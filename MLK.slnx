@@ -1,0 +1,13 @@
+﻿<Solution>
+  <Folder Name="/src/">
+    <Project Path="src\MLK.Compiler.Fusca\MLK.Compiler.Fusca.fsproj" Type="Classic F#" />
+    <Project Path="src\MLK.Compiler.Text\MLK.Compiler.Text.fsproj" Type="Classic F#" />
+    <Project Path="src\MLK.Compiler.Web\MLK.Compiler.Web.fsproj" Type="Classic F#" />
+    <Project Path="src\MLK.Compiler\MLK.Compiler.fsproj" Type="Classic F#" />
+    <Project Path="src\Stdx\Stdx.fsproj" Type="Classic F#" />
+  </Folder>
+  <Folder Name="/tools/" />
+  <Folder Name="/test/">
+    <Project Path="test\MLK.Tests\MLK.Tests.fsproj" Type="Classic F#" />
+  </Folder>
+</Solution>

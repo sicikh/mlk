@@ -1,0 +1,43 @@
+# Local
+.DS_Store
+.Thumbs.db
+*.local
+*.log*
+
+# Dist
+bin/
+obj/
+node_modules
+fable_modules
+dist/
+build/
+.svelte-kit/
+.output
+
+# Profile
+.rspack-profile-*/
+
+# Generated
+generated/
+*.gen.fs
+*.fs.js
+*.fs.ts
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.vs
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Settings
+*.user

@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="Library.fs"/>
+        <Compile Include="Green.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\MLK.Compiler.Text\MLK.Compiler.Text.fsproj" />
+      <ProjectReference Include="..\Stdx\Stdx.fsproj" />
+    </ItemGroup>
+
+</Project>

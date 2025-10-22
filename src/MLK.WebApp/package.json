@@ -1,0 +1,48 @@
+{
+	"name": "mlk",
+	"private": true,
+	"version": "0.0.1",
+	"license": "Apache-2.0 OR MIT",
+	"type": "module",
+	"scripts": {
+		"dev": "bun run watch:fable -- --run bun run dev:site",
+        "dev:site": "vite dev --open",
+        "watch:fable": "dotnet fable watch ../MLK.Compiler.Web --lang typescript -o ./src/lib/language/generated",
+		"build": "bun run build:fable && bun run build:site",
+        "build:site": "vite build",
+        "build:fable": "dotnet fable ../MLK.Compiler.Web --lang typescript -o ./src/lib/language/generated",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "bun run build:fable && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "bun run watch:fable -- --run svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"format": "prettier --write .",
+		"lint": "prettier --check . && eslint ."
+	},
+    "dependencies": {
+      "monaco-editor": "^0.54.0",
+      "clone-deep": "^4.0.1",
+      "@ctrl/tinycolor": "^4.2.0"
+    },
+	"devDependencies": {
+		"@eslint/compat": "^1.4.0",
+		"@eslint/js": "^9.36.0",
+		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/kit": "^2.43.2",
+		"@sveltejs/vite-plugin-svelte": "^6.2.0",
+		"@tailwindcss/vite": "^4.1.13",
+		"@types/node": "^20",
+		"eslint": "^9.36.0",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.12.4",
+		"globals": "^16.4.0",
+		"prettier": "^3.6.2",
+		"prettier-plugin-svelte": "^3.4.0",
+		"prettier-plugin-tailwindcss": "^0.6.14",
+		"svelte": "^5.39.5",
+		"svelte-check": "^4.3.2",
+		"tailwindcss": "^4.1.13",
+		"@typescript/native-preview": "^7.0.0-dev.20251022.1",
+		"typescript-eslint": "^8.44.1",
+		"vite": "^7.1.7"
+	}
+}

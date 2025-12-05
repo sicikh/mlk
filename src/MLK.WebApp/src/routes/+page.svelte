@@ -203,8 +203,7 @@
 
     .ast-tab-container {
         display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-top: 150px;
+        justify-content: left;
+        margin: 30px;
     }
 </style>

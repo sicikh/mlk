@@ -40,4 +40,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Settings
-*.user
+*.DotSettings
+*.DotSettings.user

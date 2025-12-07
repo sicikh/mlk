@@ -1,40 +1,48 @@
 ﻿namespace MLK.Compiler.Ungrammar
 
 open System
+open Stdx
 open System.Text
 open MLK.Compiler.Text
+open System.Collections.Generic
 
-/// A node, like `A = 'b' | 'c'`.
 type Node = | Node of uint32
-/// A token, denoted with single quotes, like `'struct'` or `'+'`.
 type Token = | Token of uint32
 
-/// A production rule.
 type Rule =
-    /// A labeled rule, like `a:B` (`a` is the label, `B` is the rule).
     | RLabeled of label : string * rule : Rule
-    /// A node, like `A`.
     | RNode of Node
-    /// A token, like `'struct'`.
     | RToken of Token
-    /// A sequence of rules, like `A 'b' C`.
     | RSeq of Rule list
-    /// An alternative between many rules, like `'+' | '-' | '*' | '/'`.
     | RAlt of Rule list
-    /// An optional rule, like `A?`.
     | ROpt of Rule
-    /// A repeated rule, like `A*`.
     | RStar of Rule
 
-type TokenData = | TokenData of name : string
-type NodeData = | NodeData of name : string * rule : Rule
+[<Sealed>]
+type TokenData(name : string) =
+    member this.Name = name
+
+[<Sealed>]
+type NodeData(name : string, rule : Rule) =
+    let mutable rule = rule
+
+    member this.Name = name
+
+    member this.Rule
+        with get () = rule
+        and set v = rule <- v
+
+module TokenData =
+    let (|TokenData|) (tokenData : TokenData) : string = tokenData.Name
+
+module NodeData =
+    let (|NodeData|) (nodeData : NodeData) : string * Rule = nodeData.Name, nodeData.Rule
 
 type Grammar =
-    private
-        {
-            TokensData : TokenData list
-            NodesData : NodeData list
-        }
+    {
+        mutable TokensData : TokenData list
+        mutable NodesData : NodeData list
+    }
 
     member this.Tokens : Token seq =
         this.TokensData |> Seq.mapi (fun i _ -> uint32 i |> Token)
@@ -44,7 +52,7 @@ type Grammar =
     member this.Token (Token index) : TokenData = this.TokensData[int index]
     member this.Node (Node index) : NodeData = this.NodesData[int index]
 
-type internal TokenKind =
+type TokenKind =
     | TNode of string
     | TToken of string
     | TEq
@@ -55,7 +63,7 @@ type internal TokenKind =
     | TLParen
     | TRParen
 
-type Error =
+type SyntaxError =
     {
         Message : string
         Location : LineCol option
@@ -68,14 +76,18 @@ type Error =
         | Some loc -> $"{loc}: {this.Message}"
         | None -> $"{this.Message}"
 
-type Result<'T> = Result<'T, Error>
+type Result<'T> = Result<'T, SyntaxError>
 
-module Error =
-    let create message : Error = { Message = message ; Location = None }
+module SyntaxError =
+    let create message : SyntaxError = { Message = message ; Location = None }
     let bail message : Result<'T> = create message |> Error
+    let withLocation loc (err : SyntaxError) : SyntaxError = err.WithLocation loc
+
+    let bailWithLocation loc message : Result<'T> =
+        create message |> withLocation loc |> Error
 
 
-module private Lexer =
+module Lexer =
     type Token =
         {
             Kind : TokenKind
@@ -149,7 +161,7 @@ module private Lexer =
             let mutable closed = false
 
             let bail msg =
-                res <- Error.bail msg
+                res <- SyntaxError.bail msg
                 closed <- true
 
             while not closed do
@@ -178,8 +190,8 @@ module private Lexer =
 
             Ok (TNode <| buf.ToString (), rest)
 
-        | '\r' -> Error.bail "unexpected `\\r`, only Unix-style line endings allowed"
-        | c -> Error.bail $"unexpected character: `{c}`"
+        | '\r' -> SyntaxError.bail "unexpected `\\r`, only Unix-style line endings allowed"
+        | c -> SyntaxError.bail $"unexpected character: `{c}`"
 
     let skipWhitespace (input : string) : string = input.TrimStart ()
 
@@ -217,5 +229,102 @@ module private Lexer =
 
         res |> Result.map List.rev
 
-module private Parser =
-    open Lexer
+type Parser(tokens : Lexer.Token list) =
+    let mutable tokens = tokens
+    let nodeTable = Dictionary<string, Node> ()
+    let tokenTable = Dictionary<string, Token> ()
+    let grammar = { TokensData = [] ; NodesData = [] }
+
+    static let DUMMY_RULE = RNode (Node 0u)
+
+    let peekN (n : int) : Lexer.Token option = List.tryItem n tokens
+    let peek () : Lexer.Token option = peekN 0
+
+    let bump () : Result<Lexer.Token> =
+        match tokens with
+        | [] -> SyntaxError.bail "unexpected end of input"
+        | t :: rest ->
+            tokens <- rest
+            Ok t
+
+    let expect (what : string) (kind : TokenKind) : Result<unit> =
+        match bump () with
+        | Error e -> Error e
+        | Ok t when t.Kind = kind -> Ok ()
+        | Ok t -> SyntaxError.bailWithLocation t.Location $"unexpected token, expected {what}"
+
+    let isEof () : bool = tokens.IsEmpty
+
+    let finish () : Result<Grammar> =
+        grammar.NodesData
+        |> List.tryPick (
+            function
+            | nd when nd.Rule = DUMMY_RULE -> Some nd.Name
+            | _ -> None
+        )
+        |> function
+            | Some name -> SyntaxError.bail $"undefined node: {name}"
+            | None -> Ok grammar
+
+    let internNode (name : string) : Node =
+        nodeTable
+        |> Dictionary.getOrAdd
+            name
+            (fun () ->
+                let n = Node (uint32 nodeTable.Count)
+                grammar.NodesData <- grammar.NodesData @ [ NodeData (name, DUMMY_RULE) ]
+                n
+            )
+
+    let internToken (name : string) : Token =
+        tokenTable
+        |> Dictionary.getOrAdd
+            name
+            (fun () ->
+                let t = Token (uint32 tokenTable.Count)
+                grammar.TokensData <- grammar.TokensData @ [ TokenData name ]
+                t
+            )
+
+    let rec node () : Result<unit> =
+        match bump () with
+        | Ok ({ Kind = TNode it } as token) ->
+            let node = internNode it
+
+            match expect "=" TEq with
+            | Error e -> Error e
+            | Ok () ->
+                match grammar.Node node with
+                | nd when nd.Rule <> DUMMY_RULE ->
+                    SyntaxError.bailWithLocation token.Location $"duplicate rule: {nd.Name}"
+                | _ ->
+                    match rule () with
+                    | Ok rule ->
+                        let (Node node) = node
+                        grammar.NodesData[int node].Rule <- rule
+                        Ok ()
+                    | Error e -> Error e
+        | Error e -> Error e
+        | Ok t -> SyntaxError.bailWithLocation t.Location "expected node identifier"
+
+    and rule () : Result<Rule> = failwith "todo"
+    and seqRule () : Result<Rule> = failwith "todo"
+    and atomRule () : Result<Rule> = failwith "todo"
+    and optAtomRule () : Result<Rule> = failwith "todo"
+
+    member this.Run () : Result<Grammar> =
+        let rec loop () : Result<Grammar> =
+            if isEof () then
+                finish ()
+            else
+                match node () with
+                | Ok () -> loop ()
+                | Error e -> Error e
+
+        loop ()
+
+type Grammar with
+    static member Parse (input : string) : Result<Grammar> =
+        match Lexer.tokenize input with
+        | Error e -> Error e
+        | Ok tokens -> Parser(tokens).Run ()

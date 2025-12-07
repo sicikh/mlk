@@ -6,11 +6,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
+        <Compile Include="Ungrammar.fsi" />
+        <Compile Include="Ungrammar.fs" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\MLK.Compiler.Text\MLK.Compiler.Text.fsproj" />
+      <ProjectReference Include="..\Stdx\Stdx.fsproj" />
     </ItemGroup>
 
 </Project>

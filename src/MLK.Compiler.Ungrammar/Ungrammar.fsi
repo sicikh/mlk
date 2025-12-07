@@ -1,68 +1,62 @@
 namespace MLK.Compiler.Ungrammar
 
-/// A node, like `A = 'b' | 'c'`.
+/// <summary>A node, like <c>A = 'b' | 'c'</c>.</summary>
 type Node = | Node of uint32
-/// A token, denoted with single quotes, like `'struct'` or `'+'`.
+/// <summary>A token, denoted with single quotes, like <c>'struct'</c> or <c>'+'</c>.</summary>
 type Token = | Token of uint32
 
-/// A production rule.
+/// <summary>A production rule.</summary>
 type Rule =
-    /// A labeled rule, like `a:B` (`a` is the label, `B` is the rule).
+    /// <summary>A labeled rule, like <c>a:B</c> (<c>a</c> is the label, <c>B</c> is the rule).</summary>
     | RLabeled of label : string * rule : Rule
-    /// A node, like `A`.
+    /// <summary>A node, like <c>A</c>.</summary>
     | RNode of Node
-    /// A token, like `'struct'`.
+    /// <summary>A token, like <c>'struct'</c>.</summary>
     | RToken of Token
-    /// A sequence of rules, like `A 'b' C`.
+    /// <summary>A sequence of rules, like <c>A 'b' C</c>.</summary>
     | RSeq of Rule list
-    /// An alternative between many rules, like `'+' | '-' | '*' | '/'`.
+    /// <summary>An alternative between many rules, like <c>'+'</c> | <c>'-'</c> | <c>'*'</c> | <c>'/'</c>.</summary>
     | RAlt of Rule list
-    /// An optional rule, like `A?`.
+    /// <summary>An optional rule, like <c>A?</c>.</summary>
     | ROpt of Rule
-    /// A repeated rule, like `A*`.
+    /// <summary>A repeated rule, like <c>A*</c>.</summary>
     | RStar of Rule
 
-/// Data about a token.
+/// <summary>Data about a token.</summary>
 [<Sealed>]
 type TokenData =
     new : name : string -> TokenData
 
-    /// The name of the token.
+    /// <summary>The name of the token.</summary>
     member Name : string
 
 [<AutoOpen>]
 module TokenData =
-    /// Active pattern to deconstruct a TokenData.
+    /// <summary>Active pattern to deconstruct a TokenData.</summary>
     val (|TokenData|) : tokenData : TokenData -> string
 
-/// Data about a node.
+/// <summary>Data about a node.</summary>
 [<Sealed>]
 type NodeData =
     new : name : string * rule : Rule -> NodeData
 
-    /// The name of the node.
-    ///
-    /// In the rule `A = 'b' | 'c'`, the name is `"A"`.
+    /// <summary>The name of the node.</summary>
+    /// <remarks>In the rule <c>A = 'b' | 'c'</c>, the name is <c>"A"</c>.</remarks>
     member Name : string
 
-    /// The rule for this node.
-    ///
-    /// In the rule `A = 'b' | 'c'`, this represents `'b' | 'c'`.
+    /// <summary>The rule for this node.</summary>
+    /// <remarks>In the rule <c>A = 'b' | 'c'</c>, this represents <c>'b' | 'c'</c>.</remarks>
     member Rule : Rule
 
 [<AutoOpen>]
 module NodeData =
-    /// Active pattern to deconstruct a NodeData.
+    /// <summary>Active pattern to deconstruct a NodeData.</summary>
     val (|NodeData|) : nodeData : NodeData -> name : string * rule : Rule
 
-/// An error encountered when parsing a Grammar.
-[<Sealed>]
-type SyntaxError = class end
-
-/// An Ungrammar grammar.
+/// <summary>An Ungrammar grammar.</summary>
 [<Sealed>]
 type Grammar =
-    static member Parse : input : string -> Result<Grammar, SyntaxError>
+    static member Parse : input : string -> Grammar
 
     member Tokens : Token seq
     member Nodes : Node seq

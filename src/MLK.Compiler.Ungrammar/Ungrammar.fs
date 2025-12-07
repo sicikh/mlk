@@ -76,16 +76,24 @@ type SyntaxError =
         | Some loc -> $"{loc}: {this.Message}"
         | None -> $"{this.Message}"
 
-type Result<'T> = Result<'T, SyntaxError>
+type SyntaxException(err : SyntaxError) =
+    inherit Exception(err.ToString ())
+    member this.Error = err
 
 module SyntaxError =
     let create message : SyntaxError = { Message = message ; Location = None }
-    let bail message : Result<'T> = create message |> Error
+
+    let createLoc loc message : SyntaxError =
+        {
+            Message = message
+            Location = Some loc
+        }
+
     let withLocation loc (err : SyntaxError) : SyntaxError = err.WithLocation loc
 
-    let bailWithLocation loc message : Result<'T> =
-        create message |> withLocation loc |> Error
-
+    let raise (err : SyntaxError) : 'T = raise <| SyntaxException err
+    let createRaise message : 'T = create message |> raise
+    let createLocRaise loc message : 'T = createLoc loc message |> raise
 
 module Lexer =
     type Token =
@@ -128,7 +136,7 @@ module Lexer =
 
     let (|Ident|_|) (c : char) : bool = Set.contains c identLetters
 
-    let advance (input : string) : Result<TokenKind * string> =
+    let advance (input : string) : TokenKind * string =
         let mutable rest = input
 
         let nextChar () =
@@ -142,7 +150,7 @@ module Lexer =
         let peekChar () : char option =
             if rest.Length = 0 then None else Some rest[0]
 
-        let emit t = Ok (t, rest)
+        let emit t = (t, rest)
 
         match nextChar().Value with
         | '=' -> emit TEq
@@ -153,28 +161,23 @@ module Lexer =
         | '|' -> emit TPipe
         | ':' -> emit TColon
         | '\'' ->
-            let mutable res = Ok <| StringBuilder ()
+            let mutable buf = StringBuilder ()
 
-            let pushBuf (c : char) =
-                Result.iter (fun (buf : StringBuilder) -> buf.Append c |> ignore) res
+            let pushBuf (c : char) = buf.Append c |> ignore
 
             let mutable closed = false
 
-            let bail msg =
-                res <- SyntaxError.bail msg
-                closed <- true
-
             while not closed do
                 match nextChar () with
-                | None -> bail "unclosed token literal"
+                | None -> SyntaxError.createRaise "unclosed token literal"
                 | Some '\\' ->
                     match nextChar () with
                     | Some (Escapable as c) -> pushBuf c
-                    | _ -> bail "invalid escape in token literal"
+                    | _ -> SyntaxError.createRaise "invalid escape in token literal"
                 | Some '\'' -> closed <- true
                 | Some c -> pushBuf c
 
-            res |> Result.map (fun buf -> TToken <| buf.ToString (), rest)
+            TToken <| buf.ToString (), rest
 
         | Ident as c ->
             let buf = StringBuilder ()
@@ -188,10 +191,10 @@ module Lexer =
                     buf.Append c |> ignore
                 | _ -> isDone <- true
 
-            Ok (TNode <| buf.ToString (), rest)
+            TNode <| buf.ToString (), rest
 
-        | '\r' -> SyntaxError.bail "unexpected `\\r`, only Unix-style line endings allowed"
-        | c -> SyntaxError.bail $"unexpected character: `{c}`"
+        | '\r' -> SyntaxError.createRaise "unexpected `\\r`, only Unix-style line endings allowed"
+        | c -> SyntaxError.createRaise $"unexpected character: `{c}`"
 
     let skipWhitespace (input : string) : string = input.TrimStart ()
 
@@ -206,28 +209,29 @@ module Lexer =
         else
             input
 
-    let tokenize (input : string) : Result<Token list> =
+    let tokenize (input : string) : Token list =
         let mutable input = input
         let mutable location = LineCol.zero
-        let mutable res = Ok []
+        let mutable tokens = []
 
-        while not <| String.IsNullOrEmpty input && res.IsOk do
+        while not <| String.IsNullOrEmpty input do
             let oldInput = input
             input <- skipWhitespace input
             input <- skipComment input
 
             if oldInput.Length = input.Length then
-                match advance input with
-                | Ok (kind, rest) ->
+                try
+                    let kind, rest = advance input
                     input <- rest
                     let token = { Kind = kind ; Location = location }
-                    res <- Result.map (fun lst -> token :: lst) res
-                | Error e -> res <- Error <| e.WithLocation location
+                    tokens <- token :: tokens
+                with :? SyntaxException as ex ->
+                    ex.Error |> SyntaxError.withLocation location |> SyntaxError.raise
 
             let consumed = oldInput.Length - input.Length
             location <- location |> advanceLocation (oldInput[..consumed])
 
-        res |> Result.map List.rev
+        List.rev tokens
 
 type Parser(tokens : Lexer.Token list) =
     let mutable tokens = tokens
@@ -235,27 +239,27 @@ type Parser(tokens : Lexer.Token list) =
     let tokenTable = Dictionary<string, Token> ()
     let grammar = { TokensData = [] ; NodesData = [] }
 
-    static let DUMMY_RULE = RNode (Node 0u)
+    static let DUMMY_RULE = RNode (Node ~~~0u)
 
     let peekN (n : int) : Lexer.Token option = List.tryItem n tokens
     let peek () : Lexer.Token option = peekN 0
 
-    let bump () : Result<Lexer.Token> =
+    let bump () : Lexer.Token =
         match tokens with
-        | [] -> SyntaxError.bail "unexpected end of input"
+        | [] -> SyntaxError.create "unexpected end of input" |> SyntaxError.raise
         | t :: rest ->
             tokens <- rest
-            Ok t
+            t
 
-    let expect (what : string) (kind : TokenKind) : Result<unit> =
-        match bump () with
-        | Error e -> Error e
-        | Ok t when t.Kind = kind -> Ok ()
-        | Ok t -> SyntaxError.bailWithLocation t.Location $"unexpected token, expected {what}"
+    let expect (what : string) (kind : TokenKind) =
+        let token = bump ()
+
+        if token.Kind <> kind then
+            SyntaxError.createLocRaise token.Location $"unexpected token, expected {what}"
 
     let isEof () : bool = tokens.IsEmpty
 
-    let finish () : Result<Grammar> =
+    let finish () : Grammar =
         grammar.NodesData
         |> List.tryPick (
             function
@@ -263,8 +267,8 @@ type Parser(tokens : Lexer.Token list) =
             | _ -> None
         )
         |> function
-            | Some name -> SyntaxError.bail $"undefined node: {name}"
-            | None -> Ok grammar
+            | Some name -> SyntaxError.createRaise $"undefined node: {name}"
+            | None -> grammar
 
     let internNode (name : string) : Node =
         nodeTable
@@ -286,45 +290,128 @@ type Parser(tokens : Lexer.Token list) =
                 t
             )
 
-    let rec node () : Result<unit> =
-        match bump () with
-        | Ok ({ Kind = TNode it } as token) ->
-            let node = internNode it
+    let rec node () =
+        let token = bump ()
 
-            match expect "=" TEq with
-            | Error e -> Error e
-            | Ok () ->
-                match grammar.Node node with
-                | nd when nd.Rule <> DUMMY_RULE ->
-                    SyntaxError.bailWithLocation token.Location $"duplicate rule: {nd.Name}"
-                | _ ->
-                    match rule () with
-                    | Ok rule ->
-                        let (Node node) = node
-                        grammar.NodesData[int node].Rule <- rule
-                        Ok ()
-                    | Error e -> Error e
-        | Error e -> Error e
-        | Ok t -> SyntaxError.bailWithLocation t.Location "expected node identifier"
+        let node =
+            match token.Kind with
+            | TNode it -> internNode it
+            | _ -> SyntaxError.createLocRaise token.Location "expected node identifier"
 
-    and rule () : Result<Rule> = failwith "todo"
-    and seqRule () : Result<Rule> = failwith "todo"
-    and atomRule () : Result<Rule> = failwith "todo"
-    and optAtomRule () : Result<Rule> = failwith "todo"
+        expect "='" TEq
 
-    member this.Run () : Result<Grammar> =
-        let rec loop () : Result<Grammar> =
+        if (grammar.Node node).Rule <> DUMMY_RULE then
+            SyntaxError.createLocRaise token.Location $"duplicate rule: {(grammar.Node node).Name}"
+
+        let rule = rule ()
+        let (Node nodeIdx) = node
+        grammar.NodesData[int nodeIdx].Rule <- rule
+
+    and rule () : Rule =
+        match peek () with
+        | Some token when token.Kind = TPipe ->
+            SyntaxError.createLocRaise
+                token.Location
+                "The first element in a sequence of productions or alternatives must not have a leading pipe (`|`)"
+        | _ -> ()
+
+        let lhs = seqRule ()
+        let mutable alts = [ lhs ]
+
+        let hasAlts () =
+            match peek () with
+            | Some token when token.Kind = TPipe -> true
+            | _ -> false
+
+        while hasAlts () do
+            bump () |> ignore // consume the pipe
+
+            let rule = seqRule ()
+            alts <- rule :: alts
+
+        match alts with
+        | [ single ] -> single
+        | _ -> RAlt <| List.rev alts
+
+    and seqRule () : Rule =
+        let lhs = atomRule ()
+
+        let mutable seqs = [ lhs ]
+
+        let rec loop () =
+            match optAtomRule () with
+            | Some r ->
+                seqs <- r :: seqs
+                loop ()
+            | None -> ()
+
+        loop ()
+
+        match seqs with
+        | [ single ] -> single
+        | _ -> RSeq <| List.rev seqs
+
+    and atomRule () : Rule =
+        match optAtomRule () with
+        | Some r -> r
+        | None ->
+            let token = bump ()
+            SyntaxError.createLocRaise token.Location "unexpected token"
+
+    and optAtomRule () : Rule option =
+        match peek () with
+        | None -> None
+        | Some token ->
+            let res =
+                match token.Kind with
+                | TNode name ->
+                    match peekN 1 with
+                    | Some lookahead when lookahead.Kind = TEq -> None
+                    | Some lookahead when lookahead.Kind = TColon ->
+                        bump () |> ignore // consume node
+                        bump () |> ignore // consume colon
+                        let rule = atomRule ()
+                        Some <| RLabeled (name, rule)
+                    | _ ->
+                        bump () |> ignore
+                        let node = internNode name
+                        Some <| RNode node
+                | TToken name ->
+                    bump () |> ignore
+                    let token = internToken name
+                    Some <| RToken token
+                | TLParen ->
+                    bump () |> ignore // consume '('
+                    let rule = rule ()
+                    expect "')'" TRParen
+                    Some rule
+                | _ -> None
+
+            match res, peek () with
+            | None, _ -> None
+            | Some r, None -> Some r
+            | Some r, Some lookahead ->
+                match lookahead.Kind with
+                | TQMark ->
+                    bump () |> ignore
+                    Some <| ROpt r
+                | TStar ->
+                    bump () |> ignore
+                    Some <| RStar r
+                | _ -> Some r
+
+    member this.Run () : Grammar =
+        let rec loop () : Grammar =
             if isEof () then
                 finish ()
             else
-                match node () with
-                | Ok () -> loop ()
-                | Error e -> Error e
+                node ()
+                loop ()
 
         loop ()
 
 type Grammar with
-    static member Parse (input : string) : Result<Grammar> =
-        match Lexer.tokenize input with
-        | Error e -> Error e
-        | Ok tokens -> Parser(tokens).Run ()
+    static member Parse (input : string) : Grammar =
+        let tokens = Lexer.tokenize input
+        let grammar = Parser(tokens).Run ()
+        grammar

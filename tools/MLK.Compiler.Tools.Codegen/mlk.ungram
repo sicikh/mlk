@@ -60,13 +60,13 @@ ModulePreamble =
     name: QName
 
 ModuleDecl =
-    ModuleDecl
+    InnerModuleDecl
     | OpenDecl
     | LetDecl
     | Expr
     | ErrDecl
 
-ModuleDecl =
+InnerModuleDecl =
     preamble: ModulePreamble?
     '='
     decls: ModuleDecl*

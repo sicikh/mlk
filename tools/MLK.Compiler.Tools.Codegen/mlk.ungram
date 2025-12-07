@@ -1,0 +1,268 @@
+// MLK Un-Grammar.
+//
+// This grammar specifies the structure of MLK's concrete syntax tree.
+// It does not specify parsing rules (ambiguities, precedence, etc are out of scope).
+// Tokens are processed -- contextual keywords are recognised, compound operators glued.
+//
+// Legend:
+//
+//   //          				-- comment
+//   Name =      				-- non-terminal definition
+//   'ident'     				-- token (terminal)
+//   A B         				-- sequence
+//   A | B       				-- alternation
+//   A*          				-- zero or more repetition
+//   (A (',' A)* ','?)	        -- repetition of node A separated by ',' and allowing a trailing comma
+//   (A (',' A)*)	            -- repetition of node A separated by ',' without a trailing comma
+//   A?          				-- zero or one repetition
+//   (A)         				-- same as A
+//   label:A     				-- suggested name for field of AST node
+
+//*************************//
+//         Errors          //
+//*************************//
+// SyntaxElement is a generic data structure that is meant to track nodes and tokens
+// in cases where we care about both types
+//
+// As Err* node will need to yield both tokens and nodes without discrimination,
+// and their children will need to yield nodes and tokens as well.
+// For this reason, SyntaxElement = SyntaxElement
+SyntaxElement = SyntaxElement
+
+ErrNode = SyntaxElement*
+ErrDecl = SyntaxElement*
+ErrExpr = SyntaxElement*
+ErrPat = SyntaxElement*
+ErrTy = SyntaxElement*
+
+Name = value: 'ident'
+
+QName =
+    (qualifier: QName '.')?
+    segment: QNameSegment
+
+// For now QNameSegment is just a Name, but in the future it would be extended to support
+// type applications (`Map[String, Int].contains`).
+QNameSegment =
+    name: Name
+
+//*************************//
+//          Items          //
+//*************************//
+
+RootModule =
+    preamble: ModulePreamble?
+    decls: ModuleDecl*
+    eof: 'EOF'
+
+ModulePreamble =
+    'module'
+    name: QName
+
+ModuleDecl =
+    ModuleDecl
+    | OpenDecl
+    | LetDecl
+    | Expr
+    | ErrDecl
+
+ModuleDecl =
+    preamble: ModulePreamble?
+    '='
+    decls: ModuleDecl*
+
+OpenDecl =
+    'open'
+    module: QName
+
+Binding =
+    pat: Pat
+    '='
+    expr: Expr
+
+LetDecl =
+    'let'
+    'rec'?
+    bindings: (Binding ('and' Binding)*)
+
+//****************************//
+//        Expressions         //
+//****************************//
+
+Expr =
+    Literal
+    | ParenExpr
+    | TypedExpr
+    | AppExpr
+    | IfExpr
+    | LetExpr
+    | SeqExpr
+    | TupleExpr
+    | MatchExpr
+    | ErrExpr
+
+ParenExpr = '(' Expr ')'
+
+TypedExpr =
+    expr: Expr
+    ':'
+    target: Ty
+
+AppExpr =
+    func: Expr
+    arg: Expr
+
+IfExpr =
+    'if'
+    cond: Expr
+    'then'
+    then_branch: Expr
+    'else'
+    else_branch: Expr
+
+LetExpr =
+    decl: LetDecl
+    'in'?
+    body: Expr
+
+SeqExpr =
+    first: Expr
+    ';'?
+    second: Expr
+
+TupleExpr =
+    elements: (Expr (',' Expr)*)
+
+MatchExpr =
+    'match'
+    scrutinee: Expr
+    'with'
+    '|'?
+    cases: (MatchCase ('|' MatchCase)*)
+
+MatchCase =
+    pat: Pat
+    guard: MatchGuard?
+    '->'
+    body: Expr
+
+MatchGuard =
+    'when'
+    cond: Expr
+
+//************************//
+//        Literals        //
+//************************//
+
+Literal =
+    IntLiteral
+    | BoolLiteral
+    | UnitLiteral
+    | CharLiteral
+    | StringLiteral
+
+IntLiteral = value: 'int_literal'
+
+BoolLiteral = value_token: ('true' | 'false')
+
+UnitLiteral = value_token: '()'
+
+CharLiteral = value: 'char_literal'
+
+StringLiteral = value: 'string_literal'
+
+//****************************//
+//           Types            //
+//****************************//
+
+Ty =
+    QTy
+    | FnTy
+    | TupleTy
+    | ParenTy
+    | InferTy
+    | ErrTy
+
+QTy = name: QName
+
+FnTy = arg: Ty '->' ret: Ty
+
+TupleTy = types: (Ty ('*' Ty)*)
+
+ParenTy = '(' Ty ')'
+
+InferTy = '_'
+
+//************************//
+//        Patterns        //
+//************************//
+
+Pat =
+    ParenPat
+    | NamedPat
+    | FuncPat
+    | AsPat
+    | WildPat
+    | TuplePat
+    | LiteralPat
+    | ConsPat
+    | ListPat
+    | TypedPat
+    | RecordPat
+    | OrPat
+    | AndPat
+    | ErrPat
+
+ParenPat = '(' Pat ')'
+
+NamedPat =
+    name: QName
+
+FuncPat =
+    func: Pat
+    args: Pat*
+
+AsPat =
+    lhs: Pat
+    'as'
+    rhs: Pat
+
+WildPat = '_'
+
+TuplePat = pats: (Pat (',' Pat)*)
+
+LiteralPat = Literal
+
+ConsPat =
+    head: Pat
+    '::'
+    tail: Pat
+
+ListPat =
+    '['
+    elements: (Pat (';' Pat)*)*
+    ']'
+
+TypedPat =
+    pat: Pat
+    ':'
+    target: Ty
+
+RecordPat =
+    '{'
+    fields: (RecordPatField (';' RecordPatField)*)?
+    '}'
+
+RecordPatField =
+    name: QName
+    ('=' pat: Pat)?
+
+OrPat =
+    lhs: Pat
+    '|'
+    rhs: Pat
+
+AndPat =
+    lhs: Pat
+    '&'
+    rhs: Pat

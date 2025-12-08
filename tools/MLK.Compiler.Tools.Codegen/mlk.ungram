@@ -35,16 +35,16 @@ ErrExpr = SyntaxElement*
 ErrPat = SyntaxElement*
 ErrTy = SyntaxElement*
 
-Name = value: 'ident'
+Name = Value: 'ident'
 
 QName =
-    (qualifier: QName '.')?
-    segment: QNameSegment
+    (Qualifier: QName '.')?
+    Segment: QNameSegment
 
 // For now QNameSegment is just a Name, but in the future it would be extended to support
 // type applications (`Map[String, Int].contains`).
 QNameSegment =
-    name: Name
+    Name
 
 //*************************//
 //          Items          //
@@ -251,10 +251,10 @@ ConsPat =
 
 ListPat =
     '['
-    Elements: ListPatElements?
+    Elements: ListPatElements
     ']'
 
-ListPatElements = (Pat (';' Pat)*)
+ListPatElements = (Pat (';' Pat)*)?
 
 TypedPat =
     Pat
@@ -263,10 +263,10 @@ TypedPat =
 
 RecordPat =
     '{'
-    Fields: RecordFields?
+    Fields: RecordFields
     '}'
 
-RecordFields = NamePatField (';' NamePatField)*
+RecordFields = (NamePatField (';' NamePatField)*)?
 
 NamePatField =
     Name: QName

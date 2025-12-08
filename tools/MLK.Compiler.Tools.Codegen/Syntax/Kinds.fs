@@ -3,13 +3,14 @@ module MLK.Compiler.Tools.Codegen.Syntax.Kinds
 open Stdx
 
 let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string =
-    let allKeywords =
-        languageSrc.Keywords |> List.map (fun kw -> String.toPascalCase $"{kw}Kw")
+    let keywords = languageSrc.Keywords |> List.sort
+    let literals = languageSrc.Literals |> List.sort
+    let punct = languageSrc.Punct |> List.sortBy fst
+    let tokens = languageSrc.Tokens |> List.sort
+    let lists = astSrc.Lists |> Map.keys |> Seq.toList |> List.sort
 
-    let literals = languageSrc.Literals
-    let punct = languageSrc.Punct
-    let tokens = languageSrc.Tokens
-    let lists = astSrc.Lists |> Map.keys |> Seq.toList
+    let allKeywords =
+        keywords |> List.map (fun kw -> String.toPascalCase $"{kw}Kw")
 
     let punctSyntaxKinds = punct |> List.map snd
 
@@ -19,6 +20,7 @@ let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
         |> List.append (astSrc.Enums |> List.map _.Name)
         |> List.append lists
         |> List.append astSrc.Errors
+        |> List.sort
 
     let allSyntaxKindsValues =
         "Eof" :: (punctSyntaxKinds @ allKeywords @ tokens @ nodesSyntaxKinds)
@@ -72,7 +74,7 @@ let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
         |> String.concat "\n"
 
     let tAssoc =
-        (languageSrc.Punct |> List.map (fun (kw, sk) -> kw, valueToEnumValue sk))
+        (punct |> List.map (fun (kw, sk) -> kw, valueToEnumValue sk))
         @ kwStringAssocs
         @ [ "EOF", "SyntaxKind.Eof" ; "ident", "SyntaxKind.Ident" ]
 
@@ -127,5 +129,5 @@ module SyntaxKindOps =
     let (|Literal|_|) (kind : SyntaxKind) : bool = SyntaxKind.isLiteral kind
     let (|Keyword|_|) (kind : SyntaxKind) : bool = SyntaxKind.isKeyword kind
     let (|List|_|) (kind : SyntaxKind) : bool = SyntaxKind.isList kind
-    let (|T|_|) (str : string) (sk : SyntaxKind) : SyntaxKind = t str = sk
+    let (|T|_|) (str : string) (sk : SyntaxKind) : bool = t str = sk
 "

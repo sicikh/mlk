@@ -283,6 +283,7 @@ module AstSrc =
         |> Seq.map grammar.Node
         |> Seq.filter (fun nd -> nd.Name <> SYNTAX_ELEMENT_TYPE)
         |> Seq.fold aux AstSrc.Zero
+        |> _.Sort()
 
 [<AutoOpen>]
 module MlkLanguageSrc =

@@ -9,4 +9,9 @@
         <Compile Include="Library.fs"/>
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\MLK.Compiler.Fusca\MLK.Compiler.Fusca.fsproj" />
+      <ProjectReference Include="..\MLK.Compiler.Syntax\MLK.Compiler.Syntax.fsproj" />
+    </ItemGroup>
+
 </Project>

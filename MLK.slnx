@@ -1,5 +1,8 @@
 ﻿<Solution>
   <Folder Name="/src/">
+    <Project Path="src/MLK.Compiler.Factory/MLK.Compiler.Factory.fsproj" />
+    <Project Path="src/MLK.Compiler.Parser/MLK.Compiler.Parser.fsproj" />
+    <Project Path="src/MLK.Compiler.Syntax/MLK.Compiler.Syntax.fsproj" />
     <Project Path="src/MLK.Compiler.Ungrammar/MLK.Compiler.Ungrammar.fsproj" />
     <Project Path="src\MLK.Compiler.Fusca\MLK.Compiler.Fusca.fsproj" />
     <Project Path="src\MLK.Compiler.Text\MLK.Compiler.Text.fsproj" />

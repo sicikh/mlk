@@ -7,7 +7,8 @@
 
     <ItemGroup>
         <Content Include="mlk.ungram" />
-        <Compile Include="Program.fs"/>
+        <Compile Include="Ast\AstSrc.fs" />
+        <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>

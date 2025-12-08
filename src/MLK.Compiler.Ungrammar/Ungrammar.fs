@@ -16,7 +16,7 @@ type Rule =
     | RSeq of Rule list
     | RAlt of Rule list
     | ROpt of Rule
-    | RStar of Rule
+    | RRep of Rule
 
 [<Sealed>]
 type TokenData(name : string) =
@@ -397,7 +397,7 @@ type Parser(tokens : Lexer.Token list) =
                     Some <| ROpt r
                 | TStar ->
                     bump () |> ignore
-                    Some <| RStar r
+                    Some <| RRep r
                 | _ -> Some r
 
     member this.Run () : Grammar =
@@ -415,3 +415,23 @@ type Grammar with
         let tokens = Lexer.tokenize input
         let grammar = Parser(tokens).Run ()
         grammar
+
+type Rule with
+    member this.PrettyPrint (grammar : Grammar) : string =
+        let rec ppRule (rule : Rule) : string =
+            match rule with
+            | RLabeled (label, rule) -> $"{label}:{ppRule rule}"
+            | RNode node -> (grammar.Node node).Name
+            | RToken token -> $"'{(grammar.Token token).Name}'"
+            | RSeq rules ->
+                rules
+                |> List.map ppRule
+                |> String.concat " "
+            | RAlt rules ->
+                rules
+                |> List.map ppRule
+                |> String.concat " | "
+            | ROpt rule -> $"{ppRule rule}?"
+            | RRep rule -> $"{ppRule rule}*"
+
+        ppRule this

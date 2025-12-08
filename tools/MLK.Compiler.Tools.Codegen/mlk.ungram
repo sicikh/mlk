@@ -52,8 +52,10 @@ QNameSegment =
 
 RootModule =
     preamble: ModulePreamble?
-    decls: ModuleDecl*
+    decls: ModuleDeclList
     eof: 'EOF'
+
+ModuleDeclList = ModuleDecl*
 
 ModulePreamble =
     'module'
@@ -69,7 +71,7 @@ ModuleDecl =
 InnerModuleDecl =
     preamble: ModulePreamble?
     '='
-    decls: ModuleDecl*
+    decls: ModuleDeclList
 
 OpenDecl =
     'open'
@@ -83,7 +85,9 @@ Binding =
 LetDecl =
     'let'
     'rec'?
-    bindings: (Binding ('and' Binding)*)
+    bindings: BindingList
+
+BindingList = (Binding ('and' Binding)*)
 
 //****************************//
 //        Expressions         //
@@ -117,8 +121,8 @@ IfExpr =
     cond: Expr
     'then'
     then_branch: Expr
-    'else'
-    else_branch: Expr
+    ('else'
+    else_branch: Expr)?
 
 LetExpr =
     decl: LetDecl
@@ -130,15 +134,16 @@ SeqExpr =
     ';'?
     second: Expr
 
-TupleExpr =
-    elements: (Expr (',' Expr)*)
+TupleExpr = (Expr (',' Expr)*)
 
 MatchExpr =
     'match'
     scrutinee: Expr
     'with'
     '|'?
-    cases: (MatchCase ('|' MatchCase)*)
+    cases: MatchCaseList
+
+MatchCaseList = (MatchCase ('|' MatchCase)*)
 
 MatchCase =
     pat: Pat
@@ -187,7 +192,7 @@ QTy = name: QName
 
 FnTy = arg: Ty '->' ret: Ty
 
-TupleTy = types: (Ty ('*' Ty)*)
+TupleTy = (Ty ('*' Ty)*)
 
 ParenTy = '(' Ty ')'
 
@@ -220,7 +225,13 @@ NamedPat =
 
 FuncPat =
     func: Pat
-    args: Pat*
+    args: ArgPats
+
+ArgPats = ArgPat*
+
+ArgPat =
+    Pat
+    | NamePatField
 
 AsPat =
     lhs: Pat
@@ -229,7 +240,7 @@ AsPat =
 
 WildPat = '_'
 
-TuplePat = pats: (Pat (',' Pat)*)
+TuplePat = (Pat (',' Pat)*)
 
 LiteralPat = Literal
 
@@ -240,8 +251,10 @@ ConsPat =
 
 ListPat =
     '['
-    elements: (Pat (';' Pat)*)*
+    elements: ListPatElements?
     ']'
+
+ListPatElements = (Pat (';' Pat)*)
 
 TypedPat =
     pat: Pat
@@ -250,12 +263,15 @@ TypedPat =
 
 RecordPat =
     '{'
-    fields: (RecordPatField (';' RecordPatField)*)?
+    fields: RecordFields?
     '}'
 
-RecordPatField =
+RecordFields = NamePatField (';' NamePatField)*
+
+NamePatField =
     name: QName
-    ('=' pat: Pat)?
+    '='
+    Pat
 
 OrPat =
     lhs: Pat

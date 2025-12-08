@@ -20,7 +20,7 @@ type Rule =
     /// <summary>An optional rule, like <c>A?</c>.</summary>
     | ROpt of Rule
     /// <summary>A repeated rule, like <c>A*</c>.</summary>
-    | RStar of Rule
+    | RRep of Rule
 
 /// <summary>Data about a token.</summary>
 [<Sealed>]
@@ -56,9 +56,18 @@ module NodeData =
 /// <summary>An Ungrammar grammar.</summary>
 [<Sealed>]
 type Grammar =
+    /// <summary>Parses an Ungrammar grammar from a string.</summary>
     static member Parse : input : string -> Grammar
 
+    /// <summary>All tokens in the grammar.</summary>
     member Tokens : Token seq
+    /// <summary>All nodes in the grammar.</summary>
     member Nodes : Node seq
+    /// <summary>Gets data about a token.</summary>
     member Token : index : Token -> TokenData
+    /// <summary>Gets data about a node.</summary>
     member Node : index : Node -> NodeData
+
+type Rule with
+    /// <summary>Pretty-prints a rule to a string.</summary>
+    member PrettyPrint : Grammar -> string

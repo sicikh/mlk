@@ -1,4 +1,4 @@
-namespace MLK.Compiler.Tools.Codegen.Ast
+namespace MLK.Compiler.Tools.Codegen.Syntax
 
 open Stdx
 open MLK.Compiler.Ungrammar
@@ -7,10 +7,8 @@ open MLK.Compiler.Ungrammar
 type ILanguageSrc =
     abstract Punct : (string * string) list
     abstract Keywords : string list
-    abstract Literals : string
-    abstract Tokens : string
-
-    abstract Nodes : string list
+    abstract Literals : string list
+    abstract Tokens : string list
 
     abstract ToMethodName : tokenName : string -> string
 
@@ -166,7 +164,7 @@ type NodeRuleClassification =
             )
             |> Option.sequence
             |> function
-                | Some names -> NodeRuleClassification.Union (names |> Seq.toList)
+                | Some names -> NodeRuleClassification.Union names
                 | None -> NodeRuleClassification.Node
         | RRep rule ->
             let elementType =
@@ -195,11 +193,11 @@ type NodeRuleClassification =
 
 module AstSrc =
     let rec handleRule
-        (fields : Field list)
         (grammar : Grammar)
-        (rule : Rule)
         (label : string option)
         (optional : bool)
+        (fields : Field list)
+        (rule : Rule)
         : Field list
         =
         let debugRule optional label (rule : Rule) =
@@ -207,7 +205,8 @@ module AstSrc =
                 match label with
                 | Some l -> $"{l}:"
                 | None -> ""
-            $"{label}{rule.PrettyPrint(grammar)} (optional={optional})"
+
+            $"{label}{rule.PrettyPrint grammar} (optional={optional})"
 
         let handleTokensInUnions (grammar : Grammar) rule label optional =
             let rule, optional =
@@ -232,8 +231,8 @@ module AstSrc =
         | RLabeled (label, rule) ->
             match handleTokensInUnions grammar rule label optional with
             | Some tokenField -> tokenField :: fields
-            | None -> handleRule fields grammar rule (Some label) optional
-        | ROpt rule -> handleRule fields grammar rule label true
+            | None -> handleRule grammar (Some label) optional fields rule
+        | ROpt rule -> handleRule grammar label true fields rule
         | RNode node ->
             let ty = grammar.Node(node).Name
             let name = label |> Option.defaultValue ty
@@ -250,29 +249,19 @@ module AstSrc =
             if optional then
                 failwith "Alternates cannot be nested within an optional Rule. Use a new node to contain the alternates"
 
-            rules
-            |> List.fold (fun fields rule -> handleRule fields grammar rule label false) fields
-        | RSeq rules ->
-            rules
-            |> List.fold (fun fields rule -> handleRule fields grammar rule label optional) fields
+            rules |> List.fold (handleRule grammar label false) fields
+        | RSeq rules -> rules |> List.fold (handleRule grammar label optional) fields
 
     let fromGrammar (grammar : Grammar) : AstSrc =
-        let nodes =
-            grammar.Nodes
-            |> Seq.map grammar.Node
-            |> Seq.filter (fun nd -> nd.Name <> SYNTAX_ELEMENT_TYPE)
-
-        let mutable astSrc = AstSrc.Zero
-
-        for node in nodes do
+        let aux (astSrc : AstSrc) (node : NodeData) =
             let name = node.Name
             let rule = node.Rule
 
             match NodeRuleClassification.FromGrammar grammar rule with
             | NodeRuleClassification.Union cases ->
                 let enumSrc = { Name = name ; Cases = cases }
-                astSrc <- astSrc.PushUnion enumSrc
-            | NodeRuleClassification.Error -> astSrc <- astSrc.PushError name
+                astSrc.PushUnion enumSrc
+            | NodeRuleClassification.Error -> astSrc.PushError name
             | NodeRuleClassification.List (elementName, separator) ->
                 let listSrc =
                     {
@@ -280,10 +269,81 @@ module AstSrc =
                         Separator = separator
                     }
 
-                astSrc <- astSrc.PushList name listSrc
+                astSrc.PushList name listSrc
             | NodeRuleClassification.Node ->
-                let fields = handleRule [] grammar rule None false
-                let nodeSrc = { Name = name ; Fields = List.rev fields }
-                astSrc <- astSrc.PushNode nodeSrc
+                let nodeSrc =
+                    {
+                        Name = name
+                        Fields = handleRule grammar None false [] rule
+                    }
 
-        astSrc
+                astSrc.PushNode nodeSrc
+
+        grammar.Nodes
+        |> Seq.map grammar.Node
+        |> Seq.filter (fun nd -> nd.Name <> SYNTAX_ELEMENT_TYPE)
+        |> Seq.fold aux AstSrc.Zero
+
+[<AutoOpen>]
+module MlkLanguageSrc =
+    let mlkLanguageSrc : ILanguageSrc =
+        { new ILanguageSrc with
+            member _.Punct =
+                [
+                    ".", "Dot"
+                    ",", "Comma"
+                    ":", "Colon"
+                    "::", "Colon2"
+                    ";", "Semicolon"
+                    "=", "Eq"
+                    "(", "LParen"
+                    ")", "RParen"
+                    "{", "LBrace"
+                    "}", "RBrace"
+                    "[", "LBracket"
+                    "]", "RBracket"
+                    "|", "Pipe"
+                    "&", "Amp"
+                    "->", "Arrow"
+                    "*", "Star"
+                    "_", "Underscore"
+                ]
+
+            member _.Keywords =
+                [
+                    "module"
+                    "open"
+                    "let"
+                    "rec"
+                    "and"
+                    "in"
+                    "if"
+                    "then"
+                    "else"
+                    "match"
+                    "with"
+                    "when"
+                    "as"
+                    "true"
+                    "false"
+                ]
+
+            member _.Literals = [ "IntLiteral" ; "BoolLiteral" ; "StringLiteral" ; "CharLiteral" ]
+
+            member _.Tokens =
+                [
+                    "Ident"
+                    "Newline"
+                    "Whitespace"
+                    "Comment"
+                    "MultilineComment"
+                    "ErrToken"
+                ]
+
+            member this.ToMethodName tokenName =
+                this.Punct
+                |> List.assoc tokenName
+                |> Option.orElseWith (fun () -> this.Keywords |> List.tryFind ((=) tokenName))
+                |> Option.defaultValue tokenName
+                |> String.toPascalCase
+        }

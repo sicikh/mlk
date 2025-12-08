@@ -7,7 +7,9 @@
 
     <ItemGroup>
         <Content Include="mlk.ungram" />
-        <Compile Include="Ast\AstSrc.fs" />
+        <Compile Include="Syntax\AstSrc.fs" />
+        <Compile Include="Syntax\Kinds.fs" />
+        <Compile Include="Syntax\Writer.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

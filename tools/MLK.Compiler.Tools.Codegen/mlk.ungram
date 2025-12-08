@@ -50,16 +50,16 @@ QNameSegment =
 //          Items          //
 //*************************//
 
-RootModule =
-    preamble: ModulePreamble?
-    decls: ModuleDeclList
-    eof: 'EOF'
+ModuleRoot =
+    Preamble: ModulePreamble?
+    Decls: ModuleDeclList
+    Eof: 'EOF'
 
 ModuleDeclList = ModuleDecl*
 
 ModulePreamble =
     'module'
-    name: QName
+    Name: QName
 
 ModuleDecl =
     InnerModuleDecl
@@ -69,23 +69,23 @@ ModuleDecl =
     | ErrDecl
 
 InnerModuleDecl =
-    preamble: ModulePreamble?
+    Preamble: ModulePreamble?
     '='
-    decls: ModuleDeclList
+    Decls: ModuleDeclList
 
 OpenDecl =
     'open'
-    module: QName
+    Module: QName
 
 Binding =
-    pat: Pat
+    Pat: Pat
     '='
-    expr: Expr
+    Expr: Expr
 
 LetDecl =
     'let'
     'rec'?
-    bindings: BindingList
+    Bindings: BindingList
 
 BindingList = (Binding ('and' Binding)*)
 
@@ -108,52 +108,52 @@ Expr =
 ParenExpr = '(' Expr ')'
 
 TypedExpr =
-    expr: Expr
+    Expr: Expr
     ':'
-    target: Ty
+    Target: Ty
 
 AppExpr =
-    func: Expr
-    arg: Expr
+    Func: Expr
+    Arg: Expr
 
 IfExpr =
     'if'
-    cond: Expr
+    Cond: Expr
     'then'
-    then_branch: Expr
+    ThenBranch: Expr
     ('else'
-    else_branch: Expr)?
+    ElseBranch: Expr)?
 
 LetExpr =
-    decl: LetDecl
+    Decl: LetDecl
     'in'?
-    body: Expr
+    Body: Expr
 
 SeqExpr =
-    first: Expr
+    First: Expr
     ';'?
-    second: Expr
+    Second: Expr
 
 TupleExpr = (Expr (',' Expr)*)
 
 MatchExpr =
     'match'
-    scrutinee: Expr
+    Scrutinee: Expr
     'with'
-    '|'?
-    cases: MatchCaseList
+    LeadingPipeToken: '|'?
+    Cases: MatchCaseList
 
 MatchCaseList = (MatchCase ('|' MatchCase)*)
 
 MatchCase =
-    pat: Pat
-    guard: MatchGuard?
+    Pat
+    Guard: MatchGuard?
     '->'
-    body: Expr
+    Body: Expr
 
 MatchGuard =
     'when'
-    cond: Expr
+    Cond: Expr
 
 //************************//
 //        Literals        //
@@ -166,15 +166,15 @@ Literal =
     | CharLiteral
     | StringLiteral
 
-IntLiteral = value: 'int_literal'
+IntLiteral = Value: 'IntLiteral'
 
-BoolLiteral = value_token: ('true' | 'false')
+BoolLiteral = ValueToken: ('true' | 'false')
 
-UnitLiteral = value_token: '()'
+UnitLiteral = ValueToken: '()'
 
-CharLiteral = value: 'char_literal'
+CharLiteral = Value: 'CharLiteral'
 
-StringLiteral = value: 'string_literal'
+StringLiteral = Value: 'StringLiteral'
 
 //****************************//
 //           Types            //
@@ -188,9 +188,9 @@ Ty =
     | InferTy
     | ErrTy
 
-QTy = name: QName
+QTy = Name: QName
 
-FnTy = arg: Ty '->' ret: Ty
+FnTy = Arg: Ty '->' Ret: Ty
 
 TupleTy = (Ty ('*' Ty)*)
 
@@ -221,11 +221,11 @@ Pat =
 ParenPat = '(' Pat ')'
 
 NamedPat =
-    name: QName
+    Name: QName
 
 FuncPat =
-    func: Pat
-    args: ArgPats
+    Func: Pat
+    Args: ArgPats
 
 ArgPats = ArgPat*
 
@@ -234,9 +234,9 @@ ArgPat =
     | NamePatField
 
 AsPat =
-    lhs: Pat
+    Lhs: Pat
     'as'
-    rhs: Pat
+    Rhs: Pat
 
 WildPat = '_'
 
@@ -245,40 +245,40 @@ TuplePat = (Pat (',' Pat)*)
 LiteralPat = Literal
 
 ConsPat =
-    head: Pat
+    Head: Pat
     '::'
-    tail: Pat
+    Tail: Pat
 
 ListPat =
     '['
-    elements: ListPatElements?
+    Elements: ListPatElements?
     ']'
 
 ListPatElements = (Pat (';' Pat)*)
 
 TypedPat =
-    pat: Pat
+    Pat
     ':'
-    target: Ty
+    Target: Ty
 
 RecordPat =
     '{'
-    fields: RecordFields?
+    Fields: RecordFields?
     '}'
 
 RecordFields = NamePatField (';' NamePatField)*
 
 NamePatField =
-    name: QName
+    Name: QName
     '='
     Pat
 
 OrPat =
-    lhs: Pat
+    Lhs: Pat
     '|'
-    rhs: Pat
+    Rhs: Pat
 
 AndPat =
-    lhs: Pat
+    Lhs: Pat
     '&'
-    rhs: Pat
+    Rhs: Pat

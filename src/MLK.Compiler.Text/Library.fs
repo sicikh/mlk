@@ -8,14 +8,6 @@ type TextSize =
         let (TextSize size) = this
         size.ToString ()
 
-    static member (+) (TextSize a, TextSize b) : TextSize = TextSize (a + b)
-
-    static member (-) (TextSize a, TextSize b) : TextSize =
-        if b > a then
-            invalidOp "Resulting TextSize cannot be negative."
-
-        TextSize (a - b)
-
 module TextSize =
     let zero = TextSize 0u
 
@@ -44,6 +36,16 @@ module TextSize =
 
 type TextSize with
     static member Zero = TextSize.zero
+
+    static member (+) (a : TextSize, b : TextSize) : TextSize =
+        match TextSize.checkedAdd a b with
+        | ValueSome sum -> sum
+        | ValueNone -> invalidOp "TextSize addition overflowed"
+
+    static member (-) (a : TextSize, b : TextSize) : TextSize =
+        match TextSize.checkedSub a b with
+        | ValueSome diff -> diff
+        | ValueNone -> invalidOp "TextSize subtraction underflowed"
 
 [<Struct>]
 type TextRange =

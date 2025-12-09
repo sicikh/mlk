@@ -251,10 +251,10 @@ ConsPat =
 
 ListPat =
     '['
-    Elements: ListPatElements
+    Elements: ListPatElements?
     ']'
 
-ListPatElements = (Pat (';' Pat)*)?
+ListPatElements = (Pat (';' Pat)*)
 
 TypedPat =
     Pat
@@ -263,10 +263,10 @@ TypedPat =
 
 RecordPat =
     '{'
-    Fields: RecordFields
+    Fields: RecordFields?
     '}'
 
-RecordFields = (NamePatField (';' NamePatField)*)?
+RecordFields = (NamePatField (';' NamePatField)*)
 
 NamePatField =
     Name: QName

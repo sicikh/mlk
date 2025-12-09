@@ -3,7 +3,6 @@ namespace MLK.Compiler.Parser.IParsec
 open MLK.Compiler.Text
 open MLK.Compiler.Syntax
 open MLK.Compiler.Parser
-open MLK.Compiler.Parser.TokenSource
 
 type SignificantTokens = Set<SyntaxKind>
 
@@ -223,19 +222,11 @@ module Combinators =
         let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
             if inp.Head.Kind = kind then
                 let tokenEndOffset = inp.Head.Range.End
-                let events' =
-                    if isSignificant then
-                        TokenEvent (kind, tokenEndOffset) :: events
-                    else
-                        events
+                let events' = TokenEvent (kind, tokenEndOffset) :: events
 
                 Success (inp.Head, inp.Tail, events', state)
             else
-                let expected =
-                    if isSignificant then
-                        Set.add kind sigs
-                    else
-                        sigs
+                let expected = if isSignificant then Set.add kind sigs else sigs
 
                 let err =
                     {
@@ -248,25 +239,59 @@ module Combinators =
 
         Parser (f, if isSignificant then Set.singleton kind else Set.empty)
 
-    let pToken kind = token kind (pTokenS' false kind)
-    let pTokenS kind = token kind (pTokenS' true kind)
+    let pToken kind = pTokenS' false kind
+    let pTokenS kind = pTokenS' true kind
 
-    let skipInsignificant : uparser =
+    let skipInsignificantInto
+        (errorKind : SyntaxKind)
+        (diagBuilder : TokenSource -> TextRange -> ParseDiagnostic)
+        : uparser
+        =
         let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            let rec loop (inp : TokenSource) =
+            let rec loop (inp : TokenSource) events =
                 match inp.Head.Kind with
-                | SyntaxKind.Eof -> inp
-                | _ when Set.contains inp.Head.Kind sigs -> inp
-                | _ ->
-                    // TODO: emit error token
-                    loop inp.Tail
+                | SyntaxKind.Eof -> true, inp, events
+                | tk when Set.contains tk sigs -> false, inp, events
+                | tk ->
+                    let event = TokenEvent (tk, inp.Head.Range.End)
+                    loop inp.Tail (event :: events)
 
-            Success ((), loop inp, events, state)
+            let isEof, inp', errEvents = loop inp []
+
+            let events', state' =
+                match errEvents with
+                | TokenEvent (endOffset = endOffset) :: _ ->
+                    let errorRange = TextRange.create inp.Position endOffset
+                    let diag = diagBuilder inp' errorRange
+                    let state' = state.AddDiag diag
+
+                    FinishEvent :: errEvents @ (StartEvent errorKind :: events), state'
+                | [] ->
+                    if isEof then
+                        let errorRange = TextRange.emptyAt inp.Position
+                        let diag = diagBuilder inp' errorRange
+                        let state' = state.AddDiag diag
+                        FinishEvent :: StartEvent errorKind :: events, state'
+                    else
+                        events, state
+                | _ -> failwith "unreachable"
+
+            Success ((), inp', events', state')
 
         Parser (f, Set.empty, true)
 
-    let expect p =
-        pipe2 skipInsignificant p (fun _ x -> x)
+    let recoverInto
+        (errorNode : SyntaxKind)
+        (diagBuilder : TokenSource -> TextRange -> ParseDiagnostic)
+        (defaultValue : 'a)
+        (p : 'a parser)
+        : 'a parser
+        =
+        p <|> (skipInsignificantInto errorNode diagBuilder ^>>. preturn defaultValue)
+
+    let tryOrDiag (_diagBuilder : TokenSource -> TextRange -> ParseDiagnostic) (p : 'a parser) : 'a option parser =
+        // TODO: add diag to state
+        opt p
 
     // TODO: rewrite to use events, not directly build AST nodes
     let pPratt'
@@ -294,16 +319,16 @@ module Combinators =
     let trace (name : string) (p : 'a parser) : 'a parser =
         let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
             let indentStr = String.replicate traceMsgIndent "  "
-            printfn "%sEntering parser \"%s\". Current token: %A" indentStr name inp.Head
+            printfn $"{indentStr}Entering parser {name}. Current token: {inp.Head}"
             traceMsgIndent <- traceMsgIndent + 1
 
             match p.Run inp sigs events state with
             | Success (r, inp', events', state') ->
-                printfn "%sExiting parser \"%s\". Next token: %A" indentStr name inp'.Head
+                printfn $"{indentStr}Exiting parser {name}. Next token: {inp'.Head}"
                 traceMsgIndent <- traceMsgIndent - 1
                 Success (r, inp', events', state')
             | Failure (err, con, state') ->
-                printfn "%sFailing parser: \"%s\". Current token: %A" indentStr name inp.Head
+                printfn $"{indentStr}Failing parser {name}. Current token: {inp.Head}"
                 traceMsgIndent <- traceMsgIndent - 1
                 Failure (err, con, state')
 

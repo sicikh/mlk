@@ -6,9 +6,9 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="TokenSource.fs" />
         <Compile Include="Diagnostics.fs" />
         <Compile Include="TreeSink.fs" />
-        <Compile Include="TokenSource.fs"/>
         <FsLex Include="Lex.fsl">
             <OtherFlags>--module MLK.Compiler.Parser.Lex --unicode --internal -o Lex.gen.fs</OtherFlags>
         </FsLex>

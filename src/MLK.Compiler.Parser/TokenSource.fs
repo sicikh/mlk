@@ -1,4 +1,4 @@
-namespace MLK.Compiler.Parser.TokenSource
+namespace MLK.Compiler.Parser
 
 open System
 open MLK.Compiler.Text
@@ -21,6 +21,9 @@ type Token =
             StartLineCol = LineCol.zero
         }
 
+    override this.ToString (): string =
+        $"{this.Kind}@{this.Range}({this.StartLineCol}) \"{this.Text}\""
+
 type Trivia =
     {
         Kind : TriviaPieceKind
@@ -36,7 +39,9 @@ type TokenSource =
     | TokenSource of input : string * tokens : Token list * trivias : Trivia list
 
     static member FromTokens (input : string) (tokens : Token list) : TokenSource =
-        let clearTokensFromTrivia (_tokens : Token list) : Token list * Trivia list = failwith "todo"
+        let clearTokensFromTrivia (tokens : Token list) : Token list * Trivia list =
+            // TODO:
+            tokens, []
 
         let tokens, trivias = clearTokensFromTrivia tokens
 

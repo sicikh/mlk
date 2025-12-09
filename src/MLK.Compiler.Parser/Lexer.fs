@@ -2,7 +2,6 @@ module MLK.Compiler.Parser.Lexer
 
 open FSharp.Text.Lexing
 open MLK.Compiler.Syntax
-open MLK.Compiler.Parser.TokenSource
 open MLK.Compiler.Parser.Lex
 
 let tokenize (source : string) : Token list =

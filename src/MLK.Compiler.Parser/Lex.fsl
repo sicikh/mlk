@@ -3,7 +3,6 @@ open FSharp.Text.Lexing
 
 open MLK.Compiler.Text
 open MLK.Compiler.Syntax
-open MLK.Compiler.Parser.TokenSource
 
 let lexeme (sk : SyntaxKind) (lexbuf : LexBuffer<_>) =
     let text = LexBuffer<_>.LexemeString lexbuf

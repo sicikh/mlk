@@ -14,6 +14,7 @@
     <Project Path="tools/MLK.Compiler.Tools.Codegen/MLK.Compiler.Tools.Codegen.fsproj" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/MLK.Compiler.Parser.Tests/MLK.Compiler.Parser.Tests.fsproj" />
     <Project Path="test\MLK.Tests\MLK.Tests.fsproj" />
   </Folder>
 </Solution>

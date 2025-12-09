@@ -75,5 +75,12 @@ type TokenSource =
             | [] -> (Token.Eof, this)
             | head :: tail -> (head, TokenSource (input, tail, trivias))
 
+    member this.IsEof : bool = this.Head.Kind = SyntaxKind.Eof
+
+    member this.Position : TextSize = this.Head.Range.Start
+
+    member this.HasSameCurrentToken (other : TokenSource) : bool =
+        this.Head = other.Head
+
 // workaround for FsLex that does not let change the name of the result type of lexer func
 type token = Token

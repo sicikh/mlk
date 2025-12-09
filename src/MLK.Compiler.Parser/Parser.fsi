@@ -1,4 +1,6 @@
 [<AutoOpen>]
 module MLK.Compiler.Parser.Impl
 
-val parseRoot : sourceText : string -> unit
+open MLK.Compiler.Parser
+
+val parseRoot : sourceText : string -> ParseEvent list * ParseDiagnostic list

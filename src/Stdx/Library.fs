@@ -8,6 +8,11 @@ module Operators =
     [<CompiledName("Flip")>]
     let inline flip f b a = f a b
 
+    let inline thd (x, _y, _z) = x
+    let inline fst3 (x, _y, _z) = x
+    let inline snd3 (_x, y, _z) = y
+
+
 
 module ValueOption =
     [<CompiledName("MapOrZero")>]

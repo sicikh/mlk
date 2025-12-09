@@ -318,6 +318,7 @@ module MlkLanguageSrc =
                     "rec"
                     "and"
                     "in"
+                    "fun"
                     "if"
                     "then"
                     "else"

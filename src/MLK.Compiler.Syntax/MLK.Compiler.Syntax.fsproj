@@ -10,4 +10,9 @@
         <Compile Include="Library.fs" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\MLK.Compiler.Fusca\MLK.Compiler.Fusca.fsproj" />
+      <ProjectReference Include="..\Stdx\Stdx.fsproj" />
+    </ItemGroup>
+
 </Project>

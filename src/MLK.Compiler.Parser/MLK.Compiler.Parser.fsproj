@@ -6,12 +6,26 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
+        <Compile Include="Diagnostics.fs" />
+        <Compile Include="TreeSink.fs" />
+        <Compile Include="TokenSource.fs"/>
+        <FsLex Include="Lex.fsl">
+            <OtherFlags>--module MLK.Compiler.Parser.Lex --unicode --internal -o Lex.gen.fs</OtherFlags>
+        </FsLex>
+        <Compile Include="Lex.gen.fsi"/>
+        <Compile Include="Lex.gen.fs"/>
+        <Compile Include="Lexer.fs"/>
+        <Compile Include="IParsec.fs"/>
+        <Compile Include="Parser.fsi" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\MLK.Compiler.Fusca\MLK.Compiler.Fusca.fsproj" />
-      <ProjectReference Include="..\MLK.Compiler.Syntax\MLK.Compiler.Syntax.fsproj" />
+        <ProjectReference Include="..\MLK.Compiler.Fusca\MLK.Compiler.Fusca.fsproj"/>
+        <ProjectReference Include="..\MLK.Compiler.Syntax\MLK.Compiler.Syntax.fsproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FsLexYacc" Version="11.3.0"/>
     </ItemGroup>
 
 </Project>

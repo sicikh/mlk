@@ -103,6 +103,7 @@ Expr =
     | SeqExpr
     | TupleExpr
     | MatchExpr
+    | FunExpr
     | ErrExpr
 
 ParenExpr = '(' Expr ')'
@@ -135,6 +136,12 @@ SeqExpr =
     Second: Expr
 
 TupleExpr = (Expr (',' Expr)*)
+
+FunExpr =
+    'fun'
+    Args: ArgPats
+    '->'
+    Body: Expr
 
 MatchExpr =
     'match'
@@ -170,7 +177,7 @@ IntLiteral = Value: 'IntLiteral'
 
 BoolLiteral = ValueToken: ('true' | 'false')
 
-UnitLiteral = ValueToken: '()'
+UnitLiteral = '(' ')'
 
 CharLiteral = Value: 'CharLiteral'
 

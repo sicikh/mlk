@@ -153,6 +153,9 @@ type LineCol =
 module LineCol =
     let zero = { Line = 0u ; Column = 0u }
 
+    let create (line : uint32) (column : uint32) : LineCol =
+        { Line = line ; Column = column }
+
 type LineCol with
     static member Zero = LineCol.zero
 

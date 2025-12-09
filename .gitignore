@@ -20,6 +20,7 @@ build/
 # Generated
 generated/
 *.gen.fs
+*.gen.fsi
 *.fs.js
 *.fs.ts
 

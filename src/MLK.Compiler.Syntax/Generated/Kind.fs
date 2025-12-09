@@ -23,83 +23,85 @@ type SyntaxKind =
     | AsKw = 19uy
     | ElseKw = 20uy
     | FalseKw = 21uy
-    | IfKw = 22uy
-    | InKw = 23uy
-    | LetKw = 24uy
-    | MatchKw = 25uy
-    | ModuleKw = 26uy
-    | OpenKw = 27uy
-    | RecKw = 28uy
-    | ThenKw = 29uy
-    | TrueKw = 30uy
-    | WhenKw = 31uy
-    | WithKw = 32uy
-    | Comment = 33uy
-    | ErrToken = 34uy
-    | Ident = 35uy
-    | MultilineComment = 36uy
-    | Newline = 37uy
-    | Whitespace = 38uy
-    | AndPat = 39uy
-    | AppExpr = 40uy
-    | ArgPat = 41uy
-    | ArgPats = 42uy
-    | AsPat = 43uy
-    | Binding = 44uy
-    | BindingList = 45uy
-    | BoolLiteral = 46uy
-    | CharLiteral = 47uy
-    | ConsPat = 48uy
-    | ErrDecl = 49uy
-    | ErrExpr = 50uy
-    | ErrNode = 51uy
-    | ErrPat = 52uy
-    | ErrTy = 53uy
-    | Expr = 54uy
-    | FnTy = 55uy
-    | FuncPat = 56uy
-    | IfExpr = 57uy
-    | InferTy = 58uy
-    | InnerModuleDecl = 59uy
-    | IntLiteral = 60uy
-    | LetDecl = 61uy
-    | LetExpr = 62uy
-    | ListPat = 63uy
-    | ListPatElements = 64uy
-    | Literal = 65uy
-    | LiteralPat = 66uy
-    | MatchCase = 67uy
-    | MatchCaseList = 68uy
-    | MatchExpr = 69uy
-    | MatchGuard = 70uy
-    | ModuleDecl = 71uy
-    | ModuleDeclList = 72uy
-    | ModulePreamble = 73uy
-    | ModuleRoot = 74uy
-    | Name = 75uy
-    | NamePatField = 76uy
-    | NamedPat = 77uy
-    | OpenDecl = 78uy
-    | OrPat = 79uy
-    | ParenExpr = 80uy
-    | ParenPat = 81uy
-    | ParenTy = 82uy
-    | Pat = 83uy
-    | QName = 84uy
-    | QNameSegment = 85uy
-    | QTy = 86uy
-    | RecordFields = 87uy
-    | RecordPat = 88uy
-    | SeqExpr = 89uy
-    | StringLiteral = 90uy
-    | TupleExpr = 91uy
-    | TuplePat = 92uy
-    | TupleTy = 93uy
-    | Ty = 94uy
-    | TypedExpr = 95uy
-    | TypedPat = 96uy
-    | UnitLiteral = 97uy
-    | WildPat = 98uy
+    | FunKw = 22uy
+    | IfKw = 23uy
+    | InKw = 24uy
+    | LetKw = 25uy
+    | MatchKw = 26uy
+    | ModuleKw = 27uy
+    | OpenKw = 28uy
+    | RecKw = 29uy
+    | ThenKw = 30uy
+    | TrueKw = 31uy
+    | WhenKw = 32uy
+    | WithKw = 33uy
+    | Comment = 34uy
+    | ErrToken = 35uy
+    | Ident = 36uy
+    | MultilineComment = 37uy
+    | Newline = 38uy
+    | Whitespace = 39uy
+    | AndPat = 40uy
+    | AppExpr = 41uy
+    | ArgPat = 42uy
+    | ArgPats = 43uy
+    | AsPat = 44uy
+    | Binding = 45uy
+    | BindingList = 46uy
+    | BoolLiteral = 47uy
+    | CharLiteral = 48uy
+    | ConsPat = 49uy
+    | ErrDecl = 50uy
+    | ErrExpr = 51uy
+    | ErrNode = 52uy
+    | ErrPat = 53uy
+    | ErrTy = 54uy
+    | Expr = 55uy
+    | FnTy = 56uy
+    | FunExpr = 57uy
+    | FuncPat = 58uy
+    | IfExpr = 59uy
+    | InferTy = 60uy
+    | InnerModuleDecl = 61uy
+    | IntLiteral = 62uy
+    | LetDecl = 63uy
+    | LetExpr = 64uy
+    | ListPat = 65uy
+    | ListPatElements = 66uy
+    | Literal = 67uy
+    | LiteralPat = 68uy
+    | MatchCase = 69uy
+    | MatchCaseList = 70uy
+    | MatchExpr = 71uy
+    | MatchGuard = 72uy
+    | ModuleDecl = 73uy
+    | ModuleDeclList = 74uy
+    | ModulePreamble = 75uy
+    | ModuleRoot = 76uy
+    | Name = 77uy
+    | NamePatField = 78uy
+    | NamedPat = 79uy
+    | OpenDecl = 80uy
+    | OrPat = 81uy
+    | ParenExpr = 82uy
+    | ParenPat = 83uy
+    | ParenTy = 84uy
+    | Pat = 85uy
+    | QName = 86uy
+    | QNameSegment = 87uy
+    | QTy = 88uy
+    | RecordFields = 89uy
+    | RecordPat = 90uy
+    | SeqExpr = 91uy
+    | StringLiteral = 92uy
+    | TupleExpr = 93uy
+    | TuplePat = 94uy
+    | TupleTy = 95uy
+    | Ty = 96uy
+    | TypedExpr = 97uy
+    | TypedPat = 98uy
+    | UnitLiteral = 99uy
+    | WildPat = 100uy
 
 module SyntaxKind =
     let isPunct (kind : SyntaxKind) : bool =
@@ -137,6 +139,7 @@ module SyntaxKind =
         | SyntaxKind.AsKw
         | SyntaxKind.ElseKw
         | SyntaxKind.FalseKw
+        | SyntaxKind.FunKw
         | SyntaxKind.IfKw
         | SyntaxKind.InKw
         | SyntaxKind.LetKw
@@ -171,6 +174,7 @@ module SyntaxKind =
         | "rec" -> ValueSome SyntaxKind.RecKw
         | "and" -> ValueSome SyntaxKind.AndKw
         | "in" -> ValueSome SyntaxKind.InKw
+        | "fun" -> ValueSome SyntaxKind.FunKw
         | "if" -> ValueSome SyntaxKind.IfKw
         | "then" -> ValueSome SyntaxKind.ThenKw
         | "else" -> ValueSome SyntaxKind.ElseKw
@@ -190,6 +194,7 @@ module SyntaxKind =
         | SyntaxKind.RecKw -> ValueSome "rec"
         | SyntaxKind.AndKw -> ValueSome "and"
         | SyntaxKind.InKw -> ValueSome "in"
+        | SyntaxKind.FunKw -> ValueSome "fun"
         | SyntaxKind.IfKw -> ValueSome "if"
         | SyntaxKind.ThenKw -> ValueSome "then"
         | SyntaxKind.ElseKw -> ValueSome "else"
@@ -233,6 +238,7 @@ module SyntaxKindOps =
         | "rec" -> SyntaxKind.RecKw
         | "and" -> SyntaxKind.AndKw
         | "in" -> SyntaxKind.InKw
+        | "fun" -> SyntaxKind.FunKw
         | "if" -> SyntaxKind.IfKw
         | "then" -> SyntaxKind.ThenKw
         | "else" -> SyntaxKind.ElseKw

@@ -40,6 +40,7 @@ type TokenSource =
 
     static member FromTokens (input : string) (tokens : Token list) : TokenSource =
         let clearTokensFromTrivia (tokens : Token list) : Token list * Trivia list =
+            // trivia after and including the newline is considered the leading trivia of the next token
             let tokenToTrivia (token : Token) : Trivia option =
                 let syntaxKindToTriviaPieceKind (kind : SyntaxKind) : TriviaPieceKind option =
                     match kind with
@@ -55,7 +56,8 @@ type TokenSource =
                         {
                             Kind = triviaKind
                             Range = token.Range
-                            Trailing = token.Text.Contains "\n"
+                            // TODO: determine properly, it's easy
+                            Trailing = false
                         }
                 | None -> None
 

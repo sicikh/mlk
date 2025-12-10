@@ -52,7 +52,7 @@ let Test1 () =
 
 [<Test>]
 let Test2 () =
-    let source = "let x = 1\nid 2\nid 3\nx + id 4 x"
+    let source = "let x = \n id 2\nid 3\nx + id 4 x"
     let events, trivias, diags = parseRoot source
     let tree =
         let sink = LosslessTreeSink(source, trivias)

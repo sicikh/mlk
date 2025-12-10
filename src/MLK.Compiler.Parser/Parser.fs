@@ -16,6 +16,8 @@ let expectedExpression = ParseDiagnostic.mkSingleNode "expression"
 let recoverExpr<'a> : 'a -> 'a parser -> 'a parser =
     recoverInto SyntaxKind.ErrExpr expectedExpression
 
+// could make via `mkRec`, but parsers as values is better here
+// (except to that we need to manually calculate significant tokens)
 let pExpr =
     Parser (
         (fun _ _ -> failwith "uninitialized"),
@@ -36,8 +38,8 @@ let pPrefixOp =
 let pInfixOp =
     pChooseToken (fun t ->
         match t.Text, t.Kind with
-        | "+", SyntaxKind.Ident -> Some (1, 2, SyntaxKind.BinExpr)
-        | "*", SyntaxKind.Ident -> Some (3, 4, SyntaxKind.BinExpr)
+        | ("+" | "-"), _ -> Some (1, 2, SyntaxKind.BinExpr)
+        | ("*" | "/"), _ -> Some (3, 4, SyntaxKind.BinExpr)
         | _ -> None
     )
 

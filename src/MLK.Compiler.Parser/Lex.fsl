@@ -58,7 +58,7 @@ rule read = parse
 | '_'            { lexeme SyntaxKind.Underscore lexbuf }
 //| '|'            { lexeme SyntaxKind.Pipe lexbuf }
 //| '*'            { lexeme SyntaxKind.Star lexbuf }
-| operator       { lexeme SyntaxKind.Ident lexbuf }
+| operator       { lexeme SyntaxKind.Op lexbuf }
 | "module"       { lexeme SyntaxKind.ModuleKw lexbuf }
 | "open"         { lexeme SyntaxKind.OpenKw lexbuf }
 | "fun"          { lexeme SyntaxKind.FunKw lexbuf }

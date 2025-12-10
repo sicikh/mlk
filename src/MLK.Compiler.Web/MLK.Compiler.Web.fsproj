@@ -10,6 +10,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\MLK.Compiler.Parser\MLK.Compiler.Parser.fsproj" />
       <ProjectReference Include="..\MLK.Compiler\MLK.Compiler.fsproj" />
     </ItemGroup>
 

@@ -16,25 +16,26 @@ let expectedExpression = ParseDiagnostic.mkSingleNode "expression"
 let recoverExpr<'a> : 'a -> 'a parser -> 'a parser =
     recoverInto SyntaxKind.ErrExpr expectedExpression
 
-let pExpr0 : uparser =
-    mkRec
-    <| fun pExpr ->
-        let pFunc =
-            node SyntaxKind.FunExpr
-            <| pIdent ^>> pLParen ^>> recoverExpr () pExpr ^>> opt pRParen
+// let pExpr0 : uparser =
+//     mkRec
+//     <| fun pExpr ->
+//         let pFunc =
+//             node SyntaxKind.FunExpr
+//             <| pIdent ^>> pLParen ^>> recoverExpr () pExpr ^>> opt pRParen
+//
+//         let pList =
+//             node SyntaxKind.ListExpr
+//             <| pLBracket ^>> recoverExpr () (manyU pExpr) ^>> opt pRBracket
+//
+//         pFunc <|> pList
 
-        let pList =
-            node SyntaxKind.ListExpr
-            <| pLBracket ^>> recoverExpr () (manyU pExpr) ^>> opt pRBracket
-
-        pFunc <|> pList
-
-let pTerm = pTokenS SyntaxKind.IntLiteral |>> (fun _ -> SyntaxKind.Literal)
+let pTerm = node SyntaxKind.Literal <| pTokenS SyntaxKind.IntLiteral
 
 let pPrefixOp =
     pChooseToken (fun t ->
         match t.Text, t.Kind with
         | "+", SyntaxKind.Ident -> Some (5, SyntaxKind.UnaryExpr)
+        | "-", SyntaxKind.Ident -> Some (5, SyntaxKind.UnaryExpr)
         | _ -> None
     )
 
@@ -54,5 +55,5 @@ let parseRoot (sourceText : string) : ParseEvent list * ParseDiagnostic list =
     let tokenSource = TokenSource.FromTokens sourceText tokens
 
     match runParser pArithExpr tokenSource with
-    | Success ((), state) -> state.Finish ()
+    | Success (_, state) -> state.Finish ()
     | Failure _ -> failwith "Parsing failed unexpectedly"

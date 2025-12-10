@@ -5,7 +5,14 @@ open MLK.Compiler.Syntax
 open MLK.Compiler.Parser
 
 type SignificantTokens = Set<SyntaxKind>
-type Marker = | Marker of int
+type Marker =
+    {
+        Index : int
+        mutable ForwardParent : int option
+    }
+
+type CompletedMarker =
+    { StartIndex : int }
 
 type ParseState =
     {
@@ -64,34 +71,39 @@ type ParseState =
     member this.StartNode () =
         let idx = this.EventCount
 
+        let start = StartEvent (SyntaxKind.Tombstone, None)
+
         if idx = this.Events.Count then
-            this.Events.Add (StartEvent SyntaxKind.Tombstone)
+            this.Events.Add start
         else
-            this.Events[idx] <- StartEvent SyntaxKind.Tombstone
+            this.Events[idx] <- start
 
-        { this with EventCount = idx + 1 }, Marker idx
+        { this with EventCount = idx + 1 }, { Index = idx ; ForwardParent = None }
 
-    member this.FinishNode (Marker idx) (kind : SyntaxKind) : ParseState =
-        this.Events[idx] <- StartEvent kind
-        this.PushEvent FinishEvent
+    member this.FinishNode (marker : Marker) (kind : SyntaxKind) : ParseState * CompletedMarker =
+        this.Events[marker.Index] <- StartEvent(kind, marker.ForwardParent)
+        this.PushEvent FinishEvent, { StartIndex = marker.Index }
 
-    member this.CancelNode (Marker idx) : ParseState =
-        let last = this.EventCount - 1
+    member this.ChangeKind (marker : Marker) (kind : SyntaxKind) : ParseState =
+        this.Events[marker.Index] <-
+            match this.Events[marker.Index] with
+            | StartEvent (_, fp) -> StartEvent (kind, fp)
+            | _ -> failwith "expected start event"
+        this
 
-        for i = idx to last - 1 do
-            this.Events[i] <- this.Events[i + 1]
-
-        { this with EventCount = idx }
+    member this.Precede (completed : CompletedMarker) : ParseState * Marker =
+        let s1, marker = this.StartNode ()
+        match s1.Events[completed.StartIndex] with
+        | StartEvent (kind, _) ->
+            let offset = marker.Index - completed.StartIndex
+            assert (offset > 0)
+            s1.Events[completed.StartIndex] <- StartEvent (kind, Some offset)
+            s1, marker
+        | _ -> failwith "expected start event"
 
     member this.Finish () : ParseEvent list * ParseDiagnostic list =
-        let isTombstone event =
-            match event with
-            | StartEvent SyntaxKind.Tombstone -> true
-            | _ -> false
-
         this.Events
         |> Seq.take this.EventCount
-        |> Seq.filter (not << isTombstone)
         |> Seq.toList,
         List.rev this.Diagnostics
 
@@ -280,11 +292,14 @@ module Combinators =
         p.SignificantTokens <- p'.SignificantTokens
         p
 
-    let node (kind : SyntaxKind) (p : 'a parser) : 'a parser =
-        let f state ctx =
-            match p.Run (pushEvent (StartEvent kind) state) ctx with
-            | Success (r, state1) -> Success (r, state1.PushEvent FinishEvent)
-            | Failure _ as r -> r
+    let node (kind : SyntaxKind) (p : 'a parser) : CompletedMarker parser =
+        let f (state : ParseState) ctx =
+            let s1, marker = state.StartNode ()
+            match p.Run s1 ctx with
+            | Success (_, state1) ->
+                let s2, completed = state1.FinishNode marker kind
+                Success (completed, s2)
+            | Failure con -> Failure con
 
         Parser (f, p.SignificantTokens, p.IsOpt)
 
@@ -326,7 +341,7 @@ module Combinators =
 
                 let diag = diagBuilder state.Source diagRange
 
-                state.WithSource(inp1).AddDiag(diag).PushEvent(StartEvent errorKind).PushEvents(errEvents).PushEvent
+                state.WithSource(inp1).AddDiag(diag).PushEvent(StartEvent(errorKind, None)).PushEvents(errEvents).PushEvent
                     FinishEvent
 
             Success ((), state1)
@@ -359,48 +374,43 @@ module Combinators =
         Parser (f', Set.empty)
 
     let pPratt'
-        (pTerm : SyntaxKind parser)
+        (pTerm : CompletedMarker parser)
         (pPrefixOp : (int * SyntaxKind) parser)
         (pInfixOp : (int * int * SyntaxKind) parser)
         (minbp : int)
-        : uparser
-        =
-        let rec pExpr minbp (state : ParseState) ctx =
-            let state0, mark = state.StartNode ()
-
-            let parseHead state =
-                match pPrefixOp.Run state ctx with
-                | Success ((rbp, kind), state1) ->
-                    match pExpr rbp state1 ctx with
-                    | Success (_, state2) -> Success ((kind, true), state2)
-                    | Failure con -> Failure con
-                | Failure false ->
-                    match pTerm.Run state ctx with
-                    | Success (kind, state1) -> Success ((kind, false), state1)
-                    | Failure con -> Failure con
-                | Failure true -> Failure true
-
-            match parseHead state0 with
+        : Parser<CompletedMarker> =
+        let rec pExpr minbp state ctx =
+            match parseHead state ctx with
             | Failure con -> Failure con
-            | Success ((headKind, needsWrapper), state1) -> parseTail mark headKind needsWrapper minbp state1 ctx
+            | Success (head, state1) -> parseTail head minbp state1 ctx
 
-        and parseTail mark currentKind needsWrapper minbp state ctx =
-            let finishOrCancel (state : ParseState) =
-                if needsWrapper then
-                    state.FinishNode mark currentKind
-                else
-                    state
+        and parseHead (state : ParseState) ctx =
+            let s1, marker = state.StartNode ()
+            match pPrefixOp.Run s1 ctx with
+            | Success ((rbp, kind), state1) ->
+                match pExpr rbp state1 ctx with
+                | Success (_completed, state2) ->
+                    let s3 = state2.ChangeKind marker kind
+                    let s4 = s3.PushEvent FinishEvent
+                    let completedMarker = { StartIndex = marker.Index }
+                    // let state3, marker = state2.Precede completed
+                    // let state4, completedNode = state3.FinishNode marker kind
+                    Success (completedMarker, s4)
+                | Failure con -> Failure con
+            | Failure false -> pTerm.Run state ctx
+            | Failure true -> Failure true
 
-            let snapshot = state
-
+        and parseTail left minbp state ctx =
             match pInfixOp.Run state ctx with
             | Success ((lbp, rbp, kind), stateOp) when lbp >= minbp ->
                 match pExpr rbp stateOp ctx with
-                | Success ((), stateRhs) -> parseTail mark kind true minbp stateRhs ctx
+                | Success (_right, stateRhs) ->
+                    let stateParent, wrap = stateRhs.Precede left
+                    let stateDone, combined = stateParent.FinishNode wrap kind
+                    parseTail combined minbp stateDone ctx
                 | Failure con -> Failure con
-            | Success _ -> Success ((), finishOrCancel snapshot)
-            | Failure false -> Success ((), finishOrCancel state)
-            | Failure true -> Failure true
+            | _ ->
+                Success (left, state)
 
         Parser (pExpr minbp, pTerm.SignificantTokens, false)
 

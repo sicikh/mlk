@@ -11,7 +11,7 @@ let Setup () =
 
 [<Test>]
 let Test1 () =
-    let events, diags = parseRoot "["
+    let events, diags = parseRoot "[f(]"
 
     printfn "%A" events
     printfn "%A" diags

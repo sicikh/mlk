@@ -17,7 +17,7 @@ let recoverExpr<'a> : 'a -> 'a parser -> 'a parser = recoverInto SyntaxKind.ErrE
 
 let pExpr : uparser = mkRec <| fun pExpr ->
     let pFunc = node SyntaxKind.FunExpr <| pIdent ^>> pLParen ^>> recoverExpr () pExpr ^>> opt pRParen
-    let pList = node SyntaxKind.ListExpr <| pLBracket ^>> recoverExpr [] (many pExpr) ^>> opt pRBracket
+    let pList = node SyntaxKind.ListExpr <| pLBracket ^>> recoverExpr () (manyU pExpr) ^>> opt pRBracket
 
     pFunc <|> pList
 
@@ -25,6 +25,6 @@ let parseRoot (sourceText : string) : ParseEvent list * ParseDiagnostic list =
     let tokens = Lexer.tokenize sourceText
     let tokenSource = TokenSource.FromTokens sourceText tokens
     match runParser pExpr tokenSource with
-    | Success ((), _, events, state) -> List.rev events, state.Diagnostics
+    | Success ((), state) -> List.rev state.Events, List.rev state.Diagnostics
     | Failure _ ->
         failwith "Parsing failed unexpectedly"

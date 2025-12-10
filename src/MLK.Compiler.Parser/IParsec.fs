@@ -8,13 +8,61 @@ type SignificantTokens = Set<SyntaxKind>
 
 type ParseState =
     {
+        Source : TokenSource
         Diagnostics : ParseDiagnostic list
+        Events : ParseEvent list
     }
+
+    static member WithSource (source : TokenSource) =
+        {
+            Source = source
+            Diagnostics = []
+            Events = []
+        }
 
     member this.AddDiag (diag : ParseDiagnostic) : ParseState =
         { this with
             Diagnostics = diag :: this.Diagnostics
         }
+
+    member this.PushToken (kind : SyntaxKind) (offset : TextSize) : ParseState =
+        { this with
+            Events = TokenEvent (kind, offset) :: this.Events
+        }
+
+    member this.PushEvent (event : ParseEvent) : ParseState =
+        { this with
+            Events = event :: this.Events
+        }
+
+    member this.PushEvents (events : ParseEvent list) : ParseState =
+        { this with
+            Events = events @ this.Events
+        }
+
+    member this.SameCurrent (other : ParseState) : bool =
+        this.Source.HasSameCurrentToken other.Source
+
+    member this.Uncons : Token * ParseState =
+        let head, tail = this.Source.Uncons
+        let state' = { this with Source = tail }
+        head, state'
+
+    member this.WithSource (source : TokenSource) : ParseState = { this with Source = source }
+
+type ParseCtx =
+    {
+        SignificantTokens : SignificantTokens
+    }
+
+    static member Zero = { SignificantTokens = Set.empty }
+
+    member this.UnionTokens (sigs : SignificantTokens) : ParseCtx =
+        { this with
+            SignificantTokens = Set.union this.SignificantTokens sigs
+        }
+
+    member this.WithTokens (sigs : SignificantTokens) : ParseCtx = { this with SignificantTokens = sigs }
 
 type ErrorReason =
     {
@@ -24,10 +72,10 @@ type ErrorReason =
     }
 
 type PResult<'a> =
-    | Success of res : 'a * inp : TokenSource * events : ParseEvent list * state : ParseState
-    | Failure of err : ErrorReason * con : bool * state : ParseState
+    | Success of res : 'a * state : ParseState
+    | Failure of con : bool
 
-type RunParser<'a> = TokenSource -> SignificantTokens -> ParseEvent list -> ParseState -> PResult<'a>
+type RunParser<'a> = ParseState -> ParseCtx -> PResult<'a>
 
 type Parser<'a>(f : RunParser<'a>, significantTokens : SignificantTokens, [<Struct>] ?isOpt : bool) =
     let mutable f = f
@@ -44,7 +92,7 @@ type Parser<'a>(f : RunParser<'a>, significantTokens : SignificantTokens, [<Stru
 
     member this.IsOpt = isOpt
 
-    new() = Parser<'a> ((fun _ _ _ -> failwith "called dummy parser"), Set.empty)
+    new() = Parser<'a> ((fun _ _ -> failwith "called dummy parser"), Set.empty)
 
 type 'a parser = Parser<'a>
 
@@ -54,24 +102,26 @@ type uparser = UParser
 [<AutoOpen>]
 module Combinators =
     let runParser (p : 'a parser) (inp : TokenSource) : PResult<'a> =
-        let initialState = { Diagnostics = [] }
-
-        p.Run inp Set.empty [] initialState
+        p.Run (ParseState.WithSource inp) ParseCtx.Zero
 
     let preturn (x : 'a) : 'a parser =
-        let f (inp : TokenSource) (_ : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            Success (x, inp, events, state)
+        let f state _ = Success (x, state)
 
         Parser (f, Set.empty, true)
 
+    let unionCtx (p : 'a parser) (ctx : ParseCtx) : ParseCtx = ctx.UnionTokens p.SignificantTokens
+
+    let pushEvent (event : ParseEvent) (state : ParseState) : ParseState = state.PushEvent event
+
     let pipe2 (p : 'a parser) (q : 'b parser) (f : 'a -> 'b -> 'c) : 'c parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p.Run inp (Set.union sigs q.SignificantTokens) events state with
-            | Success (r1, inp', events', state') ->
-                match q.Run inp' sigs events' state' with
-                | Success (r2, inp'', events'', state'') -> Success (f r1 r2, inp'', events'', state'')
-                | Failure (err, con, state'') -> Failure (err, con || not (inp.HasSameCurrentToken inp'), state'')
-            | Failure (err, con, state') -> Failure (err, con, state')
+        let f state ctx =
+            // TODO: how to union ctx?
+            match p.Run state (unionCtx q ctx) with
+            | Success (r1, state1) ->
+                match q.Run state1 ctx with
+                | Success (r2, state2) -> Success (f r1 r2, state2)
+                | Failure con -> Failure (con || not (state.SameCurrent state1))
+            | Failure con -> Failure con
 
         let significantTokens =
             if p.IsOpt then
@@ -82,31 +132,8 @@ module Combinators =
         Parser (f, significantTokens, p.IsOpt && q.IsOpt)
 
     let pipe3 (p1 : 'a parser) (p2 : 'b parser) (p3 : 'c parser) (f : 'a -> 'b -> 'c -> 'd) : 'd parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p1.Run inp (Set.union sigs (Set.union p2.SignificantTokens p3.SignificantTokens)) events state with
-            | Success (r1, inp', events', state') ->
-                match p2.Run inp' (Set.union sigs p3.SignificantTokens) events' state' with
-                | Success (r2, inp'', events'', state'') ->
-                    match p3.Run inp'' sigs events'' state'' with
-                    | Success (r3, inp''', events''', state''') -> Success (f r1 r2 r3, inp''', events''', state''')
-                    | Failure (err, con, state''') ->
-                        Failure (err, con || not (inp.HasSameCurrentToken inp''), state''')
-                | Failure (err, con, state'') -> Failure (err, con || not (inp.HasSameCurrentToken inp'), state'')
-            | Failure (err, con, state') -> Failure (err, con, state')
-
-        let significantTokens =
-            if p1.IsOpt then
-                let p2SignificantTokens =
-                    if p2.IsOpt then
-                        Set.union p2.SignificantTokens p3.SignificantTokens
-                    else
-                        p2.SignificantTokens
-
-                Set.union p1.SignificantTokens p2SignificantTokens
-            else
-                p1.SignificantTokens
-
-        Parser (f, significantTokens, p1.IsOpt && p2.IsOpt && p3.IsOpt)
+        // TODO: optimize later
+        pipe2 p1 (pipe2 p2 p3 (fun x y -> (x, y))) (fun x (y, z) -> f x y z)
 
     let inline (^.>>.) (p : 'a parser) (q : 'b parser) : ('a * 'b) parser = pipe2 p q (fun x y -> (x, y))
 
@@ -117,21 +144,21 @@ module Combinators =
     let inline (^>>) (p : 'a parser) (q : 'b parser) : uparser = pipe2 p q (fun _ _ -> ())
 
     let (<|>) (p : 'a parser) (q : 'a parser) : 'a parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p.Run inp sigs events state with
+        let f state ctx =
+            match p.Run state ctx with
             | Success _ as r -> r
-            | Failure (con = true) as r -> r
-            | Failure (con = false) -> q.Run inp sigs events state
+            | Failure true as r -> r
+            | Failure false -> q.Run state ctx
 
         let significantTokens = Set.union p.SignificantTokens q.SignificantTokens
 
         Parser (f, significantTokens, p.IsOpt || q.IsOpt)
 
     let map (f : 'a -> 'b) (p : 'a parser) : 'b parser =
-        let f' (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p.Run inp sigs events state with
-            | Success (r, inp', events', state') -> Success (f r, inp', events', state')
-            | Failure (err, con, state') -> Failure (err, con, state')
+        let f' state ctx =
+            match p.Run state ctx with
+            | Success (r, state1) -> Success (f r, state1)
+            | Failure con -> Failure con
 
         Parser (f', p.SignificantTokens, p.IsOpt)
 
@@ -139,41 +166,50 @@ module Combinators =
 
     // TODO: add parameter to get significant tokens as isOpt from f's result?
     let bind (f : 'a -> 'b parser) (p : 'a parser) : 'b parser =
-        let f' (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p.Run inp sigs events state with
-            | Success (r, inp', events', state') ->
+        let f' state ctx =
+            match p.Run state ctx with
+            | Success (r, state1) ->
                 let q = f r
 
-                match q.Run inp' sigs events' state' with
+                match q.Run state1 ctx with
                 | Success _ as r -> r
-                | Failure (err, con, state'') -> Failure (err, con || not (inp.HasSameCurrentToken inp'), state'')
-            | Failure (err, con, state') -> Failure (err, con, state')
+                | Failure con -> Failure (con || not (state.SameCurrent state1))
+            | Failure con -> Failure con
 
         Parser (f', p.SignificantTokens, p.IsOpt)
 
     let inline (>>=) (p : 'a parser) (f : 'a -> 'b parser) : 'b parser = bind f p
 
     let opt (p : 'a parser) : 'a option parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p.Run inp sigs events state with
-            | Success (r, inp', events', state') -> Success (Some r, inp', events', state')
-            | Failure (con = false) -> Success (None, inp, events, state)
-            | Failure (err, con, state) -> Failure (err, con, state)
+        let f state ctx =
+            match p.Run state ctx with
+            | Success (r, state1) -> Success (Some r, state1)
+            | Failure false -> Success (None, state)
+            | Failure true -> Failure true
 
         Parser (f, p.SignificantTokens, true)
 
     let many (p : 'a parser) : 'a list parser =
-        let rec pfold acc inp sigs events state =
-            match p.Run inp (Set.union sigs p.SignificantTokens) events state with
-            | Success (r, inp', events', state') -> pfold (r :: acc) inp' sigs events' state'
-            | Failure (con = false) -> Success (List.rev acc, inp, events, state)
-            | Failure (err, con, state) -> Failure (err, con, state)
+        let rec aux acc state ctx =
+            match p.Run state (unionCtx p ctx) with
+            | Success (r, state1) -> aux (r :: acc) state1 ctx
+            | Failure false -> Success (List.rev acc, state)
+            | Failure true -> Failure true
 
-        let f = pfold []
+        Parser (aux [], p.SignificantTokens, true)
 
-        Parser (f, p.SignificantTokens, true)
+    let manyU (p : uparser) : uparser =
+        let rec aux state ctx =
+            match p.Run state (unionCtx p ctx) with
+            | Success (_, state1) -> aux state1 ctx
+            | Failure false -> Success ((), state)
+            | Failure true -> Failure true
+
+        Parser (aux, p.SignificantTokens, true)
 
     let many1 (p : 'a parser) : 'a list parser = pipe2 p (many p) (fun x xs -> x :: xs)
+
+    let many1U (p : uparser) : uparser = pipe2 p (manyU p) (fun () () -> ())
 
     let sepBy1 (p : 'a parser) (sep : 'b parser) : 'a list parser =
         let sepThenP = sep ^>>. p
@@ -187,8 +223,8 @@ module Combinators =
 
     let sepByTrailing (p : 'a parser) (sep : 'b parser) : 'a list parser = sepBy1Trailing p sep <|> preturn []
 
-    let between (popen : 'a parser) (pclose : 'b parser) (p : 'c parser) : 'c parser =
-        pipe3 popen p pclose (fun _ x _ -> x)
+    let between (pOpen : 'a parser) (pClose : 'b parser) (p : 'c parser) : 'c parser =
+        pipe3 pOpen p pClose (fun _ x _ -> x)
 
     let mkRec (mkParser : 'a parser -> 'a parser) : 'a parser =
         let p = Parser ()
@@ -200,42 +236,20 @@ module Combinators =
         p
 
     let node (kind : SyntaxKind) (p : 'a parser) : 'a parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            match p.Run inp sigs (StartEvent kind :: events) state with
-            | Success (r, inp', events', state') -> Success (r, inp', FinishEvent :: events', state')
-            | Failure (err, con, state') -> Failure (err, con, state')
-
-        Parser (f, p.SignificantTokens, p.IsOpt)
-
-    let token (kind : SyntaxKind) (p : 'a parser) : 'a parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            let tokenEndOffset = inp.Head.Range.End
-
-            match p.Run inp sigs events state with
-            | Success (r, inp', events', state') ->
-                Success (r, inp', TokenEvent (kind, tokenEndOffset) :: events', state')
-            | Failure (err, con, state') -> Failure (err, con, state')
+        let f state ctx =
+            match p.Run (pushEvent (StartEvent kind) state) ctx with
+            | Success (r, state1) -> Success (r, state1.PushEvent FinishEvent)
+            | Failure _ as r -> r
 
         Parser (f, p.SignificantTokens, p.IsOpt)
 
     let private pTokenS' isSignificant kind : Token parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
-            if inp.Head.Kind = kind then
-                let tokenEndOffset = inp.Head.Range.End
-                let events' = TokenEvent (kind, tokenEndOffset) :: events
-
-                Success (inp.Head, inp.Tail, events', state)
-            else
-                let expected = if isSignificant then Set.add kind sigs else sigs
-
-                let err =
-                    {
-                        Reason = None
-                        Expected = expected
-                        Position = inp.Head.Range.Start
-                    }
-
-                Failure (err, false, state)
+        let f (state : ParseState) _ctx =
+            match state.Uncons with
+            | t, state1 when t.Kind = kind ->
+                let tokenEndOffset = t.Range.End
+                Success (t, state1.PushEvent (TokenEvent (kind, tokenEndOffset)))
+            | _ -> Failure false
 
         Parser (f, if isSignificant then Set.singleton kind else Set.empty)
 
@@ -247,36 +261,30 @@ module Combinators =
         (diagBuilder : TokenSource -> TextRange -> ParseDiagnostic)
         : uparser
         =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
+        let f (state : ParseState) (ctx : ParseCtx) =
             let rec loop (inp : TokenSource) events =
                 match inp.Head.Kind with
-                | SyntaxKind.Eof -> true, inp, events
-                | tk when Set.contains tk sigs -> false, inp, events
+                | SyntaxKind.Eof -> inp, events
+                | tk when Set.contains tk ctx.SignificantTokens -> inp, events
                 | tk ->
                     let event = TokenEvent (tk, inp.Head.Range.End)
                     loop inp.Tail (event :: events)
 
-            let isEof, inp', errEvents = loop inp []
+            let inp1, errEvents = loop state.Source []
 
-            let events', state' =
-                match errEvents with
-                | TokenEvent (endOffset = endOffset) :: _ ->
-                    let errorRange = TextRange.create inp.Position endOffset
-                    let diag = diagBuilder inp' errorRange
-                    let state' = state.AddDiag diag
+            let state1 =
+                let diagRange =
+                    match errEvents with
+                    | TokenEvent (endOffset = endOffset) :: _ -> TextRange.create state.Source.Position endOffset
+                    | [] -> state.Source.Head.Range
+                    | _ -> failwith "unreachable"
 
-                    FinishEvent :: errEvents @ (StartEvent errorKind :: events), state'
-                | [] ->
-                    if isEof then
-                        let errorRange = TextRange.emptyAt inp.Position
-                        let diag = diagBuilder inp' errorRange
-                        let state' = state.AddDiag diag
-                        FinishEvent :: StartEvent errorKind :: events, state'
-                    else
-                        events, state
-                | _ -> failwith "unreachable"
+                let diag = diagBuilder state.Source diagRange
 
-            Success ((), inp', events', state')
+                state.WithSource(inp1).AddDiag(diag).PushEvent(StartEvent errorKind).PushEvents(errEvents).PushEvent
+                    FinishEvent
+
+            Success ((), state1)
 
         Parser (f, Set.empty, true)
 
@@ -293,43 +301,37 @@ module Combinators =
         // TODO: add diag to state
         opt p
 
+    type private POpKind<'a> =
+        | PInfix of rbp : int * mkInfix : ('a -> 'a -> 'a)
+        | PPostfix of pPostfix : ('a -> 'a parser)
+
     // TODO: rewrite to use events, not directly build AST nodes
     let pPratt'
         (pTerm : 'a parser)
         (pPrefixOp : (int * ('a -> 'a)) parser)
-        (pInfixOp : (int * ('a -> 'a -> 'a)) parser)
-        (pPostfixOp : (int * ('a -> 'a)) parser)
+        (pInfixOp : (int * int * ('a -> 'a -> 'a)) parser)
+        (pPostfixOp : (int * ('a -> 'a parser)) parser)
         (minbp : int)
         : 'a parser
         =
         failwith "todo"
 
-    let pPratt
-        (pTerm : 'a parser)
-        (pPrefixOp : (int * ('a -> 'a)) parser)
-        (pInfixOp : (int * ('a -> 'a -> 'a)) parser)
-        (pPostfixOp : (int * ('a -> 'a)) parser)
-        : 'a parser
-        =
-        pPratt' pTerm pPrefixOp pInfixOp pPostfixOp 0
-
-
     let mutable private traceMsgIndent = 0
 
     let trace (name : string) (p : 'a parser) : 'a parser =
-        let f (inp : TokenSource) (sigs : SignificantTokens) (events : ParseEvent list) (state : ParseState) =
+        let f (state : ParseState) (ctx : ParseCtx) =
             let indentStr = String.replicate traceMsgIndent "  "
-            printfn $"{indentStr}Entering parser {name}. Current token: {inp.Head}"
+            printfn $"{indentStr}Entering parser {name}. Current token: {state.Source.Head}"
             traceMsgIndent <- traceMsgIndent + 1
 
-            match p.Run inp sigs events state with
-            | Success (r, inp', events', state') ->
-                printfn $"{indentStr}Exiting parser {name}. Next token: {inp'.Head}"
+            match p.Run state ctx with
+            | Success (_, state1) as r ->
+                printfn $"{indentStr}Exiting parser {name}. Next token: {state1.Source.Head}"
                 traceMsgIndent <- traceMsgIndent - 1
-                Success (r, inp', events', state')
-            | Failure (err, con, state') ->
-                printfn $"{indentStr}Failing parser {name}. Current token: {inp.Head}"
+                r
+            | Failure con ->
+                printfn $"{indentStr}Failing parser {name}, consumed = {con}. Current token: {state.Source.Head}"
                 traceMsgIndent <- traceMsgIndent - 1
-                Failure (err, con, state')
+                Failure con
 
         Parser (f, p.SignificantTokens, p.IsOpt)

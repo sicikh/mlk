@@ -78,21 +78,33 @@ type GenericTree =
         trailingTrivia : TriviaPiece list
     | Node of kind : SyntaxKind * children : GenericTree list * range : TextRange
 
-    override this.ToString() : string =
+    member this.DebugPrint (source : string option) : string =
+        let printTrivia (startOffset : TextSize) (trivia : TriviaPiece) : string =
+            match source with
+            | Some src ->
+                let text = src.Slice(TextRange.at startOffset trivia.Length)
+                $"%A{trivia.Kind}(\"{text}\")"
+            | None -> $"%A{trivia.Kind}({trivia.Length})"
+
         let rec toStringIndent (tree : GenericTree) (indent : int) : string =
             let indentStr = String.replicate indent "  "
 
             match tree with
             | Token (kind, text, range, leadingTrivia, trailingTrivia) ->
-                let leadingStr =
-                    leadingTrivia
-                    |> List.map (fun t -> $"%A{t.Kind}({t.Length})")
-                    |> String.concat ", "
+                let printTriviaList (startOffset : TextSize) (trivias : TriviaPiece list) (isLeading : bool) : string =
+                    let mutable offset = startOffset
+                    let triviaStrs =
+                        trivias
+                        |> List.map (fun t ->
+                            let offset' = if isLeading then offset - t.Length else offset
+                            let s = printTrivia offset' t
+                            offset <- if isLeading then offset' else offset' + t.Length
+                            s)
 
-                let trailingStr =
-                    trailingTrivia
-                    |> List.map (fun t -> $"%A{t.Kind}({t.Length})")
-                    |> String.concat ", "
+                    String.concat " ; " triviaStrs
+
+                let leadingStr = printTriviaList range.Start leadingTrivia true
+                let trailingStr = printTriviaList range.End trailingTrivia false
 
                 $"{indentStr}%A{kind}@{range} \"{text}\" [{leadingStr}] [{trailingStr}]"
             | Node (kind, children, range) ->
@@ -105,6 +117,8 @@ type GenericTree =
 
         toStringIndent this 0
 
+    override this.ToString(): string = this.DebugPrint(None)
+
 type TreeFactory() =
     let mutable position : TextSize = TextSize.zero
     let mutable stack : (SyntaxKind * GenericTree list * TextSize) list = []
@@ -114,15 +128,13 @@ type TreeFactory() =
     member this.TokenWithTrivia
         (kind : SyntaxKind)
         (text : string)
+        (range : TextRange)
         (leadingTrivia : TriviaPiece list)
         (trailingTrivia : TriviaPiece list)
         =
-        let length = text.Size
+        let token = Token (kind, text, range, leadingTrivia, trailingTrivia)
 
-        let token =
-            Token (kind, text, TextRange.create position (position + length), leadingTrivia, trailingTrivia)
-
-        position <- position + length
+        position <- range.End
 
         match stack with
         | (parentKind, children, startPos) :: rest -> stack <- (parentKind, children @ [ token ], startPos) :: rest
@@ -175,9 +187,12 @@ type LosslessTreeSink(source : string, trivias : Trivia list) =
 
 
     member this.DoToken (kind : SyntaxKind) (tokenEnd : TextSize) =
-        let tokenStart = textPos
+        // let tokenStart = textPos
 
         this.EatTrivia false tokenEnd
+
+        let tokenStart = textPos
+
         let trailingStart = triviaPieces.Count
 
         textPos <- tokenEnd
@@ -190,7 +205,7 @@ type LosslessTreeSink(source : string, trivias : Trivia list) =
         let leading = triviaPieces |> Seq.take trailingStart |> Seq.toList
         let trailing = triviaPieces |> Seq.skip trailingStart |> Seq.toList
 
-        builder.TokenWithTrivia kind text leading trailing
+        builder.TokenWithTrivia kind text tokenRange leading trailing
         triviaPieces.Clear ()
 
     interface ITreeSink with

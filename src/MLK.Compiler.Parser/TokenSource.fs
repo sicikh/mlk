@@ -40,8 +40,30 @@ type TokenSource =
 
     static member FromTokens (input : string) (tokens : Token list) : TokenSource =
         let clearTokensFromTrivia (tokens : Token list) : Token list * Trivia list =
-            // TODO:
-            tokens, []
+            let tokenToTrivia (token : Token) : Trivia option =
+                let syntaxKindToTriviaPieceKind (kind : SyntaxKind) : TriviaPieceKind option =
+                    match kind with
+                    | SyntaxKind.Whitespace -> Some TriviaPieceKind.Whitespace
+                    | SyntaxKind.Newline -> Some TriviaPieceKind.Newline
+                    // | SyntaxKind.LineComment -> TriviaPieceKind.LineComment
+                    // | SyntaxKind.BlockComment -> TriviaPieceKind.BlockComment
+                    | _ -> None
+
+                match syntaxKindToTriviaPieceKind token.Kind with
+                | Some triviaKind ->
+                    Some
+                        {
+                            Kind = triviaKind
+                            Range = token.Range
+                            Trailing = token.Text.Contains "\n"
+                        }
+                | None -> None
+
+            // TODO: make in one pass
+            let trivias = tokens |> List.choose tokenToTrivia
+            let tokens = tokens |> List.filter (tokenToTrivia >> Option.isNone)
+
+            tokens, trivias
 
         let tokens, trivias = clearTokensFromTrivia tokens
 

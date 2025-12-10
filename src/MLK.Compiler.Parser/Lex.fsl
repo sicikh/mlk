@@ -26,7 +26,7 @@ let newline (lexbuf : LexBuffer<_>) =
 
 let digit = ['0'-'9']
 // TODO: tab should trigger error (and treated as 4 whitespaces)
-let whitespace = [' ' '\t']
+let whitespace = [' ' '\t']+
 let newline = ('\n' | '\r' '\n')
 let operator_char = ['+' '-' '*' '/' '%' '^' '&' '|' '<' '>' '=' '!' '?' '~']
 let operator = operator_char+
@@ -37,7 +37,7 @@ let int = ['-']?digit+
 let float = ['-']?digit+('.'digit+)?(['e''E']digit+)?
 
 rule read = parse
-| whitespace     { read lexbuf }
+| whitespace     { lexeme SyntaxKind.Whitespace lexbuf }
 | newline        { newline lexbuf; read lexbuf  }
 | int            { lexeme SyntaxKind.IntLiteral lexbuf }
 // | float          { lexeme TFloat lexbuf }

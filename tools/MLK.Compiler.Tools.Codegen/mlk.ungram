@@ -107,6 +107,15 @@ Expr =
     | ListExpr
     | ErrExpr
 
+BinExpr =
+    Left: Expr
+    Op: QName
+    Right: Expr
+
+UnaryExpr =
+    Op: QName
+    Operand: Expr
+
 ParenExpr = '(' Expr ')'
 
 TypedExpr =

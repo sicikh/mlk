@@ -23,7 +23,7 @@ let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
         |> List.sort
 
     let allSyntaxKindsValues =
-        "Eof" :: (punctSyntaxKinds @ allKeywords @ tokens @ nodesSyntaxKinds)
+        "Tombstone" :: "Eof" :: (punctSyntaxKinds @ allKeywords @ tokens @ nodesSyntaxKinds)
 
     let syntaxKindsValues =
         allSyntaxKindsValues

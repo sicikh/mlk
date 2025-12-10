@@ -5,19 +5,22 @@ open MLK.Compiler.Syntax
 open MLK.Compiler.Parser
 
 type SignificantTokens = Set<SyntaxKind>
+type Marker = | Marker of int
 
 type ParseState =
     {
         Source : TokenSource
         Diagnostics : ParseDiagnostic list
-        Events : ParseEvent list
+        Events : ResizeArray<ParseEvent>
+        EventCount : int
     }
 
     static member WithSource (source : TokenSource) =
         {
             Source = source
             Diagnostics = []
-            Events = []
+            Events = ResizeArray ()
+            EventCount = 0
         }
 
     member this.AddDiag (diag : ParseDiagnostic) : ParseState =
@@ -26,19 +29,27 @@ type ParseState =
         }
 
     member this.PushToken (kind : SyntaxKind) (offset : TextSize) : ParseState =
-        { this with
-            Events = TokenEvent (kind, offset) :: this.Events
-        }
+        let idx = this.EventCount
+
+        if idx = this.Events.Count then
+            this.Events.Add (TokenEvent (kind, offset))
+        else
+            this.Events[idx] <- TokenEvent (kind, offset)
+
+        { this with EventCount = idx + 1 }
 
     member this.PushEvent (event : ParseEvent) : ParseState =
-        { this with
-            Events = event :: this.Events
-        }
+        let idx = this.EventCount
+
+        if idx = this.Events.Count then
+            this.Events.Add (event)
+        else
+            this.Events[idx] <- event
+
+        { this with EventCount = idx + 1 }
 
     member this.PushEvents (events : ParseEvent list) : ParseState =
-        { this with
-            Events = events @ this.Events
-        }
+        List.fold _.PushEvent this (List.rev events)
 
     member this.SameCurrent (other : ParseState) : bool =
         this.Source.HasSameCurrentToken other.Source
@@ -49,6 +60,24 @@ type ParseState =
         head, state'
 
     member this.WithSource (source : TokenSource) : ParseState = { this with Source = source }
+
+    member this.StartNode () =
+        let idx = this.EventCount
+
+        if idx = this.Events.Count then
+            this.Events.Add (StartEvent SyntaxKind.Tombstone)
+        else
+            this.Events[idx] <- StartEvent SyntaxKind.Tombstone
+
+        { this with EventCount = idx + 1 }, Marker idx
+
+    member this.FinishNode (Marker idx) (kind : SyntaxKind) : ParseState =
+        this.Events[idx] <- StartEvent kind
+        this.PushEvent FinishEvent
+
+
+    member this.Finish () : ParseEvent list * ParseDiagnostic list =
+        this.Events |> Seq.take this.EventCount |> Seq.toList, List.rev this.Diagnostics
 
 type ParseCtx =
     {
@@ -301,15 +330,55 @@ module Combinators =
         // TODO: add diag to state
         opt p
 
+    let pChooseToken (f : Token -> 'a option) : 'a parser =
+        let f' (state : ParseState) _ctx =
+            match state.Uncons with
+            | t, state1 ->
+                match f t with
+                | Some r ->
+                    let tokenEndOffset = t.Range.End
+                    Success (r, state1.PushEvent (TokenEvent (t.Kind, tokenEndOffset)))
+                | None -> Failure false
+
+        Parser (f', Set.empty)
+
     let pPratt'
-        (pTerm : uparser)
+        (pTerm : SyntaxKind parser)
         (pPrefixOp : (int * SyntaxKind) parser)
         (pInfixOp : (int * int * SyntaxKind) parser)
         (minbp : int)
-        : 'a parser
+        : uparser
         =
-        let rec pExpr minbp state ctx =
-            failwith "todo"
+        let rec pExpr minbp (state : ParseState) ctx =
+            let state0, mark = state.StartNode ()
+
+            let parseHead state =
+                match pPrefixOp.Run state ctx with
+                | Success ((rbp, kind), state1) ->
+                    match pExpr rbp state1 ctx with
+                    | Success (_, state2) -> Success (kind, state2)
+                    | Failure con -> Failure con
+                | Failure false ->
+                    match pTerm.Run state ctx with
+                    | Success (kind, state1) -> Success (kind, state1)
+                    | Failure con -> Failure con
+                | Failure true -> Failure true
+
+            match parseHead state0 with
+            | Failure con -> Failure con
+            | Success (headKind, state1) -> parseTail mark headKind minbp state1 ctx
+
+        and parseTail mark currentKind minbp state ctx =
+            let snapshot = state
+
+            match pInfixOp.Run state ctx with
+            | Success ((lbp, rbp, kind), stateOp) when lbp >= minbp ->
+                match pExpr rbp stateOp ctx with
+                | Success ((), stateRhs) -> parseTail mark kind minbp stateRhs ctx
+                | Failure con -> Failure con
+            | Success _ -> Success ((), snapshot.FinishNode mark currentKind)
+            | Failure false -> Success ((), state.FinishNode mark currentKind)
+            | Failure true -> Failure true
 
         Parser (pExpr minbp, pTerm.SignificantTokens, false)
 

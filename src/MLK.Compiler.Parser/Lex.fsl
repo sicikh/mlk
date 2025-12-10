@@ -38,7 +38,7 @@ let float = ['-']?digit+('.'digit+)?(['e''E']digit+)?
 
 rule read = parse
 | whitespace     { lexeme SyntaxKind.Whitespace lexbuf }
-| newline        { newline lexbuf; read lexbuf  }
+| newline        { let nl = lexeme SyntaxKind.Newline lexbuf in newline lexbuf ; nl }
 | int            { lexeme SyntaxKind.IntLiteral lexbuf }
 // | float          { lexeme TFloat lexbuf }
 // TODO: strings

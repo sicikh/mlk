@@ -10,10 +10,10 @@
         <Compile Include="Diagnostics.fs" />
         <Compile Include="TreeSink.fs" />
         <FsLex Include="Lex.fsl">
-            <OtherFlags>--module MLK.Compiler.Parser.Lex --unicode --internal -o Lex.gen.fs</OtherFlags>
+            <OtherFlags>--module MLK.Compiler.Parser.Lex --unicode --internal</OtherFlags>
         </FsLex>
-        <Compile Include="Lex.gen.fsi"/>
-        <Compile Include="Lex.gen.fs"/>
+        <Compile Include="Lex.fsi"/>
+        <Compile Include="Lex.fs"/>
         <Compile Include="Lexer.fs"/>
         <Compile Include="IParsec.fs"/>
         <Compile Include="Parser.fsi" />

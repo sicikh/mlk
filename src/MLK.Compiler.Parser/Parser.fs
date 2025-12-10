@@ -16,26 +16,20 @@ let expectedExpression = ParseDiagnostic.mkSingleNode "expression"
 let recoverExpr<'a> : 'a -> 'a parser -> 'a parser =
     recoverInto SyntaxKind.ErrExpr expectedExpression
 
-// let pExpr0 : uparser =
-//     mkRec
-//     <| fun pExpr ->
-//         let pFunc =
-//             node SyntaxKind.FunExpr
-//             <| pIdent ^>> pLParen ^>> recoverExpr () pExpr ^>> opt pRParen
-//
-//         let pList =
-//             node SyntaxKind.ListExpr
-//             <| pLBracket ^>> recoverExpr () (manyU pExpr) ^>> opt pRBracket
-//
-//         pFunc <|> pList
+let pExpr =
+    Parser (
+        (fun _ _ -> failwith "uninitialized"),
+        Set [ SyntaxKind.Ident ; SyntaxKind.Op ; SyntaxKind.IntLiteral ],
+        false
+    )
 
 let pTerm = node SyntaxKind.Literal <| pTokenS SyntaxKind.IntLiteral
 
 let pPrefixOp =
     pChooseToken (fun t ->
         match t.Text, t.Kind with
-        | "+", SyntaxKind.Ident -> Some (5, SyntaxKind.UnaryExpr)
-        | "-", SyntaxKind.Ident -> Some (5, SyntaxKind.UnaryExpr)
+        | "+", _ -> Some (5, SyntaxKind.UnaryExpr)
+        | "-", _ -> Some (5, SyntaxKind.UnaryExpr)
         | _ -> None
     )
 
@@ -47,13 +41,12 @@ let pInfixOp =
         | _ -> None
     )
 
-let pArithExpr = pPratt' pTerm pPrefixOp pInfixOp 0
-
+pExpr.Run <- (pPratt' pTerm pPrefixOp pInfixOp 0).Run
 
 let parseRoot (sourceText : string) : ParseEvent list * Trivia list * ParseDiagnostic list =
     let tokens = Lexer.tokenize sourceText
     let tokenSource = TokenSource.FromTokens sourceText tokens
 
-    match runParser pArithExpr tokenSource with
+    match runParser pExpr tokenSource with
     | Success (_, state) -> state.Finish ()
     | Failure _ -> failwith "Parsing failed unexpectedly"

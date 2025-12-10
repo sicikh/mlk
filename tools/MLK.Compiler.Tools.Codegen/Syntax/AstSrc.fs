@@ -335,6 +335,7 @@ module MlkLanguageSrc =
             member _.Tokens =
                 [
                     "Ident"
+                    "Op"
                     "Newline"
                     "Whitespace"
                     "Comment"

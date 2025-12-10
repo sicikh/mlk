@@ -43,3 +43,7 @@ vite.config.ts.timestamp-*
 # Settings
 *.DotSettings
 *.DotSettings.user
+
+# Lexer generated files
+Lex.fs
+Lex.fsi

@@ -79,10 +79,13 @@ type GenericTree =
     | Node of kind : SyntaxKind * children : GenericTree list * range : TextRange
 
     member this.DebugPrint (source : string option) : string =
+        let escapeNewlines (s : string) : string =
+            s.Replace("\n", "\\n").Replace("\r", "\\r")
+
         let printTrivia (startOffset : TextSize) (trivia : TriviaPiece) : string =
             match source with
             | Some src ->
-                let text = src.Slice(TextRange.at startOffset trivia.Length)
+                let text = src.Slice(TextRange.at startOffset trivia.Length) |> escapeNewlines
                 $"%A{trivia.Kind}(\"{text}\")"
             | None -> $"%A{trivia.Kind}({trivia.Length})"
 

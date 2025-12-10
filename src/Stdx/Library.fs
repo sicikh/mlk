@@ -12,6 +12,8 @@ module Operators =
     let inline fst3 (x, _y, _z) = x
     let inline snd3 (_x, y, _z) = y
 
+    let inline (^<|) f x = f x
+
 
 
 module ValueOption =

@@ -3,16 +3,30 @@ namespace MLK.Compiler.Parser.IParsec
 open MLK.Compiler.Text
 open MLK.Compiler.Syntax
 open MLK.Compiler.Parser
+open Stdx
 
 type SignificantTokens = Set<SyntaxKind>
+
 type Marker =
     {
         Index : int
         mutable ForwardParent : int option
     }
 
-type CompletedMarker =
-    { StartIndex : int }
+type CompletedMarker = { StartIndex : int }
+
+type Indent =
+    | Indent of int
+
+    static member Inf = Indent System.Int32.MaxValue
+    static member Zero = Indent 0
+
+type IndentRel =
+    | Eq
+    | Any
+    | Const of indent : Indent
+    | Ge
+    | Gt
 
 type ParseState =
     {
@@ -20,6 +34,10 @@ type ParseState =
         Diagnostics : ParseDiagnostic list
         Events : ResizeArray<ParseEvent>
         EventCount : int
+        MinIndent : Indent
+        MaxIndent : Indent
+        AbsMode : bool
+        IndentRel : IndentRel
     }
 
     static member WithSource (source : TokenSource) =
@@ -28,6 +46,10 @@ type ParseState =
             Diagnostics = []
             Events = ResizeArray ()
             EventCount = 0
+            MinIndent = Indent.Zero
+            MaxIndent = Indent.Inf
+            AbsMode = true
+            IndentRel = Ge
         }
 
     member this.AddDiag (diag : ParseDiagnostic) : ParseState =
@@ -81,7 +103,7 @@ type ParseState =
         { this with EventCount = idx + 1 }, { Index = idx ; ForwardParent = None }
 
     member this.FinishNode (marker : Marker) (kind : SyntaxKind) : ParseState * CompletedMarker =
-        this.Events[marker.Index] <- StartEvent(kind, marker.ForwardParent)
+        this.Events[marker.Index] <- StartEvent (kind, marker.ForwardParent)
         this.PushEvent FinishEvent, { StartIndex = marker.Index }
 
     member this.ChangeKind (marker : Marker) (kind : SyntaxKind) : ParseState =
@@ -89,10 +111,12 @@ type ParseState =
             match this.Events[marker.Index] with
             | StartEvent (_, fp) -> StartEvent (kind, fp)
             | _ -> failwith "expected start event"
+
         this
 
     member this.Precede (completed : CompletedMarker) : ParseState * Marker =
         let s1, marker = this.StartNode ()
+
         match s1.Events[completed.StartIndex] with
         | StartEvent (kind, _) ->
             let offset = marker.Index - completed.StartIndex
@@ -102,11 +126,7 @@ type ParseState =
         | _ -> failwith "expected start event"
 
     member this.Finish () : ParseEvent list * Trivia list * ParseDiagnostic list =
-        this.Events
-        |> Seq.take this.EventCount
-        |> Seq.toList,
-        this.Source.Trivias,
-        List.rev this.Diagnostics
+        this.Events |> Seq.take this.EventCount |> Seq.toList, this.Source.Trivias, List.rev this.Diagnostics
 
 type ParseCtx =
     {
@@ -154,9 +174,6 @@ type Parser<'a>(f : RunParser<'a>, significantTokens : SignificantTokens, [<Stru
 
 type 'a parser = Parser<'a>
 
-type UParser = Parser<unit>
-type uparser = UParser
-
 [<AutoOpen>]
 module Combinators =
     let runParser (p : 'a parser) (inp : TokenSource) : PResult<'a> =
@@ -199,7 +216,7 @@ module Combinators =
 
     let inline (^>>.) (p : 'a parser) (q : 'b parser) : 'b parser = pipe2 p q (fun _ y -> y)
 
-    let inline (^>>) (p : 'a parser) (q : 'b parser) : uparser = pipe2 p q (fun _ _ -> ())
+    let inline (^>>) (p : 'a parser) (q : 'b parser) : unit parser = pipe2 p q (fun _ _ -> ())
 
     let (<|>) (p : 'a parser) (q : 'a parser) : 'a parser =
         let f state ctx =
@@ -256,7 +273,7 @@ module Combinators =
 
         Parser (aux [], p.SignificantTokens, true)
 
-    let manyU (p : uparser) : uparser =
+    let manyU (p : unit parser) : unit parser =
         let rec aux state ctx =
             match p.Run state (unionCtx p ctx) with
             | Success (_, state1) -> aux state1 ctx
@@ -267,7 +284,7 @@ module Combinators =
 
     let many1 (p : 'a parser) : 'a list parser = pipe2 p (many p) (fun x xs -> x :: xs)
 
-    let many1U (p : uparser) : uparser = pipe2 p (manyU p) (fun () () -> ())
+    let many1U (p : unit parser) : unit parser = pipe2 p (manyU p) (fun () () -> ())
 
     let sepBy1 (p : 'a parser) (sep : 'b parser) : 'a list parser =
         let sepThenP = sep ^>>. p
@@ -296,6 +313,7 @@ module Combinators =
     let node (kind : SyntaxKind) (p : 'a parser) : CompletedMarker parser =
         let f (state : ParseState) ctx =
             let s1, marker = state.StartNode ()
+
             match p.Run s1 ctx with
             | Success (_, state1) ->
                 let s2, completed = state1.FinishNode marker kind
@@ -304,23 +322,10 @@ module Combinators =
 
         Parser (f, p.SignificantTokens, p.IsOpt)
 
-    let private pTokenS' isSignificant kind : Token parser =
-        let f (state : ParseState) _ctx =
-            match state.Uncons with
-            | t, state1 when t.Kind = kind ->
-                let tokenEndOffset = t.Range.End
-                Success (t, state1.PushEvent (TokenEvent (kind, tokenEndOffset)))
-            | _ -> Failure false
-
-        Parser (f, if isSignificant then Set.singleton kind else Set.empty)
-
-    let pToken kind = pTokenS' false kind
-    let pTokenS kind = pTokenS' true kind
-
     let skipInsignificantInto
         (errorKind : SyntaxKind)
         (diagBuilder : TokenSource -> TextRange -> ParseDiagnostic)
-        : uparser
+        : unit parser
         =
         let f (state : ParseState) (ctx : ParseCtx) =
             let rec loop (inp : TokenSource) events =
@@ -342,7 +347,12 @@ module Combinators =
 
                 let diag = diagBuilder state.Source diagRange
 
-                state.WithSource(inp1).AddDiag(diag).PushEvent(StartEvent(errorKind, None)).PushEvents(errEvents).PushEvent
+                state
+                    .WithSource(inp1)
+                    .AddDiag(diag)
+                    .PushEvent(StartEvent (errorKind, None))
+                    .PushEvents(errEvents)
+                    .PushEvent
                     FinishEvent
 
             Success ((), state1)
@@ -362,14 +372,64 @@ module Combinators =
         // TODO: add diag to state
         opt p
 
+    let checkIndentation (state : ParseState) (token : Token) : ParseState option =
+        let (Indent lo) = state.MinIndent
+        let (Indent hi) = state.MaxIndent
+        let i = int (token.StartLineCol.Column + 1u)
+        let rel = if state.AbsMode then Eq else state.IndentRel
+
+        let updateState lo hi =
+            { state with
+                MinIndent = Indent lo
+                MaxIndent = Indent hi
+                AbsMode = false
+            }
+
+        match rel with
+        | Any -> Some <| updateState lo hi
+        | Const (Indent c) when c = i -> Some <| updateState lo hi
+        | Eq when lo <= i && i <= hi -> Some <| updateState i i
+        | Gt when lo < i -> Some <| updateState lo (min (i - 1) hi)
+        | Ge when lo <= i -> Some <| updateState lo (min i hi)
+        | _ -> None
+
+    let testIndent (value : 'a) : 'a parser =
+        let f (state : ParseState) _ctx =
+            match state.Source.Head with
+            | t ->
+                match checkIndentation state t with
+                | None -> Failure false
+                | Some state1 -> Success (value, state)
+
+        Parser (f, Set.empty, true)
+
+    let private pTokenS' isSignificant kind : Token parser =
+        let f (state : ParseState) _ctx =
+            match state.Uncons with
+            | t, state1 when t.Kind = kind ->
+                match checkIndentation state1 t with
+                | None -> Failure false
+                | Some state1 ->
+                    let tokenEndOffset = t.Range.End
+                    Success (t, state1.PushEvent (TokenEvent (kind, tokenEndOffset)))
+            | _ -> Failure false
+
+        Parser (f, if isSignificant then Set.singleton kind else Set.empty)
+
+    let pToken kind = pTokenS' false kind
+    let pTokenS kind = pTokenS' true kind
+
     let pChooseToken (f : Token -> 'a option) : 'a parser =
         let f' (state : ParseState) _ctx =
             match state.Uncons with
             | t, state1 ->
                 match f t with
                 | Some r ->
-                    let tokenEndOffset = t.Range.End
-                    Success (r, state1.PushEvent (TokenEvent (t.Kind, tokenEndOffset)))
+                    match checkIndentation state1 t with
+                    | None -> Failure false
+                    | Some state1 ->
+                        let tokenEndOffset = t.Range.End
+                        Success (r, state1.PushEvent (TokenEvent (t.Kind, tokenEndOffset)))
                 | None -> Failure false
 
         Parser (f', Set.empty)
@@ -379,7 +439,8 @@ module Combinators =
         (pPrefixOp : (int * SyntaxKind) parser)
         (pInfixOp : (int * int * SyntaxKind) parser)
         (minbp : int)
-        : Parser<CompletedMarker> =
+        : Parser<CompletedMarker>
+        =
         let rec pExpr minbp state ctx =
             match parseHead state ctx with
             | Failure con -> Failure con
@@ -387,6 +448,7 @@ module Combinators =
 
         and parseHead (state : ParseState) ctx =
             let s1, marker = state.StartNode ()
+
             match pPrefixOp.Run s1 ctx with
             | Success ((rbp, kind), state1) ->
                 match pExpr rbp state1 ctx with
@@ -410,10 +472,100 @@ module Combinators =
                     let stateDone, combined = stateParent.FinishNode wrap kind
                     parseTail combined minbp stateDone ctx
                 | Failure con -> Failure con
-            | _ ->
-                Success (left, state)
+            | _ -> Success (left, state)
 
         Parser (pExpr minbp, pTerm.SignificantTokens, false)
+
+    let localTokenMode (fRel : IndentRel -> IndentRel) (p : 'a parser) : 'a parser =
+        let f state ctx =
+            match
+                p.Run
+                    { state with
+                        IndentRel = fRel state.IndentRel
+                    }
+                    ctx
+            with
+            | Success (r, state1) ->
+                Success (
+                    r,
+                    { state1 with
+                        IndentRel = state.IndentRel
+                    }
+                )
+            | Failure con -> Failure con
+
+        Parser (f, p.SignificantTokens, p.IsOpt)
+
+    let localIndentation (rel : IndentRel) (p : 'a parser) : 'a parser =
+        let aux fLo fHi fHi' state ctx =
+            match
+                p.Run
+                    { state with
+                        MinIndent = fLo state.MinIndent
+                        MaxIndent = fHi state.MaxIndent
+                    }
+                    ctx
+            with
+            | Success (r, state1) ->
+                Success (
+                    r,
+                    { state1 with
+                        MinIndent = state.MinIndent
+                        MaxIndent = fHi' state.MaxIndent state1.MaxIndent
+                    }
+                )
+            | Failure con -> Failure con
+
+        let f =
+            match rel with
+            // TODO: ??? why on equality nothing happens?
+            | Eq -> p.Run
+            | Any -> aux (konst (Indent 0)) (konst Indent.Inf) konst
+            | Const indent -> aux (konst indent) (konst indent) konst
+            | Ge -> aux id (konst Indent.Inf) (flip konst)
+            | Gt ->
+                let f hi hi' =
+                    if hi' = Indent.Inf || hi < hi' then
+                        hi
+                    elif hi' > Indent.Zero then
+                        let (Indent n) = hi'
+                        Indent (n - 1)
+                    else
+                        failwith "assertion failed: hi' > 0"
+
+                aux (fun (Indent n) -> Indent (n + 1)) (konst Indent.Inf) f
+
+        Parser (f, p.SignificantTokens, p.IsOpt)
+
+    let absoluteIndentation (p : 'a parser) : 'a parser =
+        let f state ctx =
+            match p.Run { state with AbsMode = true } ctx with
+            | Success (r, state1) ->
+                Success (
+                    r,
+                    { state1 with
+                        AbsMode = state.AbsMode && state1.AbsMode
+                    }
+                )
+            | Failure con -> Failure con
+
+        Parser (f, p.SignificantTokens, p.IsOpt)
+
+    let ignoreAbsoluteIndentation (p : 'a parser) : 'a parser =
+        let f state ctx =
+            match p.Run { state with AbsMode = false } ctx with
+            | Success (r, state1) -> Success (r, { state1 with AbsMode = state.AbsMode })
+            | Failure con -> Failure con
+
+        Parser (f, p.SignificantTokens, p.IsOpt)
+
+    let localAbsoluteIndentation (p : 'a parser) : 'a parser =
+        let f state ctx =
+            match p.Run { state with AbsMode = true } ctx with
+            | Success (r, state1) -> Success (r, { state1 with AbsMode = state.AbsMode })
+            | Failure con -> Failure con
+
+        Parser (f, p.SignificantTokens, p.IsOpt)
 
     let mutable private traceMsgIndent = 0
 

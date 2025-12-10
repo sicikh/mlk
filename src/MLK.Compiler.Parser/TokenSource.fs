@@ -18,7 +18,7 @@ type Token =
             Kind = SyntaxKind.Eof
             Text = ""
             Range = TextRange.create (TextSize.ofUint UInt32.MaxValue) (TextSize.ofUint UInt32.MaxValue)
-            StartLineCol = LineCol.zero
+            StartLineCol = LineCol.create UInt32.MaxValue UInt32.MaxValue
         }
 
     override this.ToString (): string =

@@ -7,7 +7,7 @@ open MLK.Compiler.Syntax
 open MLK.Compiler.Parser.IParsec
 
 let pIdent = pTokenS SyntaxKind.Ident
-let pIntLiteral = pTokenS SyntaxKind.IntLiteral
+let pIntLiteral = pTokenS SyntaxKind.IntLiteral |> trace "pIntLiteral"
 let pLBracket = pTokenS SyntaxKind.LBracket
 let pRBracket = pTokenS SyntaxKind.RBracket
 let pLParen = pTokenS SyntaxKind.LParen
@@ -27,9 +27,10 @@ let pName = node SyntaxKind.Name pIdent
 let pLiteral = node SyntaxKind.Literal <| pIntLiteral
 
 let expectedExpression = ParseDiagnostic.mkSingleNode "expression"
+let expectedClosingParen = ParseDiagnostic.mkSingleNode "closing parenthesis ')'"
+let expectedClosingBracket = ParseDiagnostic.mkSingleNode "closing bracket ']'"
 
-let recoverExpr<'a> : 'a -> 'a parser -> 'a parser =
-    recoverInto SyntaxKind.ErrExpr expectedExpression
+let recoverExpr = recoverInto SyntaxKind.ErrExpr expectedExpression
 
 // could make via `mkRec`, but parsers as values is better here
 // (except to that we need to manually calculate significant tokens)
@@ -39,11 +40,18 @@ let pExprRun : (int -> RunParser<CompletedMarker>) ref =
 let pExpr' (minbp : int) : CompletedMarker parser =
     Parser (
         (fun state ctx -> pExprRun.Value minbp state ctx),
-        Set [ SyntaxKind.Ident ; SyntaxKind.Op ; SyntaxKind.IntLiteral ],
+        Set
+            [
+                SyntaxKind.Ident
+                SyntaxKind.Op
+                SyntaxKind.IntLiteral
+                SyntaxKind.LetKw
+                SyntaxKind.LParen
+            ],
         false
     )
 
-let pExpr = pExpr' 0
+let pExpr = trace "pExpr" <| pExpr' 0
 
 let pPat = node SyntaxKind.NamedPat ^<| pName
 
@@ -60,11 +68,22 @@ let pLetExpr =
              <|> (localIndentation Eq (localTokenMode (konst Ge) pExpr)))
 
 let pParenExpr =
-    node SyntaxKind.ParenExpr
-    ^<| between pLParen pRParen
-    ^<| localIndentation Any pExpr
+    trace "pParenExpr"
+    ^<| node SyntaxKind.ParenExpr
+    ^<| between pLParen (tryOrDiag expectedClosingParen pRParen)
+    ^<| localIndentation Any (trace "pInParenExpr" pExpr)
 
-let pTerm = pName <|> pLiteral <|> pParenExpr <|> pLetExpr
+let pList =
+    node SyntaxKind.ListExpr
+    ^<| between pLBracket (tryOrDiag expectedClosingBracket pRBracket)
+    ^<| localIndentation Any
+    ^<| sepBy pExpr (pChooseToken (fun t -> if t.Text = ";" then Some () else None))
+
+// TODO:
+// let pUnit =
+//     node SyntaxKind.UnitLiteral (pLParen ^>> opt pRParen)
+
+let pTerm = pLiteral <|> pName <|> pParenExpr <|> pLetExpr <|> pList
 
 let pPrefixOp =
     pChooseToken (fun t ->
@@ -73,6 +92,7 @@ let pPrefixOp =
         | "-", _ -> Some (5, SyntaxKind.UnaryExpr)
         | _ -> None
     )
+    |> withSignificant (Set [ SyntaxKind.Op ])
 
 let pInfixOp =
     pChooseToken (fun t ->
@@ -85,12 +105,22 @@ let pInfixOp =
     )
     <|> (localIndentation Gt
          // ^<| absoluteIndentation
-         ^<| testIndent (9, 10, SyntaxKind.AppExpr))
+         ^<| pCheckToken (fun t ->
+             pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
+         )
+         |>> (konst (9, 10, SyntaxKind.AppExpr)))
     <|> (localIndentation Eq
          // ^<| absoluteIndentation
-         ^<| testIndent ((0, 0, SyntaxKind.SeqExpr)))
+         ^<| pCheckToken (fun t ->
+             pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
+         )
+         |>> (konst (0, 0, SyntaxKind.SeqExpr)))
+    |> withSignificant (
+        Set.union pExpr.SignificantTokens
+        <| Set [ SyntaxKind.Op ; SyntaxKind.Semicolon ]
+    )
 
-pExprRun.Value <- fun minbp -> (pPratt' pTerm pPrefixOp pInfixOp minbp).Run
+pExprRun.Value <- fun minbp -> (pPratt' (recoverExpr pTerm) pPrefixOp pInfixOp minbp).Run
 
 let parseRoot (sourceText : string) : ParseEvent list * Trivia list * ParseDiagnostic list =
     let tokens = Lexer.tokenize sourceText

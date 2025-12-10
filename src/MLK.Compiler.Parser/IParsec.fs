@@ -350,10 +350,10 @@ module Combinators =
                 state
                     .WithSource(inp1)
                     .AddDiag(diag)
-                    .PushEvent(StartEvent (errorKind, None))
+                    // .PushEvent(StartEvent (errorKind, None))
                     .PushEvents(errEvents)
-                    .PushEvent
-                    FinishEvent
+                    // .PushEvent
+                    // FinishEvent
 
             Success ((), state1)
 
@@ -362,11 +362,10 @@ module Combinators =
     let recoverInto
         (errorNode : SyntaxKind)
         (diagBuilder : TokenSource -> TextRange -> ParseDiagnostic)
-        (defaultValue : 'a)
-        (p : 'a parser)
-        : 'a parser
+        (p : CompletedMarker parser)
+        : CompletedMarker parser
         =
-        p <|> (skipInsignificantInto errorNode diagBuilder ^>>. preturn defaultValue)
+        p <|> (node errorNode <| skipInsignificantInto errorNode diagBuilder)
 
     let tryOrDiag (_diagBuilder : TokenSource -> TextRange -> ParseDiagnostic) (p : 'a parser) : 'a option parser =
         // TODO: add diag to state
@@ -399,7 +398,8 @@ module Combinators =
             | t ->
                 match checkIndentation state t with
                 | None -> Failure false
-                | Some state1 -> Success (value, state)
+                // TODO: to thread or not to thread? that is the question
+                | Some _state1 -> Success (value, state)
 
         Parser (f, Set.empty, true)
 
@@ -434,6 +434,18 @@ module Combinators =
 
         Parser (f', Set.empty)
 
+    let pCheckToken (f : Token -> bool) : Token parser =
+        let f' (state : ParseState) _ctx =
+            match state.Uncons with
+            | t, state1 when f t ->
+                match checkIndentation state1 t with
+                | None -> Failure false
+                | Some _ ->
+                    Success (t, state)
+            | _ -> Failure false
+
+        Parser (f', Set.empty)
+
     let pPratt'
         (pTerm : CompletedMarker parser)
         (pPrefixOp : (int * SyntaxKind) parser)
@@ -441,6 +453,15 @@ module Combinators =
         (minbp : int)
         : Parser<CompletedMarker>
         =
+        let sigs =
+            Set.unionMany
+                [
+                    pTerm.SignificantTokens
+                    pPrefixOp.SignificantTokens
+                    pInfixOp.SignificantTokens
+                ]
+        let u (ctx : ParseCtx) = ctx.UnionTokens sigs
+
         let rec pExpr minbp state ctx =
             match parseHead state ctx with
             | Failure con -> Failure con
@@ -449,9 +470,9 @@ module Combinators =
         and parseHead (state : ParseState) ctx =
             let s1, marker = state.StartNode ()
 
-            match pPrefixOp.Run s1 ctx with
+            match pPrefixOp.Run s1 (u ctx) with
             | Success ((rbp, kind), state1) ->
-                match pExpr rbp state1 ctx with
+                match pExpr rbp state1 (u ctx) with
                 | Success (_completed, state2) ->
                     let s3 = state2.ChangeKind marker kind
                     let s4 = s3.PushEvent FinishEvent
@@ -464,9 +485,9 @@ module Combinators =
             | Failure true -> Failure true
 
         and parseTail left minbp state ctx =
-            match pInfixOp.Run state ctx with
+            match pInfixOp.Run state (u ctx) with
             | Success ((lbp, rbp, kind), stateOp) when lbp >= minbp ->
-                match pExpr rbp stateOp ctx with
+                match pExpr rbp stateOp (u ctx) with
                 | Success (_right, stateRhs) ->
                     let stateParent, wrap = stateRhs.Precede left
                     let stateDone, combined = stateParent.FinishNode wrap kind
@@ -566,6 +587,9 @@ module Combinators =
             | Failure con -> Failure con
 
         Parser (f, p.SignificantTokens, p.IsOpt)
+
+    let withSignificant (sigs : SignificantTokens) (p : 'a parser) : 'a parser =
+        Parser (p.Run, Set.union p.SignificantTokens sigs, p.IsOpt)
 
     let mutable private traceMsgIndent = 0
 

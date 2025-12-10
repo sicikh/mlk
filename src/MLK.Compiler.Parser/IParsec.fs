@@ -101,10 +101,11 @@ type ParseState =
             s1, marker
         | _ -> failwith "expected start event"
 
-    member this.Finish () : ParseEvent list * ParseDiagnostic list =
+    member this.Finish () : ParseEvent list * Trivia list * ParseDiagnostic list =
         this.Events
         |> Seq.take this.EventCount
         |> Seq.toList,
+        this.Source.Trivias,
         List.rev this.Diagnostics
 
 type ParseCtx =

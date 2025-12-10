@@ -1,5 +1,6 @@
 namespace MLK.Compiler.Parser
 
+open MLK.Compiler.Fusca
 open MLK.Compiler.Text
 open MLK.Compiler.Syntax
 
@@ -28,6 +29,7 @@ module ParseEvent =
             let mutable chain = []
 
             let mutable stop = false
+
             while not stop do
                 chain <- currentKind :: chain
                 events[currentIdx] <- StartEvent (SyntaxKind.Tombstone, None)
@@ -35,6 +37,7 @@ module ParseEvent =
                 match currentFp with
                 | Some offset ->
                     let parentIdx = currentIdx + offset
+
                     match events[parentIdx] with
                     | StartEvent (parentKind, parentFp) ->
                         currentIdx <- parentIdx
@@ -57,14 +60,145 @@ type DebugTreeSink() =
     let mutable sink : ParseEvent list = []
 
     interface ITreeSink with
-        member this.Token(kind: SyntaxKind) (endOffset: TextSize) : unit =
-            sink <- TokenEvent(kind, endOffset) :: sink
+        member this.Token (kind : SyntaxKind) (endOffset : TextSize) : unit =
+            sink <- TokenEvent (kind, endOffset) :: sink
 
-        member this.EmitErrors(_diagnostics) = ()
-        member this.FinishNode() =
-            sink <- FinishEvent :: sink
-        member this.StartNode(kind) =
-            sink <- StartEvent(kind, None) :: sink
+        member this.EmitErrors _diagnostics = ()
+        member this.FinishNode () = sink <- FinishEvent :: sink
+        member this.StartNode kind = sink <- StartEvent (kind, None) :: sink
 
-    member this.Finish() : ParseEvent list =
-        List.rev sink
+    member this.Finish () : ParseEvent list = List.rev sink
+
+type GenericTree =
+    | Token of
+        kind : SyntaxKind *
+        text : string *
+        range : TextRange *
+        leadingTrivia : TriviaPiece list *
+        trailingTrivia : TriviaPiece list
+    | Node of kind : SyntaxKind * children : GenericTree list * range : TextRange
+
+    override this.ToString() : string =
+        let rec toStringIndent (tree : GenericTree) (indent : int) : string =
+            let indentStr = String.replicate indent "  "
+
+            match tree with
+            | Token (kind, text, range, leadingTrivia, trailingTrivia) ->
+                let leadingStr =
+                    leadingTrivia
+                    |> List.map (fun t -> $"%A{t.Kind}({t.Length})")
+                    |> String.concat ", "
+
+                let trailingStr =
+                    trailingTrivia
+                    |> List.map (fun t -> $"%A{t.Kind}({t.Length})")
+                    |> String.concat ", "
+
+                $"{indentStr}%A{kind}@{range} \"{text}\" [{leadingStr}] [{trailingStr}]"
+            | Node (kind, children, range) ->
+                let childStrs =
+                    children
+                    |> List.map (fun c -> toStringIndent c (indent + 1))
+                    |> String.concat "\n"
+
+                $"{indentStr}%A{kind}@{range}\n{childStrs}"
+
+        toStringIndent this 0
+
+type TreeFactory() =
+    let mutable position : TextSize = TextSize.zero
+    let mutable stack : (SyntaxKind * GenericTree list * TextSize) list = []
+
+    member this.StartNode (kind : SyntaxKind) = stack <- (kind, [], position) :: stack
+
+    member this.TokenWithTrivia
+        (kind : SyntaxKind)
+        (text : string)
+        (leadingTrivia : TriviaPiece list)
+        (trailingTrivia : TriviaPiece list)
+        =
+        let length = text.Size
+
+        let token =
+            Token (kind, text, TextRange.create position (position + length), leadingTrivia, trailingTrivia)
+
+        position <- position + length
+
+        match stack with
+        | (parentKind, children, startPos) :: rest -> stack <- (parentKind, children @ [ token ], startPos) :: rest
+        | [] ->
+            // No parent node, ignore
+            ()
+
+    member this.FinishNode () =
+        match stack with
+        | (kind, children, startPos) :: rest ->
+            let endPos = position
+            let node = Node (kind, children, TextRange.create startPos endPos)
+            position <- endPos
+
+            stack <-
+                match rest with
+                | (parentKind, parentChildren, parentStartPos) :: restTail ->
+                    (parentKind, parentChildren @ [ node ], parentStartPos) :: restTail
+                | [] -> [ (SyntaxKind.Tombstone, [ node ], TextSize.zero) ]
+        | [] ->
+            // No node to finish, ignore
+            ()
+
+    member this.GetTree () : GenericTree option =
+        match stack with
+        | [] -> None
+        | [ (_, [ root ], _) ] -> Some root
+        | _ -> None
+
+type LosslessTreeSink(source : string, trivias : Trivia list) =
+    let builder = TreeFactory ()
+    let mutable textPos = TextSize.zero
+    let mutable triviaPos = 0
+    let triviaPieces : ResizeArray<TriviaPiece> = ResizeArray ()
+
+    member this.Finish () : GenericTree option = builder.GetTree ()
+
+    member this.EatTrivia (trailing : bool) (tokenEnd : TextSize) =
+        let isDone (trivia : Trivia) =
+            trailing <> trivia.Trailing
+            || textPos <> trivia.Range.Start
+            || (not trailing && trivia.Range.End > tokenEnd)
+
+        for trivia in trivias |> Seq.skip triviaPos |> Seq.takeWhile (not << isDone) do
+            let triviaLen = TextRange.length trivia.Range
+            let piece = TriviaPiece.create trivia.Kind triviaLen
+            triviaPieces.Add piece
+            textPos <- textPos + triviaLen
+            triviaPos <- triviaPos + 1
+
+
+    member this.DoToken (kind : SyntaxKind) (tokenEnd : TextSize) =
+        let tokenStart = textPos
+
+        this.EatTrivia false tokenEnd
+        let trailingStart = triviaPieces.Count
+
+        textPos <- tokenEnd
+
+        this.EatTrivia true tokenEnd
+
+        let tokenRange = TextRange.create tokenStart tokenEnd
+
+        let text = source.Slice tokenRange
+        let leading = triviaPieces |> Seq.take trailingStart |> Seq.toList
+        let trailing = triviaPieces |> Seq.skip trailingStart |> Seq.toList
+
+        builder.TokenWithTrivia kind text leading trailing
+        triviaPieces.Clear ()
+
+    interface ITreeSink with
+        member this.Token (kind : SyntaxKind) (endOffset : TextSize) : unit =
+            this.DoToken kind endOffset
+
+        member this.EmitErrors _diagnostics = ()
+
+        member this.FinishNode () = builder.FinishNode ()
+
+        member this.StartNode kind = builder.StartNode kind

@@ -50,7 +50,7 @@ let pInfixOp =
 let pArithExpr = pPratt' pTerm pPrefixOp pInfixOp 0
 
 
-let parseRoot (sourceText : string) : ParseEvent list * ParseDiagnostic list =
+let parseRoot (sourceText : string) : ParseEvent list * Trivia list * ParseDiagnostic list =
     let tokens = Lexer.tokenize sourceText
     let tokenSource = TokenSource.FromTokens sourceText tokens
 

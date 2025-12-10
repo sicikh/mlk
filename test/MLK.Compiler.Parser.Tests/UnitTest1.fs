@@ -36,7 +36,7 @@ let Setup () =
 [<Test>]
 let Test1 () =
     let source = "1 + 2 * +3 + +4"
-    let events, diags = parseRoot source
+    let events, _, diags = parseRoot source
     let processedEvents =
         let sink = DebugTreeSink()
         ParseEvent.processEvents sink diags events
@@ -47,5 +47,21 @@ let Test1 () =
     printfn ""
 
     debugPrintEvents source processedEvents
+
+    Assert.Pass()
+
+[<Test>]
+let Test2 () =
+    let source = "1 + 2 * 3 - 4"
+    let events, trivias, diags = parseRoot source
+    let tree =
+        let sink = LosslessTreeSink(source, trivias)
+        ParseEvent.processEvents sink diags events
+        sink.Finish()
+
+    match tree with
+    | None -> Assert.Fail("Tree construction failed")
+    | Some tree ->
+        printfn "%s" <| tree.ToString()
 
     Assert.Pass()

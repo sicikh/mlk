@@ -42,7 +42,7 @@ type ParseState =
         let idx = this.EventCount
 
         if idx = this.Events.Count then
-            this.Events.Add (event)
+            this.Events.Add event
         else
             this.Events[idx] <- event
 
@@ -75,9 +75,25 @@ type ParseState =
         this.Events[idx] <- StartEvent kind
         this.PushEvent FinishEvent
 
+    member this.CancelNode (Marker idx) : ParseState =
+        let last = this.EventCount - 1
+
+        for i = idx to last - 1 do
+            this.Events[i] <- this.Events[i + 1]
+
+        { this with EventCount = idx }
 
     member this.Finish () : ParseEvent list * ParseDiagnostic list =
-        this.Events |> Seq.take this.EventCount |> Seq.toList, List.rev this.Diagnostics
+        let isTombstone event =
+            match event with
+            | StartEvent SyntaxKind.Tombstone -> true
+            | _ -> false
+
+        this.Events
+        |> Seq.take this.EventCount
+        |> Seq.filter (not << isTombstone)
+        |> Seq.toList,
+        List.rev this.Diagnostics
 
 type ParseCtx =
     {
@@ -356,28 +372,34 @@ module Combinators =
                 match pPrefixOp.Run state ctx with
                 | Success ((rbp, kind), state1) ->
                     match pExpr rbp state1 ctx with
-                    | Success (_, state2) -> Success (kind, state2)
+                    | Success (_, state2) -> Success ((kind, true), state2)
                     | Failure con -> Failure con
                 | Failure false ->
                     match pTerm.Run state ctx with
-                    | Success (kind, state1) -> Success (kind, state1)
+                    | Success (kind, state1) -> Success ((kind, false), state1)
                     | Failure con -> Failure con
                 | Failure true -> Failure true
 
             match parseHead state0 with
             | Failure con -> Failure con
-            | Success (headKind, state1) -> parseTail mark headKind minbp state1 ctx
+            | Success ((headKind, needsWrapper), state1) -> parseTail mark headKind needsWrapper minbp state1 ctx
 
-        and parseTail mark currentKind minbp state ctx =
+        and parseTail mark currentKind needsWrapper minbp state ctx =
+            let finishOrCancel (state : ParseState) =
+                if needsWrapper then
+                    state.FinishNode mark currentKind
+                else
+                    state
+
             let snapshot = state
 
             match pInfixOp.Run state ctx with
             | Success ((lbp, rbp, kind), stateOp) when lbp >= minbp ->
                 match pExpr rbp stateOp ctx with
-                | Success ((), stateRhs) -> parseTail mark kind minbp stateRhs ctx
+                | Success ((), stateRhs) -> parseTail mark kind true minbp stateRhs ctx
                 | Failure con -> Failure con
-            | Success _ -> Success ((), snapshot.FinishNode mark currentKind)
-            | Failure false -> Success ((), state.FinishNode mark currentKind)
+            | Success _ -> Success ((), finishOrCancel snapshot)
+            | Failure false -> Success ((), finishOrCancel state)
             | Failure true -> Failure true
 
         Parser (pExpr minbp, pTerm.SignificantTokens, false)

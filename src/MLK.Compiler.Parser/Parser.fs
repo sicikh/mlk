@@ -29,7 +29,7 @@ let pExpr0 : uparser =
 
         pFunc <|> pList
 
-let pTerm = node SyntaxKind.Literal (pTokenS SyntaxKind.IntLiteral) |>> (fun _ -> SyntaxKind.Literal)
+let pTerm = pTokenS SyntaxKind.IntLiteral |>> (fun _ -> SyntaxKind.Literal)
 
 let pPrefixOp =
     pChooseToken (fun t ->

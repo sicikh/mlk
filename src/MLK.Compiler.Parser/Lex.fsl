@@ -43,7 +43,7 @@ rule read = parse
 // | float          { lexeme TFloat lexbuf }
 // TODO: strings
 | '"'            { lexeme SyntaxKind.StringLiteral lexbuf }
-| '='            { lexeme SyntaxKind.Eq lexbuf }
+// | '='            { lexeme SyntaxKind.Eq lexbuf }
 | '('            { lexeme SyntaxKind.LParen lexbuf }
 | ')'            { lexeme SyntaxKind.RParen lexbuf }
 | ','            { lexeme SyntaxKind.Comma lexbuf }
@@ -56,8 +56,8 @@ rule read = parse
 | ':'            { lexeme SyntaxKind.Colon lexbuf }
 | '.'            { lexeme SyntaxKind.Dot lexbuf }
 | '_'            { lexeme SyntaxKind.Underscore lexbuf }
-| '|'            { lexeme SyntaxKind.Pipe lexbuf }
-| '*'            { lexeme SyntaxKind.Star lexbuf }
+//| '|'            { lexeme SyntaxKind.Pipe lexbuf }
+//| '*'            { lexeme SyntaxKind.Star lexbuf }
 | operator       { lexeme SyntaxKind.Ident lexbuf }
 | "module"       { lexeme SyntaxKind.ModuleKw lexbuf }
 | "open"         { lexeme SyntaxKind.OpenKw lexbuf }

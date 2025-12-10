@@ -301,20 +301,17 @@ module Combinators =
         // TODO: add diag to state
         opt p
 
-    type private POpKind<'a> =
-        | PInfix of rbp : int * mkInfix : ('a -> 'a -> 'a)
-        | PPostfix of pPostfix : ('a -> 'a parser)
-
-    // TODO: rewrite to use events, not directly build AST nodes
     let pPratt'
-        (pTerm : 'a parser)
-        (pPrefixOp : (int * ('a -> 'a)) parser)
-        (pInfixOp : (int * int * ('a -> 'a -> 'a)) parser)
-        (pPostfixOp : (int * ('a -> 'a parser)) parser)
+        (pTerm : uparser)
+        (pPrefixOp : (int * SyntaxKind) parser)
+        (pInfixOp : (int * int * SyntaxKind) parser)
         (minbp : int)
         : 'a parser
         =
-        failwith "todo"
+        let rec pExpr minbp state ctx =
+            failwith "todo"
+
+        Parser (pExpr minbp, pTerm.SignificantTokens, false)
 
     let mutable private traceMsgIndent = 0
 

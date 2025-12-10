@@ -6,6 +6,7 @@ open MLK.Compiler.Syntax
 open MLK.Compiler.Parser.IParsec
 
 let pIdent = pTokenS SyntaxKind.Ident
+let pIntLiteral = pTokenS SyntaxKind.IntLiteral
 let pLBracket = pTokenS SyntaxKind.LBracket
 let pRBracket = pTokenS SyntaxKind.RBracket
 let pLParen = pTokenS SyntaxKind.LParen
@@ -25,7 +26,10 @@ let pExpr =
         false
     )
 
-let pTerm = node SyntaxKind.Literal <| pTokenS SyntaxKind.IntLiteral
+let pLiteral = node SyntaxKind.Literal <| pIntLiteral
+let pParenExpr = node SyntaxKind.ParenExpr <| between pLParen pRParen pExpr
+
+let pTerm = pLiteral <|> pParenExpr
 
 let pPrefixOp =
     pChooseToken (fun t ->

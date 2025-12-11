@@ -111,12 +111,14 @@ type GenericTree =
 
                 $"{indentStr}%A{kind}@{range} \"{text}\" [{leadingStr}] [{trailingStr}]"
             | Node (kind, children, range) ->
+                let newline =
+                    if children.Length > 0 then "\n" else ""
                 let childStrs =
                     children
                     |> List.map (fun c -> toStringIndent c (indent + 1))
                     |> String.concat "\n"
 
-                $"{indentStr}%A{kind}@{range}\n{childStrs}"
+                $"{indentStr}%A{kind}@{range}{newline}{childStrs}"
 
         toStringIndent this 0
 

@@ -52,7 +52,7 @@ let Test1 () =
 
 [<Test>]
 let Test2 () =
-    let source = "[f(]"
+    let source = "[ f ( ]"
     let events, trivias, diags = parseRoot source
     let tree =
         let sink = LosslessTreeSink(source, trivias)

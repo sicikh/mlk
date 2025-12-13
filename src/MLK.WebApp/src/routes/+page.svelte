@@ -2,6 +2,9 @@
     import ASTTab from '$lib/tabs/ASTTab.svelte'
     import OtherTab from '$lib/tabs/OtherTab.svelte'
     import { writable } from 'svelte/store';
+    import MonacoEditor from '$lib/monaco-editor.svelte';
+    
+    let code = "function add(a, b) {\n  return a + b;\n}\n";
 
     const selectedResult = writable('AST');
 </script>
@@ -31,7 +34,9 @@
 </div>
 
 <div class="input">
-
+    <div class="editor-wrapper">
+        <MonacoEditor bind:value={code} language="javascript" />
+    </div>
 </div>
 
 <div class="output">
@@ -122,6 +127,12 @@
         left: 0px;
         width: 50%;
         z-index: 0; 
+        display: flex;
+        flex-direction: column;
+    }
+
+    .editor-wrapper {
+        flex: 1;            
     }
 
     .output {

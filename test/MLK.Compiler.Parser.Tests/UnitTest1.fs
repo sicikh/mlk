@@ -52,7 +52,7 @@ let Test1 () =
 
 [<Test>]
 let Test2 () =
-    let source = "[ f ( ]"
+    let source = "id id\n   1"
     let events, trivias, diags = parseRoot source
     let tree =
         let sink = LosslessTreeSink(source, trivias)
@@ -62,6 +62,8 @@ let Test2 () =
     match tree with
     | None -> Assert.Fail("Tree construction failed")
     | Some tree ->
+        debugPrintEvents source events
+        printfn ""
         printfn "%s" <| tree.DebugPrint (Some source)
 
     Assert.Pass()

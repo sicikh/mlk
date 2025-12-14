@@ -1,0 +1,80 @@
+{
+open FSharp.Text.Lexing
+
+open MLK.Compiler.Text
+open MLK.Compiler.Syntax
+
+let lexeme (sk : SyntaxKind) (lexbuf : LexBuffer<_>) =
+    let text = LexBuffer<_>.LexemeString lexbuf
+    let line = uint lexbuf.StartPos.Line
+    let col = uint lexbuf.StartPos.Column
+    let lineCol = LineCol.create line col
+    let absStart = TextSize.ofUint <| uint lexbuf.StartPos.AbsoluteOffset
+    let absEnd = TextSize.ofUint <| uint lexbuf.EndPos.AbsoluteOffset
+    let range = TextRange.create absStart absEnd
+
+    {
+        Kind = sk
+        Text = text
+        Range = range
+        StartLineCol = lineCol
+    }
+
+let newline (lexbuf : LexBuffer<_>) =
+    lexbuf.EndPos <- lexbuf.EndPos.NextLine
+}
+
+let digit = ['0'-'9']
+// TODO: tab should trigger error (and treated as 4 whitespaces)
+let whitespace = [' ' '\t']+
+let newline = ('\n' | '\r' '\n')
+let operator_char = ['+' '-' '*' '/' '%' '^' '&' '|' '<' '>' '=' '!' '?' '~']
+let operator = operator_char+
+let ident_start_char = ['a'-'z' 'A'-'Z' '_']
+let ident_char = (ident_start_char | digit | ''')
+let ident = ident_start_char ident_char*
+let int = ['-']?digit+
+let float = ['-']?digit+('.'digit+)?(['e''E']digit+)?
+
+rule read = parse
+| whitespace     { lexeme SyntaxKind.Whitespace lexbuf }
+| newline        { let nl = lexeme SyntaxKind.Newline lexbuf in newline lexbuf ; nl }
+| int            { lexeme SyntaxKind.IntLiteral lexbuf }
+// | float          { lexeme TFloat lexbuf }
+// TODO: strings
+| '"'            { lexeme SyntaxKind.StringLiteral lexbuf }
+// | '='            { lexeme SyntaxKind.Eq lexbuf }
+| '('            { lexeme SyntaxKind.LParen lexbuf }
+| ')'            { lexeme SyntaxKind.RParen lexbuf }
+| ','            { lexeme SyntaxKind.Comma lexbuf }
+| ';'            { lexeme SyntaxKind.Semicolon lexbuf }
+| '['            { lexeme SyntaxKind.LBracket lexbuf }
+| ']'            { lexeme SyntaxKind.RBracket lexbuf }
+| '{'            { lexeme SyntaxKind.LBrace lexbuf }
+| '}'            { lexeme SyntaxKind.RBrace lexbuf }
+| "->"           { lexeme SyntaxKind.Arrow lexbuf }
+| ':'            { lexeme SyntaxKind.Colon lexbuf }
+| '.'            { lexeme SyntaxKind.Dot lexbuf }
+| '_'            { lexeme SyntaxKind.Underscore lexbuf }
+//| '|'            { lexeme SyntaxKind.Pipe lexbuf }
+//| '*'            { lexeme SyntaxKind.Star lexbuf }
+| operator       { lexeme SyntaxKind.Op lexbuf }
+| "module"       { lexeme SyntaxKind.ModuleKw lexbuf }
+| "open"         { lexeme SyntaxKind.OpenKw lexbuf }
+| "fun"          { lexeme SyntaxKind.FunKw lexbuf }
+| "let"          { lexeme SyntaxKind.LetKw lexbuf }
+| "rec"          { lexeme SyntaxKind.RecKw lexbuf }
+| "in"           { lexeme SyntaxKind.InKw lexbuf }
+| "and"          { lexeme SyntaxKind.AndKw lexbuf }
+| "if"           { lexeme SyntaxKind.IfKw lexbuf }
+| "then"         { lexeme SyntaxKind.ThenKw lexbuf }
+| "else"         { lexeme SyntaxKind.ElseKw lexbuf }
+| "match"        { lexeme SyntaxKind.MatchKw lexbuf }
+| "with"         { lexeme SyntaxKind.WithKw lexbuf }
+| "when"         { lexeme SyntaxKind.WhenKw lexbuf }
+| "as"           { lexeme SyntaxKind.AsKw lexbuf }
+| "true"         { lexeme SyntaxKind.TrueKw lexbuf }
+| "false"        { lexeme SyntaxKind.FalseKw lexbuf }
+| ident          { lexeme SyntaxKind.Ident lexbuf }
+| eof            { lexeme SyntaxKind.Eof lexbuf }
+| _              { lexeme SyntaxKind.ErrToken lexbuf }

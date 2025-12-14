@@ -6,8 +6,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
-        <Compile Include="Green.fs" />
+        <Compile Include="Ungrammar.fsi" />
+        <Compile Include="Ungrammar.fs" />
     </ItemGroup>
 
     <ItemGroup>

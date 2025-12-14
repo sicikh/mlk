@@ -4,17 +4,9 @@
 type TextSize =
     | TextSize of uint32
 
-    override this.ToString() =
+    override this.ToString () =
         let (TextSize size) = this
         size.ToString ()
-
-    static member (+)(TextSize a, TextSize b) : TextSize = TextSize (a + b)
-
-    static member (-)(TextSize a, TextSize b) : TextSize =
-        if b > a then
-            invalidOp "Resulting TextSize cannot be negative."
-
-        TextSize (a - b)
 
 module TextSize =
     let zero = TextSize 0u
@@ -45,22 +37,33 @@ module TextSize =
 type TextSize with
     static member Zero = TextSize.zero
 
+    static member (+) (a : TextSize, b : TextSize) : TextSize =
+        match TextSize.checkedAdd a b with
+        | ValueSome sum -> sum
+        | ValueNone -> invalidOp "TextSize addition overflowed"
+
+    static member (-) (a : TextSize, b : TextSize) : TextSize =
+        match TextSize.checkedSub a b with
+        | ValueSome diff -> diff
+        | ValueNone -> invalidOp "TextSize subtraction underflowed"
+
 [<Struct>]
 type TextRange =
     private
-        { Starts : TextSize
-          Ends : TextSize }
+        {
+            Starts : TextSize
+            Ends : TextSize
+        }
 
     member this.Start = this.Starts
     member this.End = this.Ends
 
-    override this.ToString() =
-        sprintf "%s..%s" (this.Start.ToString ()) (this.End.ToString ())
+    override this.ToString () = $"{this.Start}..{this.End}"
 
 module TextRange =
-    let create (start : TextSize) (ends : TextSize) : TextRange =
-        assert (start <= ends)
-        { Starts = start; Ends = ends }
+    let create (starts : TextSize) (ends : TextSize) : TextRange =
+        assert (starts <= ends)
+        { Starts = starts ; Ends = ends }
 
     let at (offset : TextSize) (length : TextSize) : TextRange = create offset (offset + length)
 
@@ -125,24 +128,47 @@ module TextRangeOps =
     let (|TextRange|) (range : TextRange) = struct (range.Start, range.End)
 
 type TextRange with
-    static member (+)(range : TextRange, offset : TextSize) : TextRange =
+    static member (+) (range : TextRange, offset : TextSize) : TextRange =
         match TextRange.checkedAdd offset range with
         | ValueSome newRange -> newRange
         | ValueNone -> invalidOp "TextRange +offset overflowed"
 
-    static member (-)(range : TextRange, offset : TextSize) : TextRange =
+    static member (-) (range : TextRange, offset : TextSize) : TextRange =
         match TextRange.checkedSub offset range with
         | ValueSome newRange -> newRange
         | ValueNone -> invalidOp "TextRange -offset overflowed"
 
     static member Zero = TextRange.empty
 
+/// 0-based line and column representation.
+[<Struct>]
+type LineCol =
+    {
+        Line : uint32
+        Column : uint32
+    }
+
+    override this.ToString () = $"{this.Line + 1u}:{this.Column + 1u}"
+
+module LineCol =
+    let zero = { Line = 0u ; Column = 0u }
+
+    let create (line : uint32) (column : uint32) : LineCol =
+        { Line = line ; Column = column }
+
+type LineCol with
+    static member Zero = LineCol.zero
+
 [<AutoOpen>]
 module StringOps =
     type System.String with
         member this.Size : TextSize = TextSize.ofStr this
 
-        member this.Slice(range : TextRange) : string =
+        member this.Slice (range : TextRange) : string =
             let start = TextSize.toInt range.Start
             let length = TextSize.toInt (TextRange.length range)
             this.Substring (start, length)
+
+module String =
+    let slice (range : TextRange) (s : string) : string = s.Slice range
+    let size (s : string) : TextSize = s.Size

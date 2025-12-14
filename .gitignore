@@ -20,6 +20,7 @@ build/
 # Generated
 generated/
 *.gen.fs
+*.gen.fsi
 *.fs.js
 *.fs.ts
 
@@ -40,4 +41,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Settings
-*.user
+*.DotSettings
+*.DotSettings.user
+
+# Lexer generated files
+Lex.fs
+Lex.fsi

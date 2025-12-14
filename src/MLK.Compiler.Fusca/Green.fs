@@ -1,7 +1,7 @@
 // Port of biome's rowan crate, that is fork of rust-analyzer's one.
 // https://github.com/biomejs/biome/tree/main/crates/biome_rowan
 
-namespace MLK.Compiler.Fusca.Green
+namespace MLK.Compiler.Fusca
 
 open System.Collections.Concurrent
 open Stdx

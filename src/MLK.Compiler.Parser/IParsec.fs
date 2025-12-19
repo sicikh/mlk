@@ -517,6 +517,9 @@ module Combinators =
 
         Parser (f, p.SignificantTokens, p.IsOpt)
 
+    let pCheckIndent (p : 'a parser) : 'a parser =
+        pCheckToken (konst true) ^>>. p
+
     let localIndentation (rel : IndentRel) (p : 'a parser) : 'a parser =
         let aux fLo fHi fHi' state ctx =
             match
@@ -594,18 +597,23 @@ module Combinators =
     let mutable private traceMsgIndent = 0
 
     let trace (name : string) (p : 'a parser) : 'a parser =
+        let printState (state : ParseState) =
+            let { Source = source ; MinIndent = Indent lo ; MaxIndent = Indent hi ; AbsMode = absMode ; IndentRel = indentRel } = state
+            let currToken = source.Head
+            $"Current token: {currToken}. MinIndent: {lo}, MaxIndent: {hi}, AbsMode: {absMode}, IndentRel: {indentRel}"
+
         let f (state : ParseState) (ctx : ParseCtx) =
             let indentStr = String.replicate traceMsgIndent "  "
-            printfn $"{indentStr}Entering parser {name}. Current token: {state.Source.Head}"
+            printfn $"{indentStr}Entering parser {name}. Current state: {printState state}"
             traceMsgIndent <- traceMsgIndent + 1
 
             match p.Run state ctx with
             | Success (_, state1) as r ->
-                printfn $"{indentStr}Exiting parser {name}. Next token: {state1.Source.Head}"
+                printfn $"{indentStr}Exiting parser {name}. New state: {printState state1}"
                 traceMsgIndent <- traceMsgIndent - 1
                 r
             | Failure con ->
-                printfn $"{indentStr}Failing parser {name}, consumed = {con}. Current token: {state.Source.Head}"
+                printfn $"{indentStr}Failing parser {name}, consumed = {con}. Current state: {printState state}"
                 traceMsgIndent <- traceMsgIndent - 1
                 Failure con
 

@@ -15,6 +15,8 @@ let pRParen = pTokenS SyntaxKind.RParen
 let pLetKw = pTokenS SyntaxKind.LetKw
 let pInKw = pTokenS SyntaxKind.InKw
 let pAndKw = pTokenS SyntaxKind.AndKw
+let pFunKw = pTokenS SyntaxKind.FunKw
+let pArrow = pTokenS SyntaxKind.Arrow
 
 let pEq =
     pChooseToken (fun t ->
@@ -51,27 +53,38 @@ let pExpr' (minbp : int) : CompletedMarker parser =
         false
     )
 
-let pExpr = trace "pExpr" <| pExpr' 0
+let pExpr = pExpr' 0
 
 let pPat = node SyntaxKind.NamedPat ^<| pName
 
-let pBinding = node SyntaxKind.Binding ^<| pPat ^>> pEq ^>> pExpr
+let pBinding =
+    node SyntaxKind.Binding ^<| pPat ^>> pEq ^>> trace "pBindingExpr" pExpr
+
 let pBindingList = node SyntaxKind.BindingList ^<| sepBy1 pBinding pAndKw
 
 let pLetDecl = node SyntaxKind.LetDecl ^<| pLetKw ^>> pBindingList
+
+let pFun =
+    let firstPart = (trace "pFunKw" pFunKw) ^>> (trace "pPat" pPat) ^>> (trace "pArrow" pArrow)
+
+    let p =
+        localAbsoluteIndentation
+        ^<| localIndentation Any
+        ^<| localTokenMode (konst Gt) firstPart
+
+    node SyntaxKind.FunExpr ^<| (pCheckIndent p) ^>> (trace "pFunExpr" pExpr)
 
 let pLetExpr =
     node SyntaxKind.LetExpr
     ^<| localTokenMode (konst Gt)
     ^<| pLetDecl
         ^>> ((localIndentation Any (pInKw ^>>. pExpr))
-             <|> (localIndentation Eq (localTokenMode (konst Ge) pExpr)))
+             <|> (localIndentation Eq (localTokenMode (konst Ge) <| trace "pLetBody" pExpr)))
 
 let pParenExpr =
-    trace "pParenExpr"
-    ^<| node SyntaxKind.ParenExpr
+    node SyntaxKind.ParenExpr
     ^<| between pLParen (tryOrDiag expectedClosingParen pRParen)
-    ^<| localIndentation Any (trace "pInParenExpr" pExpr)
+    ^<| localIndentation Any pExpr
 
 let pList =
     node SyntaxKind.ListExpr
@@ -83,7 +96,7 @@ let pList =
 // let pUnit =
 //     node SyntaxKind.UnitLiteral (pLParen ^>> opt pRParen)
 
-let pTerm = pLiteral <|> pName <|> pParenExpr <|> pLetExpr <|> pList
+let pTerm = pName <|> pFun <|> pLetExpr // pLiteral <|> pName <|> pParenExpr <|> pFun <|> pLetExpr <|> pList
 
 let pPrefixOp =
     pChooseToken (fun t ->
@@ -103,24 +116,20 @@ let pInfixOp =
         | _, SyntaxKind.Op -> Some (5, 6, SyntaxKind.BinExpr)
         | _ -> None
     )
-    <|> (localIndentation Gt
-         // ^<| absoluteIndentation
-         ^<| pCheckToken (fun t ->
-             pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
-         )
-         |>> (konst (9, 10, SyntaxKind.AppExpr)))
-    <|> (localIndentation Eq
-         // ^<| absoluteIndentation
-         ^<| pCheckToken (fun t ->
-             pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
-         )
-         |>> (konst (0, 0, SyntaxKind.SeqExpr)))
+    // <|> (localIndentation Gt
+    //      // ^<| absoluteIndentation
+    //      ^<| pCheckToken (fun t -> pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken)
+    //      |>> (konst (9, 10, SyntaxKind.AppExpr)))
+    // <|> (localIndentation Eq
+    //      // ^<| absoluteIndentation
+    //      ^<| pCheckToken (fun t -> pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken)
+    //      |>> (konst (0, 0, SyntaxKind.SeqExpr)))
     |> withSignificant (
         Set.union pExpr.SignificantTokens
         <| Set [ SyntaxKind.Op ; SyntaxKind.Semicolon ]
     )
 
-pExprRun.Value <- fun minbp -> (pPratt' (recoverExpr pTerm) pPrefixOp pInfixOp minbp).Run
+pExprRun.Value <- fun minbp -> (pPratt' pTerm pPrefixOp pInfixOp minbp).Run
 
 let parseRoot (sourceText : string) : ParseEvent list * Trivia list * ParseDiagnostic list =
     let tokens = Lexer.tokenize sourceText

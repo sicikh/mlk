@@ -22,7 +22,8 @@
 		"@ctrl/tinycolor": "^4.2.0",
 		"@monaco-editor/loader": "^1.7.0",
 		"clone-deep": "^4.0.1",
-		"monaco-editor": "^0.54.0"
+		"monaco-editor": "^0.54.0",
+		"monaco-languages": "^2.11.1"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",

@@ -3,14 +3,13 @@
 
 namespace MLK.Compiler.Fusca
 
-open System.Collections.Concurrent
+open System.Collections.Generic
 open Stdx
 open MLK.Compiler.Text
 
 [<Struct>]
 type RawSyntaxKind = RawSyntaxKind of uint16
 
-[<Struct>]
 type TriviaPieceKind =
     | Newline
     | Whitespace
@@ -20,7 +19,6 @@ type TriviaPieceKind =
 
     member this.IsComment = this.IsSingleLineComment || this.IsMultiLineComment
 
-[<Struct>]
 type TriviaPiece =
     { Kind : TriviaPieceKind
       Length : TextSize }
@@ -262,7 +260,7 @@ module private Hash =
     let tokenHash (token : GreenToken) : uint64 = tokenHashOf token.Kind token.Text
 
 type TriviaCache () =
-    let trivias = ConcurrentDictionary<uint64, ResizeArray<CachedTrivia>> ()
+    let trivias = Dictionary<uint64, ResizeArray<CachedTrivia>> ()
 
     let whitespace = GreenTrivia.create [| TriviaPiece.whitespace (TextSize 1u) |]
 
@@ -318,5 +316,5 @@ type NodeCache () =
     [<Literal>]
     let UncachedNodeHash = 0UL
 
-    let nodes = ConcurrentDictionary<uint64, ResizeArray<CachedNode>> ()
-    let tokens = ConcurrentDictionary<uint64, CachedToken> ()
+    let nodes = Dictionary<uint64, ResizeArray<CachedNode>> ()
+    let tokens = Dictionary<uint64, CachedToken> ()

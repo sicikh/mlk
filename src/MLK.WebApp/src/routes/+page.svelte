@@ -7,6 +7,58 @@
     let code = "function add(a, b) {\n  return a + b;\n}\n";
 
     const selectedResult = writable('AST');
+    export interface Node {
+        hidden?: boolean;
+        name: string;
+        children?: Node[];
+        range?: [number, number];
+        type?: string;
+        [key: string]: any;
+    }
+
+    interface DiagnosticDto {
+        message: string;
+    }
+
+    interface AstResponseDto {
+        diagnostics: DiagnosticDto[];
+        tree?: Node | null;
+    }
+
+    let ast: Node | null = null;
+    let diagnostics: DiagnosticDto[] = [];
+    let isLoading = false;
+
+    async function run() {
+        isLoading = true;
+        try {
+            const res = await fetch('/api/ast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+
+            if (!res.ok) {
+                console.error('AST request failed', await res.text());
+                return;
+            }
+
+            const data: AstResponseDto = await res.json();
+            diagnostics = data.diagnostics;
+            ast = data.tree ?? null;
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    let timeout: number | undefined;
+
+    $: if (code !== undefined) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            void run();
+        }, 300);
+    }
 </script>
 
 <div class="main">
@@ -15,7 +67,7 @@
     </div>
 
     <div class="toolbar">
-        <button class="runbutton">Run</button>
+        <button class="runbutton" on:click={run}>Run</button>
         <div class="center-group">
             Results
             <select bind:value={$selectedResult} class="select-result">
@@ -42,7 +94,11 @@
 <div class="output">
     <div class="ast-tab-container">
         {#if $selectedResult === 'AST'}
-            <ASTTab />
+            {#if ast}
+                <ASTTab {ast} />
+            {:else}
+                <div>Nothing</div>
+            {/if}
         {:else}
             <OtherTab />
         {/if}

@@ -44,8 +44,10 @@
             }
 
             const data: AstResponseDto = await res.json();
+            console.log('AST response', data);
             diagnostics = data.diagnostics;
             ast = data.tree ?? null;
+            console.log('AST set to', ast);
         } finally {
             isLoading = false;
         }

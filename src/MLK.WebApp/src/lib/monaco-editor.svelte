@@ -13,7 +13,7 @@
 
   onMount(async () => {
     monaco = await loader.init();
-
+    
     editor = monaco.editor.create(container, {
       value,
       language,

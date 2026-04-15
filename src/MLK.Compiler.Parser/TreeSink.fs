@@ -174,6 +174,8 @@ type LosslessTreeSink(source : string, trivias : Trivia list) =
     let mutable textPos = TextSize.zero
     let mutable triviaPos = 0
     let triviaPieces : ResizeArray<TriviaPiece> = ResizeArray ()
+    let mutable parentsCount = 0
+    let mutable needsEof = true
 
     member this.Finish () : GenericTree option = builder.GetTree ()
 
@@ -219,6 +221,39 @@ type LosslessTreeSink(source : string, trivias : Trivia list) =
 
         member this.EmitErrors _diagnostics = ()
 
-        member this.FinishNode () = builder.FinishNode ()
+        member this.FinishNode () =
+            parentsCount <- parentsCount - 1
 
-        member this.StartNode kind = builder.StartNode kind
+            if parentsCount = 0 && needsEof then
+                // this.DoToken SyntaxKind.Eof source.Size
+                needsEof <- false
+
+            builder.FinishNode ()
+
+        member this.StartNode kind =
+            builder.StartNode kind
+            parentsCount <- parentsCount + 1
+
+module GenericTree =
+    let intoGreen (tree : GenericTree) : GreenNode =
+        let rec toGreen (tree : GenericTree) : GreenElement =
+            match tree with
+            | Token (kind, text, _range, leadingTrivia, trailingTrivia) ->
+                let leading = GreenTrivia.create (leadingTrivia |> List.toArray)
+                let trailing = GreenTrivia.create (trailingTrivia |> List.toArray)
+                let token = GreenToken.withTrivia (SyntaxKind.toRaw kind) text leading trailing
+                GreenElement.Token token
+            | Node (kind, children, range) ->
+                let greenChildren = children |> List.map toGreen
+                let slots =
+                    greenChildren
+                    |> List.map (function
+                        | GreenElement.Node node -> Slot.Node (TextRange.length range, node)
+                        | GreenElement.Token token -> Slot.Token (TextRange.length range, token))
+                    |> List.toArray
+                let node = { Kind = SyntaxKind.toRaw kind; Length = TextRange.length range; Slots = slots }
+                GreenElement.Node node
+
+        match toGreen tree with
+        | GreenElement.Node node -> node
+        | GreenElement.Token _ -> failwith "Root of the tree cannot be a token"

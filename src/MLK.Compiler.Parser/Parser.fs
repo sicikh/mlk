@@ -18,6 +18,9 @@ let pAndKw = pTokenS SyntaxKind.AndKw
 let pFunKw = pTokenS SyntaxKind.FunKw
 let pArrow = pTokenS SyntaxKind.Arrow
 let pSemi = pTokenS SyntaxKind.Semicolon
+let pIf = pTokenS SyntaxKind.IfKw
+let pThen = pTokenS SyntaxKind.ThenKw
+let pElse = pTokenS SyntaxKind.ElseKw
 
 let pEq =
     pChooseToken (fun t ->
@@ -56,20 +59,18 @@ let pExpr' (minbp : int) : CompletedMarker parser =
 
 let pExpr = pExpr' 0
 
-let pPat = node SyntaxKind.NamedPat ^<| pName
+// let pPat = node SyntaxKind.NamedPat ^<| pName
+// let pBinding = node SyntaxKind.Binding ^<| pPat ^>> pEq ^>> pExpr
+// let pBindingList = node SyntaxKind.BindingList ^<| sepBy1 pBinding pAndKw
 
-let pBinding = node SyntaxKind.Binding ^<| pPat ^>> pEq ^>> pExpr
-
-let pBindingList = node SyntaxKind.BindingList ^<| sepBy1 pBinding pAndKw
-
-let pLetDecl = node SyntaxKind.LetDecl ^<| pLetKw ^>> pBindingList
+let pLetDecl = node SyntaxKind.LetDecl ^<| pLetKw ^>> pName ^>> pEq ^>> (localIndentation Gt pExpr)
 
 let pFun =
     let p =
         localAbsoluteIndentation
         ^<| localIndentation Any
         ^<| localTokenMode (konst Gt)
-        ^<| pipe3 pFunKw pPat pArrow (fun _ _ _ -> ())
+        ^<| pipe3 pFunKw pName pArrow (fun _ _ _ -> ())
 
     node SyntaxKind.FunExpr ^<| (pCheckIndent p) ^>> (localIndentation Gt pExpr)
 
@@ -90,7 +91,20 @@ let pList =
     // TODO: indent + optional trailing
     ^<| sepBy pExpr pSemi
 
-let pTerm = pName <|> pFun <|> pLetExpr <|> pLiteral <|> pParenExpr <|> pList
+let pIfThenElse =
+    let p =
+        pIf
+        ^>> (localIndentation Gt pExpr)
+        ^>> pThen
+        ^>> (localIndentation Gt pExpr)
+        ^>> pElse
+        ^>> (localIndentation Gt pExpr)
+
+    node SyntaxKind.IfExpr p
+
+let pVar = node SyntaxKind.VarExpr pName
+
+let pTerm = pVar <|> pFun <|> pLetExpr <|> pLiteral <|> pParenExpr <|> pList <|> pIfThenElse
 
 let pPrefixOp =
     pChooseToken (fun t ->
@@ -111,6 +125,8 @@ let pInfixOp =
         // | ";", _ -> Some (0, 0, SyntaxKind.SeqExpr)
         | ("+" | "-"), _ -> Some (1, 2, SyntaxKind.BinExpr)
         | ("*" | "/"), _ -> Some (3, 4, SyntaxKind.BinExpr)
+        | ("=" | "<" | ">" | "<=" | ">="), _ -> Some (2, 3, SyntaxKind.BinExpr)
+        | ("&&" | "||"), _ -> Some (0, 1, SyntaxKind.BinExpr)
         | _, SyntaxKind.Op -> Some (5, 6, SyntaxKind.BinExpr)
         | _ -> None
     )
@@ -132,3 +148,16 @@ let parseRoot (sourceText : string) : ParseEvent list * Trivia list * ParseDiagn
     match runParser pExpr tokenSource with
     | Success (_, state) -> state.Finish ()
     | Failure _ -> failwith "Parsing failed unexpectedly"
+
+open MLK.Compiler.Fusca
+
+let exprRoot (source : string) (events : ParseEvent list) (trivias : Trivia list) : Expr =
+    let sink = LosslessTreeSink(source, trivias)
+    ParseEvent.processEvents sink [] events
+    match sink.Finish() with
+    | Some tree ->
+        let green = GenericTree.intoGreen tree
+        match AstNode.cast<Expr> (SyntaxNode.CreateRoot green) with
+        | Some expr -> expr
+        | None -> failwith "Failed to cast root node to Expr"
+    | None -> failwith "Failed to construct syntax tree from events"

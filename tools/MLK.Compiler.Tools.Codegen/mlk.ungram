@@ -86,10 +86,9 @@ Binding =
 
 LetDecl =
     'let'
-    'rec'?
-    Bindings: BindingList
-
-BindingList = (Binding ('and' Binding)*)
+    Name: Name
+    '='
+    Expr: Expr
 
 //****************************//
 //        Expressions         //
@@ -97,21 +96,21 @@ BindingList = (Binding ('and' Binding)*)
 
 Expr =
     Literal
-    | ParenExpr
-    | TypedExpr
     | AppExpr
-    | IfExpr
     | LetExpr
-    | SeqExpr
-    | TupleExpr
-    | MatchExpr
     | FunExpr
-    | ListExpr
+    | IfExpr
+    | BinExpr
+    | VarExpr
+    | ParenExpr
     | ErrExpr
+
+VarExpr =
+    Name: Name
 
 BinExpr =
     Left: Expr
-    Op: QName
+    Op: 'operator'
     Right: Expr
 
 UnaryExpr =
@@ -139,7 +138,6 @@ IfExpr =
 
 LetExpr =
     Decl: LetDecl
-    'in'?
     Body: Expr
 
 SeqExpr =
@@ -151,7 +149,7 @@ TupleExpr = (Expr (',' Expr)*)
 
 FunExpr =
     'fun'
-    Args: ArgPats
+    Arg: Name
     '->'
     Body: Expr
 
@@ -186,12 +184,9 @@ MatchGuard =
 //************************//
 
 Literal =
-    IntLiteral
-    | BoolLiteral
-    | UnitLiteral
-    | CharLiteral
-    | StringLiteral
+    Value: 'IntLiteral'
 
+// FIXME:
 IntLiteral = Value: 'IntLiteral'
 
 BoolLiteral = ValueToken: ('true' | 'false')

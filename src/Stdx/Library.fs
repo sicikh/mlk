@@ -199,3 +199,18 @@ module String =
                 string upperFirstChar
             else
                 upperFirstChar.ToString () + s[1..]
+
+[<AutoOpen>]
+module PatternOps =
+    let (|Never|) _ = failwith "This pattern should never be matched"
+
+module Result =
+    let inline get result =
+        match result with
+        | Ok v -> v
+        | Error e -> failwithf "Expected Ok but got Error: %A" e
+
+[<AutoOpen>]
+module ResultExtensions =
+    type Result<'T, 'E> with
+        member this.Value = Result.get this

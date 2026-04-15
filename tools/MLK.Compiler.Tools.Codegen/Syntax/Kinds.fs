@@ -88,6 +88,8 @@ let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
     $"\
 namespace MLK.Compiler.Syntax
 
+open MLK.Compiler.Fusca
+
 type SyntaxKind =
 {syntaxKindsValues}
 

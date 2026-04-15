@@ -1,7 +1,5 @@
 module MLK.Compiler.Tools.Codegen.Syntax.Nodes
 
-open Stdx
-
 let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string =
     let withIndent (n : int) (s : string list) : string =
         let indent = String.replicate n " "
@@ -17,7 +15,7 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
         let listInterface =
             match separator with
             | None -> $"    interface IAstNodeList<{elementName}> with"
-            | Some sep -> $"    interface IAstSeparatedList<{elementName}> with"
+            | Some _sep -> $"    interface IAstSeparatedList<{elementName}> with"
 
         $"""type {name} =
     private

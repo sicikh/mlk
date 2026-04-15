@@ -20,6 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\src\MLK.Compiler.Desugar\MLK.Compiler.Desugar.fsproj" />
       <ProjectReference Include="..\..\src\MLK.Compiler.Parser\MLK.Compiler.Parser.fsproj" />
     </ItemGroup>
 

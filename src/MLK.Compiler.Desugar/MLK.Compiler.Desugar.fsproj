@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="Library.fs"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\MLK.Compiler.Parser\MLK.Compiler.Parser.fsproj" />
+      <ProjectReference Include="..\MLK.Compiler.Syntax\MLK.Compiler.Syntax.fsproj" />
+      <ProjectReference Include="..\MLK.Compiler.Text\MLK.Compiler.Text.fsproj" />
+    </ItemGroup>
+
+</Project>

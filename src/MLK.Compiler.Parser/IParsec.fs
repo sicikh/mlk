@@ -49,7 +49,7 @@ type ParseState =
             MinIndent = Indent.Zero
             MaxIndent = Indent.Inf
             AbsMode = true
-            IndentRel = Gt
+            IndentRel = Ge
         }
 
     member this.AddDiag (diag : ParseDiagnostic) : ParseState =
@@ -350,9 +350,9 @@ module Combinators =
                     .WithSource(inp1)
                     .AddDiag(diag)
                     // .PushEvent(StartEvent (errorKind, None))
-                    .PushEvents(errEvents)
-                    // .PushEvent
-                    // FinishEvent
+                    .PushEvents (errEvents)
+            // .PushEvent
+            // FinishEvent
 
             Success ((), state1)
 
@@ -366,9 +366,20 @@ module Combinators =
         =
         p <|> (node errorNode <| skipInsignificantInto errorNode diagBuilder)
 
-    let tryOrDiag (_diagBuilder : TokenSource -> TextRange -> ParseDiagnostic) (p : 'a parser) : 'a option parser =
-        // TODO: add diag to state
-        opt p
+    let tryOrDiag (diagBuilder : TokenSource -> TextRange -> ParseDiagnostic) (p : 'a parser) : 'a option parser =
+        let f state ctx =
+            match p.Run state ctx with
+            | Success (r, state1) -> Success (Some r, state1)
+            | Failure false ->
+                Success (
+                    None,
+                    { state with
+                        Diagnostics = diagBuilder state.Source state.Source.Head.Range :: state.Diagnostics
+                    }
+                )
+            | Failure true -> Failure true
+
+        Parser (f, p.SignificantTokens, true)
 
     let checkIndentation (state : ParseState) (token : Token) : ParseState option =
         let (Indent lo) = state.MinIndent
@@ -438,8 +449,7 @@ module Combinators =
             | t, state1 when f t ->
                 match checkIndentation state1 t with
                 | None -> Failure false
-                | Some _ ->
-                    Success (t, state)
+                | Some _ -> Success (t, state)
             | _ -> Failure false
 
         Parser (f', Set.empty)
@@ -458,6 +468,7 @@ module Combinators =
                     pPrefixOp.SignificantTokens
                     pInfixOp.SignificantTokens
                 ]
+
         let u (ctx : ParseCtx) = ctx.UnionTokens sigs
 
         let rec pExpr minbp state ctx =
@@ -515,8 +526,7 @@ module Combinators =
 
         Parser (f, p.SignificantTokens, p.IsOpt)
 
-    let pCheckIndent (p : 'a parser) : 'a parser =
-        pCheckToken (konst true) ^>>. p
+    let pCheckIndent (p : 'a parser) : 'a parser = pCheckToken (konst true) ^>>. p
 
     let localIndentation (rel : IndentRel) (p : 'a parser) : 'a parser =
         let aux fLo fHi fHi' state ctx =
@@ -595,7 +605,15 @@ module Combinators =
 
     let trace (name : string) (p : 'a parser) : 'a parser =
         let printState (state : ParseState) =
-            let { Source = source ; MinIndent = Indent lo ; MaxIndent = Indent hi ; AbsMode = absMode ; IndentRel = indentRel } = state
+            let {
+                    Source = source
+                    MinIndent = Indent lo
+                    MaxIndent = Indent hi
+                    AbsMode = absMode
+                    IndentRel = indentRel
+                } =
+                state
+
             let currToken = source.Head
             $"Token: {currToken}. Lo: {lo}, Hi: {hi}, Abs: {absMode}, Rel: {indentRel}"
 

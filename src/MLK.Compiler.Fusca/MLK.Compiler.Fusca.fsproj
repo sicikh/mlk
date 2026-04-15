@@ -3,11 +3,15 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>3535</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
-        <Compile Include="Green.fs" />
+        <Compile Include="NodeOrToken.fs" />
+        <Compile Include="Green\Green.fs" />
+        <Compile Include="Green\Cache.fs" />
+        <Compile Include="Syntax\Token.fs" />
+        <Compile Include="Ast.fs" />
     </ItemGroup>
 
     <ItemGroup>

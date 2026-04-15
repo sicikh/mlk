@@ -52,11 +52,15 @@ let Test1 () =
 
 [<Test>]
 let Test2 () =
+//     let source = """
+// let id = fun x ->
+//     x
+// id
+//  1
+// println id
+// """
     let source = """
- let id =
-  fun x ->
-  y
- z
+[1 ; 2]
 """
     let events, trivias, diags = parseRoot source
     let tree =
@@ -67,7 +71,7 @@ let Test2 () =
     match tree with
     | None -> Assert.Fail("Tree construction failed")
     | Some tree ->
-        debugPrintEvents source events
+        // debugPrintEvents source events
         printfn ""
         printfn "%s" <| tree.DebugPrint (Some source)
 

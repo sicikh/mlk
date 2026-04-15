@@ -7,7 +7,7 @@ open MLK.Compiler.Syntax
 open MLK.Compiler.Parser.IParsec
 
 let pIdent = pTokenS SyntaxKind.Ident
-let pIntLiteral = pTokenS SyntaxKind.IntLiteral |> trace "pIntLiteral"
+let pIntLiteral = pTokenS SyntaxKind.IntLiteral
 let pLBracket = pTokenS SyntaxKind.LBracket
 let pRBracket = pTokenS SyntaxKind.RBracket
 let pLParen = pTokenS SyntaxKind.LParen
@@ -17,6 +17,7 @@ let pInKw = pTokenS SyntaxKind.InKw
 let pAndKw = pTokenS SyntaxKind.AndKw
 let pFunKw = pTokenS SyntaxKind.FunKw
 let pArrow = pTokenS SyntaxKind.Arrow
+let pSemi = pTokenS SyntaxKind.Semicolon
 
 let pEq =
     pChooseToken (fun t ->
@@ -57,46 +58,39 @@ let pExpr = pExpr' 0
 
 let pPat = node SyntaxKind.NamedPat ^<| pName
 
-let pBinding =
-    node SyntaxKind.Binding ^<| pPat ^>> pEq ^>> trace "pBindingExpr" pExpr
+let pBinding = node SyntaxKind.Binding ^<| pPat ^>> pEq ^>> pExpr
 
 let pBindingList = node SyntaxKind.BindingList ^<| sepBy1 pBinding pAndKw
 
 let pLetDecl = node SyntaxKind.LetDecl ^<| pLetKw ^>> pBindingList
 
 let pFun =
-    let firstPart = (trace "pFunKw" pFunKw) ^>> (trace "pPat" pPat) ^>> (trace "pArrow" pArrow)
-
     let p =
         localAbsoluteIndentation
         ^<| localIndentation Any
-        ^<| localTokenMode (konst Gt) firstPart
+        ^<| localTokenMode (konst Gt)
+        ^<| pipe3 pFunKw pPat pArrow (fun _ _ _ -> ())
 
-    node SyntaxKind.FunExpr ^<| (pCheckIndent p) ^>> (trace "pFunExpr" pExpr)
+    node SyntaxKind.FunExpr ^<| (pCheckIndent p) ^>> (localIndentation Gt pExpr)
 
 let pLetExpr =
-    node SyntaxKind.LetExpr
-    ^<| localTokenMode (konst Gt)
-    ^<| pLetDecl
-        ^>> ((localIndentation Any (pInKw ^>>. pExpr))
-             <|> (localIndentation Eq (localTokenMode (konst Ge) <| trace "pLetBody" pExpr)))
+    let inVar = (localIndentation Any ((localTokenMode (konst Any) pInKw) ^>>. pExpr))
+
+    node SyntaxKind.LetExpr ^<| pLetDecl ^>> (inVar <|> (localIndentation Eq pExpr))
 
 let pParenExpr =
     node SyntaxKind.ParenExpr
-    ^<| between pLParen (tryOrDiag expectedClosingParen pRParen)
+    ^<| between pLParen (localTokenMode (konst Any) (tryOrDiag expectedClosingParen pRParen))
     ^<| localIndentation Any pExpr
 
 let pList =
     node SyntaxKind.ListExpr
-    ^<| between pLBracket (tryOrDiag expectedClosingBracket pRBracket)
+    ^<| between pLBracket (localTokenMode (konst Any) (tryOrDiag expectedClosingBracket pRBracket))
     ^<| localIndentation Any
-    ^<| sepBy pExpr (pChooseToken (fun t -> if t.Text = ";" then Some () else None))
+    // TODO: indent + optional trailing
+    ^<| sepBy pExpr pSemi
 
-// TODO:
-// let pUnit =
-//     node SyntaxKind.UnitLiteral (pLParen ^>> opt pRParen)
-
-let pTerm = pName <|> pFun <|> pLetExpr // pLiteral <|> pName <|> pParenExpr <|> pFun <|> pLetExpr <|> pList
+let pTerm = pName <|> pFun <|> pLetExpr <|> pLiteral <|> pParenExpr <|> pList
 
 let pPrefixOp =
     pChooseToken (fun t ->
@@ -108,22 +102,22 @@ let pPrefixOp =
     |> withSignificant (Set [ SyntaxKind.Op ])
 
 let pInfixOp =
+    let isSignificant (t : Token) =
+        pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
+
     pChooseToken (fun t ->
         match t.Text, t.Kind with
-        | ";", _ -> Some (0, 0, SyntaxKind.SeqExpr)
+        // TODO: introduce flag `InList`. Listmakers enable it, parens --- disable
+        // | ";", _ -> Some (0, 0, SyntaxKind.SeqExpr)
         | ("+" | "-"), _ -> Some (1, 2, SyntaxKind.BinExpr)
         | ("*" | "/"), _ -> Some (3, 4, SyntaxKind.BinExpr)
         | _, SyntaxKind.Op -> Some (5, 6, SyntaxKind.BinExpr)
         | _ -> None
     )
-    // <|> (localIndentation Gt
-    //      // ^<| absoluteIndentation
-    //      ^<| pCheckToken (fun t -> pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken)
-    //      |>> (konst (9, 10, SyntaxKind.AppExpr)))
-    // <|> (localIndentation Eq
-    //      // ^<| absoluteIndentation
-    //      ^<| pCheckToken (fun t -> pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken)
-    //      |>> (konst (0, 0, SyntaxKind.SeqExpr)))
+    <|> (localIndentation Gt ^<| pCheckToken isSignificant
+         |>> (konst (9, 10, SyntaxKind.AppExpr)))
+    <|> (localIndentation Eq ^<| pCheckToken isSignificant
+         |>> (konst (0, 0, SyntaxKind.SeqExpr)))
     |> withSignificant (
         Set.union pExpr.SignificantTokens
         <| Set [ SyntaxKind.Op ; SyntaxKind.Semicolon ]

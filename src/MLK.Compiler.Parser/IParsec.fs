@@ -49,7 +49,7 @@ type ParseState =
             MinIndent = Indent.Zero
             MaxIndent = Indent.Inf
             AbsMode = true
-            IndentRel = Ge
+            IndentRel = Gt
         }
 
     member this.AddDiag (diag : ParseDiagnostic) : ParseState =
@@ -190,7 +190,6 @@ module Combinators =
 
     let pipe2 (p : 'a parser) (q : 'b parser) (f : 'a -> 'b -> 'c) : 'c parser =
         let f state ctx =
-            // TODO: how to union ctx?
             match p.Run state (unionCtx q ctx) with
             | Success (r1, state1) ->
                 match q.Run state1 ctx with
@@ -398,7 +397,6 @@ module Combinators =
             | t ->
                 match checkIndentation state t with
                 | None -> Failure false
-                // TODO: to thread or not to thread? that is the question
                 | Some _state1 -> Success (value, state)
 
         Parser (f, Set.empty, true)
@@ -542,7 +540,6 @@ module Combinators =
 
         let f =
             match rel with
-            // TODO: ??? why on equality nothing happens?
             | Eq -> p.Run
             | Any -> aux (konst (Indent 0)) (konst Indent.Inf) konst
             | Const indent -> aux (konst indent) (konst indent) konst
@@ -600,20 +597,20 @@ module Combinators =
         let printState (state : ParseState) =
             let { Source = source ; MinIndent = Indent lo ; MaxIndent = Indent hi ; AbsMode = absMode ; IndentRel = indentRel } = state
             let currToken = source.Head
-            $"Current token: {currToken}. MinIndent: {lo}, MaxIndent: {hi}, AbsMode: {absMode}, IndentRel: {indentRel}"
+            $"Token: {currToken}. Lo: {lo}, Hi: {hi}, Abs: {absMode}, Rel: {indentRel}"
 
         let f (state : ParseState) (ctx : ParseCtx) =
             let indentStr = String.replicate traceMsgIndent "  "
-            printfn $"{indentStr}Entering parser {name}. Current state: {printState state}"
+            printfn $"{indentStr}Entering {name}. State: {printState state}"
             traceMsgIndent <- traceMsgIndent + 1
 
             match p.Run state ctx with
             | Success (_, state1) as r ->
-                printfn $"{indentStr}Exiting parser {name}. New state: {printState state1}"
+                printfn $"{indentStr}Exiting {name}. State: {printState state1}"
                 traceMsgIndent <- traceMsgIndent - 1
                 r
             | Failure con ->
-                printfn $"{indentStr}Failing parser {name}, consumed = {con}. Current state: {printState state}"
+                printfn $"{indentStr}Failing {name}, consumed = {con}"
                 traceMsgIndent <- traceMsgIndent - 1
                 Failure con
 

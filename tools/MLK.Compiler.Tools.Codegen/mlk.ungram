@@ -37,7 +37,7 @@ ErrTy = SyntaxElement*
 
 Name = Value: 'ident'
 
-Operator = Value: ('op' | '`' 'ident' '`')
+Operator = Value: 'operator'
 
 QName =
     (Qualifier: QName '.')?
@@ -46,7 +46,7 @@ QName =
 // For now QNameSegment is just a Name, but in the future it would be extended to support
 // type applications (`Map[String, Int].contains`).
 QNameSegment =
-    Name | Operator
+    Name: Name
 
 //*************************//
 //          Items          //

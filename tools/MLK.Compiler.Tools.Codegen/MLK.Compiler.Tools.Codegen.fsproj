@@ -9,6 +9,7 @@
         <Content Include="mlk.ungram" />
         <Compile Include="Syntax\AstSrc.fs" />
         <Compile Include="Syntax\Kinds.fs" />
+        <Compile Include="Syntax\Nodes.fs" />
         <Compile Include="Syntax\Writer.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>

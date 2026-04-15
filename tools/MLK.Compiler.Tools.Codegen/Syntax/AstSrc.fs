@@ -274,7 +274,7 @@ module AstSrc =
                 let nodeSrc =
                     {
                         Name = name
-                        Fields = handleRule grammar None false [] rule
+                        Fields = handleRule grammar None false [] rule |> List.rev
                     }
 
                 astSrc.PushNode nodeSrc
@@ -294,19 +294,19 @@ module MlkLanguageSrc =
                     ".", "Dot"
                     ",", "Comma"
                     ":", "Colon"
-                    // "::", "Colon2"
+                    "::", "Colon2"
                     ";", "Semicolon"
-                    // "=", "Eq"
+                    "=", "Eq"
                     "(", "LParen"
                     ")", "RParen"
                     "{", "LBrace"
                     "}", "RBrace"
                     "[", "LBracket"
                     "]", "RBracket"
-                    // "|", "Pipe"
-                    // "&", "Amp"
+                    "|", "Pipe"
+                    "&", "Amp"
                     "->", "Arrow"
-                    // "*", "Star"
+                    "*", "Star"
                     "_", "Underscore"
                 ]
 

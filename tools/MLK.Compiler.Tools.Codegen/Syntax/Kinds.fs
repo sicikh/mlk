@@ -44,7 +44,7 @@ let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
             |> String.concat "\n"
 
         let falseCase = toCaseWithIndent 8 "_ -> false"
-        $"{trueCases} -> true \n{falseCase}"
+        $"{trueCases} -> true\n{falseCase}"
 
     let isPunctCases = valuesToCases punctSyntaxKinds
     let isLiteralCases = valuesToCases literals
@@ -92,6 +92,16 @@ type SyntaxKind =
 {syntaxKindsValues}
 
 module SyntaxKind =
+    let fromRaw (raw : RawSyntaxKind) : SyntaxKind =
+        let v = byte raw.Value
+        if v <= LanguagePrimitives.EnumToValue SyntaxKind.{allSyntaxKindsValues |> List.last} then
+            LanguagePrimitives.EnumOfValue v
+        else
+            failwith \"Invalid raw SyntaxKind.\"
+
+    let toRaw (kind : SyntaxKind) : RawSyntaxKind =
+        RawSyntaxKind (uint16 (byte kind))
+
     let isPunct (kind : SyntaxKind) : bool =
         match kind with
 {isPunctCases}

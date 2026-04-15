@@ -3,123 +3,143 @@ namespace MLK.Compiler.Syntax
 type SyntaxKind =
     | Tombstone = 0uy
     | Eof = 1uy
-    | LParen = 2uy
-    | RParen = 3uy
-    | Comma = 4uy
-    | Arrow = 5uy
-    | Dot = 6uy
-    | Colon = 7uy
-    | Semicolon = 8uy
-    | LBracket = 9uy
-    | RBracket = 10uy
-    | Underscore = 11uy
-    | LBrace = 12uy
-    | RBrace = 13uy
-    | AndKw = 14uy
-    | AsKw = 15uy
-    | ElseKw = 16uy
-    | FalseKw = 17uy
-    | FunKw = 18uy
-    | IfKw = 19uy
-    | InKw = 20uy
-    | LetKw = 21uy
-    | MatchKw = 22uy
-    | ModuleKw = 23uy
-    | OpenKw = 24uy
-    | RecKw = 25uy
-    | ThenKw = 26uy
-    | TrueKw = 27uy
-    | WhenKw = 28uy
-    | WithKw = 29uy
-    | Comment = 30uy
-    | ErrToken = 31uy
-    | Ident = 32uy
-    | MultilineComment = 33uy
-    | Newline = 34uy
-    | Op = 35uy
-    | Whitespace = 36uy
-    | AndPat = 37uy
-    | AppExpr = 38uy
-    | ArgPat = 39uy
-    | ArgPats = 40uy
-    | AsPat = 41uy
-    | BinExpr = 42uy
-    | Binding = 43uy
-    | BindingList = 44uy
-    | BoolLiteral = 45uy
-    | CharLiteral = 46uy
-    | ConsPat = 47uy
-    | ErrDecl = 48uy
-    | ErrExpr = 49uy
-    | ErrNode = 50uy
-    | ErrPat = 51uy
-    | ErrTy = 52uy
-    | Expr = 53uy
-    | FnTy = 54uy
-    | FunExpr = 55uy
-    | FuncPat = 56uy
-    | IfExpr = 57uy
-    | InferTy = 58uy
-    | InnerModuleDecl = 59uy
-    | IntLiteral = 60uy
-    | LetDecl = 61uy
-    | LetExpr = 62uy
-    | ListExpr = 63uy
-    | ListExprElements = 64uy
-    | ListPat = 65uy
-    | ListPatElements = 66uy
-    | Literal = 67uy
-    | LiteralPat = 68uy
-    | MatchCase = 69uy
-    | MatchCaseList = 70uy
-    | MatchExpr = 71uy
-    | MatchGuard = 72uy
-    | ModuleDecl = 73uy
-    | ModuleDeclList = 74uy
-    | ModulePreamble = 75uy
-    | ModuleRoot = 76uy
-    | Name = 77uy
-    | NamePatField = 78uy
-    | NamedPat = 79uy
-    | OpenDecl = 80uy
-    | Operator = 81uy
-    | OrPat = 82uy
-    | ParenExpr = 83uy
-    | ParenPat = 84uy
-    | ParenTy = 85uy
-    | Pat = 86uy
-    | QName = 87uy
-    | QNameSegment = 88uy
-    | QTy = 89uy
-    | RecordFields = 90uy
-    | RecordPat = 91uy
-    | SeqExpr = 92uy
-    | StringLiteral = 93uy
-    | TupleExpr = 94uy
-    | TuplePat = 95uy
-    | TupleTy = 96uy
-    | Ty = 97uy
-    | TypedExpr = 98uy
-    | TypedPat = 99uy
-    | UnaryExpr = 100uy
-    | UnitLiteral = 101uy
-    | WildPat = 102uy
+    | Amp = 2uy
+    | LParen = 3uy
+    | RParen = 4uy
+    | Star = 5uy
+    | Comma = 6uy
+    | Arrow = 7uy
+    | Dot = 8uy
+    | Colon = 9uy
+    | Colon2 = 10uy
+    | Semicolon = 11uy
+    | Eq = 12uy
+    | LBracket = 13uy
+    | RBracket = 14uy
+    | Underscore = 15uy
+    | LBrace = 16uy
+    | Pipe = 17uy
+    | RBrace = 18uy
+    | AndKw = 19uy
+    | AsKw = 20uy
+    | ElseKw = 21uy
+    | FalseKw = 22uy
+    | FunKw = 23uy
+    | IfKw = 24uy
+    | InKw = 25uy
+    | LetKw = 26uy
+    | MatchKw = 27uy
+    | ModuleKw = 28uy
+    | OpenKw = 29uy
+    | RecKw = 30uy
+    | ThenKw = 31uy
+    | TrueKw = 32uy
+    | WhenKw = 33uy
+    | WithKw = 34uy
+    | Comment = 35uy
+    | ErrToken = 36uy
+    | Ident = 37uy
+    | MultilineComment = 38uy
+    | Newline = 39uy
+    | Op = 40uy
+    | Whitespace = 41uy
+    | AndPat = 42uy
+    | AppExpr = 43uy
+    | ArgPat = 44uy
+    | ArgPats = 45uy
+    | AsPat = 46uy
+    | BinExpr = 47uy
+    | Binding = 48uy
+    | BindingList = 49uy
+    | BoolLiteral = 50uy
+    | CharLiteral = 51uy
+    | ConsPat = 52uy
+    | ErrDecl = 53uy
+    | ErrExpr = 54uy
+    | ErrNode = 55uy
+    | ErrPat = 56uy
+    | ErrTy = 57uy
+    | Expr = 58uy
+    | FnTy = 59uy
+    | FunExpr = 60uy
+    | FuncPat = 61uy
+    | IfExpr = 62uy
+    | InferTy = 63uy
+    | InnerModuleDecl = 64uy
+    | IntLiteral = 65uy
+    | LetDecl = 66uy
+    | LetExpr = 67uy
+    | ListExpr = 68uy
+    | ListExprElements = 69uy
+    | ListPat = 70uy
+    | ListPatElements = 71uy
+    | Literal = 72uy
+    | LiteralPat = 73uy
+    | MatchCase = 74uy
+    | MatchCaseList = 75uy
+    | MatchExpr = 76uy
+    | MatchGuard = 77uy
+    | ModuleDecl = 78uy
+    | ModuleDeclList = 79uy
+    | ModulePreamble = 80uy
+    | ModuleRoot = 81uy
+    | Name = 82uy
+    | NamePatField = 83uy
+    | NamedPat = 84uy
+    | OpenDecl = 85uy
+    | Operator = 86uy
+    | OrPat = 87uy
+    | ParenExpr = 88uy
+    | ParenPat = 89uy
+    | ParenTy = 90uy
+    | Pat = 91uy
+    | QName = 92uy
+    | QNameSegment = 93uy
+    | QTy = 94uy
+    | RecordFields = 95uy
+    | RecordPat = 96uy
+    | SeqExpr = 97uy
+    | StringLiteral = 98uy
+    | TupleExpr = 99uy
+    | TuplePat = 100uy
+    | TupleTy = 101uy
+    | Ty = 102uy
+    | TypedExpr = 103uy
+    | TypedPat = 104uy
+    | UnaryExpr = 105uy
+    | UnitLiteral = 106uy
+    | WildPat = 107uy
 
 module SyntaxKind =
+    let fromRaw (raw : RawSyntaxKind) : SyntaxKind =
+        let v = byte raw.Value
+        if v <= LanguagePrimitives.EnumToValue SyntaxKind.WildPat then
+            LanguagePrimitives.EnumOfValue v
+        else
+            failwith "Invalid raw SyntaxKind."
+
+    let toRaw (kind : SyntaxKind) : RawSyntaxKind =
+        RawSyntaxKind (uint16 (byte kind))
+
     let isPunct (kind : SyntaxKind) : bool =
         match kind with
+        | SyntaxKind.Amp
         | SyntaxKind.LParen
         | SyntaxKind.RParen
+        | SyntaxKind.Star
         | SyntaxKind.Comma
         | SyntaxKind.Arrow
         | SyntaxKind.Dot
         | SyntaxKind.Colon
+        | SyntaxKind.Colon2
         | SyntaxKind.Semicolon
+        | SyntaxKind.Eq
         | SyntaxKind.LBracket
         | SyntaxKind.RBracket
         | SyntaxKind.Underscore
         | SyntaxKind.LBrace
-        | SyntaxKind.RBrace -> true 
+        | SyntaxKind.Pipe
+        | SyntaxKind.RBrace -> true
         | _ -> false
 
     let isLiteral (kind : SyntaxKind) : bool =
@@ -127,7 +147,7 @@ module SyntaxKind =
         | SyntaxKind.BoolLiteral
         | SyntaxKind.CharLiteral
         | SyntaxKind.IntLiteral
-        | SyntaxKind.StringLiteral -> true 
+        | SyntaxKind.StringLiteral -> true
         | _ -> false
 
     let isKeyword (kind : SyntaxKind) : bool =
@@ -147,7 +167,7 @@ module SyntaxKind =
         | SyntaxKind.ThenKw
         | SyntaxKind.TrueKw
         | SyntaxKind.WhenKw
-        | SyntaxKind.WithKw -> true 
+        | SyntaxKind.WithKw -> true
         | _ -> false
 
     let isList (kind : SyntaxKind) : bool =
@@ -161,7 +181,7 @@ module SyntaxKind =
         | SyntaxKind.RecordFields
         | SyntaxKind.TupleExpr
         | SyntaxKind.TuplePat
-        | SyntaxKind.TupleTy -> true 
+        | SyntaxKind.TupleTy -> true
         | _ -> false
 
     let fromKeyword (keyword : string) : SyntaxKind voption =
@@ -213,17 +233,22 @@ module SyntaxKindOps =
     // [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
     let inline t (str : string) : SyntaxKind =
         match str with
+        | "&" -> SyntaxKind.Amp
         | "(" -> SyntaxKind.LParen
         | ")" -> SyntaxKind.RParen
+        | "*" -> SyntaxKind.Star
         | "," -> SyntaxKind.Comma
         | "->" -> SyntaxKind.Arrow
         | "." -> SyntaxKind.Dot
         | ":" -> SyntaxKind.Colon
+        | "::" -> SyntaxKind.Colon2
         | ";" -> SyntaxKind.Semicolon
+        | "=" -> SyntaxKind.Eq
         | "[" -> SyntaxKind.LBracket
         | "]" -> SyntaxKind.RBracket
         | "_" -> SyntaxKind.Underscore
         | "{" -> SyntaxKind.LBrace
+        | "|" -> SyntaxKind.Pipe
         | "}" -> SyntaxKind.RBrace
         | "module" -> SyntaxKind.ModuleKw
         | "open" -> SyntaxKind.OpenKw

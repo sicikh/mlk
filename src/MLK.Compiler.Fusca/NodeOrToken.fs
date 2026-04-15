@@ -8,6 +8,7 @@ type RawSyntaxKind =
         let (RawSyntaxKind v) = this
         v
 
+[<RequireQualifiedAccess>]
 type NodeOrToken<'N, 'T> =
     | Node of node : 'N
     | Token of token : 'T
@@ -20,20 +21,20 @@ type NodeOrToken<'N, 'T> =
 module NodeOrToken =
     let asNode self =
         match self with
-        | Node n -> Some n
-        | Token _ -> None
+        | NodeOrToken.Node n -> Some n
+        | NodeOrToken.Token _ -> None
 
     let asToken self =
         match self with
-        | Node _ -> None
-        | Token t -> Some t
+        | NodeOrToken.Node _ -> None
+        | NodeOrToken.Token t -> Some t
 
     let map onNode onToken self =
         match self with
-        | Node n -> n |> onNode |> Node
-        | Token t -> t |> onToken |> Token
+        | NodeOrToken.Node n -> n |> onNode |> NodeOrToken.Node
+        | NodeOrToken.Token t -> t |> onToken |> NodeOrToken.Token
 
     let consolidate onNode onToken self =
         match self with
-        | Node n -> n |> onNode
-        | Token t -> t |> onToken
+        | NodeOrToken.Node n -> n |> onNode
+        | NodeOrToken.Token t -> t |> onToken

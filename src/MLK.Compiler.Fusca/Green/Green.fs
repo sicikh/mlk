@@ -168,8 +168,8 @@ type GreenElement = NodeOrToken<GreenNode, GreenToken>
 module GreenElement =
     let length (element : GreenElement) : TextSize =
         match element with
-        | Node n -> n.Length
-        | Token t -> t.Length
+        | NodeOrToken.Node n -> n.Length
+        | NodeOrToken.Token t -> t.Length
 
 module Slot =
     let relOffset (slot : Slot) =
@@ -180,8 +180,8 @@ module Slot =
 
     let asElement (slot : Slot) : GreenElement voption =
         match slot with
-        | Slot.Node (_, n) -> ValueSome (Node n)
-        | Slot.Token (_, t) -> ValueSome (Token t)
+        | Slot.Node (_, n) -> ValueSome (NodeOrToken.Node n)
+        | Slot.Token (_, t) -> ValueSome (NodeOrToken.Token t)
         | Slot.Empty _ -> ValueNone
 
     let relRange (slot : Slot) : TextRange =

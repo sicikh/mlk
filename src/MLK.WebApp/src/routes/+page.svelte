@@ -93,6 +93,10 @@
     </div>
 </div>
 
+<div class="console-output">
+    console
+</div>
+
 <div class="output">
     <div class="ast-tab-container">
         {#if $selectedResult === 'AST'}
@@ -106,6 +110,7 @@
         {/if}
     </div>
 </div>
+
 
 
 <style>
@@ -180,13 +185,29 @@
         position: absolute;
         border-top: 2px solid #000000;
         border-right: 2px solid #000000;
-        height: calc(100% - 60px); 
-        top: 60px; 
+        border-bottom: 2px solid #000000;
+        height: 70%;
+        top: 60px;
         left: 0px;
         width: 50%;
         z-index: 0; 
         display: flex;
         flex-direction: column;
+    }
+    
+    .console-output {
+        position: absolute;
+        border-top: 2px solid #000000;
+        border-right: 2px solid #000000;
+        border-bottom: 2px solid #000000;
+        height: 70%;
+        top:725px;
+        left: 0px;
+        width: 50%;
+        z-index: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
     }
 
     .editor-wrapper {

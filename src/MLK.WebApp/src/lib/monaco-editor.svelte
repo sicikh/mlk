@@ -1,37 +1,44 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import loader from '@monaco-editor/loader';
-  import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api';
+    import {onMount, onDestroy} from 'svelte';
+    import loader from '@monaco-editor/loader';
+    import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api';
+    import {MlkMonarch} from "$lib/language/monarch";
+    import {conf} from "$lib/language/monarch.ts";
 
-  export let value = '';
-  export let language = 'javascript';
-  export let theme: Monaco.editor.BuiltinTheme = 'hc-light';
+    export let value = '';
+    export let language = 'mlk';
+    export let theme: Monaco.editor.BuiltinTheme = 'hc-light';
 
-  let container: HTMLDivElement;
-  let monaco: typeof Monaco;
-  let editor: Monaco.editor.IStandaloneCodeEditor;
+    let container: HTMLDivElement;
+    let monaco: typeof Monaco;
+    let editor: Monaco.editor.IStandaloneCodeEditor;
 
-  onMount(async () => {
-    monaco = await loader.init();
-    
-    editor = monaco.editor.create(container, {
-      value,
-      language,
-      theme,
-      automaticLayout: true
+    onMount(async () => {
+        monaco = await loader.init();
+
+        monaco.languages.register({id: 'mlk'});
+        monaco.languages.setMonarchTokensProvider('mlk', MlkMonarch);
+        monaco.languages.setLanguageConfiguration('mlk', conf);
+
+        editor = monaco.editor.create(container, {
+            value,
+            language,
+            theme,
+            automaticLayout: true,
+            minimap: {enabled: false}
+        });
+
+        editor.onDidChangeModelContent(() => {
+            value = editor.getValue();
+            const ev = new CustomEvent('change', {detail: value});
+            dispatchEvent(ev);
+        });
     });
 
-    editor.onDidChangeModelContent(() => {
-      value = editor.getValue();
-      const ev = new CustomEvent('change', { detail: value });
-      dispatchEvent(ev);
+    onDestroy(() => {
+        editor?.dispose();
+        monaco?.editor.getModels().forEach(m => m.dispose());
     });
-  });
-
-  onDestroy(() => {
-    editor?.dispose();
-    monaco?.editor.getModels().forEach(m => m.dispose());
-  });
 </script>
 
 <div bind:this={container} class="monaco-container"></div>

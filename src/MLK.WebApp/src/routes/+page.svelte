@@ -4,7 +4,7 @@
     import { writable } from 'svelte/store';
     import MonacoEditor from '$lib/monaco-editor.svelte';
     
-    let code = "function add(a, b) {\n  return a + b;\n}\n";
+    let code = "id 42";
 
     const selectedResult = writable('AST');
     export interface Node {
@@ -89,7 +89,7 @@
 
 <div class="input">
     <div class="editor-wrapper">
-        <MonacoEditor bind:value={code} language="javascript" />
+        <MonacoEditor bind:value={code} />
     </div>
 </div>
 

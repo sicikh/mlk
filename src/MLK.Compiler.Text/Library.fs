@@ -47,7 +47,7 @@ type TextSize with
         | ValueSome diff -> diff
         | ValueNone -> invalidOp "TextSize subtraction underflowed"
 
-[<Struct>]
+[<Struct; NoComparison>]
 type TextRange =
     private
         {
@@ -141,7 +141,7 @@ type TextRange with
     static member Zero = TextRange.empty
 
 /// 0-based line and column representation.
-[<Struct>]
+[<Struct; NoComparison>]
 type LineCol =
     {
         Line : uint32

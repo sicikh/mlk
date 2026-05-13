@@ -142,4 +142,4 @@ const op_Neq = (a) => (b) => a !== b;
                 $"(() => {{ const {name} = {expr}; return {body}; }})()"
             | HirExpr.Hole _ -> "undefined"
 
-        JS_STD + "\n" + transpileExpr ctx id
+        transpileExpr ctx id

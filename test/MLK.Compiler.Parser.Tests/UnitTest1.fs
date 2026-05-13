@@ -39,7 +39,7 @@ let Setup () =
 
 [<Test>]
 let Test1 () =
-    let source = "1 + 2 * +3 + +4"
+    let source = "console.log 42"
     let events, _, diags = parseRoot source
     let processedEvents =
         let sink = DebugTreeSink()
@@ -56,10 +56,15 @@ let Test1 () =
 
 [<Test>]
 let Test2 () =
+//    let source = """
+//let fix = fun f -> fun x -> f (fix f) x
+//let factabs = fun fact -> fun x -> if x = 0 then 1 else x * fact (x - 1)
+//fix factabs 5
+//"""
     let source = """
-let fix = fun f -> fun x -> f (fix f) x
-let factabs = fun fact -> fun x -> if x = 0 then 1 else x * fact (x - 1)
-fix factabs 5
+let res = 42
+console.log res
+alert res
 """
     let events, trivias, diags = parseRoot source
     let tree =

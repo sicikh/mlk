@@ -21,6 +21,7 @@ let pSemi = pTokenS SyntaxKind.Semicolon
 let pIf = pTokenS SyntaxKind.IfKw
 let pThen = pTokenS SyntaxKind.ThenKw
 let pElse = pTokenS SyntaxKind.ElseKw
+let pDot = pTokenS SyntaxKind.Dot
 
 let pEq =
     pChooseToken (fun t ->
@@ -139,7 +140,9 @@ let pInfixOp =
         <| Set [ SyntaxKind.Op ; SyntaxKind.Semicolon ]
     )
 
-pExprRun.Value <- fun minbp -> (pPratt' pTerm pPrefixOp pInfixOp minbp).Run
+let pPostfixOp = pDot ^>> pName |>> (konst (11, SyntaxKind.MemberAccessExpr))
+
+pExprRun.Value <- fun minbp -> (pPratt' pTerm pPrefixOp pInfixOp pPostfixOp minbp).Run
 
 let parseRoot (sourceText : string) : ParseEvent list * Trivia list * ParseDiagnostic list =
     let tokens = Lexer.tokenize sourceText

@@ -1122,6 +1122,55 @@ module MatchGuard =
     let (|WhenToken|) (value : MatchGuard) : SyntaxResult<SyntaxToken> = value.WhenToken
     let (|Cond|) (value : MatchGuard) : SyntaxResult<Expr> = value.Cond
 
+type MemberAccessExprFields =
+    {
+        Target : SyntaxResult<Expr>
+        DotToken : SyntaxResult<SyntaxToken>
+        Member : SyntaxResult<Name>
+    }
+
+type MemberAccessExpr =
+    private
+    | MemberAccessExpr of SyntaxNode
+
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.MemberAccessExpr
+
+    static member Cast (node : SyntaxNode) : MemberAccessExpr option =
+        if AstNode.canCast<MemberAccessExpr> node.Kind then
+            Some (MemberAccessExpr node)
+        else
+            None
+
+    interface IAstNode with
+        member this.Syntax =
+            let (MemberAccessExpr node) = this
+            node
+
+    member this.Target : SyntaxResult<Expr> =
+        let (MemberAccessExpr syntax) = this
+        Support.requiredNode<Expr> 0u syntax
+
+    member this.DotToken : SyntaxResult<SyntaxToken> =
+        let (MemberAccessExpr syntax) = this
+        Support.requiredToken 1u syntax
+
+    member this.Member : SyntaxResult<Name> =
+        let (MemberAccessExpr syntax) = this
+        Support.requiredNode<Name> 2u syntax
+
+    member this.AsFields : MemberAccessExprFields =
+        {
+            Target = this.Target
+            DotToken = this.DotToken
+            Member = this.Member
+        }
+
+module MemberAccessExpr =
+    let (|Target|) (value : MemberAccessExpr) : SyntaxResult<Expr> = value.Target
+    let (|DotToken|) (value : MemberAccessExpr) : SyntaxResult<SyntaxToken> = value.DotToken
+    let (|Member|) (value : MemberAccessExpr) : SyntaxResult<Name> = value.Member
+
 type ModulePreambleFields =
     {
         ModuleToken : SyntaxResult<SyntaxToken>
@@ -1776,7 +1825,6 @@ module RecordPat =
 type SeqExprFields =
     {
         First : SyntaxResult<Expr>
-        SemicolonToken : Option<SyntaxToken>
         Second : SyntaxResult<Expr>
     }
 
@@ -1802,24 +1850,18 @@ type SeqExpr =
         let (SeqExpr syntax) = this
         Support.requiredNode<Expr> 0u syntax
 
-    member this.SemicolonToken : Option<SyntaxToken> =
-        let (SeqExpr syntax) = this
-        Support.token 1u syntax
-
     member this.Second : SyntaxResult<Expr> =
         let (SeqExpr syntax) = this
-        Support.requiredNode<Expr> 2u syntax
+        Support.requiredNode<Expr> 1u syntax
 
     member this.AsFields : SeqExprFields =
         {
             First = this.First
-            SemicolonToken = this.SemicolonToken
             Second = this.Second
         }
 
 module SeqExpr =
     let (|First|) (value : SeqExpr) : SyntaxResult<Expr> = value.First
-    let (|SemicolonToken|) (value : SeqExpr) : Option<SyntaxToken> = value.SemicolonToken
     let (|Second|) (value : SeqExpr) : SyntaxResult<Expr> = value.Second
 
 type StringLiteralFields =
@@ -2139,7 +2181,9 @@ type Expr =
     | ExprIf of IfExpr
     | ExprLet of LetExpr
     | ExprLiteral of Literal
+    | ExprMemberAccess of MemberAccessExpr
     | ExprParen of ParenExpr
+    | ExprSeq of SeqExpr
     | ExprVar of VarExpr
 
     static member CanCast (kind : RawSyntaxKind) : bool =
@@ -2151,7 +2195,9 @@ type Expr =
         | SyntaxKind.IfExpr
         | SyntaxKind.LetExpr
         | SyntaxKind.Literal
+        | SyntaxKind.MemberAccessExpr
         | SyntaxKind.ParenExpr
+        | SyntaxKind.SeqExpr
         | SyntaxKind.VarExpr -> true
         | _ -> false
 
@@ -2164,7 +2210,9 @@ type Expr =
         | SyntaxKind.IfExpr -> Some (ExprIf (IfExpr node))
         | SyntaxKind.LetExpr -> Some (ExprLet (LetExpr node))
         | SyntaxKind.Literal -> Some (ExprLiteral (Literal node))
+        | SyntaxKind.MemberAccessExpr -> Some (ExprMemberAccess (MemberAccessExpr node))
         | SyntaxKind.ParenExpr -> Some (ExprParen (ParenExpr node))
+        | SyntaxKind.SeqExpr -> Some (ExprSeq (SeqExpr node))
         | SyntaxKind.VarExpr -> Some (ExprVar (VarExpr node))
         | _ -> None
 
@@ -2178,7 +2226,9 @@ type Expr =
             | ExprIf it -> (it :> IAstNode).Syntax
             | ExprLet it -> (it :> IAstNode).Syntax
             | ExprLiteral it -> (it :> IAstNode).Syntax
+            | ExprMemberAccess it -> (it :> IAstNode).Syntax
             | ExprParen it -> (it :> IAstNode).Syntax
+            | ExprSeq it -> (it :> IAstNode).Syntax
             | ExprVar it -> (it :> IAstNode).Syntax
 
 type ModuleDecl =

@@ -6,7 +6,10 @@
     import {buildAstFromSource} from '$lib/language/generated/AstApi.js';
     import {transpileToJs} from "$lib/language/generated/TranspileApi";
 
-    let code = "id 42";
+    let code = `let fix = fun f -> fun x -> f (fix f) x
+let factabs = fun fact -> fun x ->
+    if x = 0 then 1 else x * fact (x - 1)
+fix factabs 5`;
 
     const selectedResult = writable('AST');
 

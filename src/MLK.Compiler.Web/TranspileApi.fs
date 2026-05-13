@@ -10,5 +10,4 @@ let transpileToJs (source : string) : string =
     let desugarCtx = Desugar.emptyCtx
     let expr, desugarCtx = Desugar.desugarExpr desugarCtx expr
     let transpiled = JsTranspile.transpileExpr desugarCtx expr
-    // Console.WriteLine transpiled
     JsTranspile.JS_STD + $"console.log(({transpiled}));"

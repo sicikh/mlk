@@ -13,6 +13,8 @@ type HirExpr =
     | App of id : HirId * func : HirId * arg : HirId
     | Lam of id : HirId * param : string * body : HirId
     | If of id : HirId * cond : HirId * thenBranch : HirId * elseBranch : HirId
+    | MemberAccess of id : HirId * obj : HirId * memberName : string
+    | Seq of id : HirId * first : HirId * second : HirId
     | Hole of id : HirId
 
 type DesugarCtx =
@@ -103,6 +105,20 @@ module Desugar =
             let expr = HirExpr.Var (id, name)
             id, ctx.AddExpr id expr
 
+        | ExprMemberAccess memberAccessExpr ->
+            let objId, ctx = desugarExpr ctx memberAccessExpr.Target.Value
+            let memberName = memberAccessExpr.Member.Value.ValueToken.Value.Green.Text
+            let id, ctx = ctx.Id
+            let expr = HirExpr.MemberAccess (id, objId, memberName)
+            id, ctx.AddExpr id expr
+
+        | ExprSeq seqExpr ->
+            let firstExprId, ctx = desugarExpr ctx seqExpr.First.Value
+            let secondExprId, ctx = desugarExpr ctx seqExpr.Second.Value
+            let id, ctx = ctx.Id
+            let expr = HirExpr.Seq (id, firstExprId, secondExprId)
+            id, ctx.AddExpr id expr
+
         | ExprParen parenExpr -> desugarExpr ctx parenExpr.Expr.Value
 
 module JsTranspile =
@@ -140,6 +156,13 @@ const op_Neq = (a) => (b) => a !== b;
                 // TODO: introduce rec and nonrec let
                 // $"(({name}) => {body})({expr})"
                 $"(() => {{ const {name} = {expr}; return {body}; }})()"
+            | HirExpr.MemberAccess (_, objId, memberName) ->
+                let obj = transpileExpr ctx objId
+                $"{obj}.{memberName}"
+            | HirExpr.Seq (_, firstId, secondId) ->
+                let first = transpileExpr ctx firstId
+                let second = transpileExpr ctx secondId
+                $"(() => {{ {first}; return {second}; }})()"
             | HirExpr.Hole _ -> "undefined"
 
         transpileExpr ctx id

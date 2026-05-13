@@ -458,6 +458,7 @@ module Combinators =
         (pTerm : CompletedMarker parser)
         (pPrefixOp : (int * SyntaxKind) parser)
         (pInfixOp : (int * int * SyntaxKind) parser)
+        (pPostfixOp : (int * SyntaxKind) parser)
         (minbp : int)
         : Parser<CompletedMarker>
         =
@@ -467,6 +468,7 @@ module Combinators =
                     pTerm.SignificantTokens
                     pPrefixOp.SignificantTokens
                     pInfixOp.SignificantTokens
+                    pPostfixOp.SignificantTokens
                 ]
 
         let u (ctx : ParseCtx) = ctx.UnionTokens sigs
@@ -494,15 +496,21 @@ module Combinators =
             | Failure true -> Failure true
 
         and parseTail left minbp state ctx =
-            match pInfixOp.Run state (u ctx) with
-            | Success ((lbp, rbp, kind), stateOp) when lbp >= minbp ->
-                match pExpr rbp stateOp (u ctx) with
-                | Success (_right, stateRhs) ->
-                    let stateParent, wrap = stateRhs.Precede left
-                    let stateDone, combined = stateParent.FinishNode wrap kind
-                    parseTail combined minbp stateDone ctx
-                | Failure con -> Failure con
-            | _ -> Success (left, state)
+           match pPostfixOp.Run state (u ctx) with
+           | Success ((lbp, kind), stateOp) when lbp >= minbp ->
+               let stateParent, wrap = stateOp.Precede left
+               let stateDone, combined = stateParent.FinishNode wrap kind
+               parseTail combined minbp stateDone ctx
+           | _ ->
+               match pInfixOp.Run state (u ctx) with
+               | Success ((lbp, rbp, kind), stateOp) when lbp >= minbp ->
+                   match pExpr rbp stateOp (u ctx) with
+                   | Success (_right, stateRhs) ->
+                       let stateParent, wrap = stateRhs.Precede left
+                       let stateDone, combined = stateParent.FinishNode wrap kind
+                       parseTail combined minbp stateDone ctx
+                   | Failure con -> Failure con
+               | _ -> Success (left, state)
 
         Parser (pExpr minbp, pTerm.SignificantTokens, false)
 

@@ -97,6 +97,7 @@ LetDecl =
 Expr =
     Literal
     | AppExpr
+    | SeqExpr
     | LetExpr
     | FunExpr
     | IfExpr
@@ -104,9 +105,15 @@ Expr =
     | VarExpr
     | ParenExpr
     | ErrExpr
+    | MemberAccessExpr
 
 VarExpr =
     Name: Name
+
+MemberAccessExpr =
+    Target: Expr
+    '.'
+    Member: Name
 
 BinExpr =
     Left: Expr
@@ -142,7 +149,7 @@ LetExpr =
 
 SeqExpr =
     First: Expr
-    ';'?
+    // FIXME: ';'?
     Second: Expr
 
 TupleExpr = (Expr (',' Expr)*)

@@ -3,7 +3,8 @@
     import OtherTab from '$lib/tabs/OtherTab.svelte'
     import { writable } from 'svelte/store';
     import MonacoEditor from '$lib/monaco-editor.svelte';
-    
+    import { buildAstFromSource } from '$lib/language/generated/AstApi.js';
+
     let code = "id 42";
 
     const selectedResult = writable('AST');
@@ -27,30 +28,11 @@
 
     let ast: Node | null = null;
     let diagnostics: DiagnosticDto[] = [];
-    let isLoading = false;
 
-    async function run() {
-        isLoading = true;
-        try {
-            const res = await fetch('/api/ast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
-            });
-
-            if (!res.ok) {
-                console.error('AST request failed', await res.text());
-                return;
-            }
-
-            const data: AstResponseDto = await res.json();
-            console.log('AST response', data);
-            diagnostics = data.diagnostics;
-            ast = data.tree ?? null;
-            console.log('AST set to', ast);
-        } finally {
-            isLoading = false;
-        }
+    function run() {
+        let res : AstResponseDto = JSON.parse(JSON.stringify(buildAstFromSource(code)));
+        ast = res.tree ?? null;
+        diagnostics = res.diagnostics;
     }
 
     let timeout: number | undefined;

@@ -7,7 +7,7 @@ open MLK.Compiler.Syntax
 open MLK.Compiler.Parser.IParsec
 
 let pIdent = pTokenS SyntaxKind.Ident
-let pIntLiteral = pTokenS SyntaxKind.IntLiteral |> trace "pIntLiteral"
+let pIntLiteral = pTokenS SyntaxKind.IntLiteral
 let pLBracket = pTokenS SyntaxKind.LBracket
 let pRBracket = pTokenS SyntaxKind.RBracket
 let pLParen = pTokenS SyntaxKind.LParen
@@ -51,7 +51,7 @@ let pExpr' (minbp : int) : CompletedMarker parser =
         false
     )
 
-let pExpr = trace "pExpr" <| pExpr' 0
+let pExpr = pExpr' 0
 
 let pPat = node SyntaxKind.NamedPat ^<| pName
 
@@ -68,10 +68,9 @@ let pLetExpr =
              <|> (localIndentation Eq (localTokenMode (konst Ge) pExpr)))
 
 let pParenExpr =
-    trace "pParenExpr"
-    ^<| node SyntaxKind.ParenExpr
+    node SyntaxKind.ParenExpr
     ^<| between pLParen (tryOrDiag expectedClosingParen pRParen)
-    ^<| localIndentation Any (trace "pInParenExpr" pExpr)
+    ^<| localIndentation Any pExpr
 
 let pList =
     node SyntaxKind.ListExpr
@@ -105,15 +104,11 @@ let pInfixOp =
     )
     <|> (localIndentation Gt
          // ^<| absoluteIndentation
-         ^<| pCheckToken (fun t ->
-             pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
-         )
+         ^<| pCheckToken (fun t -> pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken)
          |>> (konst (9, 10, SyntaxKind.AppExpr)))
     <|> (localIndentation Eq
          // ^<| absoluteIndentation
-         ^<| pCheckToken (fun t ->
-             pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken
-         )
+         ^<| pCheckToken (fun t -> pTerm.SignificantTokens.Contains t.Kind || t.Kind = SyntaxKind.ErrToken)
          |>> (konst (0, 0, SyntaxKind.SeqExpr)))
     |> withSignificant (
         Set.union pExpr.SignificantTokens

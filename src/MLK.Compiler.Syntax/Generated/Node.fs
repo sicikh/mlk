@@ -13,15 +13,14 @@ type AndPat =
     private
     | AndPat of SyntaxNode
 
-    interface IAstNodeFactory<AndPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.AndPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.AndPat
 
-        static member Cast (node : SyntaxNode) : AndPat option =
-            if AstNode.canCast<AndPat> node.Kind then
-                Some (AndPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : AndPat option =
+        if AstNode.canCast<AndPat> node.Kind then
+            Some (AndPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -62,15 +61,14 @@ type AppExpr =
     private
     | AppExpr of SyntaxNode
 
-    interface IAstNodeFactory<AppExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.AppExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.AppExpr
 
-        static member Cast (node : SyntaxNode) : AppExpr option =
-            if AstNode.canCast<AppExpr> node.Kind then
-                Some (AppExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : AppExpr option =
+        if AstNode.canCast<AppExpr> node.Kind then
+            Some (AppExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -106,15 +104,14 @@ type AsPat =
     private
     | AsPat of SyntaxNode
 
-    interface IAstNodeFactory<AsPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.AsPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.AsPat
 
-        static member Cast (node : SyntaxNode) : AsPat option =
-            if AstNode.canCast<AsPat> node.Kind then
-                Some (AsPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : AsPat option =
+        if AstNode.canCast<AsPat> node.Kind then
+            Some (AsPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -156,15 +153,14 @@ type BinExpr =
     private
     | BinExpr of SyntaxNode
 
-    interface IAstNodeFactory<BinExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.BinExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.BinExpr
 
-        static member Cast (node : SyntaxNode) : BinExpr option =
-            if AstNode.canCast<BinExpr> node.Kind then
-                Some (BinExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : BinExpr option =
+        if AstNode.canCast<BinExpr> node.Kind then
+            Some (BinExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -206,15 +202,14 @@ type Binding =
     private
     | Binding of SyntaxNode
 
-    interface IAstNodeFactory<Binding> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.Binding
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.Binding
 
-        static member Cast (node : SyntaxNode) : Binding option =
-            if AstNode.canCast<Binding> node.Kind then
-                Some (Binding node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : Binding option =
+        if AstNode.canCast<Binding> node.Kind then
+            Some (Binding node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -254,15 +249,14 @@ type BoolLiteral =
     private
     | BoolLiteral of SyntaxNode
 
-    interface IAstNodeFactory<BoolLiteral> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.BoolLiteral
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.BoolLiteral
 
-        static member Cast (node : SyntaxNode) : BoolLiteral option =
-            if AstNode.canCast<BoolLiteral> node.Kind then
-                Some (BoolLiteral node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : BoolLiteral option =
+        if AstNode.canCast<BoolLiteral> node.Kind then
+            Some (BoolLiteral node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -290,15 +284,14 @@ type CharLiteral =
     private
     | CharLiteral of SyntaxNode
 
-    interface IAstNodeFactory<CharLiteral> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.CharLiteral
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.CharLiteral
 
-        static member Cast (node : SyntaxNode) : CharLiteral option =
-            if AstNode.canCast<CharLiteral> node.Kind then
-                Some (CharLiteral node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : CharLiteral option =
+        if AstNode.canCast<CharLiteral> node.Kind then
+            Some (CharLiteral node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -328,15 +321,14 @@ type ConsPat =
     private
     | ConsPat of SyntaxNode
 
-    interface IAstNodeFactory<ConsPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ConsPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ConsPat
 
-        static member Cast (node : SyntaxNode) : ConsPat option =
-            if AstNode.canCast<ConsPat> node.Kind then
-                Some (ConsPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ConsPat option =
+        if AstNode.canCast<ConsPat> node.Kind then
+            Some (ConsPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -378,15 +370,14 @@ type FnTy =
     private
     | FnTy of SyntaxNode
 
-    interface IAstNodeFactory<FnTy> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.FnTy
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.FnTy
 
-        static member Cast (node : SyntaxNode) : FnTy option =
-            if AstNode.canCast<FnTy> node.Kind then
-                Some (FnTy node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : FnTy option =
+        if AstNode.canCast<FnTy> node.Kind then
+            Some (FnTy node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -429,15 +420,14 @@ type FunExpr =
     private
     | FunExpr of SyntaxNode
 
-    interface IAstNodeFactory<FunExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.FunExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.FunExpr
 
-        static member Cast (node : SyntaxNode) : FunExpr option =
-            if AstNode.canCast<FunExpr> node.Kind then
-                Some (FunExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : FunExpr option =
+        if AstNode.canCast<FunExpr> node.Kind then
+            Some (FunExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -484,15 +474,14 @@ type FuncPat =
     private
     | FuncPat of SyntaxNode
 
-    interface IAstNodeFactory<FuncPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.FuncPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.FuncPat
 
-        static member Cast (node : SyntaxNode) : FuncPat option =
-            if AstNode.canCast<FuncPat> node.Kind then
-                Some (FuncPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : FuncPat option =
+        if AstNode.canCast<FuncPat> node.Kind then
+            Some (FuncPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -531,15 +520,14 @@ type IfExpr =
     private
     | IfExpr of SyntaxNode
 
-    interface IAstNodeFactory<IfExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.IfExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.IfExpr
 
-        static member Cast (node : SyntaxNode) : IfExpr option =
-            if AstNode.canCast<IfExpr> node.Kind then
-                Some (IfExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : IfExpr option =
+        if AstNode.canCast<IfExpr> node.Kind then
+            Some (IfExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -597,15 +585,14 @@ type InferTy =
     private
     | InferTy of SyntaxNode
 
-    interface IAstNodeFactory<InferTy> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.InferTy
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.InferTy
 
-        static member Cast (node : SyntaxNode) : InferTy option =
-            if AstNode.canCast<InferTy> node.Kind then
-                Some (InferTy node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : InferTy option =
+        if AstNode.canCast<InferTy> node.Kind then
+            Some (InferTy node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -635,15 +622,14 @@ type InnerModuleDecl =
     private
     | InnerModuleDecl of SyntaxNode
 
-    interface IAstNodeFactory<InnerModuleDecl> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.InnerModuleDecl
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.InnerModuleDecl
 
-        static member Cast (node : SyntaxNode) : InnerModuleDecl option =
-            if AstNode.canCast<InnerModuleDecl> node.Kind then
-                Some (InnerModuleDecl node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : InnerModuleDecl option =
+        if AstNode.canCast<InnerModuleDecl> node.Kind then
+            Some (InnerModuleDecl node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -683,15 +669,14 @@ type IntLiteral =
     private
     | IntLiteral of SyntaxNode
 
-    interface IAstNodeFactory<IntLiteral> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.IntLiteral
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.IntLiteral
 
-        static member Cast (node : SyntaxNode) : IntLiteral option =
-            if AstNode.canCast<IntLiteral> node.Kind then
-                Some (IntLiteral node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : IntLiteral option =
+        if AstNode.canCast<IntLiteral> node.Kind then
+            Some (IntLiteral node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -722,15 +707,14 @@ type LetDecl =
     private
     | LetDecl of SyntaxNode
 
-    interface IAstNodeFactory<LetDecl> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.LetDecl
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.LetDecl
 
-        static member Cast (node : SyntaxNode) : LetDecl option =
-            if AstNode.canCast<LetDecl> node.Kind then
-                Some (LetDecl node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : LetDecl option =
+        if AstNode.canCast<LetDecl> node.Kind then
+            Some (LetDecl node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -777,15 +761,14 @@ type LetExpr =
     private
     | LetExpr of SyntaxNode
 
-    interface IAstNodeFactory<LetExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.LetExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.LetExpr
 
-        static member Cast (node : SyntaxNode) : LetExpr option =
-            if AstNode.canCast<LetExpr> node.Kind then
-                Some (LetExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : LetExpr option =
+        if AstNode.canCast<LetExpr> node.Kind then
+            Some (LetExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -821,15 +804,14 @@ type ListExpr =
     private
     | ListExpr of SyntaxNode
 
-    interface IAstNodeFactory<ListExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ListExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ListExpr
 
-        static member Cast (node : SyntaxNode) : ListExpr option =
-            if AstNode.canCast<ListExpr> node.Kind then
-                Some (ListExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ListExpr option =
+        if AstNode.canCast<ListExpr> node.Kind then
+            Some (ListExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -871,15 +853,14 @@ type ListPat =
     private
     | ListPat of SyntaxNode
 
-    interface IAstNodeFactory<ListPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ListPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ListPat
 
-        static member Cast (node : SyntaxNode) : ListPat option =
-            if AstNode.canCast<ListPat> node.Kind then
-                Some (ListPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ListPat option =
+        if AstNode.canCast<ListPat> node.Kind then
+            Some (ListPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -919,15 +900,14 @@ type Literal =
     private
     | Literal of SyntaxNode
 
-    interface IAstNodeFactory<Literal> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.Literal
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.Literal
 
-        static member Cast (node : SyntaxNode) : Literal option =
-            if AstNode.canCast<Literal> node.Kind then
-                Some (Literal node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : Literal option =
+        if AstNode.canCast<Literal> node.Kind then
+            Some (Literal node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -955,15 +935,14 @@ type LiteralPat =
     private
     | LiteralPat of SyntaxNode
 
-    interface IAstNodeFactory<LiteralPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.LiteralPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.LiteralPat
 
-        static member Cast (node : SyntaxNode) : LiteralPat option =
-            if AstNode.canCast<LiteralPat> node.Kind then
-                Some (LiteralPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : LiteralPat option =
+        if AstNode.canCast<LiteralPat> node.Kind then
+            Some (LiteralPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -994,15 +973,14 @@ type MatchCase =
     private
     | MatchCase of SyntaxNode
 
-    interface IAstNodeFactory<MatchCase> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.MatchCase
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.MatchCase
 
-        static member Cast (node : SyntaxNode) : MatchCase option =
-            if AstNode.canCast<MatchCase> node.Kind then
-                Some (MatchCase node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : MatchCase option =
+        if AstNode.canCast<MatchCase> node.Kind then
+            Some (MatchCase node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1052,15 +1030,14 @@ type MatchExpr =
     private
     | MatchExpr of SyntaxNode
 
-    interface IAstNodeFactory<MatchExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.MatchExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.MatchExpr
 
-        static member Cast (node : SyntaxNode) : MatchExpr option =
-            if AstNode.canCast<MatchExpr> node.Kind then
-                Some (MatchExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : MatchExpr option =
+        if AstNode.canCast<MatchExpr> node.Kind then
+            Some (MatchExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1113,15 +1090,14 @@ type MatchGuard =
     private
     | MatchGuard of SyntaxNode
 
-    interface IAstNodeFactory<MatchGuard> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.MatchGuard
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.MatchGuard
 
-        static member Cast (node : SyntaxNode) : MatchGuard option =
-            if AstNode.canCast<MatchGuard> node.Kind then
-                Some (MatchGuard node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : MatchGuard option =
+        if AstNode.canCast<MatchGuard> node.Kind then
+            Some (MatchGuard node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1156,15 +1132,14 @@ type ModulePreamble =
     private
     | ModulePreamble of SyntaxNode
 
-    interface IAstNodeFactory<ModulePreamble> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ModulePreamble
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ModulePreamble
 
-        static member Cast (node : SyntaxNode) : ModulePreamble option =
-            if AstNode.canCast<ModulePreamble> node.Kind then
-                Some (ModulePreamble node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ModulePreamble option =
+        if AstNode.canCast<ModulePreamble> node.Kind then
+            Some (ModulePreamble node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1200,15 +1175,14 @@ type ModuleRoot =
     private
     | ModuleRoot of SyntaxNode
 
-    interface IAstNodeFactory<ModuleRoot> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ModuleRoot
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ModuleRoot
 
-        static member Cast (node : SyntaxNode) : ModuleRoot option =
-            if AstNode.canCast<ModuleRoot> node.Kind then
-                Some (ModuleRoot node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ModuleRoot option =
+        if AstNode.canCast<ModuleRoot> node.Kind then
+            Some (ModuleRoot node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1248,15 +1222,14 @@ type Name =
     private
     | Name of SyntaxNode
 
-    interface IAstNodeFactory<Name> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.Name
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.Name
 
-        static member Cast (node : SyntaxNode) : Name option =
-            if AstNode.canCast<Name> node.Kind then
-                Some (Name node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : Name option =
+        if AstNode.canCast<Name> node.Kind then
+            Some (Name node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1286,15 +1259,14 @@ type NamePatField =
     private
     | NamePatField of SyntaxNode
 
-    interface IAstNodeFactory<NamePatField> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.NamePatField
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.NamePatField
 
-        static member Cast (node : SyntaxNode) : NamePatField option =
-            if AstNode.canCast<NamePatField> node.Kind then
-                Some (NamePatField node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : NamePatField option =
+        if AstNode.canCast<NamePatField> node.Kind then
+            Some (NamePatField node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1334,15 +1306,14 @@ type NamedPat =
     private
     | NamedPat of SyntaxNode
 
-    interface IAstNodeFactory<NamedPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.NamedPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.NamedPat
 
-        static member Cast (node : SyntaxNode) : NamedPat option =
-            if AstNode.canCast<NamedPat> node.Kind then
-                Some (NamedPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : NamedPat option =
+        if AstNode.canCast<NamedPat> node.Kind then
+            Some (NamedPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1371,15 +1342,14 @@ type OpenDecl =
     private
     | OpenDecl of SyntaxNode
 
-    interface IAstNodeFactory<OpenDecl> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.OpenDecl
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.OpenDecl
 
-        static member Cast (node : SyntaxNode) : OpenDecl option =
-            if AstNode.canCast<OpenDecl> node.Kind then
-                Some (OpenDecl node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : OpenDecl option =
+        if AstNode.canCast<OpenDecl> node.Kind then
+            Some (OpenDecl node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1413,15 +1383,14 @@ type Operator =
     private
     | Operator of SyntaxNode
 
-    interface IAstNodeFactory<Operator> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.Operator
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.Operator
 
-        static member Cast (node : SyntaxNode) : Operator option =
-            if AstNode.canCast<Operator> node.Kind then
-                Some (Operator node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : Operator option =
+        if AstNode.canCast<Operator> node.Kind then
+            Some (Operator node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1451,15 +1420,14 @@ type OrPat =
     private
     | OrPat of SyntaxNode
 
-    interface IAstNodeFactory<OrPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.OrPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.OrPat
 
-        static member Cast (node : SyntaxNode) : OrPat option =
-            if AstNode.canCast<OrPat> node.Kind then
-                Some (OrPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : OrPat option =
+        if AstNode.canCast<OrPat> node.Kind then
+            Some (OrPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1501,15 +1469,14 @@ type ParenExpr =
     private
     | ParenExpr of SyntaxNode
 
-    interface IAstNodeFactory<ParenExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ParenExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ParenExpr
 
-        static member Cast (node : SyntaxNode) : ParenExpr option =
-            if AstNode.canCast<ParenExpr> node.Kind then
-                Some (ParenExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ParenExpr option =
+        if AstNode.canCast<ParenExpr> node.Kind then
+            Some (ParenExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1551,15 +1518,14 @@ type ParenPat =
     private
     | ParenPat of SyntaxNode
 
-    interface IAstNodeFactory<ParenPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ParenPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ParenPat
 
-        static member Cast (node : SyntaxNode) : ParenPat option =
-            if AstNode.canCast<ParenPat> node.Kind then
-                Some (ParenPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ParenPat option =
+        if AstNode.canCast<ParenPat> node.Kind then
+            Some (ParenPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1601,15 +1567,14 @@ type ParenTy =
     private
     | ParenTy of SyntaxNode
 
-    interface IAstNodeFactory<ParenTy> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ParenTy
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ParenTy
 
-        static member Cast (node : SyntaxNode) : ParenTy option =
-            if AstNode.canCast<ParenTy> node.Kind then
-                Some (ParenTy node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ParenTy option =
+        if AstNode.canCast<ParenTy> node.Kind then
+            Some (ParenTy node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1651,15 +1616,14 @@ type QName =
     private
     | QName of SyntaxNode
 
-    interface IAstNodeFactory<QName> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.QName
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.QName
 
-        static member Cast (node : SyntaxNode) : QName option =
-            if AstNode.canCast<QName> node.Kind then
-                Some (QName node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : QName option =
+        if AstNode.canCast<QName> node.Kind then
+            Some (QName node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1699,15 +1663,14 @@ type QNameSegment =
     private
     | QNameSegment of SyntaxNode
 
-    interface IAstNodeFactory<QNameSegment> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.QNameSegment
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.QNameSegment
 
-        static member Cast (node : SyntaxNode) : QNameSegment option =
-            if AstNode.canCast<QNameSegment> node.Kind then
-                Some (QNameSegment node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : QNameSegment option =
+        if AstNode.canCast<QNameSegment> node.Kind then
+            Some (QNameSegment node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1735,15 +1698,14 @@ type QTy =
     private
     | QTy of SyntaxNode
 
-    interface IAstNodeFactory<QTy> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.QTy
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.QTy
 
-        static member Cast (node : SyntaxNode) : QTy option =
-            if AstNode.canCast<QTy> node.Kind then
-                Some (QTy node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : QTy option =
+        if AstNode.canCast<QTy> node.Kind then
+            Some (QTy node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1773,15 +1735,14 @@ type RecordPat =
     private
     | RecordPat of SyntaxNode
 
-    interface IAstNodeFactory<RecordPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.RecordPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.RecordPat
 
-        static member Cast (node : SyntaxNode) : RecordPat option =
-            if AstNode.canCast<RecordPat> node.Kind then
-                Some (RecordPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : RecordPat option =
+        if AstNode.canCast<RecordPat> node.Kind then
+            Some (RecordPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1823,15 +1784,14 @@ type SeqExpr =
     private
     | SeqExpr of SyntaxNode
 
-    interface IAstNodeFactory<SeqExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.SeqExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.SeqExpr
 
-        static member Cast (node : SyntaxNode) : SeqExpr option =
-            if AstNode.canCast<SeqExpr> node.Kind then
-                Some (SeqExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : SeqExpr option =
+        if AstNode.canCast<SeqExpr> node.Kind then
+            Some (SeqExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1871,15 +1831,14 @@ type StringLiteral =
     private
     | StringLiteral of SyntaxNode
 
-    interface IAstNodeFactory<StringLiteral> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.StringLiteral
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.StringLiteral
 
-        static member Cast (node : SyntaxNode) : StringLiteral option =
-            if AstNode.canCast<StringLiteral> node.Kind then
-                Some (StringLiteral node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : StringLiteral option =
+        if AstNode.canCast<StringLiteral> node.Kind then
+            Some (StringLiteral node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1909,15 +1868,14 @@ type TypedExpr =
     private
     | TypedExpr of SyntaxNode
 
-    interface IAstNodeFactory<TypedExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.TypedExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.TypedExpr
 
-        static member Cast (node : SyntaxNode) : TypedExpr option =
-            if AstNode.canCast<TypedExpr> node.Kind then
-                Some (TypedExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : TypedExpr option =
+        if AstNode.canCast<TypedExpr> node.Kind then
+            Some (TypedExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -1959,15 +1917,14 @@ type TypedPat =
     private
     | TypedPat of SyntaxNode
 
-    interface IAstNodeFactory<TypedPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.TypedPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.TypedPat
 
-        static member Cast (node : SyntaxNode) : TypedPat option =
-            if AstNode.canCast<TypedPat> node.Kind then
-                Some (TypedPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : TypedPat option =
+        if AstNode.canCast<TypedPat> node.Kind then
+            Some (TypedPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2008,15 +1965,14 @@ type UnaryExpr =
     private
     | UnaryExpr of SyntaxNode
 
-    interface IAstNodeFactory<UnaryExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.UnaryExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.UnaryExpr
 
-        static member Cast (node : SyntaxNode) : UnaryExpr option =
-            if AstNode.canCast<UnaryExpr> node.Kind then
-                Some (UnaryExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : UnaryExpr option =
+        if AstNode.canCast<UnaryExpr> node.Kind then
+            Some (UnaryExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2051,15 +2007,14 @@ type UnitLiteral =
     private
     | UnitLiteral of SyntaxNode
 
-    interface IAstNodeFactory<UnitLiteral> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.UnitLiteral
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.UnitLiteral
 
-        static member Cast (node : SyntaxNode) : UnitLiteral option =
-            if AstNode.canCast<UnitLiteral> node.Kind then
-                Some (UnitLiteral node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : UnitLiteral option =
+        if AstNode.canCast<UnitLiteral> node.Kind then
+            Some (UnitLiteral node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2093,15 +2048,14 @@ type VarExpr =
     private
     | VarExpr of SyntaxNode
 
-    interface IAstNodeFactory<VarExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.VarExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.VarExpr
 
-        static member Cast (node : SyntaxNode) : VarExpr option =
-            if AstNode.canCast<VarExpr> node.Kind then
-                Some (VarExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : VarExpr option =
+        if AstNode.canCast<VarExpr> node.Kind then
+            Some (VarExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2129,15 +2083,14 @@ type WildPat =
     private
     | WildPat of SyntaxNode
 
-    interface IAstNodeFactory<WildPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.WildPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.WildPat
 
-        static member Cast (node : SyntaxNode) : WildPat option =
-            if AstNode.canCast<WildPat> node.Kind then
-                Some (WildPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : WildPat option =
+        if AstNode.canCast<WildPat> node.Kind then
+            Some (WildPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2160,18 +2113,17 @@ type ArgPat =
     | ArgPatNamePatField of NamePatField
     | ArgPatPat of Pat
 
-    interface IAstNodeFactory<ArgPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-            match SyntaxKind.fromRaw kind with
-            | SyntaxKind.NamePatField
-            | SyntaxKind.Pat -> true
-            | _ -> false
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
+        | SyntaxKind.NamePatField
+        | SyntaxKind.Pat -> true
+        | _ -> false
 
-        static member Cast (node : SyntaxNode) : ArgPat option =
-            match SyntaxKind.fromRaw node.Kind with
-            | SyntaxKind.NamePatField -> Some (ArgPatNamePatField (NamePatField node))
-            | SyntaxKind.Pat -> AstNode.cast<Pat> node |> Option.map ArgPatPat
-            | _ -> None
+    static member Cast (node : SyntaxNode) : ArgPat option =
+        match SyntaxKind.fromRaw node.Kind with
+        | SyntaxKind.NamePatField -> Some (ArgPatNamePatField (NamePatField node))
+        | SyntaxKind.Pat -> AstNode.cast<Pat> node |> Option.map ArgPatPat
+        | _ -> None
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2190,32 +2142,31 @@ type Expr =
     | ExprParen of ParenExpr
     | ExprVar of VarExpr
 
-    interface IAstNodeFactory<Expr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-            match SyntaxKind.fromRaw kind with
-            | SyntaxKind.AppExpr
-            | SyntaxKind.BinExpr
-            | SyntaxKind.ErrExpr
-            | SyntaxKind.FunExpr
-            | SyntaxKind.IfExpr
-            | SyntaxKind.LetExpr
-            | SyntaxKind.Literal
-            | SyntaxKind.ParenExpr
-            | SyntaxKind.VarExpr -> true
-            | _ -> false
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
+        | SyntaxKind.AppExpr
+        | SyntaxKind.BinExpr
+        | SyntaxKind.ErrExpr
+        | SyntaxKind.FunExpr
+        | SyntaxKind.IfExpr
+        | SyntaxKind.LetExpr
+        | SyntaxKind.Literal
+        | SyntaxKind.ParenExpr
+        | SyntaxKind.VarExpr -> true
+        | _ -> false
 
-        static member Cast (node : SyntaxNode) : Expr option =
-            match SyntaxKind.fromRaw node.Kind with
-            | SyntaxKind.AppExpr -> Some (ExprApp (AppExpr node))
-            | SyntaxKind.BinExpr -> Some (ExprBin (BinExpr node))
-            | SyntaxKind.ErrExpr -> Some (ExprErr (ErrExpr node))
-            | SyntaxKind.FunExpr -> Some (ExprFun (FunExpr node))
-            | SyntaxKind.IfExpr -> Some (ExprIf (IfExpr node))
-            | SyntaxKind.LetExpr -> Some (ExprLet (LetExpr node))
-            | SyntaxKind.Literal -> Some (ExprLiteral (Literal node))
-            | SyntaxKind.ParenExpr -> Some (ExprParen (ParenExpr node))
-            | SyntaxKind.VarExpr -> Some (ExprVar (VarExpr node))
-            | _ -> None
+    static member Cast (node : SyntaxNode) : Expr option =
+        match SyntaxKind.fromRaw node.Kind with
+        | SyntaxKind.AppExpr -> Some (ExprApp (AppExpr node))
+        | SyntaxKind.BinExpr -> Some (ExprBin (BinExpr node))
+        | SyntaxKind.ErrExpr -> Some (ExprErr (ErrExpr node))
+        | SyntaxKind.FunExpr -> Some (ExprFun (FunExpr node))
+        | SyntaxKind.IfExpr -> Some (ExprIf (IfExpr node))
+        | SyntaxKind.LetExpr -> Some (ExprLet (LetExpr node))
+        | SyntaxKind.Literal -> Some (ExprLiteral (Literal node))
+        | SyntaxKind.ParenExpr -> Some (ExprParen (ParenExpr node))
+        | SyntaxKind.VarExpr -> Some (ExprVar (VarExpr node))
+        | _ -> None
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2237,24 +2188,23 @@ type ModuleDecl =
     | ModuleDeclLetDecl of LetDecl
     | ModuleDeclOpenDecl of OpenDecl
 
-    interface IAstNodeFactory<ModuleDecl> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-            match SyntaxKind.fromRaw kind with
-            | SyntaxKind.ErrDecl
-            | SyntaxKind.Expr
-            | SyntaxKind.InnerModuleDecl
-            | SyntaxKind.LetDecl
-            | SyntaxKind.OpenDecl -> true
-            | _ -> false
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
+        | SyntaxKind.ErrDecl
+        | SyntaxKind.Expr
+        | SyntaxKind.InnerModuleDecl
+        | SyntaxKind.LetDecl
+        | SyntaxKind.OpenDecl -> true
+        | _ -> false
 
-        static member Cast (node : SyntaxNode) : ModuleDecl option =
-            match SyntaxKind.fromRaw node.Kind with
-            | SyntaxKind.ErrDecl -> Some (ModuleDeclErrDecl (ErrDecl node))
-            | SyntaxKind.Expr -> AstNode.cast<Expr> node |> Option.map ModuleDeclExpr
-            | SyntaxKind.InnerModuleDecl -> Some (ModuleDeclInner (InnerModuleDecl node))
-            | SyntaxKind.LetDecl -> Some (ModuleDeclLetDecl (LetDecl node))
-            | SyntaxKind.OpenDecl -> Some (ModuleDeclOpenDecl (OpenDecl node))
-            | _ -> None
+    static member Cast (node : SyntaxNode) : ModuleDecl option =
+        match SyntaxKind.fromRaw node.Kind with
+        | SyntaxKind.ErrDecl -> Some (ModuleDeclErrDecl (ErrDecl node))
+        | SyntaxKind.Expr -> AstNode.cast<Expr> node |> Option.map ModuleDeclExpr
+        | SyntaxKind.InnerModuleDecl -> Some (ModuleDeclInner (InnerModuleDecl node))
+        | SyntaxKind.LetDecl -> Some (ModuleDeclLetDecl (LetDecl node))
+        | SyntaxKind.OpenDecl -> Some (ModuleDeclOpenDecl (OpenDecl node))
+        | _ -> None
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2281,42 +2231,41 @@ type Pat =
     | PatTyped of TypedPat
     | PatWild of WildPat
 
-    interface IAstNodeFactory<Pat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-            match SyntaxKind.fromRaw kind with
-            | SyntaxKind.AndPat
-            | SyntaxKind.AsPat
-            | SyntaxKind.ConsPat
-            | SyntaxKind.ErrPat
-            | SyntaxKind.FuncPat
-            | SyntaxKind.ListPat
-            | SyntaxKind.LiteralPat
-            | SyntaxKind.NamedPat
-            | SyntaxKind.OrPat
-            | SyntaxKind.ParenPat
-            | SyntaxKind.RecordPat
-            | SyntaxKind.TuplePat
-            | SyntaxKind.TypedPat
-            | SyntaxKind.WildPat -> true
-            | _ -> false
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
+        | SyntaxKind.AndPat
+        | SyntaxKind.AsPat
+        | SyntaxKind.ConsPat
+        | SyntaxKind.ErrPat
+        | SyntaxKind.FuncPat
+        | SyntaxKind.ListPat
+        | SyntaxKind.LiteralPat
+        | SyntaxKind.NamedPat
+        | SyntaxKind.OrPat
+        | SyntaxKind.ParenPat
+        | SyntaxKind.RecordPat
+        | SyntaxKind.TuplePat
+        | SyntaxKind.TypedPat
+        | SyntaxKind.WildPat -> true
+        | _ -> false
 
-        static member Cast (node : SyntaxNode) : Pat option =
-            match SyntaxKind.fromRaw node.Kind with
-            | SyntaxKind.AndPat -> Some (PatAnd (AndPat node))
-            | SyntaxKind.AsPat -> Some (PatAs (AsPat node))
-            | SyntaxKind.ConsPat -> Some (PatCons (ConsPat node))
-            | SyntaxKind.ErrPat -> Some (PatErr (ErrPat node))
-            | SyntaxKind.FuncPat -> Some (PatFunc (FuncPat node))
-            | SyntaxKind.ListPat -> Some (PatList (ListPat node))
-            | SyntaxKind.LiteralPat -> Some (PatLiteral (LiteralPat node))
-            | SyntaxKind.NamedPat -> Some (PatNamed (NamedPat node))
-            | SyntaxKind.OrPat -> Some (PatOr (OrPat node))
-            | SyntaxKind.ParenPat -> Some (PatParen (ParenPat node))
-            | SyntaxKind.RecordPat -> Some (PatRecord (RecordPat node))
-            | SyntaxKind.TuplePat -> Some (PatTuple (TuplePat (SyntaxList node)))
-            | SyntaxKind.TypedPat -> Some (PatTyped (TypedPat node))
-            | SyntaxKind.WildPat -> Some (PatWild (WildPat node))
-            | _ -> None
+    static member Cast (node : SyntaxNode) : Pat option =
+        match SyntaxKind.fromRaw node.Kind with
+        | SyntaxKind.AndPat -> Some (PatAnd (AndPat node))
+        | SyntaxKind.AsPat -> Some (PatAs (AsPat node))
+        | SyntaxKind.ConsPat -> Some (PatCons (ConsPat node))
+        | SyntaxKind.ErrPat -> Some (PatErr (ErrPat node))
+        | SyntaxKind.FuncPat -> Some (PatFunc (FuncPat node))
+        | SyntaxKind.ListPat -> Some (PatList (ListPat node))
+        | SyntaxKind.LiteralPat -> Some (PatLiteral (LiteralPat node))
+        | SyntaxKind.NamedPat -> Some (PatNamed (NamedPat node))
+        | SyntaxKind.OrPat -> Some (PatOr (OrPat node))
+        | SyntaxKind.ParenPat -> Some (PatParen (ParenPat node))
+        | SyntaxKind.RecordPat -> Some (PatRecord (RecordPat node))
+        | SyntaxKind.TuplePat -> Some (PatTuple (TuplePat (SyntaxList node)))
+        | SyntaxKind.TypedPat -> Some (PatTyped (TypedPat node))
+        | SyntaxKind.WildPat -> Some (PatWild (WildPat node))
+        | _ -> None
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2344,26 +2293,25 @@ type Ty =
     | TyQ of QTy
     | TyTuple of TupleTy
 
-    interface IAstNodeFactory<Ty> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-            match SyntaxKind.fromRaw kind with
-            | SyntaxKind.ErrTy
-            | SyntaxKind.FnTy
-            | SyntaxKind.InferTy
-            | SyntaxKind.ParenTy
-            | SyntaxKind.QTy
-            | SyntaxKind.TupleTy -> true
-            | _ -> false
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
+        | SyntaxKind.ErrTy
+        | SyntaxKind.FnTy
+        | SyntaxKind.InferTy
+        | SyntaxKind.ParenTy
+        | SyntaxKind.QTy
+        | SyntaxKind.TupleTy -> true
+        | _ -> false
 
-        static member Cast (node : SyntaxNode) : Ty option =
-            match SyntaxKind.fromRaw node.Kind with
-            | SyntaxKind.ErrTy -> Some (TyErr (ErrTy node))
-            | SyntaxKind.FnTy -> Some (TyFn (FnTy node))
-            | SyntaxKind.InferTy -> Some (TyInfer (InferTy node))
-            | SyntaxKind.ParenTy -> Some (TyParen (ParenTy node))
-            | SyntaxKind.QTy -> Some (TyQ (QTy node))
-            | SyntaxKind.TupleTy -> Some (TyTuple (TupleTy (SyntaxList node)))
-            | _ -> None
+    static member Cast (node : SyntaxNode) : Ty option =
+        match SyntaxKind.fromRaw node.Kind with
+        | SyntaxKind.ErrTy -> Some (TyErr (ErrTy node))
+        | SyntaxKind.FnTy -> Some (TyFn (FnTy node))
+        | SyntaxKind.InferTy -> Some (TyInfer (InferTy node))
+        | SyntaxKind.ParenTy -> Some (TyParen (ParenTy node))
+        | SyntaxKind.QTy -> Some (TyQ (QTy node))
+        | SyntaxKind.TupleTy -> Some (TyTuple (TupleTy (SyntaxList node)))
+        | _ -> None
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2379,15 +2327,14 @@ type ArgPats =
     private
     | ArgPats of SyntaxList
 
-    interface IAstNodeFactory<ArgPats> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ArgPats
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ArgPats
 
-        static member Cast (node : SyntaxNode) : ArgPats option =
-            if AstNode.canCast<ArgPats> node.Kind then
-                Some (ArgPats (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : ArgPats option =
+        if AstNode.canCast<ArgPats> node.Kind then
+            Some (ArgPats (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2403,15 +2350,14 @@ type ListExprElements =
     private
     | ListExprElements of SyntaxList
 
-    interface IAstNodeFactory<ListExprElements> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ListExprElements
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ListExprElements
 
-        static member Cast (node : SyntaxNode) : ListExprElements option =
-            if AstNode.canCast<ListExprElements> node.Kind then
-                Some (ListExprElements (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : ListExprElements option =
+        if AstNode.canCast<ListExprElements> node.Kind then
+            Some (ListExprElements (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2427,15 +2373,14 @@ type ListPatElements =
     private
     | ListPatElements of SyntaxList
 
-    interface IAstNodeFactory<ListPatElements> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ListPatElements
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ListPatElements
 
-        static member Cast (node : SyntaxNode) : ListPatElements option =
-            if AstNode.canCast<ListPatElements> node.Kind then
-                Some (ListPatElements (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : ListPatElements option =
+        if AstNode.canCast<ListPatElements> node.Kind then
+            Some (ListPatElements (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2451,15 +2396,14 @@ type MatchCaseList =
     private
     | MatchCaseList of SyntaxList
 
-    interface IAstNodeFactory<MatchCaseList> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.MatchCaseList
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.MatchCaseList
 
-        static member Cast (node : SyntaxNode) : MatchCaseList option =
-            if AstNode.canCast<MatchCaseList> node.Kind then
-                Some (MatchCaseList (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : MatchCaseList option =
+        if AstNode.canCast<MatchCaseList> node.Kind then
+            Some (MatchCaseList (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2475,15 +2419,14 @@ type ModuleDeclList =
     private
     | ModuleDeclList of SyntaxList
 
-    interface IAstNodeFactory<ModuleDeclList> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ModuleDeclList
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ModuleDeclList
 
-        static member Cast (node : SyntaxNode) : ModuleDeclList option =
-            if AstNode.canCast<ModuleDeclList> node.Kind then
-                Some (ModuleDeclList (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : ModuleDeclList option =
+        if AstNode.canCast<ModuleDeclList> node.Kind then
+            Some (ModuleDeclList (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2499,15 +2442,14 @@ type RecordFields =
     private
     | RecordFields of SyntaxList
 
-    interface IAstNodeFactory<RecordFields> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.RecordFields
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.RecordFields
 
-        static member Cast (node : SyntaxNode) : RecordFields option =
-            if AstNode.canCast<RecordFields> node.Kind then
-                Some (RecordFields (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : RecordFields option =
+        if AstNode.canCast<RecordFields> node.Kind then
+            Some (RecordFields (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2523,15 +2465,14 @@ type TupleExpr =
     private
     | TupleExpr of SyntaxList
 
-    interface IAstNodeFactory<TupleExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.TupleExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.TupleExpr
 
-        static member Cast (node : SyntaxNode) : TupleExpr option =
-            if AstNode.canCast<TupleExpr> node.Kind then
-                Some (TupleExpr (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : TupleExpr option =
+        if AstNode.canCast<TupleExpr> node.Kind then
+            Some (TupleExpr (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2547,15 +2488,14 @@ type TuplePat =
     private
     | TuplePat of SyntaxList
 
-    interface IAstNodeFactory<TuplePat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.TuplePat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.TuplePat
 
-        static member Cast (node : SyntaxNode) : TuplePat option =
-            if AstNode.canCast<TuplePat> node.Kind then
-                Some (TuplePat (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : TuplePat option =
+        if AstNode.canCast<TuplePat> node.Kind then
+            Some (TuplePat (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2571,15 +2511,14 @@ type TupleTy =
     private
     | TupleTy of SyntaxList
 
-    interface IAstNodeFactory<TupleTy> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.TupleTy
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.TupleTy
 
-        static member Cast (node : SyntaxNode) : TupleTy option =
-            if AstNode.canCast<TupleTy> node.Kind then
-                Some (TupleTy (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : TupleTy option =
+        if AstNode.canCast<TupleTy> node.Kind then
+            Some (TupleTy (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2595,15 +2534,14 @@ type ErrDecl =
     private
     | ErrDecl of SyntaxNode
 
-    interface IAstNodeFactory<ErrDecl> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ErrDecl
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ErrDecl
 
-        static member Cast (node : SyntaxNode) : ErrDecl option =
-            if AstNode.canCast<ErrDecl> node.Kind then
-                Some (ErrDecl node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ErrDecl option =
+        if AstNode.canCast<ErrDecl> node.Kind then
+            Some (ErrDecl node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2617,15 +2555,14 @@ type ErrExpr =
     private
     | ErrExpr of SyntaxNode
 
-    interface IAstNodeFactory<ErrExpr> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ErrExpr
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ErrExpr
 
-        static member Cast (node : SyntaxNode) : ErrExpr option =
-            if AstNode.canCast<ErrExpr> node.Kind then
-                Some (ErrExpr node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ErrExpr option =
+        if AstNode.canCast<ErrExpr> node.Kind then
+            Some (ErrExpr node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2639,15 +2576,14 @@ type ErrNode =
     private
     | ErrNode of SyntaxNode
 
-    interface IAstNodeFactory<ErrNode> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ErrNode
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ErrNode
 
-        static member Cast (node : SyntaxNode) : ErrNode option =
-            if AstNode.canCast<ErrNode> node.Kind then
-                Some (ErrNode node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ErrNode option =
+        if AstNode.canCast<ErrNode> node.Kind then
+            Some (ErrNode node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2661,15 +2597,14 @@ type ErrPat =
     private
     | ErrPat of SyntaxNode
 
-    interface IAstNodeFactory<ErrPat> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ErrPat
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ErrPat
 
-        static member Cast (node : SyntaxNode) : ErrPat option =
-            if AstNode.canCast<ErrPat> node.Kind then
-                Some (ErrPat node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ErrPat option =
+        if AstNode.canCast<ErrPat> node.Kind then
+            Some (ErrPat node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -2683,15 +2618,14 @@ type ErrTy =
     private
     | ErrTy of SyntaxNode
 
-    interface IAstNodeFactory<ErrTy> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.ErrTy
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.ErrTy
 
-        static member Cast (node : SyntaxNode) : ErrTy option =
-            if AstNode.canCast<ErrTy> node.Kind then
-                Some (ErrTy node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : ErrTy option =
+        if AstNode.canCast<ErrTy> node.Kind then
+            Some (ErrTy node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =

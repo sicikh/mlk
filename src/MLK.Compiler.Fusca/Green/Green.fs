@@ -15,7 +15,7 @@ type TriviaPieceKind =
     | MultiLineComment
     | Skipped
 
-    member this.IsComment = this.IsSingleLineComment || this.IsMultiLineComment
+    //member this.IsComment = this.IsSingleLineComment || this.IsMultiLineComment
 
 [<Struct>]
 type TriviaPiece =

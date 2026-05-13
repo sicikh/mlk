@@ -21,15 +21,14 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
     private
     | {name} of SyntaxList
 
-    interface IAstNodeFactory<{name}> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.{name}
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.{name}
 
-        static member Cast (node : SyntaxNode) : {name} option =
-            if AstNode.canCast<{name}> node.Kind then
-                Some ({name} (SyntaxList node))
-            else
-                None
+    static member Cast (node : SyntaxNode) : {name} option =
+        if AstNode.canCast<{name}> node.Kind then
+            Some ({name} (SyntaxList node))
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -43,20 +42,18 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
 """
 
     let generateErr (name : string) : string =
-
         $"""type {name} =
     private
     | {name} of SyntaxNode
 
-    interface IAstNodeFactory<{name}> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.{name}
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.{name}
 
-        static member Cast (node : SyntaxNode) : {name} option =
-            if AstNode.canCast<{name}> node.Kind then
-                Some ({name} node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : {name} option =
+        if AstNode.canCast<{name}> node.Kind then
+            Some ({name} node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =
@@ -88,7 +85,7 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
             cases |> List.map (fun (case, var) -> $"| {case} of {var}") |> withIndent 4
 
         let canCastDef =
-            cases |> List.map (fun (_, var) -> $"| SyntaxKind.{var}") |> withIndent 12
+            cases |> List.map (fun (_, var) -> $"| SyntaxKind.{var}") |> withIndent 8
 
         let castDef =
             cases
@@ -100,7 +97,7 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
                 else
                     $"| SyntaxKind.{var} -> Some ({case} ({var} node))"
             )
-            |> withIndent 12
+            |> withIndent 8
 
         let syntaxDef =
             cases
@@ -110,16 +107,15 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
         $"""type {name} =
 {casesDef}
 
-    interface IAstNodeFactory<{name}> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-            match SyntaxKind.fromRaw kind with
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
 {canCastDef} -> true
-            | _ -> false
+        | _ -> false
 
-        static member Cast (node : SyntaxNode) : {name} option =
-            match SyntaxKind.fromRaw node.Kind with
+    static member Cast (node : SyntaxNode) : {name} option =
+        match SyntaxKind.fromRaw node.Kind with
 {castDef}
-            | _ -> None
+        | _ -> None
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -188,15 +184,14 @@ type {name} =
     private
     | {name} of SyntaxNode
 
-    interface IAstNodeFactory<{name}> with
-        static member CanCast (kind : RawSyntaxKind) : bool =
-             SyntaxKind.fromRaw kind = SyntaxKind.{name}
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.{name}
 
-        static member Cast (node : SyntaxNode) : {name} option =
-            if AstNode.canCast<{name}> node.Kind then
-                Some ({name} node)
-            else
-                None
+    static member Cast (node : SyntaxNode) : {name} option =
+        if AstNode.canCast<{name}> node.Kind then
+            Some ({name} node)
+        else
+            None
 
     interface IAstNode with
         member this.Syntax =

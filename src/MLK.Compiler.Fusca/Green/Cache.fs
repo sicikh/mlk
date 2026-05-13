@@ -1,6 +1,6 @@
 namespace MLK.Compiler.Fusca.Cache
 
-open System.Collections.Concurrent
+open System.Collections.Generic
 open MLK.Compiler.Text
 open MLK.Compiler.Fusca
 
@@ -58,7 +58,7 @@ module private Hash =
     let tokenHash (token : GreenToken) : uint64 = tokenHashOf token.Kind token.Text
 
 type TriviaCache() =
-    let trivias = ConcurrentDictionary<uint64, ResizeArray<CachedTrivia>> ()
+    let trivias = Dictionary<uint64, ResizeArray<CachedTrivia>> ()
 
     let whitespace = GreenTrivia.create [| TriviaPiece.whitespace (TextSize 1u) |]
 
@@ -125,5 +125,5 @@ type NodeCache() =
     [<Literal>]
     let UncachedNodeHash = 0UL
 
-    let nodes = ConcurrentDictionary<uint64, ResizeArray<CachedNode>> ()
-    let tokens = ConcurrentDictionary<uint64, CachedToken> ()
+    let nodes = Dictionary<uint64, ResizeArray<CachedNode>> ()
+    let tokens = Dictionary<uint64, CachedToken> ()

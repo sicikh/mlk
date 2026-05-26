@@ -8,7 +8,8 @@
     <ItemGroup>
         <Compile Include="Generated\Kind.fs" />
         <Compile Include="Generated\Node.fs" />
-        <Compile Include="Library.fs" />
+        <Compile Include="Generated\SyntaxFactory.fs" />
+        <Compile Include="Operators.fs" />
     </ItemGroup>
 
     <ItemGroup>

@@ -36,7 +36,7 @@ type Field =
         match this with
         | TokenField (name = name) ->
             let name = languageSrc.ToMethodName name
-            $"{name}Token"
+            if name.EndsWith "Token" then name else $"{name}Token"
         | NodeField (name = name) -> name
 
     member this.Ty : string =
@@ -239,9 +239,9 @@ module AstSrc =
             let field = NodeField (name, ty, optional)
             field :: fields
         | RToken token ->
-            let tokenName = grammar.Token token
-            let name = label |> Option.defaultValue tokenName.Name
-            let kind = SingleToken name
+            let tokenName = (grammar.Token token).Name
+            let kind = SingleToken tokenName
+            let name = label |> Option.defaultValue tokenName
             let field = TokenField (name, kind, optional)
             field :: fields
         | RRep _ -> failwith $"Create a list node for *many* children: {debugRule optional label rule}"

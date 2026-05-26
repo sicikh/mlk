@@ -1,9 +1,10 @@
 module MLK.Compiler.Tools.Codegen.Syntax.Nodes
 
+open System.Collections.Generic
+open MLK.Compiler.Tools.Codegen.Utils
+
 let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string =
-    let withIndent (n : int) (s : string list) : string =
-        let indent = String.replicate n " "
-        s |> List.map (fun line -> $"{indent}{line}") |> String.concat "\n"
+    let nameToVariants = astSrc.Enums |> List.map (fun e -> e.Name, e.Cases) |> dict
 
     let generateList (name : string) (list : AstListSrc) : string =
         let {
@@ -81,21 +82,36 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
 
         let cases = List.zip caseNames cases
 
+        let simpleCases, casesOfCases =
+            cases |> List.partition (fun (_, var) -> not (nameToVariants.ContainsKey var))
+
         let casesDef =
             cases |> List.map (fun (case, var) -> $"| {case} of {var}") |> withIndent 4
 
         let canCastDef =
-            cases |> List.map (fun (_, var) -> $"| SyntaxKind.{var}") |> withIndent 8
+            simpleCases |> List.map (fun (_, var) -> $"| SyntaxKind.{var}") |> withIndent 8
 
-        let castDef =
-            cases
+        let simpleCastDef =
+            simpleCases
             |> List.map (fun (case, var) ->
-                if astSrc.Enums |> List.exists (fun e -> e.Name = var) then
-                    $"| SyntaxKind.{var} -> AstNode.cast<{var}> node |> Option.map {case}"
-                else if astSrc.Lists |> Map.containsKey var then
+                if astSrc.Lists |> Map.containsKey var then
                     $"| SyntaxKind.{var} -> Some ({case} ({var} (SyntaxList node)))"
                 else
                     $"| SyntaxKind.{var} -> Some ({case} ({var} node))"
+            )
+            |> withIndent 8
+
+        let ccCastDef =
+            casesOfCases
+            |> List.map (fun (case, var) ->
+                $"|> Option.orElse ({var}.Cast node |> Option.map {case})"
+            )
+            |> withIndent 12
+
+        let ccCanCastDef =
+            casesOfCases
+            |> List.map (fun (_, var) ->
+               $"| _ when {var}.CanCast kind -> true"
             )
             |> withIndent 8
 
@@ -109,13 +125,13 @@ let generateSyntaxNodes (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
 
     static member CanCast (kind : RawSyntaxKind) : bool =
         match SyntaxKind.fromRaw kind with
-{canCastDef} -> true
+{canCastDef} -> true{if ccCanCastDef <> "" then "\n" + ccCanCastDef else "" }
         | _ -> false
 
     static member Cast (node : SyntaxNode) : {name} option =
         match SyntaxKind.fromRaw node.Kind with
-{castDef}
-        | _ -> None
+{simpleCastDef}
+        | _ ->{if ccCastDef <> "" then "\n" + String.replicate 12 " " else " " }None{if ccCastDef <> "" then "\n" + ccCastDef else "" }
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =

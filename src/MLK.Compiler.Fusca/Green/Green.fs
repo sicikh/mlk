@@ -15,7 +15,7 @@ type TriviaPieceKind =
     | MultiLineComment
     | Skipped
 
-    //member this.IsComment = this.IsSingleLineComment || this.IsMultiLineComment
+//member this.IsComment = this.IsSingleLineComment || this.IsMultiLineComment
 
 [<Struct>]
 type TriviaPiece =
@@ -166,6 +166,11 @@ and GreenNode =
 type GreenElement = NodeOrToken<GreenNode, GreenToken>
 
 module GreenElement =
+    let kind (element : GreenElement) : RawSyntaxKind =
+        match element with
+        | NodeOrToken.Node n -> n.Kind
+        | NodeOrToken.Token t -> t.Kind
+
     let length (element : GreenElement) : TextSize =
         match element with
         | NodeOrToken.Node n -> n.Length
@@ -189,3 +194,27 @@ module Slot =
         |> asElement
         |> ValueOption.mapOrZero GreenElement.length
         |> TextRange.at (relOffset slot)
+
+module GreenNode =
+    let mk (kind : RawSyntaxKind) (slots : GreenElement option seq) : GreenNode =
+        let slots, length =
+            slots
+            |> Seq.mapFold
+                (fun relOffset el ->
+                    match el with
+                    | Some el ->
+                        let slot =
+                            match el with
+                            | NodeOrToken.Node n -> Slot.Node (relOffset, n)
+                            | NodeOrToken.Token t -> Slot.Token (relOffset, t)
+
+                        slot, relOffset + GreenElement.length el
+                    | None -> Slot.Empty relOffset, relOffset
+                )
+                TextSize.zero
+
+        {
+            Kind = kind
+            Length = length
+            Slots = slots |> Seq.toArray
+        }

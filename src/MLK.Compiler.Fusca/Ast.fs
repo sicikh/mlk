@@ -1,5 +1,7 @@
 namespace MLK.Compiler.Fusca
 
+open Stdx
+
 [<Interface>]
 type IAstNode =
     abstract Syntax : SyntaxNode
@@ -56,9 +58,7 @@ module Support =
         )
 
     let inline requiredNode<'T when AstNode<'T>> (slot : uint) (parent : SyntaxNode) : SyntaxResult<'T> =
-        match node<'T> slot parent with
-        | Some node -> Ok node
-        | None -> Error MissingRequiredChild
+        node<'T> slot parent |> Option.okOr MissingRequiredChild
 
     let token (slot : uint) (parent : SyntaxNode) : SyntaxToken option =
         parent.Slots
@@ -71,9 +71,7 @@ module Support =
         )
 
     let requiredToken (slot : uint) (parent : SyntaxNode) : SyntaxResult<SyntaxToken> =
-        match token slot parent with
-        | Some token -> Ok token
-        | None -> Error MissingRequiredChild
+        token slot parent |> Option.okOr MissingRequiredChild
 
     let inline list<'T when AstNode<'T>> (slot : uint) (parent : SyntaxNode) : 'T =
         requiredNode<'T> slot parent

@@ -12,6 +12,7 @@
         <Compile Include="Green\Cache.fs" />
         <Compile Include="Syntax\Token.fs" />
         <Compile Include="Ast.fs" />
+        <Compile Include="SyntaxFactory.fs" />
     </ItemGroup>
 
     <ItemGroup>

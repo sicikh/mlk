@@ -240,75 +240,75 @@ module Binding =
     let (|EqToken|) (value : Binding) : SyntaxResult<SyntaxToken> = value.EqToken
     let (|Expr|) (value : Binding) : SyntaxResult<Expr> = value.Expr
 
-type BoolLiteralFields =
-    {
-        ValueTokenToken : SyntaxResult<SyntaxToken>
-    }
-
-type BoolLiteral =
-    private
-    | BoolLiteral of SyntaxNode
-
-    static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.BoolLiteral
-
-    static member Cast (node : SyntaxNode) : BoolLiteral option =
-        if AstNode.canCast<BoolLiteral> node.Kind then
-            Some (BoolLiteral node)
-        else
-            None
-
-    interface IAstNode with
-        member this.Syntax =
-            let (BoolLiteral node) = this
-            node
-
-    member this.ValueTokenToken : SyntaxResult<SyntaxToken> =
-        let (BoolLiteral syntax) = this
-        Support.requiredToken 0u syntax
-
-    member this.AsFields : BoolLiteralFields =
-        {
-            ValueTokenToken = this.ValueTokenToken
-        }
-
-module BoolLiteral =
-    let (|ValueTokenToken|) (value : BoolLiteral) : SyntaxResult<SyntaxToken> = value.ValueTokenToken
-
-type CharLiteralFields =
+type BoolLiteralExprFields =
     {
         ValueToken : SyntaxResult<SyntaxToken>
     }
 
-type CharLiteral =
+type BoolLiteralExpr =
     private
-    | CharLiteral of SyntaxNode
+    | BoolLiteralExpr of SyntaxNode
 
     static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.CharLiteral
+         SyntaxKind.fromRaw kind = SyntaxKind.BoolLiteralExpr
 
-    static member Cast (node : SyntaxNode) : CharLiteral option =
-        if AstNode.canCast<CharLiteral> node.Kind then
-            Some (CharLiteral node)
+    static member Cast (node : SyntaxNode) : BoolLiteralExpr option =
+        if AstNode.canCast<BoolLiteralExpr> node.Kind then
+            Some (BoolLiteralExpr node)
         else
             None
 
     interface IAstNode with
         member this.Syntax =
-            let (CharLiteral node) = this
+            let (BoolLiteralExpr node) = this
             node
 
     member this.ValueToken : SyntaxResult<SyntaxToken> =
-        let (CharLiteral syntax) = this
+        let (BoolLiteralExpr syntax) = this
         Support.requiredToken 0u syntax
 
-    member this.AsFields : CharLiteralFields =
+    member this.AsFields : BoolLiteralExprFields =
         {
             ValueToken = this.ValueToken
         }
 
-module CharLiteral =
-    let (|ValueToken|) (value : CharLiteral) : SyntaxResult<SyntaxToken> = value.ValueToken
+module BoolLiteralExpr =
+    let (|ValueToken|) (value : BoolLiteralExpr) : SyntaxResult<SyntaxToken> = value.ValueToken
+
+type CharLiteralExprFields =
+    {
+        ValueToken : SyntaxResult<SyntaxToken>
+    }
+
+type CharLiteralExpr =
+    private
+    | CharLiteralExpr of SyntaxNode
+
+    static member CanCast (kind : RawSyntaxKind) : bool =
+         SyntaxKind.fromRaw kind = SyntaxKind.CharLiteralExpr
+
+    static member Cast (node : SyntaxNode) : CharLiteralExpr option =
+        if AstNode.canCast<CharLiteralExpr> node.Kind then
+            Some (CharLiteralExpr node)
+        else
+            None
+
+    interface IAstNode with
+        member this.Syntax =
+            let (CharLiteralExpr node) = this
+            node
+
+    member this.ValueToken : SyntaxResult<SyntaxToken> =
+        let (CharLiteralExpr syntax) = this
+        Support.requiredToken 0u syntax
+
+    member this.AsFields : CharLiteralExprFields =
+        {
+            ValueToken = this.ValueToken
+        }
+
+module CharLiteralExpr =
+    let (|ValueToken|) (value : CharLiteralExpr) : SyntaxResult<SyntaxToken> = value.ValueToken
 
 type ConsPatFields =
     {
@@ -660,44 +660,45 @@ module InnerModuleDecl =
     let (|EqToken|) (value : InnerModuleDecl) : SyntaxResult<SyntaxToken> = value.EqToken
     let (|Decls|) (value : InnerModuleDecl) : SyntaxResult<ModuleDeclList> = value.Decls
 
-type IntLiteralFields =
+type IntLiteralExprFields =
     {
         ValueToken : SyntaxResult<SyntaxToken>
     }
 
-type IntLiteral =
+type IntLiteralExpr =
     private
-    | IntLiteral of SyntaxNode
+    | IntLiteralExpr of SyntaxNode
 
     static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.IntLiteral
+         SyntaxKind.fromRaw kind = SyntaxKind.IntLiteralExpr
 
-    static member Cast (node : SyntaxNode) : IntLiteral option =
-        if AstNode.canCast<IntLiteral> node.Kind then
-            Some (IntLiteral node)
+    static member Cast (node : SyntaxNode) : IntLiteralExpr option =
+        if AstNode.canCast<IntLiteralExpr> node.Kind then
+            Some (IntLiteralExpr node)
         else
             None
 
     interface IAstNode with
         member this.Syntax =
-            let (IntLiteral node) = this
+            let (IntLiteralExpr node) = this
             node
 
     member this.ValueToken : SyntaxResult<SyntaxToken> =
-        let (IntLiteral syntax) = this
+        let (IntLiteralExpr syntax) = this
         Support.requiredToken 0u syntax
 
-    member this.AsFields : IntLiteralFields =
+    member this.AsFields : IntLiteralExprFields =
         {
             ValueToken = this.ValueToken
         }
 
-module IntLiteral =
-    let (|ValueToken|) (value : IntLiteral) : SyntaxResult<SyntaxToken> = value.ValueToken
+module IntLiteralExpr =
+    let (|ValueToken|) (value : IntLiteralExpr) : SyntaxResult<SyntaxToken> = value.ValueToken
 
 type LetDeclFields =
     {
         LetToken : SyntaxResult<SyntaxToken>
+        RecToken : Option<SyntaxToken>
         Name : SyntaxResult<Name>
         EqToken : SyntaxResult<SyntaxToken>
         Expr : SyntaxResult<Expr>
@@ -725,21 +726,26 @@ type LetDecl =
         let (LetDecl syntax) = this
         Support.requiredToken 0u syntax
 
+    member this.RecToken : Option<SyntaxToken> =
+        let (LetDecl syntax) = this
+        Support.token 1u syntax
+
     member this.Name : SyntaxResult<Name> =
         let (LetDecl syntax) = this
-        Support.requiredNode<Name> 1u syntax
+        Support.requiredNode<Name> 2u syntax
 
     member this.EqToken : SyntaxResult<SyntaxToken> =
         let (LetDecl syntax) = this
-        Support.requiredToken 2u syntax
+        Support.requiredToken 3u syntax
 
     member this.Expr : SyntaxResult<Expr> =
         let (LetDecl syntax) = this
-        Support.requiredNode<Expr> 3u syntax
+        Support.requiredNode<Expr> 4u syntax
 
     member this.AsFields : LetDeclFields =
         {
             LetToken = this.LetToken
+            RecToken = this.RecToken
             Name = this.Name
             EqToken = this.EqToken
             Expr = this.Expr
@@ -747,6 +753,7 @@ type LetDecl =
 
 module LetDecl =
     let (|LetToken|) (value : LetDecl) : SyntaxResult<SyntaxToken> = value.LetToken
+    let (|RecToken|) (value : LetDecl) : Option<SyntaxToken> = value.RecToken
     let (|Name|) (value : LetDecl) : SyntaxResult<Name> = value.Name
     let (|EqToken|) (value : LetDecl) : SyntaxResult<SyntaxToken> = value.EqToken
     let (|Expr|) (value : LetDecl) : SyntaxResult<Expr> = value.Expr
@@ -891,76 +898,6 @@ module ListPat =
     let (|Elements|) (value : ListPat) : Option<ListPatElements> = value.Elements
     let (|RBracketToken|) (value : ListPat) : SyntaxResult<SyntaxToken> = value.RBracketToken
 
-type LiteralFields =
-    {
-        ValueToken : SyntaxResult<SyntaxToken>
-    }
-
-type Literal =
-    private
-    | Literal of SyntaxNode
-
-    static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.Literal
-
-    static member Cast (node : SyntaxNode) : Literal option =
-        if AstNode.canCast<Literal> node.Kind then
-            Some (Literal node)
-        else
-            None
-
-    interface IAstNode with
-        member this.Syntax =
-            let (Literal node) = this
-            node
-
-    member this.ValueToken : SyntaxResult<SyntaxToken> =
-        let (Literal syntax) = this
-        Support.requiredToken 0u syntax
-
-    member this.AsFields : LiteralFields =
-        {
-            ValueToken = this.ValueToken
-        }
-
-module Literal =
-    let (|ValueToken|) (value : Literal) : SyntaxResult<SyntaxToken> = value.ValueToken
-
-type LiteralPatFields =
-    {
-        Literal : SyntaxResult<Literal>
-    }
-
-type LiteralPat =
-    private
-    | LiteralPat of SyntaxNode
-
-    static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.LiteralPat
-
-    static member Cast (node : SyntaxNode) : LiteralPat option =
-        if AstNode.canCast<LiteralPat> node.Kind then
-            Some (LiteralPat node)
-        else
-            None
-
-    interface IAstNode with
-        member this.Syntax =
-            let (LiteralPat node) = this
-            node
-
-    member this.Literal : SyntaxResult<Literal> =
-        let (LiteralPat syntax) = this
-        Support.requiredNode<Literal> 0u syntax
-
-    member this.AsFields : LiteralPatFields =
-        {
-            Literal = this.Literal
-        }
-
-module LiteralPat =
-    let (|Literal|) (value : LiteralPat) : SyntaxResult<Literal> = value.Literal
-
 type MatchCaseFields =
     {
         Pat : SyntaxResult<Pat>
@@ -1022,7 +959,7 @@ type MatchExprFields =
         MatchToken : SyntaxResult<SyntaxToken>
         Scrutinee : SyntaxResult<Expr>
         WithToken : SyntaxResult<SyntaxToken>
-        LeadingPipeTokenToken : Option<SyntaxToken>
+        LeadingPipeToken : Option<SyntaxToken>
         Cases : SyntaxResult<MatchCaseList>
     }
 
@@ -1056,7 +993,7 @@ type MatchExpr =
         let (MatchExpr syntax) = this
         Support.requiredToken 2u syntax
 
-    member this.LeadingPipeTokenToken : Option<SyntaxToken> =
+    member this.LeadingPipeToken : Option<SyntaxToken> =
         let (MatchExpr syntax) = this
         Support.token 3u syntax
 
@@ -1069,7 +1006,7 @@ type MatchExpr =
             MatchToken = this.MatchToken
             Scrutinee = this.Scrutinee
             WithToken = this.WithToken
-            LeadingPipeTokenToken = this.LeadingPipeTokenToken
+            LeadingPipeToken = this.LeadingPipeToken
             Cases = this.Cases
         }
 
@@ -1077,7 +1014,7 @@ module MatchExpr =
     let (|MatchToken|) (value : MatchExpr) : SyntaxResult<SyntaxToken> = value.MatchToken
     let (|Scrutinee|) (value : MatchExpr) : SyntaxResult<Expr> = value.Scrutinee
     let (|WithToken|) (value : MatchExpr) : SyntaxResult<SyntaxToken> = value.WithToken
-    let (|LeadingPipeTokenToken|) (value : MatchExpr) : Option<SyntaxToken> = value.LeadingPipeTokenToken
+    let (|LeadingPipeToken|) (value : MatchExpr) : Option<SyntaxToken> = value.LeadingPipeToken
     let (|Cases|) (value : MatchExpr) : SyntaxResult<MatchCaseList> = value.Cases
 
 type MatchGuardFields =
@@ -1825,6 +1762,7 @@ module RecordPat =
 type SeqExprFields =
     {
         First : SyntaxResult<Expr>
+        SemicolonToken : Option<SyntaxToken>
         Second : SyntaxResult<Expr>
     }
 
@@ -1850,54 +1788,60 @@ type SeqExpr =
         let (SeqExpr syntax) = this
         Support.requiredNode<Expr> 0u syntax
 
+    member this.SemicolonToken : Option<SyntaxToken> =
+        let (SeqExpr syntax) = this
+        Support.token 1u syntax
+
     member this.Second : SyntaxResult<Expr> =
         let (SeqExpr syntax) = this
-        Support.requiredNode<Expr> 1u syntax
+        Support.requiredNode<Expr> 2u syntax
 
     member this.AsFields : SeqExprFields =
         {
             First = this.First
+            SemicolonToken = this.SemicolonToken
             Second = this.Second
         }
 
 module SeqExpr =
     let (|First|) (value : SeqExpr) : SyntaxResult<Expr> = value.First
+    let (|SemicolonToken|) (value : SeqExpr) : Option<SyntaxToken> = value.SemicolonToken
     let (|Second|) (value : SeqExpr) : SyntaxResult<Expr> = value.Second
 
-type StringLiteralFields =
+type StringLiteralExprFields =
     {
         ValueToken : SyntaxResult<SyntaxToken>
     }
 
-type StringLiteral =
+type StringLiteralExpr =
     private
-    | StringLiteral of SyntaxNode
+    | StringLiteralExpr of SyntaxNode
 
     static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.StringLiteral
+         SyntaxKind.fromRaw kind = SyntaxKind.StringLiteralExpr
 
-    static member Cast (node : SyntaxNode) : StringLiteral option =
-        if AstNode.canCast<StringLiteral> node.Kind then
-            Some (StringLiteral node)
+    static member Cast (node : SyntaxNode) : StringLiteralExpr option =
+        if AstNode.canCast<StringLiteralExpr> node.Kind then
+            Some (StringLiteralExpr node)
         else
             None
 
     interface IAstNode with
         member this.Syntax =
-            let (StringLiteral node) = this
+            let (StringLiteralExpr node) = this
             node
 
     member this.ValueToken : SyntaxResult<SyntaxToken> =
-        let (StringLiteral syntax) = this
+        let (StringLiteralExpr syntax) = this
         Support.requiredToken 0u syntax
 
-    member this.AsFields : StringLiteralFields =
+    member this.AsFields : StringLiteralExprFields =
         {
             ValueToken = this.ValueToken
         }
 
-module StringLiteral =
-    let (|ValueToken|) (value : StringLiteral) : SyntaxResult<SyntaxToken> = value.ValueToken
+module StringLiteralExpr =
+    let (|ValueToken|) (value : StringLiteralExpr) : SyntaxResult<SyntaxToken> = value.ValueToken
 
 type TypedExprFields =
     {
@@ -2039,47 +1983,47 @@ module UnaryExpr =
     let (|Op|) (value : UnaryExpr) : SyntaxResult<QName> = value.Op
     let (|Operand|) (value : UnaryExpr) : SyntaxResult<Expr> = value.Operand
 
-type UnitLiteralFields =
+type UnitLiteralExprFields =
     {
         LParenToken : SyntaxResult<SyntaxToken>
         RParenToken : SyntaxResult<SyntaxToken>
     }
 
-type UnitLiteral =
+type UnitLiteralExpr =
     private
-    | UnitLiteral of SyntaxNode
+    | UnitLiteralExpr of SyntaxNode
 
     static member CanCast (kind : RawSyntaxKind) : bool =
-         SyntaxKind.fromRaw kind = SyntaxKind.UnitLiteral
+         SyntaxKind.fromRaw kind = SyntaxKind.UnitLiteralExpr
 
-    static member Cast (node : SyntaxNode) : UnitLiteral option =
-        if AstNode.canCast<UnitLiteral> node.Kind then
-            Some (UnitLiteral node)
+    static member Cast (node : SyntaxNode) : UnitLiteralExpr option =
+        if AstNode.canCast<UnitLiteralExpr> node.Kind then
+            Some (UnitLiteralExpr node)
         else
             None
 
     interface IAstNode with
         member this.Syntax =
-            let (UnitLiteral node) = this
+            let (UnitLiteralExpr node) = this
             node
 
     member this.LParenToken : SyntaxResult<SyntaxToken> =
-        let (UnitLiteral syntax) = this
+        let (UnitLiteralExpr syntax) = this
         Support.requiredToken 0u syntax
 
     member this.RParenToken : SyntaxResult<SyntaxToken> =
-        let (UnitLiteral syntax) = this
+        let (UnitLiteralExpr syntax) = this
         Support.requiredToken 1u syntax
 
-    member this.AsFields : UnitLiteralFields =
+    member this.AsFields : UnitLiteralExprFields =
         {
             LParenToken = this.LParenToken
             RParenToken = this.RParenToken
         }
 
-module UnitLiteral =
-    let (|LParenToken|) (value : UnitLiteral) : SyntaxResult<SyntaxToken> = value.LParenToken
-    let (|RParenToken|) (value : UnitLiteral) : SyntaxResult<SyntaxToken> = value.RParenToken
+module UnitLiteralExpr =
+    let (|LParenToken|) (value : UnitLiteralExpr) : SyntaxResult<SyntaxToken> = value.LParenToken
+    let (|RParenToken|) (value : UnitLiteralExpr) : SyntaxResult<SyntaxToken> = value.RParenToken
 
 type VarExprFields =
     {
@@ -2157,15 +2101,16 @@ type ArgPat =
 
     static member CanCast (kind : RawSyntaxKind) : bool =
         match SyntaxKind.fromRaw kind with
-        | SyntaxKind.NamePatField
-        | SyntaxKind.Pat -> true
+        | SyntaxKind.NamePatField -> true
+        | _ when Pat.CanCast kind -> true
         | _ -> false
 
     static member Cast (node : SyntaxNode) : ArgPat option =
         match SyntaxKind.fromRaw node.Kind with
         | SyntaxKind.NamePatField -> Some (ArgPatNamePatField (NamePatField node))
-        | SyntaxKind.Pat -> AstNode.cast<Pat> node |> Option.map ArgPatPat
-        | _ -> None
+        | _ ->
+            None
+            |> Option.orElse (Pat.Cast node |> Option.map ArgPatPat)
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2180,7 +2125,7 @@ type Expr =
     | ExprFun of FunExpr
     | ExprIf of IfExpr
     | ExprLet of LetExpr
-    | ExprLiteral of Literal
+    | ExprLiteral of LiteralExpr
     | ExprMemberAccess of MemberAccessExpr
     | ExprParen of ParenExpr
     | ExprSeq of SeqExpr
@@ -2194,11 +2139,11 @@ type Expr =
         | SyntaxKind.FunExpr
         | SyntaxKind.IfExpr
         | SyntaxKind.LetExpr
-        | SyntaxKind.Literal
         | SyntaxKind.MemberAccessExpr
         | SyntaxKind.ParenExpr
         | SyntaxKind.SeqExpr
         | SyntaxKind.VarExpr -> true
+        | _ when LiteralExpr.CanCast kind -> true
         | _ -> false
 
     static member Cast (node : SyntaxNode) : Expr option =
@@ -2209,12 +2154,13 @@ type Expr =
         | SyntaxKind.FunExpr -> Some (ExprFun (FunExpr node))
         | SyntaxKind.IfExpr -> Some (ExprIf (IfExpr node))
         | SyntaxKind.LetExpr -> Some (ExprLet (LetExpr node))
-        | SyntaxKind.Literal -> Some (ExprLiteral (Literal node))
         | SyntaxKind.MemberAccessExpr -> Some (ExprMemberAccess (MemberAccessExpr node))
         | SyntaxKind.ParenExpr -> Some (ExprParen (ParenExpr node))
         | SyntaxKind.SeqExpr -> Some (ExprSeq (SeqExpr node))
         | SyntaxKind.VarExpr -> Some (ExprVar (VarExpr node))
-        | _ -> None
+        | _ ->
+            None
+            |> Option.orElse (LiteralExpr.Cast node |> Option.map ExprLiteral)
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2231,6 +2177,40 @@ type Expr =
             | ExprSeq it -> (it :> IAstNode).Syntax
             | ExprVar it -> (it :> IAstNode).Syntax
 
+type LiteralExpr =
+    | LiteralExprBool of BoolLiteralExpr
+    | LiteralExprChar of CharLiteralExpr
+    | LiteralExprInt of IntLiteralExpr
+    | LiteralExprString of StringLiteralExpr
+    | LiteralExprUnit of UnitLiteralExpr
+
+    static member CanCast (kind : RawSyntaxKind) : bool =
+        match SyntaxKind.fromRaw kind with
+        | SyntaxKind.BoolLiteralExpr
+        | SyntaxKind.CharLiteralExpr
+        | SyntaxKind.IntLiteralExpr
+        | SyntaxKind.StringLiteralExpr
+        | SyntaxKind.UnitLiteralExpr -> true
+        | _ -> false
+
+    static member Cast (node : SyntaxNode) : LiteralExpr option =
+        match SyntaxKind.fromRaw node.Kind with
+        | SyntaxKind.BoolLiteralExpr -> Some (LiteralExprBool (BoolLiteralExpr node))
+        | SyntaxKind.CharLiteralExpr -> Some (LiteralExprChar (CharLiteralExpr node))
+        | SyntaxKind.IntLiteralExpr -> Some (LiteralExprInt (IntLiteralExpr node))
+        | SyntaxKind.StringLiteralExpr -> Some (LiteralExprString (StringLiteralExpr node))
+        | SyntaxKind.UnitLiteralExpr -> Some (LiteralExprUnit (UnitLiteralExpr node))
+        | _ -> None
+
+    interface IAstNode with
+        member this.Syntax : SyntaxNode =
+            match this with
+            | LiteralExprBool it -> (it :> IAstNode).Syntax
+            | LiteralExprChar it -> (it :> IAstNode).Syntax
+            | LiteralExprInt it -> (it :> IAstNode).Syntax
+            | LiteralExprString it -> (it :> IAstNode).Syntax
+            | LiteralExprUnit it -> (it :> IAstNode).Syntax
+
 type ModuleDecl =
     | ModuleDeclErrDecl of ErrDecl
     | ModuleDeclExpr of Expr
@@ -2241,20 +2221,21 @@ type ModuleDecl =
     static member CanCast (kind : RawSyntaxKind) : bool =
         match SyntaxKind.fromRaw kind with
         | SyntaxKind.ErrDecl
-        | SyntaxKind.Expr
         | SyntaxKind.InnerModuleDecl
         | SyntaxKind.LetDecl
         | SyntaxKind.OpenDecl -> true
+        | _ when Expr.CanCast kind -> true
         | _ -> false
 
     static member Cast (node : SyntaxNode) : ModuleDecl option =
         match SyntaxKind.fromRaw node.Kind with
         | SyntaxKind.ErrDecl -> Some (ModuleDeclErrDecl (ErrDecl node))
-        | SyntaxKind.Expr -> AstNode.cast<Expr> node |> Option.map ModuleDeclExpr
         | SyntaxKind.InnerModuleDecl -> Some (ModuleDeclInner (InnerModuleDecl node))
         | SyntaxKind.LetDecl -> Some (ModuleDeclLetDecl (LetDecl node))
         | SyntaxKind.OpenDecl -> Some (ModuleDeclOpenDecl (OpenDecl node))
-        | _ -> None
+        | _ ->
+            None
+            |> Option.orElse (Expr.Cast node |> Option.map ModuleDeclExpr)
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2272,7 +2253,7 @@ type Pat =
     | PatErr of ErrPat
     | PatFunc of FuncPat
     | PatList of ListPat
-    | PatLiteral of LiteralPat
+    | PatLiteralExpr of LiteralExpr
     | PatNamed of NamedPat
     | PatOr of OrPat
     | PatParen of ParenPat
@@ -2289,7 +2270,6 @@ type Pat =
         | SyntaxKind.ErrPat
         | SyntaxKind.FuncPat
         | SyntaxKind.ListPat
-        | SyntaxKind.LiteralPat
         | SyntaxKind.NamedPat
         | SyntaxKind.OrPat
         | SyntaxKind.ParenPat
@@ -2297,6 +2277,7 @@ type Pat =
         | SyntaxKind.TuplePat
         | SyntaxKind.TypedPat
         | SyntaxKind.WildPat -> true
+        | _ when LiteralExpr.CanCast kind -> true
         | _ -> false
 
     static member Cast (node : SyntaxNode) : Pat option =
@@ -2307,7 +2288,6 @@ type Pat =
         | SyntaxKind.ErrPat -> Some (PatErr (ErrPat node))
         | SyntaxKind.FuncPat -> Some (PatFunc (FuncPat node))
         | SyntaxKind.ListPat -> Some (PatList (ListPat node))
-        | SyntaxKind.LiteralPat -> Some (PatLiteral (LiteralPat node))
         | SyntaxKind.NamedPat -> Some (PatNamed (NamedPat node))
         | SyntaxKind.OrPat -> Some (PatOr (OrPat node))
         | SyntaxKind.ParenPat -> Some (PatParen (ParenPat node))
@@ -2315,7 +2295,9 @@ type Pat =
         | SyntaxKind.TuplePat -> Some (PatTuple (TuplePat (SyntaxList node)))
         | SyntaxKind.TypedPat -> Some (PatTyped (TypedPat node))
         | SyntaxKind.WildPat -> Some (PatWild (WildPat node))
-        | _ -> None
+        | _ ->
+            None
+            |> Option.orElse (LiteralExpr.Cast node |> Option.map PatLiteralExpr)
 
     interface IAstNode with
         member this.Syntax : SyntaxNode =
@@ -2326,7 +2308,7 @@ type Pat =
             | PatErr it -> (it :> IAstNode).Syntax
             | PatFunc it -> (it :> IAstNode).Syntax
             | PatList it -> (it :> IAstNode).Syntax
-            | PatLiteral it -> (it :> IAstNode).Syntax
+            | PatLiteralExpr it -> (it :> IAstNode).Syntax
             | PatNamed it -> (it :> IAstNode).Syntax
             | PatOr it -> (it :> IAstNode).Syntax
             | PatParen it -> (it :> IAstNode).Syntax

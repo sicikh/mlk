@@ -17,13 +17,12 @@ let generateSyntaxKinds (languageSrc : ILanguageSrc) (astSrc : AstSrc) : string 
     let nodesSyntaxKinds =
         astSrc.Nodes
         |> List.map _.Name
-        |> List.append (astSrc.Enums |> List.map _.Name)
         |> List.append lists
         |> List.append astSrc.Errors
         |> List.sort
 
     let allSyntaxKindsValues =
-        "Tombstone" :: "Eof" :: (punctSyntaxKinds @ allKeywords @ tokens @ nodesSyntaxKinds)
+        "Tombstone" :: "Eof" :: (punctSyntaxKinds @ allKeywords @ literals @ tokens @ nodesSyntaxKinds)
 
     let syntaxKindsValues =
         allSyntaxKindsValues
@@ -127,6 +126,11 @@ module SyntaxKind =
     let toString (kind : SyntaxKind) : string voption =
         match kind with
 {toStringCases}
+
+    let toErr (_kind : SyntaxKind) : SyntaxKind =
+        // TODO: implement this properly
+        SyntaxKind.ErrNode
+
 
 [<AutoOpen>]
 module SyntaxKindOps =

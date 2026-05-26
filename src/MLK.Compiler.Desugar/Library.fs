@@ -38,6 +38,7 @@ module Desugar =
     let rec desugarExpr (ctx : DesugarCtx) (expr : Expr) : HirId * DesugarCtx =
         match expr with
         | ExprLiteral literal ->
+            let (LiteralExprInt literal | Never literal) = literal
             let intLiteral = literal.ValueToken.Value
             let value = int intLiteral.Green.Text
             let id, ctx = ctx.Id

@@ -31,7 +31,7 @@ let pEq =
     )
 
 let pName = node SyntaxKind.Name pIdent
-let pLiteral = node SyntaxKind.Literal <| pIntLiteral
+let pLiteral = node SyntaxKind.IntLiteralExpr pIntLiteral
 
 let expectedExpression = ParseDiagnostic.mkSingleNode "expression"
 let expectedClosingParen = ParseDiagnostic.mkSingleNode "closing parenthesis ')'"

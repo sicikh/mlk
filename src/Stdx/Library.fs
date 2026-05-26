@@ -65,6 +65,16 @@ module Option =
         | Some a -> f a |> Option.map (fun b -> a, b)
         | _ -> None
 
+    let inline okOr (err : 'e) (opt : 'a option) : Result<'a, 'e> =
+        match opt with
+        | Some a -> Ok a
+        | None -> Error err
+
+    let inline okOrElse (err : unit -> 'e) (opt : 'a option) : Result<'a, 'e> =
+        match opt with
+        | Some a -> Ok a
+        | None -> Error <| err ()
+
 // let traverseList (f : 'a -> 'b option) (list : 'a list) : 'b list option =
 //     let folder head tail = f head |> Option.bind (fun head -> tail |> Option.bind (fun tail -> Some (head :: tail)))
 //     List.foldBack folder list (Some [])
@@ -202,7 +212,8 @@ module String =
 
 [<AutoOpen>]
 module PatternOps =
-    let (|Never|) _ = failwith "This pattern should never be matched"
+    let (|Never|) _ =
+        failwith "This pattern should never be matched"
 
 module Result =
     let inline get result =
@@ -214,3 +225,7 @@ module Result =
 module ResultExtensions =
     type Result<'T, 'E> with
         member this.Value = Result.get this
+
+[<AutoOpen>]
+module PatternsExtensions =
+    let (|Never|) _ = failwith "This pattern should never be matched"

@@ -140,6 +140,8 @@ type TextRange with
 
     static member Zero = TextRange.empty
 
+    static member Create (starts, ends) = TextRange.create starts ends
+
 /// 0-based line and column representation.
 [<Struct; NoComparison>]
 type LineCol =

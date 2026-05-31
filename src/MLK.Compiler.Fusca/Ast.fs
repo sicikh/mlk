@@ -27,7 +27,7 @@ module AstNode =
     let inline unwrapCast<'T when AstNode<'T>> (node : SyntaxNode) : 'T =
         match cast<'T> node with
         | Some astNode -> astNode
-        | None -> failwithf "Failed to cast SyntaxNode of kind %A to the expected AST node type." node.Kind
+        | None -> failwithf "Failed to cast SyntaxNode of kind %A to the expected AST node type." node.RawKind
 
 module AstNodeList =
     let inline elements<'T when AstNode<'T>> (list : IAstNodeList<'T>) : 'T seq =

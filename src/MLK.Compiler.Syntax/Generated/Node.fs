@@ -17,7 +17,7 @@ type AndPat =
          SyntaxKind.fromRaw kind = SyntaxKind.AndPat
 
     static member Cast (node : SyntaxNode) : AndPat option =
-        if AstNode.canCast<AndPat> node.Kind then
+        if AstNode.canCast<AndPat> node.RawKind then
             Some (AndPat node)
         else
             None
@@ -65,7 +65,7 @@ type AppExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.AppExpr
 
     static member Cast (node : SyntaxNode) : AppExpr option =
-        if AstNode.canCast<AppExpr> node.Kind then
+        if AstNode.canCast<AppExpr> node.RawKind then
             Some (AppExpr node)
         else
             None
@@ -108,7 +108,7 @@ type AsPat =
          SyntaxKind.fromRaw kind = SyntaxKind.AsPat
 
     static member Cast (node : SyntaxNode) : AsPat option =
-        if AstNode.canCast<AsPat> node.Kind then
+        if AstNode.canCast<AsPat> node.RawKind then
             Some (AsPat node)
         else
             None
@@ -157,7 +157,7 @@ type BinExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.BinExpr
 
     static member Cast (node : SyntaxNode) : BinExpr option =
-        if AstNode.canCast<BinExpr> node.Kind then
+        if AstNode.canCast<BinExpr> node.RawKind then
             Some (BinExpr node)
         else
             None
@@ -206,7 +206,7 @@ type Binding =
          SyntaxKind.fromRaw kind = SyntaxKind.Binding
 
     static member Cast (node : SyntaxNode) : Binding option =
-        if AstNode.canCast<Binding> node.Kind then
+        if AstNode.canCast<Binding> node.RawKind then
             Some (Binding node)
         else
             None
@@ -253,7 +253,7 @@ type BoolLiteralExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.BoolLiteralExpr
 
     static member Cast (node : SyntaxNode) : BoolLiteralExpr option =
-        if AstNode.canCast<BoolLiteralExpr> node.Kind then
+        if AstNode.canCast<BoolLiteralExpr> node.RawKind then
             Some (BoolLiteralExpr node)
         else
             None
@@ -288,7 +288,7 @@ type CharLiteralExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.CharLiteralExpr
 
     static member Cast (node : SyntaxNode) : CharLiteralExpr option =
-        if AstNode.canCast<CharLiteralExpr> node.Kind then
+        if AstNode.canCast<CharLiteralExpr> node.RawKind then
             Some (CharLiteralExpr node)
         else
             None
@@ -325,7 +325,7 @@ type ConsPat =
          SyntaxKind.fromRaw kind = SyntaxKind.ConsPat
 
     static member Cast (node : SyntaxNode) : ConsPat option =
-        if AstNode.canCast<ConsPat> node.Kind then
+        if AstNode.canCast<ConsPat> node.RawKind then
             Some (ConsPat node)
         else
             None
@@ -374,7 +374,7 @@ type FnTy =
          SyntaxKind.fromRaw kind = SyntaxKind.FnTy
 
     static member Cast (node : SyntaxNode) : FnTy option =
-        if AstNode.canCast<FnTy> node.Kind then
+        if AstNode.canCast<FnTy> node.RawKind then
             Some (FnTy node)
         else
             None
@@ -424,7 +424,7 @@ type FunExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.FunExpr
 
     static member Cast (node : SyntaxNode) : FunExpr option =
-        if AstNode.canCast<FunExpr> node.Kind then
+        if AstNode.canCast<FunExpr> node.RawKind then
             Some (FunExpr node)
         else
             None
@@ -478,7 +478,7 @@ type FuncPat =
          SyntaxKind.fromRaw kind = SyntaxKind.FuncPat
 
     static member Cast (node : SyntaxNode) : FuncPat option =
-        if AstNode.canCast<FuncPat> node.Kind then
+        if AstNode.canCast<FuncPat> node.RawKind then
             Some (FuncPat node)
         else
             None
@@ -524,7 +524,7 @@ type IfExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.IfExpr
 
     static member Cast (node : SyntaxNode) : IfExpr option =
-        if AstNode.canCast<IfExpr> node.Kind then
+        if AstNode.canCast<IfExpr> node.RawKind then
             Some (IfExpr node)
         else
             None
@@ -589,7 +589,7 @@ type InferTy =
          SyntaxKind.fromRaw kind = SyntaxKind.InferTy
 
     static member Cast (node : SyntaxNode) : InferTy option =
-        if AstNode.canCast<InferTy> node.Kind then
+        if AstNode.canCast<InferTy> node.RawKind then
             Some (InferTy node)
         else
             None
@@ -626,7 +626,7 @@ type InnerModuleDecl =
          SyntaxKind.fromRaw kind = SyntaxKind.InnerModuleDecl
 
     static member Cast (node : SyntaxNode) : InnerModuleDecl option =
-        if AstNode.canCast<InnerModuleDecl> node.Kind then
+        if AstNode.canCast<InnerModuleDecl> node.RawKind then
             Some (InnerModuleDecl node)
         else
             None
@@ -673,7 +673,7 @@ type IntLiteralExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.IntLiteralExpr
 
     static member Cast (node : SyntaxNode) : IntLiteralExpr option =
-        if AstNode.canCast<IntLiteralExpr> node.Kind then
+        if AstNode.canCast<IntLiteralExpr> node.RawKind then
             Some (IntLiteralExpr node)
         else
             None
@@ -712,7 +712,7 @@ type LetDecl =
          SyntaxKind.fromRaw kind = SyntaxKind.LetDecl
 
     static member Cast (node : SyntaxNode) : LetDecl option =
-        if AstNode.canCast<LetDecl> node.Kind then
+        if AstNode.canCast<LetDecl> node.RawKind then
             Some (LetDecl node)
         else
             None
@@ -772,7 +772,7 @@ type LetExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.LetExpr
 
     static member Cast (node : SyntaxNode) : LetExpr option =
-        if AstNode.canCast<LetExpr> node.Kind then
+        if AstNode.canCast<LetExpr> node.RawKind then
             Some (LetExpr node)
         else
             None
@@ -815,7 +815,7 @@ type ListExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.ListExpr
 
     static member Cast (node : SyntaxNode) : ListExpr option =
-        if AstNode.canCast<ListExpr> node.Kind then
+        if AstNode.canCast<ListExpr> node.RawKind then
             Some (ListExpr node)
         else
             None
@@ -864,7 +864,7 @@ type ListPat =
          SyntaxKind.fromRaw kind = SyntaxKind.ListPat
 
     static member Cast (node : SyntaxNode) : ListPat option =
-        if AstNode.canCast<ListPat> node.Kind then
+        if AstNode.canCast<ListPat> node.RawKind then
             Some (ListPat node)
         else
             None
@@ -914,7 +914,7 @@ type MatchCase =
          SyntaxKind.fromRaw kind = SyntaxKind.MatchCase
 
     static member Cast (node : SyntaxNode) : MatchCase option =
-        if AstNode.canCast<MatchCase> node.Kind then
+        if AstNode.canCast<MatchCase> node.RawKind then
             Some (MatchCase node)
         else
             None
@@ -971,7 +971,7 @@ type MatchExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.MatchExpr
 
     static member Cast (node : SyntaxNode) : MatchExpr option =
-        if AstNode.canCast<MatchExpr> node.Kind then
+        if AstNode.canCast<MatchExpr> node.RawKind then
             Some (MatchExpr node)
         else
             None
@@ -1031,7 +1031,7 @@ type MatchGuard =
          SyntaxKind.fromRaw kind = SyntaxKind.MatchGuard
 
     static member Cast (node : SyntaxNode) : MatchGuard option =
-        if AstNode.canCast<MatchGuard> node.Kind then
+        if AstNode.canCast<MatchGuard> node.RawKind then
             Some (MatchGuard node)
         else
             None
@@ -1074,7 +1074,7 @@ type MemberAccessExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.MemberAccessExpr
 
     static member Cast (node : SyntaxNode) : MemberAccessExpr option =
-        if AstNode.canCast<MemberAccessExpr> node.Kind then
+        if AstNode.canCast<MemberAccessExpr> node.RawKind then
             Some (MemberAccessExpr node)
         else
             None
@@ -1122,7 +1122,7 @@ type ModulePreamble =
          SyntaxKind.fromRaw kind = SyntaxKind.ModulePreamble
 
     static member Cast (node : SyntaxNode) : ModulePreamble option =
-        if AstNode.canCast<ModulePreamble> node.Kind then
+        if AstNode.canCast<ModulePreamble> node.RawKind then
             Some (ModulePreamble node)
         else
             None
@@ -1165,7 +1165,7 @@ type ModuleRoot =
          SyntaxKind.fromRaw kind = SyntaxKind.ModuleRoot
 
     static member Cast (node : SyntaxNode) : ModuleRoot option =
-        if AstNode.canCast<ModuleRoot> node.Kind then
+        if AstNode.canCast<ModuleRoot> node.RawKind then
             Some (ModuleRoot node)
         else
             None
@@ -1212,7 +1212,7 @@ type Name =
          SyntaxKind.fromRaw kind = SyntaxKind.Name
 
     static member Cast (node : SyntaxNode) : Name option =
-        if AstNode.canCast<Name> node.Kind then
+        if AstNode.canCast<Name> node.RawKind then
             Some (Name node)
         else
             None
@@ -1249,7 +1249,7 @@ type NamePatField =
          SyntaxKind.fromRaw kind = SyntaxKind.NamePatField
 
     static member Cast (node : SyntaxNode) : NamePatField option =
-        if AstNode.canCast<NamePatField> node.Kind then
+        if AstNode.canCast<NamePatField> node.RawKind then
             Some (NamePatField node)
         else
             None
@@ -1296,7 +1296,7 @@ type NamedPat =
          SyntaxKind.fromRaw kind = SyntaxKind.NamedPat
 
     static member Cast (node : SyntaxNode) : NamedPat option =
-        if AstNode.canCast<NamedPat> node.Kind then
+        if AstNode.canCast<NamedPat> node.RawKind then
             Some (NamedPat node)
         else
             None
@@ -1332,7 +1332,7 @@ type OpenDecl =
          SyntaxKind.fromRaw kind = SyntaxKind.OpenDecl
 
     static member Cast (node : SyntaxNode) : OpenDecl option =
-        if AstNode.canCast<OpenDecl> node.Kind then
+        if AstNode.canCast<OpenDecl> node.RawKind then
             Some (OpenDecl node)
         else
             None
@@ -1373,7 +1373,7 @@ type Operator =
          SyntaxKind.fromRaw kind = SyntaxKind.Operator
 
     static member Cast (node : SyntaxNode) : Operator option =
-        if AstNode.canCast<Operator> node.Kind then
+        if AstNode.canCast<Operator> node.RawKind then
             Some (Operator node)
         else
             None
@@ -1410,7 +1410,7 @@ type OrPat =
          SyntaxKind.fromRaw kind = SyntaxKind.OrPat
 
     static member Cast (node : SyntaxNode) : OrPat option =
-        if AstNode.canCast<OrPat> node.Kind then
+        if AstNode.canCast<OrPat> node.RawKind then
             Some (OrPat node)
         else
             None
@@ -1459,7 +1459,7 @@ type ParenExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.ParenExpr
 
     static member Cast (node : SyntaxNode) : ParenExpr option =
-        if AstNode.canCast<ParenExpr> node.Kind then
+        if AstNode.canCast<ParenExpr> node.RawKind then
             Some (ParenExpr node)
         else
             None
@@ -1508,7 +1508,7 @@ type ParenPat =
          SyntaxKind.fromRaw kind = SyntaxKind.ParenPat
 
     static member Cast (node : SyntaxNode) : ParenPat option =
-        if AstNode.canCast<ParenPat> node.Kind then
+        if AstNode.canCast<ParenPat> node.RawKind then
             Some (ParenPat node)
         else
             None
@@ -1557,7 +1557,7 @@ type ParenTy =
          SyntaxKind.fromRaw kind = SyntaxKind.ParenTy
 
     static member Cast (node : SyntaxNode) : ParenTy option =
-        if AstNode.canCast<ParenTy> node.Kind then
+        if AstNode.canCast<ParenTy> node.RawKind then
             Some (ParenTy node)
         else
             None
@@ -1606,7 +1606,7 @@ type QName =
          SyntaxKind.fromRaw kind = SyntaxKind.QName
 
     static member Cast (node : SyntaxNode) : QName option =
-        if AstNode.canCast<QName> node.Kind then
+        if AstNode.canCast<QName> node.RawKind then
             Some (QName node)
         else
             None
@@ -1653,7 +1653,7 @@ type QNameSegment =
          SyntaxKind.fromRaw kind = SyntaxKind.QNameSegment
 
     static member Cast (node : SyntaxNode) : QNameSegment option =
-        if AstNode.canCast<QNameSegment> node.Kind then
+        if AstNode.canCast<QNameSegment> node.RawKind then
             Some (QNameSegment node)
         else
             None
@@ -1688,7 +1688,7 @@ type QTy =
          SyntaxKind.fromRaw kind = SyntaxKind.QTy
 
     static member Cast (node : SyntaxNode) : QTy option =
-        if AstNode.canCast<QTy> node.Kind then
+        if AstNode.canCast<QTy> node.RawKind then
             Some (QTy node)
         else
             None
@@ -1725,7 +1725,7 @@ type RecordPat =
          SyntaxKind.fromRaw kind = SyntaxKind.RecordPat
 
     static member Cast (node : SyntaxNode) : RecordPat option =
-        if AstNode.canCast<RecordPat> node.Kind then
+        if AstNode.canCast<RecordPat> node.RawKind then
             Some (RecordPat node)
         else
             None
@@ -1774,7 +1774,7 @@ type SeqExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.SeqExpr
 
     static member Cast (node : SyntaxNode) : SeqExpr option =
-        if AstNode.canCast<SeqExpr> node.Kind then
+        if AstNode.canCast<SeqExpr> node.RawKind then
             Some (SeqExpr node)
         else
             None
@@ -1821,7 +1821,7 @@ type StringLiteralExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.StringLiteralExpr
 
     static member Cast (node : SyntaxNode) : StringLiteralExpr option =
-        if AstNode.canCast<StringLiteralExpr> node.Kind then
+        if AstNode.canCast<StringLiteralExpr> node.RawKind then
             Some (StringLiteralExpr node)
         else
             None
@@ -1858,7 +1858,7 @@ type TypedExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.TypedExpr
 
     static member Cast (node : SyntaxNode) : TypedExpr option =
-        if AstNode.canCast<TypedExpr> node.Kind then
+        if AstNode.canCast<TypedExpr> node.RawKind then
             Some (TypedExpr node)
         else
             None
@@ -1907,7 +1907,7 @@ type TypedPat =
          SyntaxKind.fromRaw kind = SyntaxKind.TypedPat
 
     static member Cast (node : SyntaxNode) : TypedPat option =
-        if AstNode.canCast<TypedPat> node.Kind then
+        if AstNode.canCast<TypedPat> node.RawKind then
             Some (TypedPat node)
         else
             None
@@ -1955,7 +1955,7 @@ type UnaryExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.UnaryExpr
 
     static member Cast (node : SyntaxNode) : UnaryExpr option =
-        if AstNode.canCast<UnaryExpr> node.Kind then
+        if AstNode.canCast<UnaryExpr> node.RawKind then
             Some (UnaryExpr node)
         else
             None
@@ -1997,7 +1997,7 @@ type UnitLiteralExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.UnitLiteralExpr
 
     static member Cast (node : SyntaxNode) : UnitLiteralExpr option =
-        if AstNode.canCast<UnitLiteralExpr> node.Kind then
+        if AstNode.canCast<UnitLiteralExpr> node.RawKind then
             Some (UnitLiteralExpr node)
         else
             None
@@ -2038,7 +2038,7 @@ type VarExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.VarExpr
 
     static member Cast (node : SyntaxNode) : VarExpr option =
-        if AstNode.canCast<VarExpr> node.Kind then
+        if AstNode.canCast<VarExpr> node.RawKind then
             Some (VarExpr node)
         else
             None
@@ -2073,7 +2073,7 @@ type WildPat =
          SyntaxKind.fromRaw kind = SyntaxKind.WildPat
 
     static member Cast (node : SyntaxNode) : WildPat option =
-        if AstNode.canCast<WildPat> node.Kind then
+        if AstNode.canCast<WildPat> node.RawKind then
             Some (WildPat node)
         else
             None
@@ -2106,7 +2106,7 @@ type ArgPat =
         | _ -> false
 
     static member Cast (node : SyntaxNode) : ArgPat option =
-        match SyntaxKind.fromRaw node.Kind with
+        match SyntaxKind.fromRaw node.RawKind with
         | SyntaxKind.NamePatField -> Some (ArgPatNamePatField (NamePatField node))
         | _ ->
             None
@@ -2147,7 +2147,7 @@ type Expr =
         | _ -> false
 
     static member Cast (node : SyntaxNode) : Expr option =
-        match SyntaxKind.fromRaw node.Kind with
+        match SyntaxKind.fromRaw node.RawKind with
         | SyntaxKind.AppExpr -> Some (ExprApp (AppExpr node))
         | SyntaxKind.BinExpr -> Some (ExprBin (BinExpr node))
         | SyntaxKind.ErrExpr -> Some (ExprErr (ErrExpr node))
@@ -2194,7 +2194,7 @@ type LiteralExpr =
         | _ -> false
 
     static member Cast (node : SyntaxNode) : LiteralExpr option =
-        match SyntaxKind.fromRaw node.Kind with
+        match SyntaxKind.fromRaw node.RawKind with
         | SyntaxKind.BoolLiteralExpr -> Some (LiteralExprBool (BoolLiteralExpr node))
         | SyntaxKind.CharLiteralExpr -> Some (LiteralExprChar (CharLiteralExpr node))
         | SyntaxKind.IntLiteralExpr -> Some (LiteralExprInt (IntLiteralExpr node))
@@ -2228,7 +2228,7 @@ type ModuleDecl =
         | _ -> false
 
     static member Cast (node : SyntaxNode) : ModuleDecl option =
-        match SyntaxKind.fromRaw node.Kind with
+        match SyntaxKind.fromRaw node.RawKind with
         | SyntaxKind.ErrDecl -> Some (ModuleDeclErrDecl (ErrDecl node))
         | SyntaxKind.InnerModuleDecl -> Some (ModuleDeclInner (InnerModuleDecl node))
         | SyntaxKind.LetDecl -> Some (ModuleDeclLetDecl (LetDecl node))
@@ -2281,7 +2281,7 @@ type Pat =
         | _ -> false
 
     static member Cast (node : SyntaxNode) : Pat option =
-        match SyntaxKind.fromRaw node.Kind with
+        match SyntaxKind.fromRaw node.RawKind with
         | SyntaxKind.AndPat -> Some (PatAnd (AndPat node))
         | SyntaxKind.AsPat -> Some (PatAs (AsPat node))
         | SyntaxKind.ConsPat -> Some (PatCons (ConsPat node))
@@ -2336,7 +2336,7 @@ type Ty =
         | _ -> false
 
     static member Cast (node : SyntaxNode) : Ty option =
-        match SyntaxKind.fromRaw node.Kind with
+        match SyntaxKind.fromRaw node.RawKind with
         | SyntaxKind.ErrTy -> Some (TyErr (ErrTy node))
         | SyntaxKind.FnTy -> Some (TyFn (FnTy node))
         | SyntaxKind.InferTy -> Some (TyInfer (InferTy node))
@@ -2363,7 +2363,7 @@ type ArgPats =
          SyntaxKind.fromRaw kind = SyntaxKind.ArgPats
 
     static member Cast (node : SyntaxNode) : ArgPats option =
-        if AstNode.canCast<ArgPats> node.Kind then
+        if AstNode.canCast<ArgPats> node.RawKind then
             Some (ArgPats (SyntaxList node))
         else
             None
@@ -2386,7 +2386,7 @@ type ListExprElements =
          SyntaxKind.fromRaw kind = SyntaxKind.ListExprElements
 
     static member Cast (node : SyntaxNode) : ListExprElements option =
-        if AstNode.canCast<ListExprElements> node.Kind then
+        if AstNode.canCast<ListExprElements> node.RawKind then
             Some (ListExprElements (SyntaxList node))
         else
             None
@@ -2409,7 +2409,7 @@ type ListPatElements =
          SyntaxKind.fromRaw kind = SyntaxKind.ListPatElements
 
     static member Cast (node : SyntaxNode) : ListPatElements option =
-        if AstNode.canCast<ListPatElements> node.Kind then
+        if AstNode.canCast<ListPatElements> node.RawKind then
             Some (ListPatElements (SyntaxList node))
         else
             None
@@ -2432,7 +2432,7 @@ type MatchCaseList =
          SyntaxKind.fromRaw kind = SyntaxKind.MatchCaseList
 
     static member Cast (node : SyntaxNode) : MatchCaseList option =
-        if AstNode.canCast<MatchCaseList> node.Kind then
+        if AstNode.canCast<MatchCaseList> node.RawKind then
             Some (MatchCaseList (SyntaxList node))
         else
             None
@@ -2455,7 +2455,7 @@ type ModuleDeclList =
          SyntaxKind.fromRaw kind = SyntaxKind.ModuleDeclList
 
     static member Cast (node : SyntaxNode) : ModuleDeclList option =
-        if AstNode.canCast<ModuleDeclList> node.Kind then
+        if AstNode.canCast<ModuleDeclList> node.RawKind then
             Some (ModuleDeclList (SyntaxList node))
         else
             None
@@ -2478,7 +2478,7 @@ type RecordFields =
          SyntaxKind.fromRaw kind = SyntaxKind.RecordFields
 
     static member Cast (node : SyntaxNode) : RecordFields option =
-        if AstNode.canCast<RecordFields> node.Kind then
+        if AstNode.canCast<RecordFields> node.RawKind then
             Some (RecordFields (SyntaxList node))
         else
             None
@@ -2501,7 +2501,7 @@ type TupleExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.TupleExpr
 
     static member Cast (node : SyntaxNode) : TupleExpr option =
-        if AstNode.canCast<TupleExpr> node.Kind then
+        if AstNode.canCast<TupleExpr> node.RawKind then
             Some (TupleExpr (SyntaxList node))
         else
             None
@@ -2524,7 +2524,7 @@ type TuplePat =
          SyntaxKind.fromRaw kind = SyntaxKind.TuplePat
 
     static member Cast (node : SyntaxNode) : TuplePat option =
-        if AstNode.canCast<TuplePat> node.Kind then
+        if AstNode.canCast<TuplePat> node.RawKind then
             Some (TuplePat (SyntaxList node))
         else
             None
@@ -2547,7 +2547,7 @@ type TupleTy =
          SyntaxKind.fromRaw kind = SyntaxKind.TupleTy
 
     static member Cast (node : SyntaxNode) : TupleTy option =
-        if AstNode.canCast<TupleTy> node.Kind then
+        if AstNode.canCast<TupleTy> node.RawKind then
             Some (TupleTy (SyntaxList node))
         else
             None
@@ -2570,7 +2570,7 @@ type ErrDecl =
          SyntaxKind.fromRaw kind = SyntaxKind.ErrDecl
 
     static member Cast (node : SyntaxNode) : ErrDecl option =
-        if AstNode.canCast<ErrDecl> node.Kind then
+        if AstNode.canCast<ErrDecl> node.RawKind then
             Some (ErrDecl node)
         else
             None
@@ -2591,7 +2591,7 @@ type ErrExpr =
          SyntaxKind.fromRaw kind = SyntaxKind.ErrExpr
 
     static member Cast (node : SyntaxNode) : ErrExpr option =
-        if AstNode.canCast<ErrExpr> node.Kind then
+        if AstNode.canCast<ErrExpr> node.RawKind then
             Some (ErrExpr node)
         else
             None
@@ -2612,7 +2612,7 @@ type ErrNode =
          SyntaxKind.fromRaw kind = SyntaxKind.ErrNode
 
     static member Cast (node : SyntaxNode) : ErrNode option =
-        if AstNode.canCast<ErrNode> node.Kind then
+        if AstNode.canCast<ErrNode> node.RawKind then
             Some (ErrNode node)
         else
             None
@@ -2633,7 +2633,7 @@ type ErrPat =
          SyntaxKind.fromRaw kind = SyntaxKind.ErrPat
 
     static member Cast (node : SyntaxNode) : ErrPat option =
-        if AstNode.canCast<ErrPat> node.Kind then
+        if AstNode.canCast<ErrPat> node.RawKind then
             Some (ErrPat node)
         else
             None
@@ -2654,7 +2654,7 @@ type ErrTy =
          SyntaxKind.fromRaw kind = SyntaxKind.ErrTy
 
     static member Cast (node : SyntaxNode) : ErrTy option =
-        if AstNode.canCast<ErrTy> node.Kind then
+        if AstNode.canCast<ErrTy> node.RawKind then
             Some (ErrTy node)
         else
             None

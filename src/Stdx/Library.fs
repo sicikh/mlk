@@ -23,8 +23,6 @@ module ValueOption =
         | ValueSome v -> f v
         | ValueNone -> LanguagePrimitives.GenericZero
 
-module VOption = ValueOption
-
 module Dictionary =
     open System.Collections.Generic
 
@@ -47,6 +45,12 @@ module Dictionary =
             value
 
 module Option =
+    [<CompiledName("MapOrZero")>]
+    let inline mapOrZero ([<InlineIfLambda>] f : 'a -> 'b) (opt : 'a option) : 'b =
+        match opt with
+        | Some v -> f v
+        | None -> LanguagePrimitives.GenericZero
+
     let sequence (xs : 'a option seq) : 'a list option =
         let folder (state : 'a list option) (elem : 'a option) : 'a list option =
             match state, elem with
@@ -192,6 +196,18 @@ module Seq =
     let assoc (key : 'K) (pairs : seq<'K * 'V>) : 'V option =
         pairs |> Seq.tryFind (fun (k, _) -> k = key) |> Option.map snd
 
+    let successors (f : 'a -> 'a option) (start : 'a option) : 'a seq =
+        Seq.unfold
+            (fun state ->
+                match state with
+                | Some v -> Some (v, f v)
+                | None -> None
+            )
+            start
+
+    let enumerate (source : 'a seq) : (int * 'a) seq =
+        source |> Seq.mapi (fun i x -> i, x)
+
 module List =
     let assoc (key : 'K) (pairs : list<'K * 'V>) : 'V option =
         pairs |> List.tryFind (fun (k, _) -> k = key) |> Option.map snd
@@ -225,7 +241,3 @@ module Result =
 module ResultExtensions =
     type Result<'T, 'E> with
         member this.Value = Result.get this
-
-[<AutoOpen>]
-module PatternsExtensions =
-    let (|Never|) _ = failwith "This pattern should never be matched"

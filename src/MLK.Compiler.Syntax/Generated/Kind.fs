@@ -229,6 +229,30 @@ module SyntaxKind =
         // TODO: implement this properly
         SyntaxKind.ErrNode
 
+[<AutoOpen>]
+module SyntaxKindExtensions =
+    type SyntaxKind with
+        member this.IsPunct =
+            SyntaxKind.isPunct this
+
+        member this.IsLiteral =
+            SyntaxKind.isLiteral this
+
+        member this.IsKeyword =
+            SyntaxKind.isKeyword this
+
+        member this.IsList =
+            SyntaxKind.isList this
+
+        member this.Raw =
+            SyntaxKind.toRaw this
+
+        member this.Err =
+            SyntaxKind.toErr this
+
+    type RawSyntaxKind with
+        member this.SyntaxKind =
+            SyntaxKind.fromRaw this
 
 [<AutoOpen>]
 module SyntaxKindOps =

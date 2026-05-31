@@ -7,12 +7,15 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="NodeOrToken.fs" />
-        <Compile Include="Green\Green.fs" />
-        <Compile Include="Green\Cache.fs" />
-        <Compile Include="Syntax\Token.fs" />
+        <Compile Include="WalkEvent.fs" />
+        <Compile Include="RawSyntaxKind.fs" />
+        <Compile Include="TriviaPiece.fs" />
+        <Compile Include="GreenTree.fs" />
+        <Compile Include="GreenCache.fs" />
+        <Compile Include="SyntaxTree.fs" />
         <Compile Include="Ast.fs" />
         <Compile Include="SyntaxFactory.fs" />
+        <Compile Include="Rest.fs" />
     </ItemGroup>
 
     <ItemGroup>

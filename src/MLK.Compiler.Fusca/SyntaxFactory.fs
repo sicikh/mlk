@@ -18,20 +18,15 @@ module RawNodeSlots =
     let addAbsent (RawNodeSlots slots) = RawNodeSlots (SlotAbsent :: slots)
 
     let intoNode (kind : RawSyntaxKind) (ParsedChildren children) (RawNodeSlots slots) : GreenNode =
-        let mutable children = children
+        let rec aux acc slots children =
+            match slots with
+            | [] -> List.rev acc
+            | SlotPresent :: rest ->
+                match children with
+                | child :: restChildren ->
+                    aux (Some child :: acc) rest restChildren
+                | [] -> failwith "Expected a present node according to the slot description"
+            | SlotAbsent :: rest ->
+                aux (None :: acc) rest children
 
-        let slots =
-            slots
-            |> List.rev
-            |> Seq.map (
-                function
-                | SlotPresent ->
-                    match children with
-                    | child :: rest ->
-                        children <- rest
-                        Some child
-                    | [] -> failwith "Expected a present node according to the slot description"
-                | SlotAbsent -> None
-            )
-
-        GreenNode.mk kind slots
+        aux [] (List.rev slots) children |> GreenNode.mk kind

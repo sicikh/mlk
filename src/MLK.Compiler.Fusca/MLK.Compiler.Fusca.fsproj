@@ -15,7 +15,6 @@
         <Compile Include="SyntaxTree.fs" />
         <Compile Include="Ast.fs" />
         <Compile Include="SyntaxFactory.fs" />
-        <Compile Include="Rest.fs" />
     </ItemGroup>
 
     <ItemGroup>

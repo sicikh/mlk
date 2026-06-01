@@ -205,8 +205,7 @@ module Seq =
             )
             start
 
-    let enumerate (source : 'a seq) : (int * 'a) seq =
-        source |> Seq.mapi (fun i x -> i, x)
+    let enumerate (source : 'a seq) : (int * 'a) seq = source |> Seq.mapi (fun i x -> i, x)
 
 module List =
     let assoc (key : 'K) (pairs : list<'K * 'V>) : 'V option =
@@ -237,7 +236,55 @@ module Result =
         | Ok v -> v
         | Error e -> failwithf "Expected Ok but got Error: %A" e
 
+    let inline unwrapOrElse (onError : 'E -> 'T) (result : Result<'T, 'E>) : 'T =
+        match result with
+        | Ok v -> v
+        | Error e -> onError e
+
 [<AutoOpen>]
 module ResultExtensions =
     type Result<'T, 'E> with
         member this.Value = Result.get this
+
+[<Struct>]
+type Ordering =
+    | Less
+    | Equal
+    | Greater
+
+    static member Create (comparison : int) : Ordering =
+        if comparison < 0 then Less
+        elif comparison > 0 then Greater
+        else Equal
+
+    static member op_Explicit (ordering : Ordering) : int =
+        match ordering with
+        | Less -> -1
+        | Equal -> 0
+        | Greater -> 1
+
+module Array =
+    let binarySearchBy (comparator : 't -> Ordering) (array : 't array) : Result<int, int> =
+        let rec aux size base_ =
+            if size <= 1 then
+                base_
+            else
+                let half = size / 2
+                let mid = base_ + half
+                let cmp = comparator array[mid]
+                let base_ = if cmp = Greater then base_ else mid
+                let size = size - half
+                aux size base_
+
+        let size = array.Length
+
+        if size = 0 then
+            Error 0
+        else
+            let base_ = aux size 0
+            let cmp = comparator array[base_]
+
+            if cmp = Equal then
+                Ok base_
+            else
+                Error (base_ + if cmp = Less then 1 else 0)

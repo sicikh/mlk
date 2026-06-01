@@ -18,10 +18,7 @@ type GreenTrivia =
     member this.Count = this.Pieces.Length
 
     member this.Piece (i : int) : TriviaPiece option =
-        if i < this.Pieces.Length then
-            Some this.Pieces[i]
-        else
-            None
+        if i < this.Pieces.Length then Some this.Pieces[i] else None
 
 type GreenToken =
     {
@@ -48,6 +45,10 @@ type GreenToken =
         this.Text.Slice (TextRange.Create (starts, ends))
 
     member this.Length = this.Text.Size
+
+    member this.LeadingTrailingTotalLength =
+        this.Leading.Length, this.Trailing.Length, this.Length
+
 
 [<RequireQualifiedAccess>]
 type Slot =
@@ -99,6 +100,20 @@ and [<CustomEquality ; NoComparison>] GreenNode =
             Hash = hash
         }
 
+    member this.SlotAtRange (relRange : TextRange) : (int * TextSize * Slot) option =
+        let idx =
+            this.Slots
+            |> Array.binarySearchBy (fun slot ->
+                let childRange = slot.RelRange
+                TextRange.ordering childRange relRange
+            )
+            |> Result.unwrapOrElse (fun idx -> max 0 (idx - 1))
+
+        this.Slots
+        |> Array.tryItem idx
+        |> Option.filter (fun slot -> slot.RelRange.ContainsRange relRange)
+        |> Option.map (fun slot -> idx, slot.RelOffset, slot)
+
     override this.Equals (other : obj) =
         match other with
         | :? GreenNode as other ->
@@ -136,6 +151,13 @@ and GreenElement =
         | GreenToken t -> Some t
         | GreenNode _ -> None
 
+module Slot =
+    let map (f : GreenElement -> 'a) (slot : Slot) : 'a option =
+        match slot with
+        | Slot.Node (_, n) -> Some (f (GreenNode n))
+        | Slot.Token (_, t) -> Some (f (GreenToken t))
+        | Slot.Empty _ -> None
+
 type Child =
     internal
     | Child of element : GreenElement * slot : int * relOffset : TextSize
@@ -152,6 +174,4 @@ type Child =
 
 type GreenNode with
     member this.Children =
-        this.Slots
-        |> Seq.mapi (fun i slot -> Child.Create(i, slot))
-        |> Seq.choose id
+        this.Slots |> Seq.mapi (fun i slot -> Child.Create (i, slot)) |> Seq.choose id

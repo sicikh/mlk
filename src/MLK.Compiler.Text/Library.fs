@@ -1,5 +1,10 @@
 ﻿namespace MLK.Compiler.Text
 
+open System
+open System.Collections
+open System.Collections.Generic
+open Stdx
+
 [<Struct>]
 type TextSize =
     | TextSize of uint32
@@ -26,7 +31,7 @@ module TextSize =
     let checkedAdd (TextSize a) (TextSize b) : TextSize voption =
         let sum = uint64 a + uint64 b
 
-        if sum > uint64 System.UInt32.MaxValue then
+        if sum > uint64 UInt32.MaxValue then
             ValueNone
         else
             ValueSome (TextSize (uint32 sum))
@@ -47,7 +52,7 @@ type TextSize with
         | ValueSome diff -> diff
         | ValueNone -> invalidOp "TextSize subtraction underflowed"
 
-[<Struct; NoComparison>]
+[<Struct ; CustomEquality ; CustomComparison>]
 type TextRange =
     private
         {
@@ -59,6 +64,30 @@ type TextRange =
     member this.End = this.Ends
 
     override this.ToString () = $"{this.Start}..{this.End}"
+
+    interface IEquatable<TextRange> with
+        member this.Equals other =
+            this.Start = other.Start && this.End = other.End
+
+    override this.Equals obj =
+        match obj with
+        | :? TextRange as other -> (this :> IEquatable<TextRange>).Equals other
+        | _ -> false
+
+    override this.GetHashCode () =
+        HashCode.Combine (this.Start, this.End)
+
+    interface IComparable<TextRange> with
+        member this.CompareTo other =
+            match (this.Start :> IComparable<TextSize>).CompareTo other.Start with
+            | 0 -> (this.End :> IComparable<TextSize>).CompareTo other.End
+            | cmp -> cmp
+
+    interface IComparable with
+        member this.CompareTo obj =
+            match obj with
+            | :? TextRange as other -> (this :> IComparable<TextRange>).CompareTo other
+            | _ -> invalidArg "obj" "Object is not a TextRange."
 
 module TextRange =
     let create (starts : TextSize) (ends : TextSize) : TextRange =
@@ -123,6 +152,16 @@ module TextRange =
     let fromUint (start : uint32) (ends : uint32) : TextRange =
         create (TextSize.ofUint start) (TextSize.ofUint ends)
 
+    /// Relative order of the two ranges (overlapping ranges are considered equal)
+    let ordering (a : TextRange) (b : TextRange) : Ordering =
+        if a.End <= b.Start then Less
+        elif b.End <= a.Start then Greater
+        else Equal
+
+type TextRangeOrderingComparer() =
+    interface IComparer<TextRange> with
+        member _.Compare (a, b) = TextRange.ordering a b |> int
+
 [<AutoOpen>]
 module TextRangeOps =
     let (|TextRange|) (range : TextRange) = struct (range.Start, range.End)
@@ -141,6 +180,19 @@ type TextRange with
     static member Zero = TextRange.empty
 
     static member Create (starts, ends) = TextRange.create starts ends
+
+    member this.Length = TextRange.length this
+    member this.IsEmpty = TextRange.isEmpty this
+    member this.Contains (offset : TextSize) = TextRange.contains offset this
+    member this.ContainsInclusive (offset : TextSize) = TextRange.containsInclusive offset this
+    member this.ContainsRange (inner : TextRange) = TextRange.containsRange inner this
+    member this.Intersect (other : TextRange) = TextRange.intersect this other
+    member this.Cover (other : TextRange) = TextRange.cover this other
+    member this.CoverOffset (offset : TextSize) = TextRange.coverOffset offset this
+    member this.AddStart (amount : TextSize) = TextRange.addStart amount this
+    member this.SubStart (amount : TextSize) = TextRange.subStart amount this
+    member this.AddEnd (amount : TextSize) = TextRange.addEnd amount this
+    member this.SubEnd (amount : TextSize) = TextRange.subEnd amount this
 
 /// 0-based line and column representation.
 [<Struct; NoComparison>]

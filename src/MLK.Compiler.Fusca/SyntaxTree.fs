@@ -645,6 +645,203 @@ type PreorderTokens =
         member this.GetEnumerator () =
             (this :> IEnumerable<_>).GetEnumerator ()
 
+type SyntaxNode with
+    member this.PreorderTokens (direction : Direction) : PreorderTokens = PreorderTokens.Create (this, direction)
+
+    member this.TrimmedRange : TextRange =
+        let range = this.Range
+        let token = this.FirstToken
+
+        let rec aux (starts : TextSize) (token : SyntaxToken option) : TextSize =
+            match token with
+            | None -> starts
+            | Some token ->
+                let leading, trailing, total = token.Green.LeadingTrailingTotalLength
+                let tokenLength = total - leading - trailing
+
+                if tokenLength = TextSize.Zero then
+                    aux (starts + total) token.NextToken
+                else
+                    starts + leading
+
+        let starts = aux range.Start token
+
+        let rec aux (ends : TextSize) (token : SyntaxToken option) : TextSize =
+            match token with
+            | None -> ends
+            | Some token ->
+                let leading, trailing, total = token.Green.LeadingTrailingTotalLength
+                let tokenLength = total - leading - trailing
+
+                if tokenLength = TextSize.Zero then
+                    aux (ends - total) token.PrevToken
+                else
+                    ends - trailing
+
+        let ends = aux range.End this.LastToken
+
+        TextRange.Create (starts, ends)
+
+    member this.FirstLeadingTrivia : SyntaxTrivia option =
+        this.FirstToken |> Option.map _.LeadingTrivia
+
+    member this.LastTrailingTrivia : SyntaxTrivia option =
+        this.LastToken |> Option.map _.TrailingTrivia
+
+[<RequireQualifiedAccess>]
+type TokenAtOffset<'T> =
+    | None
+    | Single of token : 'T
+    | Between of left : 'T * right : 'T
+
+    member this.RightBiased : TokenAtOffset<'T> =
+        match this with
+        | TokenAtOffset.None -> TokenAtOffset.None
+        | TokenAtOffset.Single t -> TokenAtOffset.Single t
+        | TokenAtOffset.Between (_, r) -> TokenAtOffset.Single r
+
+    member this.LeftBiased : TokenAtOffset<'T> =
+        match this with
+        | TokenAtOffset.None -> TokenAtOffset.None
+        | TokenAtOffset.Single t -> TokenAtOffset.Single t
+        | TokenAtOffset.Between (l, _) -> TokenAtOffset.Single l
+
+    interface IEnumerable<'T> with
+        member this.GetEnumerator () =
+            match this with
+            | TokenAtOffset.None -> Seq.empty.GetEnumerator ()
+            | TokenAtOffset.Single t -> (Seq.singleton t).GetEnumerator ()
+            | TokenAtOffset.Between (l, r) ->
+                (seq {
+                    yield l
+                    yield r
+                })
+                    .GetEnumerator ()
+
+    interface IEnumerable with
+        member this.GetEnumerator () =
+            (this :> IEnumerable<'T>).GetEnumerator ()
+
+module TokenAtOffset =
+    let map f token =
+        match token with
+        | TokenAtOffset.None -> TokenAtOffset.None
+        | TokenAtOffset.Single t -> TokenAtOffset.Single (f t)
+        | TokenAtOffset.Between (l, r) -> TokenAtOffset.Between (f l, f r)
+
+type SyntaxNode with
+    member this.TokenAtOffset (offset : TextSize) : TokenAtOffset<SyntaxToken> =
+        let rec aux (node : SyntaxNode) : TokenAtOffset<SyntaxToken> =
+            let range = node.Range
+
+            if range.IsEmpty || offset < range.Start || offset > range.End then
+                TokenAtOffset.None
+            else
+                let children =
+                    node.ChildrenWithTokens
+                    |> Seq.filter (fun child ->
+                        let childRange = child.Range
+                        not childRange.IsEmpty && childRange.ContainsInclusive offset
+                    )
+                    |> Seq.toArray
+
+                let left, right =
+                    match children with
+                    | [| single |] -> single, None
+                    | [| left ; right |] -> left, Some right
+                    | _ -> failwith "Unexpected number of children at offset"
+
+                match right with
+                | Some right ->
+                    let tokenAtOffset node =
+                        match node with
+                        | SyntaxElement.SyntaxToken token -> TokenAtOffset.Single token
+                        | SyntaxElement.SyntaxNode node -> aux node
+
+                    match tokenAtOffset left, tokenAtOffset right with
+                    | TokenAtOffset.Single left, TokenAtOffset.Single right -> TokenAtOffset.Between (left, right)
+                    | _ -> TokenAtOffset.None
+                | None ->
+                    match left with
+                    | SyntaxElement.SyntaxToken token -> TokenAtOffset.Single token
+                    | SyntaxElement.SyntaxNode node -> aux node
+
+        aux this
+
+    member this.ChildOrTokenAtRange (range : TextRange) : SyntaxElement option =
+        let relRange = range - this.Offset
+
+        this.Green.SlotAtRange relRange
+        |> Option.bind (fun (index, relOffset, slot) ->
+            slot
+            |> Slot.map (fun element -> SyntaxElement.Create (element, this, index, this.Offset + relOffset))
+        )
+
+    member this.CoveringElement (range : TextRange) : SyntaxElement =
+        let rec aux (element : SyntaxElement) : SyntaxElement =
+            assert (element.Range.ContainsRange range)
+            match element with
+            | SyntaxElement.SyntaxToken _ -> element
+            | SyntaxElement.SyntaxNode node ->
+                match node.ChildOrTokenAtRange range with
+                | Some it -> it
+                | None -> element
+
+        aux (SyntaxElement.SyntaxNode this)
+
+type SyntaxNodeText =
+    internal
+    | SyntaxNodeText of node : SyntaxNode * range : TextRange
+
+    static member Create (node : SyntaxNode) : SyntaxNodeText = SyntaxNodeText (node, node.Range)
+
+    static member WithRange (node : SyntaxNode, range : TextRange) : SyntaxNodeText = SyntaxNodeText (node, range)
+
+    member this.TokensWithRanges : (SyntaxToken * TextRange) seq =
+        let (SyntaxNodeText (node, range)) = this
+
+        //let token = node.TokenAtOffset(range.Start).
+        failwith "todo"
+
+module SyntaxNodeText =
+    let tryFoldChunks (f : 'a -> string -> Result<'a, 'e>) (init : 'a) (text : SyntaxNodeText) : Result<'a, 'e> =
+        failwith "todo"
+
+[<RequireQualifiedAccess>]
+type SyntaxSlot =
+    | Node of SyntaxNode
+    | Token of SyntaxToken
+    | Empty of parent : SyntaxNode * index : int
+
+    static member FromElement (element : SyntaxElement) : SyntaxSlot =
+        match element with
+        | SyntaxElement.SyntaxNode node -> SyntaxSlot.Node node
+        | SyntaxElement.SyntaxToken token -> SyntaxSlot.Token token
+
+    member this.Element =
+        match this with
+        | Node node -> Some (SyntaxElement.SyntaxNode node)
+        | Token token -> Some (SyntaxElement.SyntaxToken token)
+        | Empty _ -> None
+
+module SyntaxSlot =
+    let map f slot =
+        match slot with
+        | SyntaxSlot.Node node -> Some (f (SyntaxNode node))
+        | SyntaxSlot.Token token -> Some (f (SyntaxToken token))
+        | SyntaxSlot.Empty _ -> None
+
+type SyntaxNode with
+    member this.Slots : SyntaxSlot seq =
+        this.Green.Slots
+        |> Seq.mapi (fun i slot ->
+            match slot with
+            | Slot.Empty _ -> SyntaxSlot.Empty (this, i)
+            | Slot.Node (relOffset, node) ->
+                SyntaxSlot.Node (SyntaxNode.CreateChild (node, this, i, this.Offset + relOffset))
+            | Slot.Token (relOffset, token) ->
+                SyntaxSlot.Token (SyntaxToken.Create (token, this, i, this.Offset + relOffset))
+        )
 
 //[<CustomEquality ; NoComparison>]
 //type SyntaxNode =

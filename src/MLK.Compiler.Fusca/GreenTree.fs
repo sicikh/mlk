@@ -17,9 +17,9 @@ type GreenTrivia =
     member this.Length = this.Pieces |> Array.sumBy _.Length
     member this.Count = this.Pieces.Length
 
-    member this.Piece (i : uint32) : TriviaPiece option =
-        if i < uint32 this.Pieces.Length then
-            Some this.Pieces[int i]
+    member this.Piece (i : int) : TriviaPiece option =
+        if i < this.Pieces.Length then
+            Some this.Pieces[i]
         else
             None
 

@@ -154,6 +154,49 @@ type SyntaxTrivia =
     static member internal Leading (token : SyntaxToken) = SyntaxTrivia (token, true)
     static member internal Trailing (token : SyntaxToken) = SyntaxTrivia (token, false)
 
+    member this.GreenTrivia : GreenTrivia =
+        let (SyntaxTrivia (token, isLeading)) = this
+
+        if isLeading then
+            token.Green.Leading
+        else
+            token.Green.Trailing
+
+    member this.Range : TextRange =
+        let (SyntaxTrivia (token, isLeading)) = this
+        let length = this.GreenTrivia.Length
+        let tokenRange = token.Range
+
+        if isLeading then
+            length |> TextRange.at tokenRange.Start
+        else
+            length |> TextRange.at (tokenRange.End - length)
+
+    member this.Length : int = this.GreenTrivia.Count
+
+    member this.Piece (index : int) : TriviaPiece option = this.GreenTrivia.Piece index
+
+    member this.First : TriviaPiece option = this.GreenTrivia.Pieces |> Array.tryHead
+    member this.Last : TriviaPiece option = this.GreenTrivia.Pieces |> Array.tryLast
+
+    member this.Token : SyntaxToken =
+        let (SyntaxTrivia (token, _)) = this
+        token
+
+    member this.Text : string =
+        let triviaRange = this.Range
+
+        let relativeRange =
+            TextRange.length triviaRange
+            |> TextRange.at (triviaRange.Start - this.Token.Offset)
+
+        this.Token.Text.Slice relativeRange
+
+    member this.Pieces : (TextSize * TriviaPiece) seq =
+        this.GreenTrivia.Pieces
+        |> Seq.mapFold (fun offset piece -> (offset, piece), offset + piece.Length) this.Range.Start
+        |> fst
+
 type SyntaxToken with
     member this.LeadingTrivia : SyntaxTrivia = SyntaxTrivia.Leading this
 
@@ -316,6 +359,15 @@ type SyntaxElement with
         | SyntaxNode node -> node.PrevSiblingOrToken
         | SyntaxToken token -> token.PrevSiblingOrToken
 
+type SyntaxToken with
+    member this.SiblingsWithTokens (direction : Direction) : SyntaxElement seq =
+        let sibling : SyntaxElement -> SyntaxElement option =
+            match direction with
+            | Direction.Next -> _.NextSiblingOrToken
+            | Direction.Prev -> _.PrevSiblingOrToken
+
+        Some (SyntaxElement.SyntaxToken this) |> Seq.successors sibling
+
 type SyntaxNode with
     member this.Tokens : SyntaxToken seq =
         this.Green.Children
@@ -408,15 +460,13 @@ type Preorder =
 
         next |> Option.map (fun next -> next, Preorder (start, newNext, false))
 
-    member private this.Seq : WalkEvent<SyntaxNode> seq = this |> Seq.unfold _.Next()
-
     interface IEnumerable<WalkEvent<SyntaxNode>> with
         member this.GetEnumerator () =
-            (this.Seq :> IEnumerable<_>).GetEnumerator ()
+            (this |> Seq.unfold _.Next() :> IEnumerable<_>).GetEnumerator ()
 
     interface IEnumerable with
         member this.GetEnumerator () =
-            (this.Seq :> IEnumerable<_>).GetEnumerator ()
+            (this :> IEnumerable<_>).GetEnumerator ()
 
 type PreorderWithTokens =
     internal
@@ -482,15 +532,13 @@ type PreorderWithTokens =
         next
         |> Option.map (fun next -> next, PreorderWithTokens (start, newNext, false, direction))
 
-    member private this.Seq : WalkEvent<SyntaxElement> seq = this |> Seq.unfold _.Next()
-
     interface IEnumerable<WalkEvent<SyntaxElement>> with
         member this.GetEnumerator () =
-            (this.Seq :> IEnumerable<_>).GetEnumerator ()
+            (this |> Seq.unfold _.Next() :> IEnumerable<_>).GetEnumerator ()
 
     interface IEnumerable with
         member this.GetEnumerator () =
-            (this.Seq :> IEnumerable<_>).GetEnumerator ()
+            (this :> IEnumerable<_>).GetEnumerator ()
 
 type SyntaxNode with
     member this.Preorder : Preorder = Preorder.Create this
@@ -498,21 +546,10 @@ type SyntaxNode with
     member this.PreorderWithTokens (direction : Direction) : PreorderWithTokens =
         PreorderWithTokens.Create (SyntaxElement.SyntaxNode this, direction)
 
-    member this.Descendants : SyntaxNode seq =
-        this.Preorder
-        |> Seq.choose (
-            function
-            | WalkEvent.Enter node -> Some node
-            | WalkEvent.Leave _ -> None
-        )
+    member this.Descendants : SyntaxNode seq = this.Preorder |> Seq.choose _.AsEnter
 
     member this.DescendantsWithTokens (direction : Direction) : SyntaxElement seq =
-        this.PreorderWithTokens direction
-        |> Seq.choose (
-            function
-            | WalkEvent.Enter el -> Some el
-            | WalkEvent.Leave _ -> None
-        )
+        this.PreorderWithTokens direction |> Seq.choose _.AsEnter
 
     member this.FirstToken : SyntaxToken option =
         this.DescendantsWithTokens Direction.Next |> Seq.tryPick _.Token
@@ -530,6 +567,83 @@ type SyntaxElement with
         match this with
         | SyntaxNode node -> node.LastToken
         | SyntaxToken token -> Some token
+
+type SyntaxToken with
+    member private this.NextTokenImpl (direction : Direction) : SyntaxToken option =
+        let rec aux (current : WalkEvent<SyntaxElement>) : SyntaxToken option =
+            match current with
+            | WalkEvent.Enter (SyntaxElement.SyntaxToken token) -> Some token
+            | WalkEvent.Enter (SyntaxElement.SyntaxNode node) ->
+                let firstChild =
+                    match direction with
+                    | Direction.Next -> node.FirstChildOrToken
+                    | Direction.Prev -> node.LastChildOrToken
+
+                match firstChild with
+                // If node is empty, leave parent
+                | None -> aux (WalkEvent.Leave (SyntaxElement.SyntaxNode node))
+                // Otherwise traverse full sub-tree
+                | Some child -> aux (WalkEvent.Enter child)
+            | WalkEvent.Leave element ->
+                let rec go (currentElement : SyntaxElement) : WalkEvent<SyntaxElement> option =
+                    // Only traverse the left (pref) / right (next) sibligns othe parent
+                    // to avoid traversing into the same children again.
+                    let sibling =
+                        match direction with
+                        | Direction.Next -> currentElement.NextSiblingOrToken
+                        | Direction.Prev -> currentElement.PrevSiblingOrToken
+
+                    match sibling with
+                    // Traverse all children of the sibling
+                    | Some sibling -> Some (WalkEvent.Enter sibling)
+                    | None ->
+                        match currentElement.Parent with
+                        | Some node -> go (SyntaxElement.SyntaxNode node)
+                        // Reached root, no token found
+                        | None -> None
+
+                match go element with
+                | Some next -> aux next
+                | None -> None
+
+        aux (WalkEvent.Leave (SyntaxElement.SyntaxToken this))
+
+    member this.NextToken : SyntaxToken option = this.NextTokenImpl Direction.Next
+
+    member this.PrevToken : SyntaxToken option = this.NextTokenImpl Direction.Prev
+
+type PreorderTokens =
+    internal
+    | PreorderTokens of next : SyntaxToken option * direction : Direction
+
+    static member Create (start : SyntaxNode, direction : Direction) : PreorderTokens =
+        let next =
+            match direction with
+            | Direction.Next -> start.FirstToken
+            | Direction.Prev -> start.LastToken
+
+        PreorderTokens (next, direction)
+
+    member this.Next () : (SyntaxToken * PreorderTokens) option =
+        let (PreorderTokens (next, direction)) = this
+
+        let newNext =
+            next
+            |> Option.bind (fun token ->
+                match direction with
+                | Direction.Next -> token.NextToken
+                | Direction.Prev -> token.PrevToken
+            )
+
+        next |> Option.map (fun next -> next, PreorderTokens (newNext, direction))
+
+    interface IEnumerable<SyntaxToken> with
+        member this.GetEnumerator () =
+            (this |> Seq.unfold _.Next() :> IEnumerable<_>).GetEnumerator ()
+
+    interface IEnumerable with
+        member this.GetEnumerator () =
+            (this :> IEnumerable<_>).GetEnumerator ()
 
 
 //[<CustomEquality ; NoComparison>]

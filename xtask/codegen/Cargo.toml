@@ -1,0 +1,22 @@
+[package]
+name = "xtask-codegen"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+bpaf = { workspace = true, features = ["derive"] }
+mlkc-rowan = { workspace = true }
+mlkc-string-case = { workspace = true }
+mlkc-ungrammar = { workspace = true }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+quote = "1.0.36"
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+syn = { version = "2.0", features = ["full"] }
+ureq = "3.3.0"
+xtask-glue = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,26 @@
+[package]
+name = "mlkc-string-case"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Utilities to convert string cases"
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[[bench]]
+harness = false
+name = "case_insensitive_search"
+
+[dependencies]
+caseless = "0.2.2"
+mlkc-rowan = { workspace = true, optional = true }
+
+[dev-dependencies]
+divan = { package = "codspeed-divan-compat", version = "=5.0.1" }
+
+[features]
+mlkc-rowan = ["dep:mlkc-rowan"]
+
+[lints]
+workspace = true

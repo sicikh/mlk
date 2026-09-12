@@ -1,0 +1,33 @@
+[package]
+name = "mlkc-rowan"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bench]]
+harness = false
+name = "mutation"
+
+[dependencies]
+countme = { workspace = true, optional = true }
+hashbrown = { workspace = true, features = ["inline-more", "raw-entry"] }
+mlkc-text-edit = { workspace = true }
+mlkc-text-size = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+iai = { workspace = true }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+countme = ["dep:countme"]
+serde = ["dep:serde", "mlkc-text-edit/serde", "mlkc-text-size/serde"]
+
+[lints]
+workspace = true

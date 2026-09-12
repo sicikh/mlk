@@ -1,0 +1,26 @@
+[package]
+name = "mlkc-text-size"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[test]]
+name = "serde"
+path = "tests/serde.rs"
+required-features = ["serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_test = { workspace = true }
+static_assertions = { workspace = true }
+
+[features]
+serde = ["dep:serde"]
+
+[lints]
+workspace = true

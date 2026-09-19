@@ -1,5 +1,5 @@
 [package]
-name = "mlkc-diagnostics"
+name = "mlkc-span"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-mlkc-span.workspace = true
+mlkc-text-size.workspace = true
 mlkc-vfs.workspace = true
 
 [lints]

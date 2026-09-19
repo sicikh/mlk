@@ -66,6 +66,8 @@ pub struct FileId(u32);
 // pub struct FileId(NonMaxU32);
 
 impl FileId {
+    pub const DUMMY: FileId = FileId(Self::MAX);
+
     const MAX: u32 = 0x7FFF_FFFF;
 
     #[inline]

@@ -6,7 +6,6 @@ mod tree_sink;
 pub use diagnostic::*;
 use event::*;
 use lexer::*;
-use mlkc_diagnostics::{DiagnosticCategory, diag};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::*;
 
@@ -130,8 +129,8 @@ impl Parser {
         self.events.push(Event::Finish);
     }
 
-    fn error(&mut self, msg: String) {
-        self.diags.push(diag(msg, DiagnosticCategory::Parse));
+    fn error(&mut self, _msg: String) {
+        // self.diags.push(diag(msg, DiagnosticCategory::Parse));
     }
 }
 

@@ -597,7 +597,8 @@ version = "0.1.0"
 name = "mlkc-diagnostics"
 version = "0.1.0"
 dependencies = [
- "mlkc-text-size",
+ "mlkc-span",
+ "mlkc-vfs",
 ]
 
 [[package]]
@@ -658,6 +659,14 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "mlkc-span"
+version = "0.1.0"
+dependencies = [
+ "mlkc-text-size",
+ "mlkc-vfs",
 ]
 
 [[package]]

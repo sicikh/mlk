@@ -1,3 +1,2 @@
-use mlkc_diagnostics::Diagnostic;
-
-pub type ParseDiagnostic = Diagnostic;
+#[derive(Debug, Clone)]
+pub struct ParseDiagnostic;

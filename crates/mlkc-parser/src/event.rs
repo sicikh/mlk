@@ -1,16 +1,16 @@
 //! Events emitted by the Parser which are then constructed into a syntax tree
 
-use std::{mem, num::NonZeroU32};
+use std::mem;
+use std::num::NonZeroU32;
 
-use mlkc_rowan::TextSize;
-use mlkc_syntax::MlkSyntaxKind::{self, TOMBSTONE};
-
-use crate::{diagnostic::ParseDiagnostic, tree_sink::TreeSink};
+use crate::diagnostic::ParseDiagnostic;
+use crate::tree_sink::TreeSink;
+use mlkc_rowan::{SyntaxKind, TextSize};
 
 /// Events emitted by the Parser, these events are later
 /// made into a syntax tree with `process` into TreeSink.
 #[derive(Debug, Clone)]
-pub enum Event {
+pub enum Event<K: SyntaxKind> {
     /// This event signifies the start of the node.
     /// It should be either abandoned (in which case the
     /// `kind` is `TOMBSTONE`, and the event is ignored),
@@ -19,7 +19,7 @@ pub enum Event {
     /// All tokens between a `Start` and a `Finish` would
     /// become the children of the respective node.
     Start {
-        kind: MlkSyntaxKind,
+        kind: K,
         forward_parent: Option<NonZeroU32>,
     },
 
@@ -28,16 +28,16 @@ pub enum Event {
 
     /// Produce a single leaf-element.
     Token {
-        kind: MlkSyntaxKind,
+        kind: K,
         /// The end offset of this token.
         end: TextSize,
     },
 }
 
-impl Event {
+impl<K: SyntaxKind> Event<K> {
     pub fn tombstone() -> Self {
         Self::Start {
-            kind: TOMBSTONE,
+            kind: K::TOMBSTONE,
             forward_parent: None,
         }
     }
@@ -45,9 +45,9 @@ impl Event {
 
 /// Generate the syntax tree with the control of events.
 #[inline]
-pub fn process(
-    sink: &mut impl TreeSink<Kind = MlkSyntaxKind>,
-    mut events: Vec<Event>,
+pub fn process<K: SyntaxKind + PartialEq>(
+    sink: &mut impl TreeSink<Kind = K>,
+    mut events: Vec<Event<K>>,
     errors: Vec<ParseDiagnostic>,
 ) {
     sink.errors(errors);
@@ -60,7 +60,7 @@ pub fn process(
                 forward_parent,
                 ..
             } => {
-                if *kind == TOMBSTONE {
+                if *kind == K::TOMBSTONE {
                     continue;
                 }
 
@@ -81,7 +81,7 @@ pub fn process(
                             forward_parent,
                             ..
                         } => {
-                            if kind != TOMBSTONE {
+                            if kind != K::TOMBSTONE {
                                 forward_parents.push(kind);
                             }
                             forward_parent

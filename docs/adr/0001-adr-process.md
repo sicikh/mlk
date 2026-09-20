@@ -38,10 +38,10 @@ and which alternatives were rejected.
 
 ## Considered Options
 
-- **No ADRs** — record decisions only in code comments
+- **No ADRs** --- record decisions only in code comments
   and ad-hoc design docs.
-- **Nygard-style ADRs** — the classic `Status / Context / Decision / Consequences` template.
-- **MADR** — Markdown Any Decision Records,
+- **Nygard-style ADRs** --- the classic `Status / Context / Decision / Consequences` template.
+- **MADR** --- Markdown Any Decision Records,
   a fixed template with decision drivers, considered options,
   and pros/cons.
 

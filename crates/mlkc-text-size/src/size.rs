@@ -46,7 +46,7 @@ impl TextSize {
     /// # Examples
     ///
     /// ```rust
-    /// # use biome_text_size::*;
+    /// # use mlkc_text_size::*;
     /// let char_size = TextSize::of('🦀');
     /// assert_eq!(char_size, TextSize::from(4));
     ///

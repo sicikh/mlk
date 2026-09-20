@@ -312,7 +312,7 @@ mod tests {
         assert_eq!(MAP.get().unwrap().len(), base_len + 3);
         let default = Symbol::intern("default");
         let many_worlds = world.clone();
-        assert_eq!(MAP.get().unwrap().len(), base_len + 3);
+        assert_eq!(MAP.get().unwrap().len(), base_len + 4);
         assert_eq!(
             "hello default world!",
             format!(

@@ -75,7 +75,7 @@ impl fmt::Debug for FileSet {
 ///
 /// # Example
 /// ```rust
-/// # use vfs::{file_set::FileSetConfigBuilder, VfsPath, Vfs};
+/// # use mlkc_vfs::{file_set::FileSetConfigBuilder, VfsPath, Vfs};
 /// let mut builder = FileSetConfigBuilder::default();
 /// builder.add_file_set(vec![VfsPath::new_virtual_path("/src".to_string())]);
 /// let config = builder.build();

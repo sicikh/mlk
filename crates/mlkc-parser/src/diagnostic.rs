@@ -1,124 +1,161 @@
+//! Diagnostics emitted by the parser.
+//!
+//! The parser is deliberately file-agnostic: it only ever sees the text it was given and
+//! refers to that text with [TextRange]s. It does not know which file the text belongs to,
+//! and it knows nothing about how diagnostics are classified or rendered.
+//!
+//! [ParseDiagnostic] therefore is a plain, self-contained value carrying exactly three
+//! things:
+//!
+//! 1. a mandatory message and an optional [TextRange] of the offending code;
+//! 2. a list of [Advice]s — extra context ("details") and suggestions ("hints"), kept in
+//!    the order they were added, because that is the order they are meant to be printed in;
+//! 3. the offset that has to be applied to advices added after a call to
+//!    [ParseDiagnostic::set_location_offset].
+//!
+//! Every [ParseDiagnostic] is an error: the parser never warns.
+//!
+//! # Ranges, not spans
+//!
+//! Ranges are stored as [TextRange]s and not as [`Span`]s, even though a span is what a
+//! consumer eventually needs. The parser has no file to attach to its ranges: the same
+//! parser is used for whole files, for fragments, and for embedded syntax. The file is
+//! attached later, at the boundary, by [ParseDiagnostic::to_diagnostic], which takes the
+//! [FileId] the ranges belong to as an argument.
+
 use crate::token_source::TokenSource;
 use crate::{EOF_STR, Parser};
+use mlkc_diagnostics::{AsRange, Category, DiagKind, Diagnostic, Level};
 use mlkc_rowan::{SyntaxKind, TextLen, TextRange, TextSize};
+use mlkc_span::{FileId, Span};
 use std::cmp::Ordering;
-use std::ops::Add;
+use std::fmt::Display;
 
-/// A specialized diagnostic for the parser
+/// A diagnostic emitted by the parser.
 ///
-/// Parser diagnostics are always **errors**.
+/// A parse diagnostic is structured in this way:
+/// 1. a mandatory message and an optional [TextRange];
+/// 2. a list of [Advice]s, useful to give more information and context around the error;
+/// 3. the location offset, which shifts the ranges of advices added later.
 ///
-/// A parser diagnostics structured in this way:
-/// 1. a mandatory message and a mandatory [TextRange]
-/// 2. a list of details, useful to give more information and context around the error
-/// 3. a hint, which should tell the user how they could fix their issue
-///
-/// These information **are printed in this exact order**.
-///
-#[derive(Clone, Debug)]
+/// These pieces of information **are printed in this exact order**.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseDiagnostic {
-    /// The location where the error is occurred
-    span: Option<TextRange>,
-    pub message: MessageAndDescription,
-    advice: ParserAdvice,
-    /// Optional offset that shifts the location of advices code frames when printed.
-    advice_offset: Option<TextSize>,
+    /// The location where the error occurred.
+    ///
+    /// `None` for errors that cannot be attributed to a specific range.
+    range: Option<TextRange>,
+    /// The one-line summary of the error.
+    pub message: String,
+    /// Extra information and hints, in the order they were added.
+    advices: Vec<Advice>,
+    /// Offset applied to the ranges of advices added after [ParseDiagnostic::set_location_offset].
+    ///
+    /// The ranges stored in this struct are always absolute: the offset is applied when an
+    /// advice is added, never when it is read.
+    advice_offset: TextSize,
 }
 
-/// Possible details related to the diagnostic
-#[derive(Clone, Debug, Default)]
-struct ParserAdvice {
-    advice_list: Vec<ParserAdviceKind>,
+/// Extra information attached to a [ParseDiagnostic].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Advice {
+    /// Decides how the advice is rendered.
+    pub kind: AdviceKind,
+    /// The message shown to the user.
+    pub message: String,
+    /// The range this advice points at, if any.
+    pub range: Option<TextRange>,
+    /// Values that were expected instead of the one that was found.
+    ///
+    /// Only meaningful for [AdviceKind::Hint], where they are printed as a list after the
+    /// message.
+    pub alternatives: Vec<String>,
 }
 
-/// The structure of the advice. A message that gives details, a possible range so
-/// the diagnostic is able to highlight the part of the code we want to explain.
-#[derive(Clone, Debug)]
-struct ParserAdviceDetail {
-    /// A message that should explain this detail
-    message: MarkupBuf,
-    /// An optional range that should highlight the details of the code
-    span: Option<TextRange>,
+/// The kind of an [Advice].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdviceKind {
+    /// Points at another piece of code and explains how it relates to the error.
+    ///
+    /// Rendered as a secondary label.
+    Detail,
+    /// Tells the user how they could fix the error.
+    ///
+    /// Rendered as a note.
+    Hint,
 }
 
-#[derive(Clone, Debug)]
-enum ParserAdviceKind {
-    /// A list a possible details that can be attached to the diagnostic.
-    /// Useful to explain the nature errors.
-    Detail(ParserAdviceDetail),
-    /// A message for the user that should tell the user how to fix the issue
-    Hint(MarkupBuf),
-    List(MarkupBuf, Vec<MarkupBuf>),
-}
-
-impl ParserAdvice {
-    fn add_detail(&mut self, message: impl Display, range: impl AsSpan) {
-        self.advice_list
-            .push(ParserAdviceKind::Detail(ParserAdviceDetail {
-                message: markup! { {message} }.to_owned(),
-                span: range.as_span(),
-            }));
-    }
-
-    fn add_hint(&mut self, message: impl Display) {
-        self.advice_list
-            .push(ParserAdviceKind::Hint(markup! { { message } }.to_owned()));
-    }
-
-    fn add_hint_with_alternatives(&mut self, message: impl Display, alternatives: &[impl Display]) {
-        self.advice_list.push(ParserAdviceKind::List(
-            markup! {{message}}.to_owned(),
-            alternatives
-                .iter()
-                .map(|msg| markup! {{msg}}.to_owned())
-                .collect(),
-        ))
+impl Advice {
+    /// Shifts the range this advice points at.
+    fn shift(&mut self, offset: TextSize) {
+        if let Some(range) = self.range.as_mut() {
+            *range += offset;
+        }
     }
 }
 
 impl ParseDiagnostic {
-    pub fn new(message: impl Display, span: impl AsSpan) -> Self {
+    /// Creates a new diagnostic with the given message, located at `range`.
+    #[must_use]
+    pub fn new(message: impl Display, range: impl AsRange) -> Self {
         Self {
-            span: span.as_span(),
-            message: MessageAndDescription::from(markup! { {message} }.to_owned()),
-            advice: ParserAdvice::default(),
-            advice_offset: None,
+            range: range.as_range(),
+            message: message.to_string(),
+            advices: Vec::new(),
+            advice_offset: TextSize::from(0),
         }
     }
 
-    pub fn span(&self) -> Option<TextRange> {
-        self.span
+    /// The location where the error occurred, if it is known.
+    pub fn range(&self) -> Option<TextRange> {
+        self.range
     }
 
-    /// Updates the location of this diagnostic and its advices
+    /// The advices attached to this diagnostic, in the order they were added.
+    pub fn advices(&self) -> &[Advice] {
+        &self.advices
+    }
+
+    /// Updates the location of this diagnostic and of its advices.
+    ///
+    /// The parser sees the text it is given, which is not necessarily the whole file: it can
+    /// be a fragment of it, or a fragment of a synthetic document. Shifting the ranges moves
+    /// the diagnostic into the coordinates of that larger document.
+    ///
+    /// Advices added after this call are shifted as well.
     pub fn set_location_offset(&mut self, offset: TextSize) {
-        self.advice_offset = Some(offset);
-        if let Some(span) = &mut self.span {
-            self.span = Some(span.add(offset));
+        self.advice_offset += offset;
+
+        if let Some(range) = self.range.as_mut() {
+            *range += offset;
+        }
+
+        for advice in &mut self.advices {
+            advice.shift(offset);
         }
     }
 
+    /// Creates a diagnostic saying that a single node named `name` was expected at `range`.
+    #[must_use]
     pub fn new_single_node(name: &str, range: TextRange, p: &impl Parser) -> Self {
         let names = format!("{} {}", article_for(name), name);
-        let msg = if p.source().text().text_len() <= range.start() {
+        let message = if p.source().text().text_len() <= range.start() {
             format!("Expected {names} but instead found the end of the file.")
         } else {
             format!("Expected {} but instead found '{}'.", names, p.text(range))
         };
-        Self {
-            span: range.as_span(),
-            message: MessageAndDescription::from(msg),
-            advice: ParserAdvice::default(),
-            advice_offset: None,
-        }
-        .with_detail(range, format!("Expected {names} here."))
+
+        Self::new(message, range).with_detail(range, format!("Expected {names} here."))
     }
 
+    /// Creates a diagnostic saying that any of the nodes named in `names` was expected at
+    /// `range`.
+    #[must_use]
     pub fn new_with_any(names: &[&str], range: TextRange, p: &impl Parser) -> Self {
         debug_assert!(names.len() > 1, "Requires at least 2 names");
 
         if names.len() < 2 {
-            return Self::new_single_node(names.first().unwrap_or(&"<missing>"), range, p);
+            return Self::new_single_node(names.first().copied().unwrap_or("<missing>"), range, p);
         }
 
         let mut joined_names = String::new();
@@ -137,7 +174,7 @@ impl ParseDiagnostic {
             joined_names.push_str(name);
         }
 
-        let msg = if p.source().text().text_len() <= range.start() {
+        let message = if p.source().text().text_len() <= range.start() {
             format!("Expected {joined_names} but instead found the end of the file.")
         } else {
             format!(
@@ -147,164 +184,183 @@ impl ParseDiagnostic {
             )
         };
 
-        Self {
-            span: range.as_span(),
-            message: MessageAndDescription::from(msg),
-            advice: ParserAdvice::default(),
-            advice_offset: None,
-        }
-        .with_detail(range, format!("Expected {joined_names} here."))
+        Self::new(message, range).with_detail(range, format!("Expected {joined_names} here."))
     }
 
+    /// Parse diagnostics are always errors.
     pub const fn is_error(&self) -> bool {
         true
     }
 
-    /// Use this API if you want to highlight more code frame, to help to explain where's the error.
+    /// Attaches a detail: a message that highlights another piece of code and explains how it
+    /// relates to the error.
     ///
-    /// A detail is printed **after the actual error** and before the hint.
-    ///
-    /// ## Examples
+    /// A detail is printed **after the actual error** and before the hints.
     ///
     /// ```
-    /// # use biome_console::fmt::{Termcolor};
-    /// # use biome_console::markup;
-    /// # use biome_diagnostics::{DiagnosticExt, PrintDiagnostic, console::fmt::Formatter};
-    /// # use biome_parser::diagnostic::ParseDiagnostic;
-    /// # use biome_rowan::{TextSize, TextRange};
-    /// # use std::fmt::Write;
+    /// use mlkc_parser::diagnostic::{AdviceKind, ParseDiagnostic};
+    /// use mlkc_rowan::{TextRange, TextSize};
     ///
-    /// let source = "const a";
-    /// let range = TextRange::new(TextSize::from(0), TextSize::from(5));
-    /// let mut diagnostic = ParseDiagnostic::new("this is wrong!", range)
-    ///     .with_detail(TextRange::new(TextSize::from(6), TextSize::from(7)), "This is reason why it's broken");
+    /// let error_range = TextRange::new(TextSize::from(0), TextSize::from(5));
+    /// let detail_range = TextRange::new(TextSize::from(6), TextSize::from(7));
     ///
-    /// let mut write = biome_diagnostics::termcolor::Buffer::no_color();
-    /// let error = diagnostic
-    ///     .clone()
-    ///     .with_file_path("example.js")
-    ///     .with_file_source_code(source.to_string());
-    /// Formatter::new(&mut Termcolor(&mut write))
-    ///     .write_markup(markup! {
-    ///     {PrintDiagnostic::verbose(&error)}
-    /// })
-    ///     .expect("failed to emit diagnostic");
+    /// let diagnostic = ParseDiagnostic::new("`a` has no type", error_range)
+    ///     .with_detail(detail_range, "the type is inferred from here");
     ///
-    /// let mut result = String::new();
-    /// write!(
-    ///     result,
-    ///     "{}",
-    ///     std::str::from_utf8(write.as_slice()).expect("non utf8 in error buffer")
-    /// ).expect("");
-    pub fn with_detail(mut self, range: impl AsSpan, message: impl Display) -> Self {
-        self.advice.add_detail(message, range.as_span());
+    /// let advice = &diagnostic.advices()[0];
+    /// assert_eq!(advice.kind, AdviceKind::Detail);
+    /// assert_eq!(advice.range, Some(detail_range));
+    /// ```
+    #[must_use]
+    pub fn with_detail(mut self, range: impl AsRange, message: impl Display) -> Self {
+        self.push_advice(Advice {
+            kind: AdviceKind::Detail,
+            message: message.to_string(),
+            range: range.as_range(),
+            alternatives: Vec::new(),
+        });
         self
     }
 
-    /// Small message that should suggest the user how they could fix the error
+    /// Attaches a hint: a small message that suggests how the user could fix the error.
     ///
-    /// Hints are rendered a **last part** of the diagnostics
-    ///
-    /// ## Examples
+    /// Hints are rendered as the **last part** of the diagnostic.
     ///
     /// ```
-    /// # use biome_console::fmt::{Termcolor};
-    /// # use biome_console::markup;
-    /// # use biome_diagnostics::{DiagnosticExt, PrintDiagnostic, console::fmt::Formatter};
-    /// # use biome_parser::diagnostic::ParseDiagnostic;
-    /// # use biome_rowan::{TextSize, TextRange};
-    /// # use std::fmt::Write;
+    /// use mlkc_parser::diagnostic::{AdviceKind, ParseDiagnostic};
+    /// use mlkc_rowan::{TextRange, TextSize};
     ///
-    /// let source = "const a";
     /// let range = TextRange::new(TextSize::from(0), TextSize::from(5));
-    /// let mut diagnostic = ParseDiagnostic::new("this is wrong!", range)
+    ///
+    /// let diagnostic = ParseDiagnostic::new("this is wrong!", range)
     ///     .with_hint("You should delete the code");
     ///
-    /// let mut write = biome_diagnostics::termcolor::Buffer::no_color();
-    /// let error = diagnostic
-    ///     .clone()
-    ///     .with_file_path("example.js")
-    ///     .with_file_source_code(source.to_string());
-    /// Formatter::new(&mut Termcolor(&mut write))
-    ///     .write_markup(markup! {
-    ///     {PrintDiagnostic::verbose(&error)}
-    /// })
-    ///     .expect("failed to emit diagnostic");
-    ///
-    /// let mut result = String::new();
-    /// write!(
-    ///     result,
-    ///     "{}",
-    ///     std::str::from_utf8(write.as_slice()).expect("non utf8 in error buffer")
-    /// ).expect("");
-    ///
-    /// assert!(result.contains("× this is wrong!"));
-    /// assert!(result.contains("i You should delete the code"));
-    /// assert!(result.contains("> 1 │ const a"));
+    /// let advice = &diagnostic.advices()[0];
+    /// assert_eq!(advice.kind, AdviceKind::Hint);
+    /// assert_eq!(advice.message, "You should delete the code");
     /// ```
-    ///
+    #[must_use]
     pub fn with_hint(mut self, message: impl Display) -> Self {
-        self.advice.add_hint(message);
+        self.push_advice(Advice {
+            kind: AdviceKind::Hint,
+            message: message.to_string(),
+            range: None,
+            alternatives: Vec::new(),
+        });
         self
     }
 
-    /// A message that also allows to list of alternatives in case a fixed range of values/characters are expected.
-    ///
-    /// ## Examples
+    /// Attaches a hint that lists the values or characters that were expected.
     ///
     /// ```
-    /// # use biome_console::fmt::{Termcolor};
-    /// # use biome_console::markup;
-    /// # use biome_diagnostics::{DiagnosticExt, PrintDiagnostic, console::fmt::Formatter};
-    /// # use biome_parser::diagnostic::ParseDiagnostic;
-    /// # use biome_rowan::{TextSize, TextRange};
-    /// # use std::fmt::Write;
+    /// use mlkc_parser::diagnostic::ParseDiagnostic;
+    /// use mlkc_rowan::{TextRange, TextSize};
     ///
-    /// let source = "const a";
     /// let range = TextRange::new(TextSize::from(0), TextSize::from(5));
-    /// let mut diagnostic = ParseDiagnostic::new("this is wrong!", range)
+    ///
+    /// let diagnostic = ParseDiagnostic::new("this is wrong!", range)
     ///     .with_alternatives("Expected one of the following values:", &["foo", "bar"]);
     ///
-    /// let mut write = biome_diagnostics::termcolor::Buffer::no_color();
-    /// let error = diagnostic
-    ///     .clone()
-    ///     .with_file_path("example.js")
-    ///     .with_file_source_code(source.to_string());
-    /// Formatter::new(&mut Termcolor(&mut write))
-    ///     .write_markup(markup! {
-    ///     {PrintDiagnostic::verbose(&error)}
-    /// })
-    ///     .expect("failed to emit diagnostic");
-    ///
-    /// let mut result = String::new();
-    /// write!(
-    ///     result,
-    ///     "{}",
-    ///     std::str::from_utf8(write.as_slice()).expect("non utf8 in error buffer")
-    /// ).expect("");
-    ///
-    /// assert!(result.contains("× this is wrong!"));
-    /// assert!(result.contains("i Expected one of the following values:"));
-    /// assert!(result.contains("- foo"));
-    /// assert!(result.contains("- bar"));
+    /// let advice = &diagnostic.advices()[0];
+    /// assert_eq!(advice.alternatives, ["foo", "bar"]);
     /// ```
-    ///
+    #[must_use]
     pub fn with_alternatives(
         mut self,
         message: impl Display,
         alternatives: &[impl Display],
     ) -> Self {
-        self.advice
-            .add_hint_with_alternatives(message, alternatives);
+        self.push_advice(Advice {
+            kind: AdviceKind::Hint,
+            message: message.to_string(),
+            range: None,
+            alternatives: alternatives.iter().map(ToString::to_string).collect(),
+        });
         self
     }
 
-    /// Retrieves the range that belongs to the diagnostic
-    pub(crate) fn diagnostic_range(&self) -> Option<&TextRange> {
-        self.span.as_ref()
+    /// Retrieves the range that belongs to the diagnostic.
+    pub(crate) fn diagnostic_range(&self) -> Option<TextRange> {
+        self.range
+    }
+
+    /// Adds an advice, shifting it by the location offset accumulated so far.
+    fn push_advice(&mut self, mut advice: Advice) {
+        advice.shift(self.advice_offset);
+        self.advices.push(advice);
+    }
+
+    /// Converts this parser diagnostic into the compiler-wide [Diagnostic].
+    ///
+    /// The parser only knows the ranges of the text it was given, so the file those ranges
+    /// belong to has to be supplied by the caller: the driver knows the [FileId] of the file
+    /// from the VFS (or from the parse unit).
+    ///
+    /// The conversion is:
+    ///
+    /// - the [message](ParseDiagnostic::message) becomes the diagnostic message;
+    /// - the primary range becomes a primary label;
+    /// - [AdviceKind::Detail] advices become secondary labels;
+    /// - [AdviceKind::Hint] advices become notes, with their alternatives printed as a list.
+    ///
+    /// A [Diagnostic] keeps labels and notes in separate lists, so the relative order of the
+    /// advices survives within each list, but not between them.
+    #[must_use]
+    pub fn to_diagnostic(&self, file: FileId) -> Diagnostic {
+        let mut diagnostic = Diagnostic::from_kind(self, self.message.clone());
+
+        if let Some(range) = self.range {
+            diagnostic = diagnostic.with_primary(Span::new(file, range), "");
+        }
+
+        for advice in &self.advices {
+            diagnostic = match advice.kind {
+                AdviceKind::Detail => match advice.range {
+                    Some(range) => {
+                        diagnostic.with_secondary(Span::new(file, range), advice.message.clone())
+                    },
+                    // A detail without a range has nothing to point at, so it is kept as a
+                    // note instead of being dropped.
+                    None => diagnostic.with_note(advice.message.clone()),
+                },
+                AdviceKind::Hint => {
+                    let mut note = advice.message.clone();
+
+                    for alternative in &advice.alternatives {
+                        note.push_str("\n- ");
+                        note.push_str(alternative);
+                    }
+
+                    diagnostic.with_note(note)
+                },
+            };
+        }
+
+        diagnostic
     }
 }
 
+impl DiagKind for ParseDiagnostic {
+    fn level(&self) -> Level {
+        Level::Error
+    }
+
+    fn category(&self) -> Category {
+        Category::Parser
+    }
+
+    /// Parse diagnostics carry no code of their own: they all share the code of the
+    /// [Category::Parser] category.
+    fn code(&self) -> &'static str {
+        Category::Parser.as_code()
+    }
+}
+
+/// Converts a value produced by a parse rule into a [ParseDiagnostic].
+///
+/// Some errors can only be materialized once the parser has been consulted (which token was
+/// found, where the file ends, etc.), so a parse rule returns one of these values and the
+/// [Parser] converts it when the error is reported.
 pub trait ToDiagnostic<P>
 where
     P: Parser,
@@ -512,5 +568,268 @@ pub fn merge_diagnostics(
                 return merged;
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ParserContext;
+    use crate::token_source::Trivia;
+    use mlkc_syntax::MlkSyntaxKind;
+
+    const FILE: FileId = FileId::from_raw(0);
+
+    fn range(start: u32, end: u32) -> TextRange {
+        TextRange::new(TextSize::from(start), TextSize::from(end))
+    }
+
+    /// A token source that keeps reporting the same token until it is bumped.
+    struct TestTokenSource {
+        text: &'static str,
+        kind: MlkSyntaxKind,
+        range: TextRange,
+    }
+
+    impl TestTokenSource {
+        /// A source positioned at `kind`, which spans `range`.
+        fn at(text: &'static str, kind: MlkSyntaxKind, range: TextRange) -> Self {
+            Self { text, kind, range }
+        }
+
+        /// A source positioned at the end of `text`.
+        fn end_of(text: &'static str) -> Self {
+            let end = TextSize::try_from(text.len()).expect("text is too long");
+            Self {
+                text,
+                kind: MlkSyntaxKind::EOF,
+                range: TextRange::empty(end),
+            }
+        }
+    }
+
+    impl TokenSource for TestTokenSource {
+        type Kind = MlkSyntaxKind;
+
+        fn current(&self) -> Self::Kind {
+            self.kind
+        }
+
+        fn current_range(&self) -> TextRange {
+            self.range
+        }
+
+        fn text(&self) -> &str {
+            self.text
+        }
+
+        fn has_preceding_line_break(&self) -> bool {
+            false
+        }
+
+        fn bump(&mut self) {
+            *self = Self::end_of(self.text);
+        }
+
+        fn skip_as_trivia(&mut self) {
+            self.bump();
+        }
+
+        fn finish(self) -> (Vec<Trivia>, Vec<ParseDiagnostic>) {
+            (Vec::new(), Vec::new())
+        }
+    }
+
+    struct TestParser {
+        context: ParserContext<MlkSyntaxKind>,
+        source: TestTokenSource,
+    }
+
+    impl TestParser {
+        fn new(source: TestTokenSource) -> Self {
+            Self {
+                context: ParserContext::new(),
+                source,
+            }
+        }
+    }
+
+    impl Parser for TestParser {
+        type Kind = MlkSyntaxKind;
+        type Source = TestTokenSource;
+
+        fn context(&self) -> &ParserContext<Self::Kind> {
+            &self.context
+        }
+
+        fn context_mut(&mut self) -> &mut ParserContext<Self::Kind> {
+            &mut self.context
+        }
+
+        fn source(&self) -> &Self::Source {
+            &self.source
+        }
+
+        fn source_mut(&mut self) -> &mut Self::Source {
+            &mut self.source
+        }
+    }
+
+    #[test]
+    fn new_diagnostic_has_a_message_and_a_range() {
+        let diagnostic = ParseDiagnostic::new("something is wrong", range(4, 8));
+
+        assert_eq!(diagnostic.message, "something is wrong");
+        assert_eq!(diagnostic.range(), Some(range(4, 8)));
+        assert_eq!(diagnostic.diagnostic_range(), Some(range(4, 8)));
+        assert!(diagnostic.advices().is_empty());
+        assert!(diagnostic.is_error());
+    }
+
+    #[test]
+    fn new_diagnostic_without_a_range() {
+        let diagnostic = ParseDiagnostic::new("something is wrong", None::<TextRange>);
+
+        assert_eq!(diagnostic.range(), None);
+        assert!(diagnostic.to_diagnostic(FILE).labels.is_empty());
+    }
+
+    #[test]
+    fn advices_keep_the_order_and_the_shape_they_were_added_with() {
+        let diagnostic = ParseDiagnostic::new("something is wrong", range(0, 1))
+            .with_detail(range(10, 12), "the detail")
+            .with_hint("the hint")
+            .with_alternatives("expected one of:", &["`a`", "`b`"]);
+
+        let advices = diagnostic.advices();
+        assert_eq!(advices.len(), 3);
+
+        assert_eq!(advices[0].kind, AdviceKind::Detail);
+        assert_eq!(advices[0].message, "the detail");
+        assert_eq!(advices[0].range, Some(range(10, 12)));
+        assert!(advices[0].alternatives.is_empty());
+
+        assert_eq!(advices[1].kind, AdviceKind::Hint);
+        assert_eq!(advices[1].message, "the hint");
+        assert_eq!(advices[1].range, None);
+
+        assert_eq!(advices[2].kind, AdviceKind::Hint);
+        assert_eq!(advices[2].message, "expected one of:");
+        assert_eq!(advices[2].alternatives, ["`a`", "`b`"]);
+    }
+
+    #[test]
+    fn location_offset_shifts_the_primary_range_and_the_advices() {
+        let mut diagnostic = ParseDiagnostic::new("something is wrong", range(0, 3))
+            .with_detail(range(3, 5), "here");
+
+        diagnostic.set_location_offset(TextSize::from(100));
+        // Advices added after the offset are shifted as well.
+        let diagnostic = diagnostic.with_hint("fix it");
+
+        assert_eq!(diagnostic.range(), Some(range(100, 103)));
+        assert_eq!(diagnostic.advices()[0].range, Some(range(103, 105)));
+        assert_eq!(diagnostic.advices()[1].range, None);
+
+        // Offsets accumulate.
+        let mut diagnostic = diagnostic;
+        diagnostic.set_location_offset(TextSize::from(10));
+        assert_eq!(diagnostic.range(), Some(range(110, 113)));
+    }
+
+    #[test]
+    fn converts_into_the_compiler_diagnostic() {
+        let diagnostic = ParseDiagnostic::new("expected `}`", range(10, 11))
+            .with_detail(range(0, 1), "the block starts here")
+            .with_hint("add a closing brace")
+            .with_alternatives("expected one of:", &["`}`", "`;`"]);
+
+        let converted = diagnostic.to_diagnostic(FILE);
+
+        assert_eq!(converted.level, Level::Error);
+        assert_eq!(converted.category, Category::Parser);
+        assert_eq!(converted.message, "expected `}`");
+
+        assert_eq!(converted.labels.len(), 2);
+        assert_eq!(converted.labels[0].span, Span::new(FILE, range(10, 11)));
+        assert_eq!(converted.labels[0].message, "");
+        assert!(converted.labels[0].primary);
+        assert_eq!(converted.labels[1].span, Span::new(FILE, range(0, 1)));
+        assert_eq!(converted.labels[1].message, "the block starts here");
+        assert!(!converted.labels[1].primary);
+
+        assert_eq!(
+            converted.notes,
+            [
+                "add a closing brace".to_string(),
+                "expected one of:\n- `}`\n- `;`".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn reports_the_end_of_the_file() {
+        let p = TestParser::new(TestTokenSource::end_of("let x = 1"));
+
+        let diagnostic = ParseDiagnostic::new_single_node("expression", range(9, 9), &p);
+        assert_eq!(
+            diagnostic.message,
+            "Expected an expression but instead found the end of the file."
+        );
+        assert_eq!(
+            diagnostic.advices()[0].message,
+            "Expected an expression here."
+        );
+
+        let diagnostic = expected_token(MlkSyntaxKind::L_CURLY).into_diagnostic(&p);
+        assert_eq!(diagnostic.message, "expected `{` but instead the file ends");
+        assert_eq!(diagnostic.advices()[0].message, "the file ends here");
+    }
+
+    #[test]
+    fn reports_the_found_token() {
+        let p = TestParser::new(TestTokenSource::at(
+            "let x = 1",
+            MlkSyntaxKind::IDENT,
+            range(0, 3),
+        ));
+
+        let diagnostic = ParseDiagnostic::new_single_node("expression", range(0, 3), &p);
+        assert_eq!(
+            diagnostic.message,
+            "Expected an expression but instead found 'let'."
+        );
+
+        let diagnostic = expected_token(MlkSyntaxKind::L_CURLY).into_diagnostic(&p);
+        assert_eq!(diagnostic.message, "expected `{` but instead found `let`");
+        assert_eq!(diagnostic.advices()[0].message, "Remove let");
+    }
+
+    #[test]
+    fn merges_diagnostics_starting_at_the_same_range() {
+        let first = vec![
+            ParseDiagnostic::new("first", range(0, 1)),
+            ParseDiagnostic::new("second", range(4, 5)),
+        ];
+        let second = vec![
+            ParseDiagnostic::new("duplicate", range(0, 2)),
+            ParseDiagnostic::new("third", range(7, 8)),
+        ];
+
+        let merged = merge_diagnostics(first, second);
+        let messages: Vec<&str> = merged.iter().map(|it| it.message.as_str()).collect();
+
+        assert_eq!(messages, ["first", "second", "third"]);
+    }
+
+    #[test]
+    fn merges_diagnostics_without_a_range() {
+        let first = vec![ParseDiagnostic::new("first", None::<TextRange>)];
+        let second = vec![ParseDiagnostic::new("second", range(0, 1))];
+
+        let merged = merge_diagnostics(first, second);
+        let messages: Vec<&str> = merged.iter().map(|it| it.message.as_str()).collect();
+
+        assert_eq!(messages, ["first", "second"]);
     }
 }

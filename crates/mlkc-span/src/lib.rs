@@ -1,6 +1,5 @@
 pub use mlkc_text_size::{TextLen, TextRange, TextSize};
-
-use mlkc_vfs::FileId;
+pub use mlkc_vfs::FileId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {

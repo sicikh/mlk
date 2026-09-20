@@ -10,6 +10,7 @@ use crate::parsed_syntax::ParsedSyntax;
 use crate::parsed_syntax::ParsedSyntax::{Absent, Present};
 use crate::token_source::{BumpWithContext, NthToken, TokenSource, TokenSourceWithBufferedLexer};
 pub use marker::{CompletedMarker, Marker};
+use mlkc_diagnostics::AsRange;
 use mlkc_rowan::{
     AstNode, EmbeddedSendNode, Language, SendNode, SyntaxKind, SyntaxNode, SyntaxNodeWithOffset,
     TextRange, TextSize,
@@ -523,8 +524,8 @@ pub trait Parser: Sized {
 
     /// Creates a new diagnostic. Pass the message and the range where the error occurred
     #[must_use]
-    fn err_builder(&self, message: impl Display, span: impl AsSpan) -> ParseDiagnostic {
-        ParseDiagnostic::new(message, span)
+    fn err_builder(&self, message: impl Display, range: impl AsRange) -> ParseDiagnostic {
+        ParseDiagnostic::new(message, range)
     }
 
     /// Bump and add an error event

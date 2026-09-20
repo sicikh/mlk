@@ -125,7 +125,7 @@ where
 
     /// Finishes the tree and return the root node with possible parser errors.
     ///
-    /// If tree is finished without a [biome_rowan::SyntaxKind::EOF], one will be generated and all pending trivia
+    /// If tree is finished without a [mlkc_rowan::SyntaxKind::EOF], one will be generated and all pending trivia
     /// will be appended to its leading trivia.
     pub fn finish(self) -> (SyntaxNode<L>, Vec<ParseDiagnostic>) {
         (self.inner.finish(), self.errors)
@@ -138,7 +138,7 @@ where
             format!("Syntax nesting exceeds maximum depth of {MAX_TREE_DEPTH}."),
             TextRange::empty(self.text_pos),
         );
-        let index = self.errors.partition_point(|error| match error.span() {
+        let index = self.errors.partition_point(|error| match error.range() {
             Some(range) => range.start() <= self.text_pos,
             None => true,
         });
@@ -322,7 +322,7 @@ mod tests {
         let (_, diagnostics) = sink.finish();
         let spans: Vec<_> = diagnostics
             .iter()
-            .map(|error| error.span().unwrap())
+            .map(|error| error.range().unwrap())
             .collect();
         assert_eq!(
             spans,
@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(root.descendants().count(), MAX_TREE_DEPTH);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(
-            diagnostics[0].span(),
+            diagnostics[0].range(),
             Some(TextRange::empty(TextSize::from(0)))
         );
     }

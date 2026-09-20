@@ -624,6 +624,7 @@ dependencies = [
  "enumflags2",
  "mlkc-diagnostics",
  "mlkc-rowan",
+ "mlkc-span",
  "mlkc-syntax",
  "unicode-bom",
 ]

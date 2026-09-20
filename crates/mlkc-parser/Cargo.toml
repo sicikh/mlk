@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 mlkc-diagnostics = { workspace = true }
 mlkc-rowan = { workspace = true }
+mlkc-span = { workspace = true }
 mlkc-syntax = { workspace = true }
 drop_bomb.workspace = true
 unicode-bom.workspace = true

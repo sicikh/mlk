@@ -198,7 +198,7 @@ impl ParseDiagnostic {
     /// A detail is printed **after the actual error** and before the hints.
     ///
     /// ```
-    /// use mlkc_parser::diagnostic::{AdviceKind, ParseDiagnostic};
+    /// use mlkc_parser_core::diagnostic::{AdviceKind, ParseDiagnostic};
     /// use mlkc_rowan::{TextRange, TextSize};
     ///
     /// let error_range = TextRange::new(TextSize::from(0), TextSize::from(5));
@@ -227,7 +227,7 @@ impl ParseDiagnostic {
     /// Hints are rendered as the **last part** of the diagnostic.
     ///
     /// ```
-    /// use mlkc_parser::diagnostic::{AdviceKind, ParseDiagnostic};
+    /// use mlkc_parser_core::diagnostic::{AdviceKind, ParseDiagnostic};
     /// use mlkc_rowan::{TextRange, TextSize};
     ///
     /// let range = TextRange::new(TextSize::from(0), TextSize::from(5));
@@ -253,7 +253,7 @@ impl ParseDiagnostic {
     /// Attaches a hint that lists the values or characters that were expected.
     ///
     /// ```
-    /// use mlkc_parser::diagnostic::ParseDiagnostic;
+    /// use mlkc_parser_core::diagnostic::ParseDiagnostic;
     /// use mlkc_rowan::{TextRange, TextSize};
     ///
     /// let range = TextRange::new(TextSize::from(0), TextSize::from(5));

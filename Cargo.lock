@@ -563,7 +563,7 @@ name = "mlkc-la-arena"
 version = "0.1.0"
 
 [[package]]
-name = "mlkc-parser"
+name = "mlkc-parser-core"
 version = "0.1.0"
 dependencies = [
  "drop_bomb",

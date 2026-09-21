@@ -5,6 +5,7 @@ mod syntax_node;
 pub use crate::generated::SyntaxKind::*;
 pub use crate::generated::*;
 pub use crate::syntax_node::*;
+use mlkc_rowan::AstNode;
 pub use mlkc_rowan::{TextLen, TextRange, TextSize, TokenAtOffset, TriviaPieceKind, WalkEvent};
 
 use mlkc_rowan::{RawSyntaxKind, SyntaxKind as SyntaxKindTrait, TokenText};
@@ -27,11 +28,20 @@ impl SyntaxKindTrait for SyntaxKind {
     const TOMBSTONE: Self = TOMBSTONE;
 
     fn is_bogus(&self) -> bool {
-        matches!(self, BOGUS_EXPR)
+        matches!(
+            self,
+            BOGUS | BOGUS_DECL | BOGUS_EXPR | BOGUS_PAT | BOGUS_TYPE
+        )
     }
 
     fn to_bogus(&self) -> Self {
-        BOGUS_EXPR
+        match self {
+            kind if Expr::can_cast(*kind) => BOGUS_EXPR,
+            kind if Pat::can_cast(*kind) => BOGUS_PAT,
+            kind if Type::can_cast(*kind) => BOGUS_TYPE,
+            kind if ModuleItem::can_cast(*kind) => BOGUS_DECL,
+            _ => BOGUS,
+        }
     }
 
     fn to_raw(&self) -> RawSyntaxKind {

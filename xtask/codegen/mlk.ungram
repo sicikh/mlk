@@ -1,6 +1,6 @@
 // MLK Un-Grammar.
 //
-// This grammar specifies the structure of Rust's concrete syntax tree.
+// This grammar specifies the structure of MLK's concrete syntax tree.
 // It does not specify parsing rules (ambiguities, precedence, etc are out of scope).
 // Tokens are processed -- contextual keywords are recognised, compound operators glued.
 //
@@ -40,62 +40,79 @@ Bogus = SyntaxElement*
 BogusDecl = SyntaxElement*
 BogusExpr = SyntaxElement*
 BogusPat = SyntaxElement*
-BogusTy = SyntaxElement*
+BogusType = SyntaxElement*
 
-Name = Value: 'ident'
+Name = value: 'ident'
 
-Operator = Value: 'operator'
+Path =
+    (qualifier: Path '.')?
+    segment: PathSegment
 
-QName =
-    (Qualifier: QName '.')?
-    Segment: QNameSegment
+PathSegment = Name TypeArgs?
 
-// For now QNameSegment is just a Name, but in the future it would be extended to support
-// type applications (`Map[String, Int].contains`).
-QNameSegment =
-    Name: Name
+TypeArgs = '[' TypeArgList ']'
+
+TypeArgList = (Type (',' Type)* ','?)
 
 //*************************//
 //          Items          //
 //*************************//
 
 ModuleRoot =
-    preamble: ModulePreamble?
     items: ModuleItemList
     eof: 'EOF'
 
+ModulePreamble =
+    'module' name: Path
+
 ModuleItemList = ModuleItem*
 
-ModulePreamble =
-    'module'
-    Name: QName
-
 ModuleItem =
-    InnerModuleItem
-    | OpenDecl
-    | LetDecl
-    | Expr
+    FunDecl
+    | TypeDecl
     | BogusDecl
 
-InnerModuleItem =
-    Preamble: ModulePreamble?
-    '='
-    Decls: ModuleItemList
+AttributeList = Attribute*
 
-OpenDecl =
-    'open'
-    Module: QName
+Attribute =
+    '@'
+    name: Name
 
-Binding =
-    Pat: Pat
-    '='
-    Expr: Expr
+TypeDecl =
+    attributes: AttributeList
+    'type'
+    name: Name
 
-LetDecl =
-    'let'
-    Name: Name
+FunDecl =
+    attributes: AttributeList
+    'fun'
+    name: Name
+    parameters: Parameters
+    return_type_annotation: FunReturnTypeAnnotation?
+    body: FunBody?
+
+FunReturnTypeAnnotation =
+    ':'
+    return_type: Type
+
+FunBody =
     '='
-    Expr: Expr
+    expr: Expr
+
+Parameters =
+    '('
+    items: ParameterList
+    ')'
+
+ParameterList = (Parameter (',' Parameter)*)
+
+Parameter =
+    name: Name
+    type_annotation: TypeAnnotation?
+
+TypeAnnotation =
+    ':'
+    type: Type
 
 //****************************//
 //        Expressions         //
@@ -103,217 +120,70 @@ LetDecl =
 
 Expr =
     Literal
-    | AppExpr
-    | SeqExpr
-    | LetExpr
-    | FunExpr
-    | IfExpr
-    | BinExpr
     | VarExpr
+    | CallExpr
+    | BinExpr
+    | LetExpr
     | ParenExpr
     | BogusExpr
-    | MemberAccessExpr
 
-VarExpr =
-    Name: Name
-
-MemberAccessExpr =
-    Target: Expr
-    '.'
-    Member: Name
-
-BinExpr =
-    Left: Expr
-    Op: 'operator'
-    Right: Expr
-
-UnaryExpr =
-    Op: QName
-    Operand: Expr
-
-ParenExpr = '(' Expr ')'
-
-TypedExpr =
-    Expr: Expr
-    ':'
-    Target: Ty
-
-AppExpr =
-    Func: Expr
-    Arg: Expr
-
-IfExpr =
-    'if'
-    Cond: Expr
-    'then'
-    ThenBranch: Expr
-    ('else'
-    ElseBranch: Expr)?
-
-LetExpr =
-    Decl: LetDecl
-    Body: Expr
-
-SeqExpr =
-    First: Expr
-    // FIXME: ';'?
-    Second: Expr
-
-TupleExpr = (Expr (',' Expr)*)
-
-FunExpr =
-    'fun'
-    Arg: Name
-    '->'
-    Body: Expr
-
-ListExpr =
-    '['
-    Elements: ListExprElements
-    ']'
-
-ListExprElements = (Expr (';' Expr)*)
-
-MatchExpr =
-    'match'
-    Scrutinee: Expr
-    'with'
-    LeadingPipeToken: '|'?
-    Cases: MatchCaseList
-
-MatchCaseList = (MatchCase ('|' MatchCase)*)
-
-MatchCase =
-    Pat
-    Guard: MatchGuard?
-    '->'
-    Body: Expr
-
-MatchGuard =
-    'when'
-    Cond: Expr
-
-//************************//
-//        Literals        //
-//************************//
+IntLiteral = value: 'int_literal'
+StringLiteral = value: 'string_literal'
 
 Literal =
-    Value: 'IntLiteral'
+    IntLiteral
+    | StringLiteral
 
-// FIXME:
-IntLiteral = Value: 'IntLiteral'
+VarExpr = name: Name
 
-BoolLiteral = ValueToken: ('true' | 'false')
+CallExpr =
+    function: Expr
+    '('
+    arguments: ArgumentList
+    ')'
 
-UnitLiteral = '(' ')'
+ArgumentList = (Expr (',' Expr)* ','?)
 
-CharLiteral = Value: 'CharLiteral'
+BinExpr =
+    lhs: Expr
+    operator_token: ('+' | '-' | '*' | '/' | '==' | '!=' | '<' | '<=' | '>' | '>=')
+    rhs: Expr
 
-StringLiteral = Value: 'StringLiteral'
+LetExpr =
+    'let'
+    pat: Pat
+    '='
+    expr: Expr
+    'in'
+    body: Expr
+
+// `(42 * 2 - 10)`
+ParenExpr =
+    '('
+    expr: Expr
+    ')'
 
 //****************************//
 //           Types            //
 //****************************//
 
-Ty =
-    QTy
-    | FnTy
-    | TupleTy
-    | ParenTy
-    | InferTy
-    | BogusTy
+Type =
+    PathType
+    | BogusType
 
-QTy = Name: QName
+PathType = Path
 
-FnTy = Arg: Ty '->' Ret: Ty
-
-TupleTy = (Ty ('*' Ty)*)
-
-ParenTy = '(' Ty ')'
-
-InferTy = '_'
+InferType = '_'
 
 //************************//
 //        Patterns        //
 //************************//
 
 Pat =
-    ParenPat
-    | NamedPat
-    | FuncPat
-    | AsPat
-    | WildPat
-    | TuplePat
-    | LiteralPat
-    | ConsPat
-    | ListPat
-    | TypedPat
-    | RecordPat
-    | OrPat
-    | AndPat
+    IdentPat
+    | WildcardPat
     | BogusPat
 
-ParenPat = '(' Pat ')'
+IdentPat = Name
 
-NamedPat =
-    Name: QName
-
-FuncPat =
-    Func: Pat
-    Args: ArgPats
-
-ArgPats = ArgPat*
-
-ArgPat =
-    Pat
-    | NamePatField
-
-AsPat =
-    Lhs: Pat
-    'as'
-    Rhs: Pat
-
-WildPat = '_'
-
-TuplePat = (Pat (',' Pat)*)
-
-LiteralPat = Literal
-
-ConsPat =
-    Head: Pat
-    '::'
-    Tail: Pat
-
-ListPat =
-    '['
-    Elements: ListPatElements
-    ']'
-
-ListPatElements = (Pat (';' Pat)*)
-
-TypedPat =
-    Pat
-    ':'
-    Target: Ty
-
-RecordPat =
-    '{'
-    Fields: RecordFields
-    '}'
-
-RecordFields = (NamePatField (';' NamePatField)*)
-
-NamePatField =
-    Name: QName
-    '='
-    Pat
-
-OrPat =
-    Lhs: Pat
-    '|'
-    Rhs: Pat
-
-AndPat =
-    Lhs: Pat
-    '&'
-    Rhs: Pat
+WildcardPat = '_'

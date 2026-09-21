@@ -108,7 +108,6 @@ pub fn generate_syntax_kinds(grammar: KindsSrc, language_kind: LanguageKind) -> 
                         #(#punctuation => #punctuation_strings,)*
                         #(#full_keywords => #all_keyword_to_strings,)*
                         EOF => "",
-                        MLK_STRING_LITERAL => "string literal",
                         _ => return None,
                     };
                     Some(tok)
@@ -189,7 +188,6 @@ pub fn generate_syntax_kinds(grammar: KindsSrc, language_kind: LanguageKind) -> 
             [ident] => { $crate::#syntax_kind::IDENT };
             [EOF] => { $crate::#syntax_kind::EOF };
             [UNICODE_BOM] => { $crate::#syntax_kind::UNICODE_BOM };
-            [#] => { $crate::#syntax_kind::HASH };
         }
     };
 

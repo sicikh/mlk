@@ -8,10 +8,27 @@ use crate::{
 };
 
 pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
-    punct: &[("->", "ARROW")],
-    keywords: &[],
-    literals: &[],
-    tokens: &[],
+    punct: &[
+        ("@", "AT"),
+        ("(", "L_PAREN"),
+        (")", "R_PAREN"),
+        ("]", "L_BRACK"),
+        ("[", "R_BRACK"),
+        (",", "COMMA"),
+        (":", "COLON"),
+        ("=", "EQ"),
+        ("->", "ARROW"),
+    ],
+    keywords: &["fun", "in", "let", "type"],
+    literals: &["INT_LITERAL", "STRING_LITERAL"],
+    tokens: &[
+        "ERROR_TOKEN",
+        "IDENT",
+        "WHITESPACE",
+        "NEWLINE",
+        "COMMENT",
+        "MULTILINE_COMMENT",
+    ],
     nodes: &[],
 };
 

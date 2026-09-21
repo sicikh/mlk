@@ -1,11 +1,14 @@
 //! Generated file, do not edit by hand, see `xtask/codegen`
 
 #![allow(unused_mut)]
-use mlkc_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory, SyntaxKind};
+use mlkc_rowan::{
+    AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory as SyntaxFactoryTrait,
+    SyntaxKind as SyntaxKindTrait,
+};
 use mlkc_syntax::{SyntaxKind, SyntaxKind::*, T, *};
 #[derive(Debug)]
 pub struct SyntaxFactory;
-impl SyntaxFactory for SyntaxFactory {
+impl SyntaxFactoryTrait for SyntaxFactory {
     type Kind = SyntaxKind;
     fn make_syntax(
         kind: Self::Kind,
@@ -65,6 +68,8 @@ impl SyntaxFactory for SyntaxFactory {
                             | T ! [<=]
                             | T ! [>]
                             | T ! [>=]
+                            | T ! [&&]
+                            | T ! [||]
                     )
                 {
                     slots.mark_present();
@@ -736,15 +741,13 @@ impl SyntaxFactory for SyntaxFactory {
             },
             ATTRIBUTE_LIST => Self::make_node_list_syntax(kind, children, Attribute::can_cast),
             MODULE_ITEM_LIST => Self::make_node_list_syntax(kind, children, ModuleItem::can_cast),
-            PARAMETER_LIST => {
-                Self::make_separated_list_syntax(
-                    kind,
-                    children,
-                    Parameter::can_cast,
-                    T ! [,],
-                    false,
-                )
-            },
+            PARAMETER_LIST => Self::make_separated_list_syntax(
+                kind,
+                children,
+                Parameter::can_cast,
+                T ! [,],
+                false,
+            ),
             TYPE_ARG_LIST => {
                 Self::make_separated_list_syntax(kind, children, Type::can_cast, T ! [,], true)
             },

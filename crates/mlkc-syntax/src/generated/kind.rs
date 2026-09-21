@@ -12,20 +12,37 @@ pub enum SyntaxKind {
     #[doc = r" Any Unicode BOM character that may be present at the start of"]
     #[doc = r" a file."]
     UNICODE_BOM,
+    DOT,
+    COMMA,
+    L_CURLY,
+    R_CURLY,
     AT,
     L_PAREN,
     R_PAREN,
     L_BRACK,
     R_BRACK,
-    COMMA,
     COLON,
+    SEMICOLON,
     EQ,
     ARROW,
     UNDERSCORE,
+    PLUS,
+    MINUS,
+    STAR,
+    SLASH,
+    EQ2,
+    BANG_EQ,
+    LT,
+    GT,
+    LT_EQ,
+    GT_EQ,
+    AND2,
+    OR2,
     FUN_KW,
     IN_KW,
     LET_KW,
     TYPE_KW,
+    MODULE_KW,
     INT_LITERAL,
     STRING_LITERAL,
     ERROR_TOKEN,
@@ -81,7 +98,31 @@ impl SyntaxKind {
     pub const fn is_punct(self) -> bool {
         matches!(
             self,
-            AT | L_PAREN | R_PAREN | L_BRACK | R_BRACK | COMMA | COLON | EQ | ARROW | UNDERSCORE
+            DOT | COMMA
+                | L_CURLY
+                | R_CURLY
+                | AT
+                | L_PAREN
+                | R_PAREN
+                | L_BRACK
+                | R_BRACK
+                | COLON
+                | SEMICOLON
+                | EQ
+                | ARROW
+                | UNDERSCORE
+                | PLUS
+                | MINUS
+                | STAR
+                | SLASH
+                | EQ2
+                | BANG_EQ
+                | LT
+                | GT
+                | LT_EQ
+                | GT_EQ
+                | AND2
+                | OR2
         )
     }
     pub const fn is_literal(self) -> bool {
@@ -99,26 +140,44 @@ impl SyntaxKind {
             "in" => IN_KW,
             "let" => LET_KW,
             "type" => TYPE_KW,
+            "module" => MODULE_KW,
             _ => return None,
         };
         Some(kw)
     }
     pub const fn to_string(&self) -> Option<&'static str> {
         let tok = match self {
+            DOT => ".",
+            COMMA => ",",
+            L_CURLY => "{",
+            R_CURLY => "}",
             AT => "@",
             L_PAREN => "(",
             R_PAREN => ")",
             L_BRACK => "]",
             R_BRACK => "[",
-            COMMA => ",",
             COLON => ":",
+            SEMICOLON => ";",
             EQ => "=",
             ARROW => "->",
             UNDERSCORE => "_",
+            PLUS => "+",
+            MINUS => "-",
+            STAR => "*",
+            SLASH => "/",
+            EQ2 => "==",
+            BANG_EQ => "!=",
+            LT => "<",
+            GT => ">",
+            LT_EQ => "<=",
+            GT_EQ => ">=",
+            AND2 => "&&",
+            OR2 => "||",
             FUN_KW => "fun",
             IN_KW => "in",
             LET_KW => "let",
             TYPE_KW => "type",
+            MODULE_KW => "module",
             EOF => "",
             _ => return None,
         };
@@ -127,4 +186,4 @@ impl SyntaxKind {
 }
 #[doc = r" Utility macro for creating a SyntaxKind through simple macro syntax"]
 #[macro_export]
-macro_rules ! T { [@] => { $ crate :: SyntaxKind :: AT } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; [']'] => { $ crate :: SyntaxKind :: L_BRACK } ; ['['] => { $ crate :: SyntaxKind :: R_BRACK } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [=] => { $ crate :: SyntaxKind :: EQ } ; [->] => { $ crate :: SyntaxKind :: ARROW } ; ["_"] => { $ crate :: SyntaxKind :: UNDERSCORE } ; [fun] => { $ crate :: SyntaxKind :: FUN_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [let] => { $ crate :: SyntaxKind :: LET_KW } ; [type] => { $ crate :: SyntaxKind :: TYPE_KW } ; [ident] => { $ crate :: SyntaxKind :: IDENT } ; [EOF] => { $ crate :: SyntaxKind :: EOF } ; [UNICODE_BOM] => { $ crate :: SyntaxKind :: UNICODE_BOM } ; }
+macro_rules ! T { [.] => { $ crate :: SyntaxKind :: DOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['{'] => { $ crate :: SyntaxKind :: L_CURLY } ; ['}'] => { $ crate :: SyntaxKind :: R_CURLY } ; [@] => { $ crate :: SyntaxKind :: AT } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; [']'] => { $ crate :: SyntaxKind :: L_BRACK } ; ['['] => { $ crate :: SyntaxKind :: R_BRACK } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [;] => { $ crate :: SyntaxKind :: SEMICOLON } ; [=] => { $ crate :: SyntaxKind :: EQ } ; [->] => { $ crate :: SyntaxKind :: ARROW } ; ["_"] => { $ crate :: SyntaxKind :: UNDERSCORE } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: STAR } ; [/] => { $ crate :: SyntaxKind :: SLASH } ; [==] => { $ crate :: SyntaxKind :: EQ2 } ; [!=] => { $ crate :: SyntaxKind :: BANG_EQ } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LT_EQ } ; [>=] => { $ crate :: SyntaxKind :: GT_EQ } ; [&&] => { $ crate :: SyntaxKind :: AND2 } ; [||] => { $ crate :: SyntaxKind :: OR2 } ; [fun] => { $ crate :: SyntaxKind :: FUN_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [let] => { $ crate :: SyntaxKind :: LET_KW } ; [type] => { $ crate :: SyntaxKind :: TYPE_KW } ; [module] => { $ crate :: SyntaxKind :: MODULE_KW } ; [ident] => { $ crate :: SyntaxKind :: IDENT } ; [EOF] => { $ crate :: SyntaxKind :: EOF } ; [UNICODE_BOM] => { $ crate :: SyntaxKind :: UNICODE_BOM } ; }

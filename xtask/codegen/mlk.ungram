@@ -148,7 +148,7 @@ ArgumentList = (Expr (',' Expr)* ','?)
 
 BinExpr =
     lhs: Expr
-    operator_token: ('+' | '-' | '*' | '/' | '==' | '!=' | '<' | '<=' | '>' | '>=')
+    operator_token: ('+' | '-' | '*' | '/' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '&&' | '||')
     rhs: Expr
 
 LetExpr =

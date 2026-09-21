@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+mlkc-syntax.workspace = true
+mlkc-rowan.workspace = true
 
 [lints]
 workspace = true

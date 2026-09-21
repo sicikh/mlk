@@ -626,6 +626,10 @@ dependencies = [
 [[package]]
 name = "mlkc-syntax-factory"
 version = "0.1.0"
+dependencies = [
+ "mlkc-rowan",
+ "mlkc-syntax",
+]
 
 [[package]]
 name = "mlkc-text-edit"

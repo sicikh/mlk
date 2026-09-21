@@ -150,12 +150,12 @@ pub fn generate_syntax_factory(ast: &AstSrc, language_kind: LanguageKind) -> Res
     let output = quote! {
         #![allow(unused_mut)]
         use #syntax_crate::{*, #syntax_kind, #syntax_kind::*, T};
-        use mlkc_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory, SyntaxKind};
+        use mlkc_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory as SyntaxFactoryTrait, SyntaxKind as SyntaxKindTrait};
 
         #[derive(Debug)]
         pub struct #factory_kind;
 
-        impl SyntaxFactory for #factory_kind {
+        impl SyntaxFactoryTrait for #factory_kind {
             type Kind = #syntax_kind;
 
             fn make_syntax(

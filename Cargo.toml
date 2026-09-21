@@ -24,7 +24,6 @@ mlkc-text-size = { path = "crates/mlkc-text-size", version = "0.1.0" }
 mlkc-ungrammar = { path = "crates/mlkc-ungrammar", version = "0.1.0" }
 mlkc-vfs = { path = "crates/mlkc-vfs", version = "0.1.0" }
 mlkc-span = { path = "crates/mlkc-span", version = "0.1.0" }
-stdx = { path = "crates/stdx", version = "0.1.0" }
 
 xtask-glue = { path = "xtask/glue", version = "0.0.0" }
 

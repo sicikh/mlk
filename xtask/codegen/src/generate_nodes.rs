@@ -751,7 +751,7 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
                 .expect("expected a plain *Bogus node")
         );
         quote! {
-            biome_rowan::declare_node_union! {
+            mlkc_rowan::declare_node_union! {
                 pub #ident = #(#kinds)*
             }
         }
@@ -926,7 +926,9 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
     let syntax_element_children = language_kind.syntax_element_children();
     let syntax_list = language_kind.syntax_list();
     let syntax_token = language_kind.syntax_token();
-    let language = language_kind.language();
+    // let language = language_kind.language();
+    // TODO:
+    let language = quote! { MlkLanguage };
 
     let serde_import = quote! {
         use serde::{Serialize, Serializer};
@@ -942,7 +944,7 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
             #syntax_kind::{self as SyntaxKind, *},
             #syntax_list as SyntaxList, #syntax_node as SyntaxNode, #syntax_token as SyntaxToken,
         };
-        use biome_rowan::{
+        use mlkc_rowan::{
             AstNodeList, AstNodeListIterator,  AstNodeSlotMap, AstSeparatedList, AstSeparatedListNodesIterator,
             support, AstNode,SyntaxKindSet, RawSyntaxKind, SyntaxResult
         };
@@ -1155,21 +1157,19 @@ pub(crate) fn get_field_predicate(field: &Field, language_kind: LanguageKind) ->
                 #ast_type_name::can_cast(element.kind())
             }
         },
-        Field::Token { kind, .. } => {
-            match kind {
-                TokenKind::Single(expected) => {
-                    let expected_kind = token_kind_to_code(expected, language_kind);
-                    quote! { element.kind() == #expected_kind}
-                },
-                TokenKind::Many(expected) => {
-                    let expected_kinds = expected
-                        .iter()
-                        .map(|kind| token_kind_to_code(kind, language_kind));
-                    quote! {
-                        matches!(element.kind(), #(#expected_kinds)|*)
-                    }
-                },
-            }
+        Field::Token { kind, .. } => match kind {
+            TokenKind::Single(expected) => {
+                let expected_kind = token_kind_to_code(expected, language_kind);
+                quote! { element.kind() == #expected_kind}
+            },
+            TokenKind::Many(expected) => {
+                let expected_kinds = expected
+                    .iter()
+                    .map(|kind| token_kind_to_code(kind, language_kind));
+                quote! {
+                    matches!(element.kind(), #(#expected_kinds)|*)
+                }
+            },
         },
     }
 }

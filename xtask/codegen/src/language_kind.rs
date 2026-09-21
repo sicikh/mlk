@@ -40,7 +40,8 @@ macro_rules! define_language_kind_function {
             match self {
                 $( LanguageKind::$kind => {
                     // HACK: workaround for $kind$out adding an extra space between the two
-                    let ident = format_ident!("{}{}", stringify!($kind), stringify!($out));
+                    // let ident = format_ident!("{}{}", stringify!($kind), stringify!($out));
+                    let ident = format_ident!("{}", stringify!($out));
                     quote! { #ident }
                 },)*
             }

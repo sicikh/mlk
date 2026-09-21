@@ -1,13 +1,13 @@
 use mlkc_rowan::Language;
 
-use crate::{MlkSyntaxKind, RootModule};
+use crate::{ModuleRoot, SyntaxKind};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct MlkLanguage;
 
 impl Language for MlkLanguage {
-    type Kind = MlkSyntaxKind;
-    type Root = RootModule;
+    type Kind = SyntaxKind;
+    type Root = ModuleRoot;
 }
 
 pub type SyntaxNode = mlkc_rowan::SyntaxNode<MlkLanguage>;

@@ -576,7 +576,7 @@ mod tests {
     use super::*;
     use crate::ParserContext;
     use crate::token_source::Trivia;
-    use mlkc_syntax::MlkSyntaxKind;
+    use mlkc_syntax::SyntaxKind::{self, *};
 
     const FILE: FileId = FileId::from_raw(0);
 
@@ -587,13 +587,13 @@ mod tests {
     /// A token source that keeps reporting the same token until it is bumped.
     struct TestTokenSource {
         text: &'static str,
-        kind: MlkSyntaxKind,
+        kind: SyntaxKind,
         range: TextRange,
     }
 
     impl TestTokenSource {
         /// A source positioned at `kind`, which spans `range`.
-        fn at(text: &'static str, kind: MlkSyntaxKind, range: TextRange) -> Self {
+        fn at(text: &'static str, kind: SyntaxKind, range: TextRange) -> Self {
             Self { text, kind, range }
         }
 
@@ -602,14 +602,14 @@ mod tests {
             let end = TextSize::try_from(text.len()).expect("text is too long");
             Self {
                 text,
-                kind: MlkSyntaxKind::EOF,
+                kind: EOF,
                 range: TextRange::empty(end),
             }
         }
     }
 
     impl TokenSource for TestTokenSource {
-        type Kind = MlkSyntaxKind;
+        type Kind = SyntaxKind;
 
         fn current(&self) -> Self::Kind {
             self.kind
@@ -641,7 +641,7 @@ mod tests {
     }
 
     struct TestParser {
-        context: ParserContext<MlkSyntaxKind>,
+        context: ParserContext<SyntaxKind>,
         source: TestTokenSource,
     }
 
@@ -655,7 +655,7 @@ mod tests {
     }
 
     impl Parser for TestParser {
-        type Kind = MlkSyntaxKind;
+        type Kind = SyntaxKind;
         type Source = TestTokenSource;
 
         fn context(&self) -> &ParserContext<Self::Kind> {
@@ -781,18 +781,14 @@ mod tests {
             "Expected an expression here."
         );
 
-        let diagnostic = expected_token(MlkSyntaxKind::L_CURLY).into_diagnostic(&p);
-        assert_eq!(diagnostic.message, "expected `{` but instead the file ends");
+        let diagnostic = expected_token(L_PAREN).into_diagnostic(&p);
+        assert_eq!(diagnostic.message, "expected `(` but instead the file ends");
         assert_eq!(diagnostic.advices()[0].message, "the file ends here");
     }
 
     #[test]
     fn reports_the_found_token() {
-        let p = TestParser::new(TestTokenSource::at(
-            "let x = 1",
-            MlkSyntaxKind::IDENT,
-            range(0, 3),
-        ));
+        let p = TestParser::new(TestTokenSource::at("let x = 1", IDENT, range(0, 3)));
 
         let diagnostic = ParseDiagnostic::new_single_node("expression", range(0, 3), &p);
         assert_eq!(
@@ -800,8 +796,8 @@ mod tests {
             "Expected an expression but instead found 'let'."
         );
 
-        let diagnostic = expected_token(MlkSyntaxKind::L_CURLY).into_diagnostic(&p);
-        assert_eq!(diagnostic.message, "expected `{` but instead found `let`");
+        let diagnostic = expected_token(L_PAREN).into_diagnostic(&p);
+        assert_eq!(diagnostic.message, "expected `(` but instead found `let`");
         assert_eq!(diagnostic.advices()[0].message, "Remove let");
     }
 

@@ -1,19 +1,16 @@
 //! Generated file, do not edit by hand, see `xtask/codegen`
 
 #![allow(clippy::redundant_closure)]
-use biome_rowan::AstNode;
-use mlkc_syntax::{
-    MlkSyntaxElement as SyntaxElement, MlkSyntaxNode as SyntaxNode, MlkSyntaxToken as SyntaxToken,
-    *,
-};
+use mlkc_rowan::AstNode;
+use mlkc_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, *};
 pub fn attribute(at_token: SyntaxToken, name: Name) -> Attribute {
-    Attribute::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::ATTRIBUTE, [
+    Attribute::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::ATTRIBUTE, [
         Some(SyntaxElement::Token(at_token)),
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
 pub fn bin_expr(lhs: Expr, operator_token_token: SyntaxToken, rhs: Expr) -> BinExpr {
-    BinExpr::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::BIN_EXPR, [
+    BinExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BIN_EXPR, [
         Some(SyntaxElement::Node(lhs.into_syntax())),
         Some(SyntaxElement::Token(operator_token_token)),
         Some(SyntaxElement::Node(rhs.into_syntax())),
@@ -25,7 +22,7 @@ pub fn call_expr(
     arguments: ArgumentList,
     r_paren_token: SyntaxToken,
 ) -> CallExpr {
-    CallExpr::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::CALL_EXPR, [
+    CallExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::CALL_EXPR, [
         Some(SyntaxElement::Node(function.into_syntax())),
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(arguments.into_syntax())),
@@ -33,7 +30,7 @@ pub fn call_expr(
     ]))
 }
 pub fn fun_body(eq_token: SyntaxToken, expr: Expr) -> FunBody {
-    FunBody::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::FUN_BODY, [
+    FunBody::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FUN_BODY, [
         Some(SyntaxElement::Token(eq_token)),
         Some(SyntaxElement::Node(expr.into_syntax())),
     ]))
@@ -74,7 +71,7 @@ impl FunDeclBuilder {
         self
     }
     pub fn build(self) -> FunDecl {
-        FunDecl::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::FUN_DECL, [
+        FunDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FUN_DECL, [
             Some(SyntaxElement::Node(self.attributes.into_syntax())),
             Some(SyntaxElement::Token(self.fun_token)),
             Some(SyntaxElement::Node(self.name.into_syntax())),
@@ -91,7 +88,7 @@ pub fn fun_return_type_annotation(
     return_type: Type,
 ) -> FunReturnTypeAnnotation {
     FunReturnTypeAnnotation::unwrap_cast(SyntaxNode::new_detached(
-        MlkSyntaxKind::FUN_RETURN_TYPE_ANNOTATION,
+        SyntaxKind::FUN_RETURN_TYPE_ANNOTATION,
         [
             Some(SyntaxElement::Token(colon_token)),
             Some(SyntaxElement::Node(return_type.into_syntax())),
@@ -99,19 +96,19 @@ pub fn fun_return_type_annotation(
     ))
 }
 pub fn ident_pat(name: Name) -> IdentPat {
-    IdentPat::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::IDENT_PAT, [Some(
+    IdentPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::IDENT_PAT, [Some(
         SyntaxElement::Node(name.into_syntax()),
     )]))
 }
-pub fn infer_type(__token: SyntaxToken) -> InferType {
-    InferType::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::INFER_TYPE, [Some(
-        SyntaxElement::Token(__token),
+pub fn infer_type(underscore_token: SyntaxToken) -> InferType {
+    InferType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::INFER_TYPE, [Some(
+        SyntaxElement::Token(underscore_token),
     )]))
 }
 pub fn int_literal(value_token: SyntaxToken) -> IntLiteral {
-    IntLiteral::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::INT_LITERAL, [
-        Some(SyntaxElement::Token(value_token)),
-    ]))
+    IntLiteral::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::INT_LITERAL, [Some(
+        SyntaxElement::Token(value_token),
+    )]))
 }
 pub fn let_expr(
     let_token: SyntaxToken,
@@ -121,7 +118,7 @@ pub fn let_expr(
     in_token: SyntaxToken,
     body: Expr,
 ) -> LetExpr {
-    LetExpr::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::LET_EXPR, [
+    LetExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::LET_EXPR, [
         Some(SyntaxElement::Token(let_token)),
         Some(SyntaxElement::Node(pat.into_syntax())),
         Some(SyntaxElement::Token(eq_token)),
@@ -131,19 +128,19 @@ pub fn let_expr(
     ]))
 }
 pub fn module_preamble(module_token: SyntaxToken, name: Path) -> ModulePreamble {
-    ModulePreamble::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::MODULE_PREAMBLE, [
+    ModulePreamble::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_PREAMBLE, [
         Some(SyntaxElement::Token(module_token)),
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
 pub fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRoot {
-    ModuleRoot::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::MODULE_ROOT, [
+    ModuleRoot::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_ROOT, [
         Some(SyntaxElement::Node(items.into_syntax())),
         Some(SyntaxElement::Token(eof_token)),
     ]))
 }
 pub fn name(value_token: SyntaxToken) -> Name {
-    Name::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::NAME, [Some(
+    Name::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::NAME, [Some(
         SyntaxElement::Token(value_token),
     )]))
 }
@@ -163,7 +160,7 @@ impl ParameterBuilder {
         self
     }
     pub fn build(self) -> Parameter {
-        Parameter::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::PARAMETER, [
+        Parameter::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PARAMETER, [
             Some(SyntaxElement::Node(self.name.into_syntax())),
             self.type_annotation
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
@@ -175,14 +172,14 @@ pub fn parameters(
     items: ParameterList,
     r_paren_token: SyntaxToken,
 ) -> Parameters {
-    Parameters::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::PARAMETERS, [
+    Parameters::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PARAMETERS, [
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(items.into_syntax())),
         Some(SyntaxElement::Token(r_paren_token)),
     ]))
 }
 pub fn paren_expr(l_paren_token: SyntaxToken, expr: Expr, r_paren_token: SyntaxToken) -> ParenExpr {
-    ParenExpr::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::PAREN_EXPR, [
+    ParenExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PAREN_EXPR, [
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(expr.into_syntax())),
         Some(SyntaxElement::Token(r_paren_token)),
@@ -192,31 +189,30 @@ pub fn path(segment: PathSegment) -> PathBuilder {
     PathBuilder {
         segment,
         qualifier: None,
-        dot_token: None,
     }
 }
 pub struct PathBuilder {
     segment: PathSegment,
-    qualifier: Option<Path>,
-    dot_token: Option<SyntaxToken>,
+    qualifier: Option<PathQualifier>,
 }
 impl PathBuilder {
-    pub fn with_qualifier(mut self, qualifier: Path) -> Self {
+    pub fn with_qualifier(mut self, qualifier: PathQualifier) -> Self {
         self.qualifier = Some(qualifier);
         self
     }
-    pub fn with_dot_token(mut self, dot_token: SyntaxToken) -> Self {
-        self.dot_token = Some(dot_token);
-        self
-    }
     pub fn build(self) -> Path {
-        Path::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::PATH, [
+        Path::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH, [
             self.qualifier
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
-            self.dot_token.map(|token| SyntaxElement::Token(token)),
             Some(SyntaxElement::Node(self.segment.into_syntax())),
         ]))
     }
+}
+pub fn path_qualifier(path: Path, dot_token: SyntaxToken) -> PathQualifier {
+    PathQualifier::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_QUALIFIER, [
+        Some(SyntaxElement::Node(path.into_syntax())),
+        Some(SyntaxElement::Token(dot_token)),
+    ]))
 }
 pub fn path_segment(name: Name) -> PathSegmentBuilder {
     PathSegmentBuilder {
@@ -234,7 +230,7 @@ impl PathSegmentBuilder {
         self
     }
     pub fn build(self) -> PathSegment {
-        PathSegment::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::PATH_SEGMENT, [
+        PathSegment::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_SEGMENT, [
             Some(SyntaxElement::Node(self.name.into_syntax())),
             self.type_args
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
@@ -242,17 +238,17 @@ impl PathSegmentBuilder {
     }
 }
 pub fn path_type(path: Path) -> PathType {
-    PathType::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::PATH_TYPE, [Some(
+    PathType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_TYPE, [Some(
         SyntaxElement::Node(path.into_syntax()),
     )]))
 }
 pub fn string_literal(value_token: SyntaxToken) -> StringLiteral {
-    StringLiteral::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::STRING_LITERAL, [
+    StringLiteral::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::STRING_LITERAL, [
         Some(SyntaxElement::Token(value_token)),
     ]))
 }
 pub fn type_annotation(colon_token: SyntaxToken, ty: Type) -> TypeAnnotation {
-    TypeAnnotation::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::TYPE_ANNOTATION, [
+    TypeAnnotation::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_ANNOTATION, [
         Some(SyntaxElement::Token(colon_token)),
         Some(SyntaxElement::Node(ty.into_syntax())),
     ]))
@@ -262,41 +258,41 @@ pub fn type_args(
     type_arg_list: TypeArgList,
     r_brack_token: SyntaxToken,
 ) -> TypeArgs {
-    TypeArgs::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::TYPE_ARGS, [
+    TypeArgs::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_ARGS, [
         Some(SyntaxElement::Token(l_brack_token)),
         Some(SyntaxElement::Node(type_arg_list.into_syntax())),
         Some(SyntaxElement::Token(r_brack_token)),
     ]))
 }
 pub fn type_decl(attributes: AttributeList, type_token: SyntaxToken, name: Name) -> TypeDecl {
-    TypeDecl::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::TYPE_DECL, [
+    TypeDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_DECL, [
         Some(SyntaxElement::Node(attributes.into_syntax())),
         Some(SyntaxElement::Token(type_token)),
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
 pub fn var_expr(name: Name) -> VarExpr {
-    VarExpr::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::VAR_EXPR, [Some(
+    VarExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::VAR_EXPR, [Some(
         SyntaxElement::Node(name.into_syntax()),
     )]))
 }
-pub fn wildcard_pat(__token: SyntaxToken) -> WildcardPat {
-    WildcardPat::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::WILDCARD_PAT, [
-        Some(SyntaxElement::Token(__token)),
-    ]))
+pub fn wildcard_pat(underscore_token: SyntaxToken) -> WildcardPat {
+    WildcardPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::WILDCARD_PAT, [Some(
+        SyntaxElement::Token(underscore_token),
+    )]))
 }
 pub fn argument_list<I, S>(items: I, separators: S) -> ArgumentList
 where
     I: IntoIterator<Item = Expr>,
     I::IntoIter: ExactSizeIterator,
-    S: IntoIterator<Item = MlkSyntaxToken>,
+    S: IntoIterator<Item = SyntaxToken>,
     S::IntoIter: ExactSizeIterator,
 {
     let mut items = items.into_iter();
     let mut separators = separators.into_iter();
     let length = items.len() + separators.len();
     ArgumentList::unwrap_cast(SyntaxNode::new_detached(
-        MlkSyntaxKind::ARGUMENT_LIST,
+        SyntaxKind::ARGUMENT_LIST,
         (0..length).map(|index| {
             if index % 2 == 0 {
                 Some(items.next()?.into_syntax().into())
@@ -312,7 +308,7 @@ where
     I::IntoIter: ExactSizeIterator,
 {
     AttributeList::unwrap_cast(SyntaxNode::new_detached(
-        MlkSyntaxKind::ATTRIBUTE_LIST,
+        SyntaxKind::ATTRIBUTE_LIST,
         items
             .into_iter()
             .map(|item| Some(item.into_syntax().into())),
@@ -324,7 +320,7 @@ where
     I::IntoIter: ExactSizeIterator,
 {
     ModuleItemList::unwrap_cast(SyntaxNode::new_detached(
-        MlkSyntaxKind::MODULE_ITEM_LIST,
+        SyntaxKind::MODULE_ITEM_LIST,
         items
             .into_iter()
             .map(|item| Some(item.into_syntax().into())),
@@ -334,14 +330,14 @@ pub fn parameter_list<I, S>(items: I, separators: S) -> ParameterList
 where
     I: IntoIterator<Item = Parameter>,
     I::IntoIter: ExactSizeIterator,
-    S: IntoIterator<Item = MlkSyntaxToken>,
+    S: IntoIterator<Item = SyntaxToken>,
     S::IntoIter: ExactSizeIterator,
 {
     let mut items = items.into_iter();
     let mut separators = separators.into_iter();
     let length = items.len() + separators.len();
     ParameterList::unwrap_cast(SyntaxNode::new_detached(
-        MlkSyntaxKind::PARAMETER_LIST,
+        SyntaxKind::PARAMETER_LIST,
         (0..length).map(|index| {
             if index % 2 == 0 {
                 Some(items.next()?.into_syntax().into())
@@ -355,14 +351,14 @@ pub fn type_arg_list<I, S>(items: I, separators: S) -> TypeArgList
 where
     I: IntoIterator<Item = Type>,
     I::IntoIter: ExactSizeIterator,
-    S: IntoIterator<Item = MlkSyntaxToken>,
+    S: IntoIterator<Item = SyntaxToken>,
     S::IntoIter: ExactSizeIterator,
 {
     let mut items = items.into_iter();
     let mut separators = separators.into_iter();
     let length = items.len() + separators.len();
     TypeArgList::unwrap_cast(SyntaxNode::new_detached(
-        MlkSyntaxKind::TYPE_ARG_LIST,
+        SyntaxKind::TYPE_ARG_LIST,
         (0..length).map(|index| {
             if index % 2 == 0 {
                 Some(items.next()?.into_syntax().into())
@@ -377,33 +373,33 @@ where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
-    Bogus::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::BOGUS, slots))
+    Bogus::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS, slots))
 }
 pub fn bogus_decl<I>(slots: I) -> BogusDecl
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
-    BogusDecl::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::BOGUS_DECL, slots))
+    BogusDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_DECL, slots))
 }
 pub fn bogus_expr<I>(slots: I) -> BogusExpr
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
-    BogusExpr::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::BOGUS_EXPR, slots))
+    BogusExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_EXPR, slots))
 }
 pub fn bogus_pat<I>(slots: I) -> BogusPat
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
-    BogusPat::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::BOGUS_PAT, slots))
+    BogusPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_PAT, slots))
 }
 pub fn bogus_type<I>(slots: I) -> BogusType
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
-    BogusType::unwrap_cast(SyntaxNode::new_detached(MlkSyntaxKind::BOGUS_TYPE, slots))
+    BogusType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_TYPE, slots))
 }

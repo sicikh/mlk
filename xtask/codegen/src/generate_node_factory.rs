@@ -207,7 +207,7 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
     let output = quote! {
         #![allow(clippy::redundant_closure)]
         use #syntax_crate::{*, #syntax_token as SyntaxToken, #syntax_node as SyntaxNode, #syntax_element as SyntaxElement};
-        use biome_rowan::AstNode;
+        use mlkc_rowan::AstNode;
 
         #(#nodes)*
         #(#lists)*

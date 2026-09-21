@@ -45,8 +45,10 @@ BogusType = SyntaxElement*
 Name = value: 'ident'
 
 Path =
-    (qualifier: Path '.')?
+    qualifier: PathQualifier?
     segment: PathSegment
+
+PathQualifier = Path '.'
 
 PathSegment = Name TypeArgs?
 
@@ -157,7 +159,6 @@ LetExpr =
     'in'
     body: Expr
 
-// `(42 * 2 - 10)`
 ParenExpr =
     '('
     expr: Expr

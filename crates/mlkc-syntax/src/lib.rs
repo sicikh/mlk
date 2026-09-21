@@ -1,27 +1,28 @@
 #[macro_use]
-mod kind;
-mod factory;
-mod nodes;
+mod generated;
 mod syntax_node;
 
-pub use kind::*;
-use mlkc_rowan::{
-    AstNode, RawSyntaxKind, SyntaxKind, TextRange, TextSize, TokenText, TreeBuilder,
-    TriviaPieceKind,
-};
-pub use nodes::*;
-pub use syntax_node::*;
+pub use crate::generated::SyntaxKind::*;
+pub use crate::generated::*;
+pub use crate::syntax_node::*;
+pub use mlkc_rowan::{TextLen, TextRange, TextSize, TokenAtOffset, TriviaPieceKind, WalkEvent};
 
-pub use crate::{MlkSyntaxKind::*, factory::MlkSyntaxFactory};
+use mlkc_rowan::{RawSyntaxKind, SyntaxKind as SyntaxKindTrait, TokenText};
 
-impl From<u16> for MlkSyntaxKind {
-    fn from(d: u16) -> MlkSyntaxKind {
+impl From<u16> for SyntaxKind {
+    fn from(d: u16) -> Self {
         assert!(d <= (__LAST as u16));
         unsafe { std::mem::transmute::<u16, Self>(d) }
     }
 }
 
-impl SyntaxKind for MlkSyntaxKind {
+impl From<SyntaxKind> for u16 {
+    fn from(kind: SyntaxKind) -> Self {
+        kind as Self
+    }
+}
+
+impl SyntaxKindTrait for SyntaxKind {
     const EOF: Self = EOF;
     const TOMBSTONE: Self = TOMBSTONE;
 
@@ -42,7 +43,7 @@ impl SyntaxKind for MlkSyntaxKind {
     }
 
     fn is_root(&self) -> bool {
-        RootModule::can_cast(*self)
+        matches!(self, MODULE_ROOT)
     }
 
     fn is_list(&self) -> bool {
@@ -54,13 +55,14 @@ impl SyntaxKind for MlkSyntaxKind {
     }
 
     fn to_string(&self) -> Option<&'static str> {
-        Self::to_string(*self)
+        Self::to_string(self)
     }
 }
-impl TryFrom<MlkSyntaxKind> for TriviaPieceKind {
+
+impl TryFrom<SyntaxKind> for TriviaPieceKind {
     type Error = ();
 
-    fn try_from(value: MlkSyntaxKind) -> Result<Self, Self::Error> {
+    fn try_from(value: SyntaxKind) -> Result<Self, Self::Error> {
         if value.is_trivia() {
             match value {
                 NEWLINE => Ok(Self::Newline),
@@ -85,5 +87,3 @@ pub fn inner_string_text(token: &SyntaxToken) -> TokenText {
 
     text
 }
-
-pub type MlkSyntaxTreeBuilder = TreeBuilder<'static, MlkLanguage, MlkSyntaxFactory>;

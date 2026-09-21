@@ -80,7 +80,7 @@ pub fn generate_nodes_mut(ast: &AstSrc, language_kind: LanguageKind) -> Result<S
 
     let ast = quote! {
         use std::iter::once;
-        use biome_rowan::AstNode;
+        use mlkc_rowan::AstNode;
         use crate::{generated::nodes::*, #syntax_token as SyntaxToken};
 
         #(#node_boilerplate_impls)*

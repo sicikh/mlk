@@ -1,14 +1,12 @@
 //! Generated file, do not edit by hand, see `xtask/codegen`
 
 #![allow(unused_mut)]
-use biome_rowan::{
-    AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory, SyntaxKind,
-};
-use mlkc_syntax::{MlkSyntaxKind, MlkSyntaxKind::*, T, *};
+use mlkc_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory, SyntaxKind};
+use mlkc_syntax::{SyntaxKind, SyntaxKind::*, T, *};
 #[derive(Debug)]
-pub struct MlkSyntaxFactory;
-impl SyntaxFactory for MlkSyntaxFactory {
-    type Kind = MlkSyntaxKind;
+pub struct SyntaxFactory;
+impl SyntaxFactory for SyntaxFactory {
+    type Kind = SyntaxKind;
     fn make_syntax(
         kind: Self::Kind,
         children: ParsedChildren<Self::Kind>,
@@ -495,17 +493,10 @@ impl SyntaxFactory for MlkSyntaxFactory {
             },
             PATH => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
-                    && Path::can_cast(element.kind())
-                {
-                    slots.mark_present();
-                    current_element = elements.next();
-                }
-                slots.next_slot();
-                if let Some(element) = &current_element
-                    && element.kind() == T ! [.]
+                    && PathQualifier::can_cast(element.kind())
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -522,6 +513,32 @@ impl SyntaxFactory for MlkSyntaxFactory {
                     return RawSyntaxNode::new(PATH.to_bogus(), children.into_iter().map(Some));
                 }
                 slots.into_node(PATH, children)
+            },
+            PATH_QUALIFIER => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && Path::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T ! [.]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        PATH_QUALIFIER.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(PATH_QUALIFIER, children)
             },
             PATH_SEGMENT => {
                 let mut elements = (&children).into_iter();
@@ -573,7 +590,7 @@ impl SyntaxFactory for MlkSyntaxFactory {
                 let mut slots: RawNodeSlots<1usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
-                    && element.kind() == T![string_literal]
+                    && element.kind() == STRING_LITERAL
                 {
                     slots.mark_present();
                     current_element = elements.next();

@@ -150,7 +150,7 @@ pub fn generate_syntax_factory(ast: &AstSrc, language_kind: LanguageKind) -> Res
     let output = quote! {
         #![allow(unused_mut)]
         use #syntax_crate::{*, #syntax_kind, #syntax_kind::*, T};
-        use biome_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory, SyntaxKind};
+        use mlkc_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory, SyntaxKind};
 
         #[derive(Debug)]
         pub struct #factory_kind;

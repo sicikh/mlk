@@ -40,8 +40,8 @@ pub fn generate_macros(ast: &AstSrc, language_kind: LanguageKind) -> Result<Stri
     let ast = quote! {
         /// Reconstruct an AstNode from a SyntaxNode
         ///
-        /// This macros performs a match over the [kind](biome_rowan::SyntaxNode::kind)
-        /// of the provided [biome_rowan::SyntaxNode] and constructs the appropriate
+        /// This macros performs a match over the [kind](mlkc_rowan::SyntaxNode::kind)
+        /// of the provided [mlkc_rowan::SyntaxNode] and constructs the appropriate
         /// AstNode type for it, then execute the provided expression over it.
         ///
         /// # Examples

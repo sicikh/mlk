@@ -2,9 +2,9 @@
 
 use std::iter::once;
 
-use biome_rowan::AstNode;
+use mlkc_rowan::AstNode;
 
-use crate::{MlkSyntaxToken as SyntaxToken, generated::nodes::*};
+use crate::{SyntaxToken, generated::nodes::*};
 impl Attribute {
     pub fn with_at_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
@@ -140,7 +140,7 @@ impl IdentPat {
     }
 }
 impl InferType {
-    pub fn with___token(self, element: SyntaxToken) -> Self {
+    pub fn with_underscore_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(0usize..=0usize, once(Some(element.into()))),
@@ -284,22 +284,30 @@ impl ParenExpr {
     }
 }
 impl Path {
-    pub fn with_qualifier(self, element: Option<Path>) -> Self {
+    pub fn with_qualifier(self, element: Option<PathQualifier>) -> Self {
         Self::unwrap_cast(self.syntax.splice_slots(
             0usize..=0usize,
             once(element.map(|element| element.into_syntax().into())),
         ))
     }
-    pub fn with_dot_token(self, element: Option<SyntaxToken>) -> Self {
-        Self::unwrap_cast(
-            self.syntax
-                .splice_slots(1usize..=1usize, once(element.map(|element| element.into()))),
-        )
-    }
     pub fn with_segment(self, element: PathSegment) -> Self {
         Self::unwrap_cast(
             self.syntax
-                .splice_slots(2usize..=2usize, once(Some(element.into_syntax().into()))),
+                .splice_slots(1usize..=1usize, once(Some(element.into_syntax().into()))),
+        )
+    }
+}
+impl PathQualifier {
+    pub fn with_path(self, element: Path) -> Self {
+        Self::unwrap_cast(
+            self.syntax
+                .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
+        )
+    }
+    pub fn with_dot_token(self, element: SyntaxToken) -> Self {
+        Self::unwrap_cast(
+            self.syntax
+                .splice_slots(1usize..=1usize, once(Some(element.into()))),
         )
     }
 }
@@ -396,7 +404,7 @@ impl VarExpr {
     }
 }
 impl WildcardPat {
-    pub fn with___token(self, element: SyntaxToken) -> Self {
+    pub fn with_underscore_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(0usize..=0usize, once(Some(element.into()))),

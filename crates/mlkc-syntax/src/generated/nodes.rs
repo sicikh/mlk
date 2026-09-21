@@ -4,17 +4,16 @@
 #![allow(unused)]
 use std::fmt::{Debug, Formatter};
 
-use biome_rowan::{
+use mlkc_rowan::{
     AstNode, AstNodeList, AstNodeListIterator, AstNodeSlotMap, AstSeparatedList,
     AstSeparatedListNodesIterator, RawSyntaxKind, SyntaxKindSet, SyntaxResult, support,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 
 use crate::{
-    MlkLanguage as Language, MlkSyntaxElement as SyntaxElement,
-    MlkSyntaxElementChildren as SyntaxElementChildren,
-    MlkSyntaxKind::{self as SyntaxKind, *},
-    MlkSyntaxList as SyntaxList, MlkSyntaxNode as SyntaxNode, MlkSyntaxToken as SyntaxToken,
+    MlkLanguage as Language, SyntaxElement, SyntaxElementChildren,
+    SyntaxKind::{self as SyntaxKind, *},
+    SyntaxList, SyntaxNode, SyntaxToken,
     macros::map_syntax_node,
 };
 #[doc = r" Sentinel value indicating a missing element in a dynamic node, where"]
@@ -344,10 +343,10 @@ impl InferType {
     }
     pub fn as_fields(&self) -> InferTypeFields {
         InferTypeFields {
-            __token: self.__token(),
+            underscore_token: self.underscore_token(),
         }
     }
-    pub fn __token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn underscore_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 0usize)
     }
 }
@@ -361,7 +360,7 @@ impl Serialize for InferType {
 }
 #[derive(Serialize)]
 pub struct InferTypeFields {
-    pub __token: SyntaxResult<SyntaxToken>,
+    pub underscore_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct IntLiteral {
@@ -720,18 +719,14 @@ impl Path {
     pub fn as_fields(&self) -> PathFields {
         PathFields {
             qualifier: self.qualifier(),
-            dot_token: self.dot_token(),
             segment: self.segment(),
         }
     }
-    pub fn qualifier(&self) -> Option<Path> {
+    pub fn qualifier(&self) -> Option<PathQualifier> {
         support::node(&self.syntax, 0usize)
     }
-    pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, 1usize)
-    }
     pub fn segment(&self) -> SyntaxResult<PathSegment> {
-        support::required_node(&self.syntax, 2usize)
+        support::required_node(&self.syntax, 1usize)
     }
 }
 impl Serialize for Path {
@@ -744,9 +739,48 @@ impl Serialize for Path {
 }
 #[derive(Serialize)]
 pub struct PathFields {
-    pub qualifier: Option<Path>,
-    pub dot_token: Option<SyntaxToken>,
+    pub qualifier: Option<PathQualifier>,
     pub segment: SyntaxResult<PathSegment>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct PathQualifier {
+    pub(crate) syntax: SyntaxNode,
+}
+impl PathQualifier {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> PathQualifierFields {
+        PathQualifierFields {
+            path: self.path(),
+            dot_token: self.dot_token(),
+        }
+    }
+    pub fn path(&self) -> SyntaxResult<Path> {
+        support::required_node(&self.syntax, 0usize)
+    }
+    pub fn dot_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+}
+impl Serialize for PathQualifier {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.as_fields().serialize(serializer)
+    }
+}
+#[derive(Serialize)]
+pub struct PathQualifierFields {
+    pub path: SyntaxResult<Path>,
+    pub dot_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PathSegment {
@@ -1035,10 +1069,10 @@ impl WildcardPat {
     }
     pub fn as_fields(&self) -> WildcardPatFields {
         WildcardPatFields {
-            __token: self.__token(),
+            underscore_token: self.underscore_token(),
         }
     }
-    pub fn __token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn underscore_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 0usize)
     }
 }
@@ -1052,7 +1086,7 @@ impl Serialize for WildcardPat {
 }
 #[derive(Serialize)]
 pub struct WildcardPatFields {
-    pub __token: SyntaxResult<SyntaxToken>,
+    pub underscore_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum Expr {
@@ -1586,7 +1620,10 @@ impl std::fmt::Debug for InferType {
         let result = if current_depth < 16 {
             DEPTH.set(current_depth + 1);
             f.debug_struct("InferType")
-                .field("__token", &support::DebugSyntaxResult(self.__token()))
+                .field(
+                    "underscore_token",
+                    &support::DebugSyntaxResult(self.underscore_token()),
+                )
                 .finish()
         } else {
             f.debug_struct("InferType").finish()
@@ -2047,10 +2084,6 @@ impl std::fmt::Debug for Path {
                     "qualifier",
                     &support::DebugOptionalElement(self.qualifier()),
                 )
-                .field(
-                    "dot_token",
-                    &support::DebugOptionalElement(self.dot_token()),
-                )
                 .field("segment", &support::DebugSyntaxResult(self.segment()))
                 .finish()
         } else {
@@ -2067,6 +2100,54 @@ impl From<Path> for SyntaxNode {
 }
 impl From<Path> for SyntaxElement {
     fn from(n: Path) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for PathQualifier {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(PATH_QUALIFIER as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PATH_QUALIFIER
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for PathQualifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("PathQualifier")
+                .field("path", &support::DebugSyntaxResult(self.path()))
+                .field("dot_token", &support::DebugSyntaxResult(self.dot_token()))
+                .finish()
+        } else {
+            f.debug_struct("PathQualifier").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<PathQualifier> for SyntaxNode {
+    fn from(n: PathQualifier) -> Self {
+        n.syntax
+    }
+}
+impl From<PathQualifier> for SyntaxElement {
+    fn from(n: PathQualifier) -> Self {
         n.syntax.into()
     }
 }
@@ -2448,7 +2529,10 @@ impl std::fmt::Debug for WildcardPat {
         let result = if current_depth < 16 {
             DEPTH.set(current_depth + 1);
             f.debug_struct("WildcardPat")
-                .field("__token", &support::DebugSyntaxResult(self.__token()))
+                .field(
+                    "underscore_token",
+                    &support::DebugSyntaxResult(self.underscore_token()),
+                )
                 .finish()
         } else {
             f.debug_struct("WildcardPat").finish()
@@ -2955,6 +3039,11 @@ impl std::fmt::Display for Path {
         std::fmt::Display::fmt(self.syntax(), f)
     }
 }
+impl std::fmt::Display for PathQualifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
 impl std::fmt::Display for PathSegment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
@@ -3274,7 +3363,7 @@ impl From<BogusType> for SyntaxElement {
         n.syntax.into()
     }
 }
-biome_rowan::declare_node_union! { pub AnyBogusNode = Bogus | BogusDecl | BogusExpr | BogusPat | BogusType }
+mlkc_rowan::declare_node_union! { pub AnyBogusNode = Bogus | BogusDecl | BogusExpr | BogusPat | BogusType }
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ArgumentList {
     syntax_list: SyntaxList,

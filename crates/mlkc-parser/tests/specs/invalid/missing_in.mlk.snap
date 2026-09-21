@@ -1,0 +1,108 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+fun main(): Unit =
+    let x = 1
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@0..4 "fun" [] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@4..8 "main" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@8..9 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@9..10 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@10..12 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@12..17 "Unit" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@17..18 "=" [] [],
+                expr: LetExpr {
+                    let_token: LET_KW@18..27 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    pat: IdentPat {
+                        name: Name {
+                            value_token: IDENT@27..29 "x" [] [Whitespace(" ")],
+                        },
+                    },
+                    eq_token: EQ@29..31 "=" [] [Whitespace(" ")],
+                    expr: IntLiteral {
+                        value_token: INT_LITERAL@31..32 "1" [] [],
+                    },
+                    in_token: missing (required),
+                    body: missing (required),
+                },
+            },
+        },
+    ],
+    eof_token: EOF@32..33 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..33
+  0: MODULE_ITEM_LIST@0..32
+    0: FUN_DECL@0..32
+      0: ATTRIBUTE_LIST@0..0
+      1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
+      2: NAME@4..8
+        0: IDENT@4..8 "main" [] []
+      3: PARAMETERS@8..10
+        0: L_PAREN@8..9 "(" [] []
+        1: PARAMETER_LIST@9..9
+        2: R_PAREN@9..10 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@10..17
+        0: COLON@10..12 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@12..17
+          0: PATH@12..17
+            0: (empty)
+            1: PATH_SEGMENT@12..17
+              0: NAME@12..17
+                0: IDENT@12..17 "Unit" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@17..32
+        0: EQ@17..18 "=" [] []
+        1: LET_EXPR@18..32
+          0: LET_KW@18..27 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: IDENT_PAT@27..29
+            0: NAME@27..29
+              0: IDENT@27..29 "x" [] [Whitespace(" ")]
+          2: EQ@29..31 "=" [] [Whitespace(" ")]
+          3: INT_LITERAL@31..32
+            0: INT_LITERAL@31..32 "1" [] []
+          4: (empty)
+          5: (empty)
+  1: EOF@32..33 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+33..33: expected `in` but instead the file ends
+    Detail Some(33..33): the file ends here

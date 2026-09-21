@@ -1,0 +1,12 @@
+fun nested(): Int =
+    let x = 1 in
+    let y = 2 in
+    x + y
+
+fun ignored(): Int =
+    let _ = 1 in
+    2
+
+fun bound_to_a_call(): Int =
+    let x = f(1) in
+    g(x, x)

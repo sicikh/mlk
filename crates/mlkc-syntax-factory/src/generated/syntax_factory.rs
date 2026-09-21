@@ -741,13 +741,15 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             ATTRIBUTE_LIST => Self::make_node_list_syntax(kind, children, Attribute::can_cast),
             MODULE_ITEM_LIST => Self::make_node_list_syntax(kind, children, ModuleItem::can_cast),
-            PARAMETER_LIST => Self::make_separated_list_syntax(
-                kind,
-                children,
-                Parameter::can_cast,
-                T ! [,],
-                false,
-            ),
+            PARAMETER_LIST => {
+                Self::make_separated_list_syntax(
+                    kind,
+                    children,
+                    Parameter::can_cast,
+                    T ! [,],
+                    false,
+                )
+            },
             TYPE_ARG_LIST => {
                 Self::make_separated_list_syntax(kind, children, Type::can_cast, T ! [,], true)
             },

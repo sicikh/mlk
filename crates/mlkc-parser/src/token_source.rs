@@ -47,6 +47,15 @@ impl<'src> TokenSource<'src> {
         token_source
     }
 
+    /// The whole source text.
+    ///
+    /// The text is borrowed from the caller of [TokenSource::from_str] and outlives the
+    /// token source, so the parser can hand it to the tree sink after the token source
+    /// has been consumed.
+    pub fn text(&self) -> &'src str {
+        self.lexer.source()
+    }
+
     /// Lexes tokens until the current one is not trivia, collecting the trivia.
     ///
     /// `first_token` is `true` for the first token of the source and for the token

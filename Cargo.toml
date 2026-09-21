@@ -19,6 +19,7 @@ mlkc-paths = { path = "crates/mlkc-paths", version = "0.1.0" }
 mlkc-rowan = { path = "crates/mlkc-rowan", version = "0.1.0" }
 mlkc-string-case = { path = "crates/mlkc-string-case", version = "0.1.0" }
 mlkc-syntax = { path = "crates/mlkc-syntax", version = "0.1.0" }
+mlkc-syntax-factory = { path = "crates/mlkc-syntax-factory", version = "0.1.0" }
 mlkc-text-edit = { path = "crates/mlkc-text-edit", version = "0.1.0" }
 mlkc-text-size = { path = "crates/mlkc-text-size", version = "0.1.0" }
 mlkc-ungrammar = { path = "crates/mlkc-ungrammar", version = "0.1.0" }
@@ -43,6 +44,7 @@ fst = "0.4.7"
 hashbrown = { version = "0.17.1", default-features = false }
 iai = "0.1.1"
 indexmap = "2.14.2"
+insta = "1.48.0"
 itertools = "0.15.0"
 jod-thread = "1.0.0"
 libc = "0.2.189"

@@ -12,8 +12,10 @@ logos.workspace = true
 mlkc-parser-core.workspace = true
 mlkc-rowan.workspace = true
 mlkc-syntax.workspace = true
+mlkc-syntax-factory.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
 quickcheck.workspace = true
 quickcheck_macros.workspace = true
 

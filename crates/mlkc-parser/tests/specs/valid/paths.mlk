@@ -1,0 +1,11 @@
+fun qualified(value: std.core.Int): Unit =
+    value
+
+fun applied(value: Map[Int, String]): Unit =
+    value
+
+fun applied_and_qualified(value: std.Map[Int, String,]): Unit =
+    value
+
+fun applied_to_a_qualified_path(value: std.core.Map[Int, String]): Unit =
+    value

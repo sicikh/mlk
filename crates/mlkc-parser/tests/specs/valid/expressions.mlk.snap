@@ -1,0 +1,548 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+fun products(): Int =
+    42 * 2 - 10
+
+fun comparisons(): Int =
+    1 + 2 * 3 <= 4 * 5 / 6
+
+fun logic(): Int =
+    1 == 2 || 3 < 4 && 5 >= 6
+
+fun parentheses(): Int =
+    (1 + 2) * (3 - 4)
+
+fun calls(): Int =
+    f(g(1), h(2, 3))
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@0..4 "fun" [] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@4..12 "products" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@12..13 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@13..14 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@14..16 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@16..20 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@20..21 "=" [] [],
+                expr: BinExpr {
+                    lhs: BinExpr {
+                        lhs: IntLiteral {
+                            value_token: INT_LITERAL@21..29 "42" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                        },
+                        operator_token: STAR@29..31 "*" [] [Whitespace(" ")],
+                        rhs: IntLiteral {
+                            value_token: INT_LITERAL@31..33 "2" [] [Whitespace(" ")],
+                        },
+                    },
+                    operator_token: MINUS@33..35 "-" [] [Whitespace(" ")],
+                    rhs: IntLiteral {
+                        value_token: INT_LITERAL@35..37 "10" [] [],
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@37..43 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@43..54 "comparisons" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@54..55 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@55..56 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@56..58 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@58..62 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@62..63 "=" [] [],
+                expr: BinExpr {
+                    lhs: BinExpr {
+                        lhs: IntLiteral {
+                            value_token: INT_LITERAL@63..70 "1" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                        },
+                        operator_token: PLUS@70..72 "+" [] [Whitespace(" ")],
+                        rhs: BinExpr {
+                            lhs: IntLiteral {
+                                value_token: INT_LITERAL@72..74 "2" [] [Whitespace(" ")],
+                            },
+                            operator_token: STAR@74..76 "*" [] [Whitespace(" ")],
+                            rhs: IntLiteral {
+                                value_token: INT_LITERAL@76..78 "3" [] [Whitespace(" ")],
+                            },
+                        },
+                    },
+                    operator_token: LT_EQ@78..81 "<=" [] [Whitespace(" ")],
+                    rhs: BinExpr {
+                        lhs: BinExpr {
+                            lhs: IntLiteral {
+                                value_token: INT_LITERAL@81..83 "4" [] [Whitespace(" ")],
+                            },
+                            operator_token: STAR@83..85 "*" [] [Whitespace(" ")],
+                            rhs: IntLiteral {
+                                value_token: INT_LITERAL@85..87 "5" [] [Whitespace(" ")],
+                            },
+                        },
+                        operator_token: SLASH@87..89 "/" [] [Whitespace(" ")],
+                        rhs: IntLiteral {
+                            value_token: INT_LITERAL@89..90 "6" [] [],
+                        },
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@90..96 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@96..101 "logic" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@101..102 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@102..103 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@103..105 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@105..109 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@109..110 "=" [] [],
+                expr: BinExpr {
+                    lhs: BinExpr {
+                        lhs: IntLiteral {
+                            value_token: INT_LITERAL@110..117 "1" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                        },
+                        operator_token: EQ2@117..120 "==" [] [Whitespace(" ")],
+                        rhs: IntLiteral {
+                            value_token: INT_LITERAL@120..122 "2" [] [Whitespace(" ")],
+                        },
+                    },
+                    operator_token: OR2@122..125 "||" [] [Whitespace(" ")],
+                    rhs: BinExpr {
+                        lhs: BinExpr {
+                            lhs: IntLiteral {
+                                value_token: INT_LITERAL@125..127 "3" [] [Whitespace(" ")],
+                            },
+                            operator_token: LT@127..129 "<" [] [Whitespace(" ")],
+                            rhs: IntLiteral {
+                                value_token: INT_LITERAL@129..131 "4" [] [Whitespace(" ")],
+                            },
+                        },
+                        operator_token: AND2@131..134 "&&" [] [Whitespace(" ")],
+                        rhs: BinExpr {
+                            lhs: IntLiteral {
+                                value_token: INT_LITERAL@134..136 "5" [] [Whitespace(" ")],
+                            },
+                            operator_token: GT_EQ@136..139 ">=" [] [Whitespace(" ")],
+                            rhs: IntLiteral {
+                                value_token: INT_LITERAL@139..140 "6" [] [],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@140..146 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@146..157 "parentheses" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@157..158 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@158..159 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@159..161 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@161..165 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@165..166 "=" [] [],
+                expr: BinExpr {
+                    lhs: ParenExpr {
+                        l_paren_token: L_PAREN@166..172 "(" [Newline("\n"), Whitespace("    ")] [],
+                        expr: BinExpr {
+                            lhs: IntLiteral {
+                                value_token: INT_LITERAL@172..174 "1" [] [Whitespace(" ")],
+                            },
+                            operator_token: PLUS@174..176 "+" [] [Whitespace(" ")],
+                            rhs: IntLiteral {
+                                value_token: INT_LITERAL@176..177 "2" [] [],
+                            },
+                        },
+                        r_paren_token: R_PAREN@177..179 ")" [] [Whitespace(" ")],
+                    },
+                    operator_token: STAR@179..181 "*" [] [Whitespace(" ")],
+                    rhs: ParenExpr {
+                        l_paren_token: L_PAREN@181..182 "(" [] [],
+                        expr: BinExpr {
+                            lhs: IntLiteral {
+                                value_token: INT_LITERAL@182..184 "3" [] [Whitespace(" ")],
+                            },
+                            operator_token: MINUS@184..186 "-" [] [Whitespace(" ")],
+                            rhs: IntLiteral {
+                                value_token: INT_LITERAL@186..187 "4" [] [],
+                            },
+                        },
+                        r_paren_token: R_PAREN@187..188 ")" [] [],
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@188..194 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@194..199 "calls" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@199..200 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@200..201 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@201..203 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@203..207 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@207..208 "=" [] [],
+                expr: CallExpr {
+                    function: VarExpr {
+                        name: Name {
+                            value_token: IDENT@208..214 "f" [Newline("\n"), Whitespace("    ")] [],
+                        },
+                    },
+                    l_paren_token: L_PAREN@214..215 "(" [] [],
+                    arguments: ArgumentList [
+                        CallExpr {
+                            function: VarExpr {
+                                name: Name {
+                                    value_token: IDENT@215..216 "g" [] [],
+                                },
+                            },
+                            l_paren_token: L_PAREN@216..217 "(" [] [],
+                            arguments: ArgumentList [
+                                IntLiteral {
+                                    value_token: INT_LITERAL@217..218 "1" [] [],
+                                },
+                            ],
+                            r_paren_token: R_PAREN@218..219 ")" [] [],
+                        },
+                        COMMA@219..221 "," [] [Whitespace(" ")],
+                        CallExpr {
+                            function: VarExpr {
+                                name: Name {
+                                    value_token: IDENT@221..222 "h" [] [],
+                                },
+                            },
+                            l_paren_token: L_PAREN@222..223 "(" [] [],
+                            arguments: ArgumentList [
+                                IntLiteral {
+                                    value_token: INT_LITERAL@223..224 "2" [] [],
+                                },
+                                COMMA@224..226 "," [] [Whitespace(" ")],
+                                IntLiteral {
+                                    value_token: INT_LITERAL@226..227 "3" [] [],
+                                },
+                            ],
+                            r_paren_token: R_PAREN@227..228 ")" [] [],
+                        },
+                    ],
+                    r_paren_token: R_PAREN@228..229 ")" [] [],
+                },
+            },
+        },
+    ],
+    eof_token: EOF@229..230 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..230
+  0: MODULE_ITEM_LIST@0..229
+    0: FUN_DECL@0..37
+      0: ATTRIBUTE_LIST@0..0
+      1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
+      2: NAME@4..12
+        0: IDENT@4..12 "products" [] []
+      3: PARAMETERS@12..14
+        0: L_PAREN@12..13 "(" [] []
+        1: PARAMETER_LIST@13..13
+        2: R_PAREN@13..14 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@14..20
+        0: COLON@14..16 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@16..20
+          0: PATH@16..20
+            0: (empty)
+            1: PATH_SEGMENT@16..20
+              0: NAME@16..20
+                0: IDENT@16..20 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@20..37
+        0: EQ@20..21 "=" [] []
+        1: BIN_EXPR@21..37
+          0: BIN_EXPR@21..33
+            0: INT_LITERAL@21..29
+              0: INT_LITERAL@21..29 "42" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+            1: STAR@29..31 "*" [] [Whitespace(" ")]
+            2: INT_LITERAL@31..33
+              0: INT_LITERAL@31..33 "2" [] [Whitespace(" ")]
+          1: MINUS@33..35 "-" [] [Whitespace(" ")]
+          2: INT_LITERAL@35..37
+            0: INT_LITERAL@35..37 "10" [] []
+    1: FUN_DECL@37..90
+      0: ATTRIBUTE_LIST@37..37
+      1: FUN_KW@37..43 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: NAME@43..54
+        0: IDENT@43..54 "comparisons" [] []
+      3: PARAMETERS@54..56
+        0: L_PAREN@54..55 "(" [] []
+        1: PARAMETER_LIST@55..55
+        2: R_PAREN@55..56 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@56..62
+        0: COLON@56..58 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@58..62
+          0: PATH@58..62
+            0: (empty)
+            1: PATH_SEGMENT@58..62
+              0: NAME@58..62
+                0: IDENT@58..62 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@62..90
+        0: EQ@62..63 "=" [] []
+        1: BIN_EXPR@63..90
+          0: BIN_EXPR@63..78
+            0: INT_LITERAL@63..70
+              0: INT_LITERAL@63..70 "1" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+            1: PLUS@70..72 "+" [] [Whitespace(" ")]
+            2: BIN_EXPR@72..78
+              0: INT_LITERAL@72..74
+                0: INT_LITERAL@72..74 "2" [] [Whitespace(" ")]
+              1: STAR@74..76 "*" [] [Whitespace(" ")]
+              2: INT_LITERAL@76..78
+                0: INT_LITERAL@76..78 "3" [] [Whitespace(" ")]
+          1: LT_EQ@78..81 "<=" [] [Whitespace(" ")]
+          2: BIN_EXPR@81..90
+            0: BIN_EXPR@81..87
+              0: INT_LITERAL@81..83
+                0: INT_LITERAL@81..83 "4" [] [Whitespace(" ")]
+              1: STAR@83..85 "*" [] [Whitespace(" ")]
+              2: INT_LITERAL@85..87
+                0: INT_LITERAL@85..87 "5" [] [Whitespace(" ")]
+            1: SLASH@87..89 "/" [] [Whitespace(" ")]
+            2: INT_LITERAL@89..90
+              0: INT_LITERAL@89..90 "6" [] []
+    2: FUN_DECL@90..140
+      0: ATTRIBUTE_LIST@90..90
+      1: FUN_KW@90..96 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: NAME@96..101
+        0: IDENT@96..101 "logic" [] []
+      3: PARAMETERS@101..103
+        0: L_PAREN@101..102 "(" [] []
+        1: PARAMETER_LIST@102..102
+        2: R_PAREN@102..103 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@103..109
+        0: COLON@103..105 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@105..109
+          0: PATH@105..109
+            0: (empty)
+            1: PATH_SEGMENT@105..109
+              0: NAME@105..109
+                0: IDENT@105..109 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@109..140
+        0: EQ@109..110 "=" [] []
+        1: BIN_EXPR@110..140
+          0: BIN_EXPR@110..122
+            0: INT_LITERAL@110..117
+              0: INT_LITERAL@110..117 "1" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+            1: EQ2@117..120 "==" [] [Whitespace(" ")]
+            2: INT_LITERAL@120..122
+              0: INT_LITERAL@120..122 "2" [] [Whitespace(" ")]
+          1: OR2@122..125 "||" [] [Whitespace(" ")]
+          2: BIN_EXPR@125..140
+            0: BIN_EXPR@125..131
+              0: INT_LITERAL@125..127
+                0: INT_LITERAL@125..127 "3" [] [Whitespace(" ")]
+              1: LT@127..129 "<" [] [Whitespace(" ")]
+              2: INT_LITERAL@129..131
+                0: INT_LITERAL@129..131 "4" [] [Whitespace(" ")]
+            1: AND2@131..134 "&&" [] [Whitespace(" ")]
+            2: BIN_EXPR@134..140
+              0: INT_LITERAL@134..136
+                0: INT_LITERAL@134..136 "5" [] [Whitespace(" ")]
+              1: GT_EQ@136..139 ">=" [] [Whitespace(" ")]
+              2: INT_LITERAL@139..140
+                0: INT_LITERAL@139..140 "6" [] []
+    3: FUN_DECL@140..188
+      0: ATTRIBUTE_LIST@140..140
+      1: FUN_KW@140..146 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: NAME@146..157
+        0: IDENT@146..157 "parentheses" [] []
+      3: PARAMETERS@157..159
+        0: L_PAREN@157..158 "(" [] []
+        1: PARAMETER_LIST@158..158
+        2: R_PAREN@158..159 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@159..165
+        0: COLON@159..161 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@161..165
+          0: PATH@161..165
+            0: (empty)
+            1: PATH_SEGMENT@161..165
+              0: NAME@161..165
+                0: IDENT@161..165 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@165..188
+        0: EQ@165..166 "=" [] []
+        1: BIN_EXPR@166..188
+          0: PAREN_EXPR@166..179
+            0: L_PAREN@166..172 "(" [Newline("\n"), Whitespace("    ")] []
+            1: BIN_EXPR@172..177
+              0: INT_LITERAL@172..174
+                0: INT_LITERAL@172..174 "1" [] [Whitespace(" ")]
+              1: PLUS@174..176 "+" [] [Whitespace(" ")]
+              2: INT_LITERAL@176..177
+                0: INT_LITERAL@176..177 "2" [] []
+            2: R_PAREN@177..179 ")" [] [Whitespace(" ")]
+          1: STAR@179..181 "*" [] [Whitespace(" ")]
+          2: PAREN_EXPR@181..188
+            0: L_PAREN@181..182 "(" [] []
+            1: BIN_EXPR@182..187
+              0: INT_LITERAL@182..184
+                0: INT_LITERAL@182..184 "3" [] [Whitespace(" ")]
+              1: MINUS@184..186 "-" [] [Whitespace(" ")]
+              2: INT_LITERAL@186..187
+                0: INT_LITERAL@186..187 "4" [] []
+            2: R_PAREN@187..188 ")" [] []
+    4: FUN_DECL@188..229
+      0: ATTRIBUTE_LIST@188..188
+      1: FUN_KW@188..194 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: NAME@194..199
+        0: IDENT@194..199 "calls" [] []
+      3: PARAMETERS@199..201
+        0: L_PAREN@199..200 "(" [] []
+        1: PARAMETER_LIST@200..200
+        2: R_PAREN@200..201 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@201..207
+        0: COLON@201..203 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@203..207
+          0: PATH@203..207
+            0: (empty)
+            1: PATH_SEGMENT@203..207
+              0: NAME@203..207
+                0: IDENT@203..207 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@207..229
+        0: EQ@207..208 "=" [] []
+        1: CALL_EXPR@208..229
+          0: VAR_EXPR@208..214
+            0: NAME@208..214
+              0: IDENT@208..214 "f" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@214..215 "(" [] []
+          2: ARGUMENT_LIST@215..228
+            0: CALL_EXPR@215..219
+              0: VAR_EXPR@215..216
+                0: NAME@215..216
+                  0: IDENT@215..216 "g" [] []
+              1: L_PAREN@216..217 "(" [] []
+              2: ARGUMENT_LIST@217..218
+                0: INT_LITERAL@217..218
+                  0: INT_LITERAL@217..218 "1" [] []
+              3: R_PAREN@218..219 ")" [] []
+            1: COMMA@219..221 "," [] [Whitespace(" ")]
+            2: CALL_EXPR@221..228
+              0: VAR_EXPR@221..222
+                0: NAME@221..222
+                  0: IDENT@221..222 "h" [] []
+              1: L_PAREN@222..223 "(" [] []
+              2: ARGUMENT_LIST@223..227
+                0: INT_LITERAL@223..224
+                  0: INT_LITERAL@223..224 "2" [] []
+                1: COMMA@224..226 "," [] [Whitespace(" ")]
+                2: INT_LITERAL@226..227
+                  0: INT_LITERAL@226..227 "3" [] []
+              3: R_PAREN@227..228 ")" [] []
+          3: R_PAREN@228..229 ")" [] []
+  1: EOF@229..230 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+No diagnostics.

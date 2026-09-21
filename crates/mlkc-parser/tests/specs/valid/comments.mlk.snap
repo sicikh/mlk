@@ -1,0 +1,33 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A module that holds nothing but a comment: the comment is the leading trivia of the end
+// of the file, and the item list stays empty.
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    items: ModuleItemList [],
+    eof_token: EOF@0..138 "" [Comments("// A module that hold ..."), Newline("\n"), Comments("// of the file, and t ..."), Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..138
+  0: MODULE_ITEM_LIST@0..0
+  1: EOF@0..138 "" [Comments("// A module that hold ..."), Newline("\n"), Comments("// of the file, and t ..."), Newline("\n")] []
+
+```
+
+## Diagnostics
+
+No diagnostics.

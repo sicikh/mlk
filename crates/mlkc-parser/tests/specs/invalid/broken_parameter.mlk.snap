@@ -1,0 +1,158 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+fun broken(1): Unit = 1
+
+fun after(): Unit = 2
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    items: ModuleItemList [
+        BogusDecl {
+            items: [
+                AttributeList [],
+                FUN_KW@0..4 "fun" [] [Whitespace(" ")],
+                Name {
+                    value_token: IDENT@4..10 "broken" [] [],
+                },
+                Bogus {
+                    items: [
+                        L_PAREN@10..11 "(" [] [],
+                        Bogus {
+                            items: [
+                                Bogus {
+                                    items: [
+                                        INT_LITERAL@11..12 "1" [] [],
+                                    ],
+                                },
+                            ],
+                        },
+                        R_PAREN@12..13 ")" [] [],
+                    ],
+                },
+                FunReturnTypeAnnotation {
+                    colon_token: COLON@13..15 ":" [] [Whitespace(" ")],
+                    return_type: PathType {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                name: Name {
+                                    value_token: IDENT@15..20 "Unit" [] [Whitespace(" ")],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                    },
+                },
+                FunBody {
+                    eq_token: EQ@20..22 "=" [] [Whitespace(" ")],
+                    expr: IntLiteral {
+                        value_token: INT_LITERAL@22..23 "1" [] [],
+                    },
+                },
+            ],
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            fun_token: FUN_KW@23..29 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@29..34 "after" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@34..35 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@35..36 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@36..38 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@38..43 "Unit" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@43..45 "=" [] [Whitespace(" ")],
+                expr: IntLiteral {
+                    value_token: INT_LITERAL@45..46 "2" [] [],
+                },
+            },
+        },
+    ],
+    eof_token: EOF@46..47 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..47
+  0: MODULE_ITEM_LIST@0..46
+    0: BOGUS_DECL@0..23
+      0: ATTRIBUTE_LIST@0..0
+      1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
+      2: NAME@4..10
+        0: IDENT@4..10 "broken" [] []
+      3: BOGUS@10..13
+        0: L_PAREN@10..11 "(" [] []
+        1: BOGUS@11..12
+          0: BOGUS@11..12
+            0: INT_LITERAL@11..12 "1" [] []
+        2: R_PAREN@12..13 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@13..20
+        0: COLON@13..15 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@15..20
+          0: PATH@15..20
+            0: (empty)
+            1: PATH_SEGMENT@15..20
+              0: NAME@15..20
+                0: IDENT@15..20 "Unit" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@20..23
+        0: EQ@20..22 "=" [] [Whitespace(" ")]
+        1: INT_LITERAL@22..23
+          0: INT_LITERAL@22..23 "1" [] []
+    1: FUN_DECL@23..46
+      0: ATTRIBUTE_LIST@23..23
+      1: FUN_KW@23..29 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: NAME@29..34
+        0: IDENT@29..34 "after" [] []
+      3: PARAMETERS@34..36
+        0: L_PAREN@34..35 "(" [] []
+        1: PARAMETER_LIST@35..35
+        2: R_PAREN@35..36 ")" [] []
+      4: FUN_RETURN_TYPE_ANNOTATION@36..43
+        0: COLON@36..38 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@38..43
+          0: PATH@38..43
+            0: (empty)
+            1: PATH_SEGMENT@38..43
+              0: NAME@38..43
+                0: IDENT@38..43 "Unit" [] [Whitespace(" ")]
+              1: (empty)
+      5: FUN_BODY@43..46
+        0: EQ@43..45 "=" [] [Whitespace(" ")]
+        1: INT_LITERAL@45..46
+          0: INT_LITERAL@45..46 "2" [] []
+  1: EOF@46..47 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+11..12: Expected a parameter but instead found '1'.
+    Detail Some(11..12): Expected a parameter here.

@@ -39,6 +39,7 @@ SyntaxElement = SyntaxElement
 Bogus = SyntaxElement*
 BogusDecl = SyntaxElement*
 BogusExpr = SyntaxElement*
+BogusParameter = SyntaxElement*
 BogusPat = SyntaxElement*
 BogusType = SyntaxElement*
 
@@ -61,6 +62,7 @@ TypeArgList = (Type (',' Type)* ','?)
 //*************************//
 
 ModuleRoot =
+    bom: 'UNICODE_BOM'?
     items: ModuleItemList
     eof: 'EOF'
 
@@ -106,7 +108,14 @@ Parameters =
     items: ParameterList
     ')'
 
-ParameterList = (Parameter (',' Parameter)*)
+// A parameter of a function declaration, or the tokens of one that is broken:
+// the list keeps the tokens of a mistake inside itself instead of breaking the
+// declaration they were written in.
+AnyParameter =
+    Parameter
+    | BogusParameter
+
+ParameterList = (AnyParameter (',' AnyParameter)*)
 
 Parameter =
     name: Name
@@ -170,6 +179,7 @@ ParenExpr =
 
 Type =
     PathType
+    | InferType
     | BogusType
 
 PathType = Path

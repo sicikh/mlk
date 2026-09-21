@@ -15,7 +15,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
         children: ParsedChildren<Self::Kind>,
     ) -> RawSyntaxNode<Self::Kind> {
         match kind {
-            BOGUS | BOGUS_DECL | BOGUS_EXPR | BOGUS_PAT | BOGUS_TYPE => {
+            BOGUS | BOGUS_DECL | BOGUS_EXPR | BOGUS_PARAMETER | BOGUS_PAT | BOGUS_TYPE => {
                 RawSyntaxNode::new(kind, children.into_iter().map(Some))
             },
             ATTRIBUTE => {
@@ -364,8 +364,15 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             MODULE_ROOT => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![UNICODE_BOM]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
                 if let Some(element) = &current_element
                     && ModuleItemList::can_cast(element.kind())
                 {
@@ -745,7 +752,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 Self::make_separated_list_syntax(
                     kind,
                     children,
-                    Parameter::can_cast,
+                    AnyParameter::can_cast,
                     T ! [,],
                     false,
                 )

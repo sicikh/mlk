@@ -14,6 +14,7 @@ fun main(): Unit =
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [
         FunDecl {
             attributes: AttributeList [],
@@ -67,7 +68,8 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..33
-  0: MODULE_ITEM_LIST@0..32
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..32
     0: FUN_DECL@0..32
       0: ATTRIBUTE_LIST@0..0
       1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
@@ -98,7 +100,7 @@ ModuleRoot {
             0: INT_LITERAL@31..32 "1" [] []
           4: (empty)
           5: (empty)
-  1: EOF@32..33 "" [Newline("\n")] []
+  2: EOF@32..33 "" [Newline("\n")] []
 
 ```
 

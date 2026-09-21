@@ -23,6 +23,7 @@ fun applied_to_a_qualified_path(value: std.core.Map[Int, String]): Unit =
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [
         FunDecl {
             attributes: AttributeList [],
@@ -389,7 +390,8 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..269
-  0: MODULE_ITEM_LIST@0..268
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..268
     0: FUN_DECL@0..52
       0: ATTRIBUTE_LIST@0..0
       1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
@@ -620,7 +622,7 @@ ModuleRoot {
         1: VAR_EXPR@258..268
           0: NAME@258..268
             0: IDENT@258..268 "value" [Newline("\n"), Whitespace("    ")] []
-  1: EOF@268..269 "" [Newline("\n")] []
+  2: EOF@268..269 "" [Newline("\n")] []
 
 ```
 

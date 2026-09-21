@@ -69,6 +69,7 @@ pub enum SyntaxKind {
     FUN_BODY,
     PARAMETERS,
     PARAMETER_LIST,
+    ANY_PARAMETER,
     PARAMETER,
     TYPE_ANNOTATION,
     EXPR,
@@ -88,6 +89,7 @@ pub enum SyntaxKind {
     BOGUS,
     BOGUS_DECL,
     BOGUS_EXPR,
+    BOGUS_PARAMETER,
     BOGUS_PAT,
     BOGUS_TYPE,
     #[doc(hidden)]

@@ -99,3 +99,29 @@ impl<'src> ParserTrait for Parser<'src> {
         &mut self.source
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use mlkc_syntax::{MlkLanguage, UNICODE_BOM};
+
+    /// The byte order mark cannot be written in a fixture or in a spec comment: it is an
+    /// invisible character at the start of a file.
+    #[test]
+    fn the_byte_order_mark_ends_up_in_the_tree() {
+        let source = "\u{feff}fun main(): Unit = 1";
+
+        let parsed = crate::parse(source);
+
+        assert!(
+            parsed.diagnostics().is_empty(),
+            "the mark is not a mistake: {:?}",
+            parsed.diagnostics()
+        );
+
+        let tree = parsed.syntax::<MlkLanguage>();
+        assert_eq!(tree.to_string(), source);
+
+        let first_token = tree.first_token().expect("the tree to hold the source");
+        assert_eq!(first_token.kind(), UNICODE_BOM);
+    }
+}

@@ -6,6 +6,9 @@
 //!
 //! A new fixture needs a line here: the tests read the directory of the fixtures as well,
 //! and fail when a fixture it holds has no test.
+//!
+//! The specs written next to the rules run as well, and need no declaration of any kind:
+//! see [`inline_specs`].
 
 mod spec_test;
 
@@ -39,6 +42,9 @@ spec_tests! {
 
     // Paths of types, qualified and applied to type arguments.
     paths: "valid/paths.mlk",
+
+    // Types left to be inferred, in a return type, a parameter and a type argument.
+    infer_type: "valid/infer_type.mlk",
 
     // A module without items: the comment it holds belongs to the end of the file.
     comments: "valid/comments.mlk",
@@ -85,4 +91,24 @@ fn every_fixture_has_a_test() {
         "the fixtures under {} and the tests of this file disagree",
         spec_test::SPECS_DIR
     );
+}
+
+/// The specs written next to the rules they cover.
+///
+/// A spec is a comment in the source of the parser, holding a module that must parse
+/// cleanly:
+///
+/// ```text
+/// // test mlk let_in
+/// // fun main(): Int =
+/// //     let x = 1 in
+/// //     x
+/// ```
+///
+/// The comment sits where the rule it covers lives, so that the rule and the module it is
+/// expected to parse are read together. A mistake is described by a fixture under `specs`,
+/// whose snapshot holds the diagnostics and the tree the parser recovered into.
+#[test]
+fn inline_specs() {
+    spec_test::run_inline_specs();
 }

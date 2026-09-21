@@ -133,11 +133,30 @@ pub fn module_preamble(module_token: SyntaxToken, name: Path) -> ModulePreamble 
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
-pub fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRoot {
-    ModuleRoot::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_ROOT, [
-        Some(SyntaxElement::Node(items.into_syntax())),
-        Some(SyntaxElement::Token(eof_token)),
-    ]))
+pub fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRootBuilder {
+    ModuleRootBuilder {
+        items,
+        eof_token,
+        bom_token: None,
+    }
+}
+pub struct ModuleRootBuilder {
+    items: ModuleItemList,
+    eof_token: SyntaxToken,
+    bom_token: Option<SyntaxToken>,
+}
+impl ModuleRootBuilder {
+    pub fn with_bom_token(mut self, bom_token: SyntaxToken) -> Self {
+        self.bom_token = Some(bom_token);
+        self
+    }
+    pub fn build(self) -> ModuleRoot {
+        ModuleRoot::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_ROOT, [
+            self.bom_token.map(|token| SyntaxElement::Token(token)),
+            Some(SyntaxElement::Node(self.items.into_syntax())),
+            Some(SyntaxElement::Token(self.eof_token)),
+        ]))
+    }
 }
 pub fn name(value_token: SyntaxToken) -> Name {
     Name::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::NAME, [Some(
@@ -328,7 +347,7 @@ where
 }
 pub fn parameter_list<I, S>(items: I, separators: S) -> ParameterList
 where
-    I: IntoIterator<Item = Parameter>,
+    I: IntoIterator<Item = AnyParameter>,
     I::IntoIter: ExactSizeIterator,
     S: IntoIterator<Item = SyntaxToken>,
     S::IntoIter: ExactSizeIterator,
@@ -388,6 +407,13 @@ where
     I::IntoIter: ExactSizeIterator,
 {
     BogusExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_EXPR, slots))
+}
+pub fn bogus_parameter<I>(slots: I) -> BogusParameter
+where
+    I: IntoIterator<Item = Option<SyntaxElement>>,
+    I::IntoIter: ExactSizeIterator,
+{
+    BogusParameter::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_PARAMETER, slots))
 }
 pub fn bogus_pat<I>(slots: I) -> BogusPat
 where

@@ -28,6 +28,7 @@ fun main(): Unit =
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [
         TypeDecl {
             attributes: AttributeList [
@@ -196,7 +197,8 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..193
-  0: MODULE_ITEM_LIST@0..192
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..192
     0: TYPE_DECL@0..37
       0: ATTRIBUTE_LIST@0..27
         0: ATTRIBUTE@0..27
@@ -301,7 +303,7 @@ ModuleRoot {
                 2: INT_LITERAL@189..191
                   0: INT_LITERAL@189..191 "20" [] []
             3: R_PAREN@191..192 ")" [] []
-  1: EOF@192..193 "" [Newline("\n")] []
+  2: EOF@192..193 "" [Newline("\n")] []
 
 ```
 

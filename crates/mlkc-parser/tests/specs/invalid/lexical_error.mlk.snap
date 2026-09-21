@@ -13,6 +13,7 @@ fun main(): Unit = $ + 1
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [
         FunDecl {
             attributes: AttributeList [],
@@ -60,7 +61,8 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..25
-  0: MODULE_ITEM_LIST@0..24
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..24
     0: FUN_DECL@0..19
       0: ATTRIBUTE_LIST@0..0
       1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
@@ -86,7 +88,7 @@ ModuleRoot {
       0: ERROR_TOKEN@19..21 "$" [] [Whitespace(" ")]
       1: PLUS@21..23 "+" [] [Whitespace(" ")]
       2: INT_LITERAL@23..24 "1" [] []
-  1: EOF@24..25 "" [Newline("\n")] []
+  2: EOF@24..25 "" [Newline("\n")] []
 
 ```
 

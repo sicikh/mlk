@@ -68,19 +68,6 @@ impl<'src> TokenSource<'src> {
         loop {
             let kind = self.lexer.next_token(());
 
-            // The byte order mark is part of the file, but not part of the language:
-            // it is kept as trivia, so that the tree stays lossless.
-            // (A grammar that wants it as a token of its own gives the root node a
-            // `bom: 'UNICODE_BOM'?` field, the way biome does.)
-            if kind == UNICODE_BOM {
-                self.trivia_list.push(Trivia::new(
-                    TriviaPieceKind::Skipped,
-                    self.lexer.current_range(),
-                    trailing,
-                ));
-                continue;
-            }
-
             let Ok(trivia_kind) = TriviaPieceKind::try_from(kind) else {
                 // The current token is not trivia: the parser can look at it.
                 break;
@@ -336,11 +323,17 @@ mod tests {
     }
 
     #[test]
-    fn the_byte_order_mark_is_trivia() {
+    fn the_byte_order_mark_is_a_token() {
         let source = TokenSource::from_str("\u{feff}fun");
 
-        assert_eq!(source.current(), FUN_KW);
-        assert_eq!(trivia(&source), [(TriviaPieceKind::Skipped, false)]);
+        // The mark is the first token of the file rather than trivia: the root node of the
+        // grammar has a field for it.
+        assert_eq!(source.current(), UNICODE_BOM);
+        assert_eq!(
+            source.current_range(),
+            TextRange::at(TextSize::from(0), TextSize::from(3))
+        );
+        assert!(trivia(&source).is_empty());
     }
 
     #[test]

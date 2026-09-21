@@ -26,6 +26,7 @@ fun calls(): Int =
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [
         FunDecl {
             attributes: AttributeList [],
@@ -335,7 +336,8 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..230
-  0: MODULE_ITEM_LIST@0..229
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..229
     0: FUN_DECL@0..37
       0: ATTRIBUTE_LIST@0..0
       1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
@@ -539,7 +541,7 @@ ModuleRoot {
                   0: INT_LITERAL@226..227 "3" [] []
               3: R_PAREN@227..228 ")" [] []
           3: R_PAREN@228..229 ")" [] []
-  1: EOF@229..230 "" [Newline("\n")] []
+  2: EOF@229..230 "" [Newline("\n")] []
 
 ```
 

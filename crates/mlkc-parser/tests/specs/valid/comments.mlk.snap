@@ -14,6 +14,7 @@ expression: snapshot
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [],
     eof_token: EOF@0..138 "" [Comments("// A module that hold ..."), Newline("\n"), Comments("// of the file, and t ..."), Newline("\n")] [],
 }
@@ -23,8 +24,9 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..138
-  0: MODULE_ITEM_LIST@0..0
-  1: EOF@0..138 "" [Comments("// A module that hold ..."), Newline("\n"), Comments("// of the file, and t ..."), Newline("\n")] []
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..0
+  2: EOF@0..138 "" [Comments("// A module that hold ..."), Newline("\n"), Comments("// of the file, and t ..."), Newline("\n")] []
 
 ```
 

@@ -134,6 +134,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::BogusExpr::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::BOGUS_PARAMETER => {
+                        let $pattern = unsafe { $crate::BogusParameter::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::BOGUS_PAT => {
                         let $pattern = unsafe { $crate::BogusPat::new_unchecked(node) };
                         $body

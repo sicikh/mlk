@@ -513,15 +513,19 @@ impl ModuleRoot {
     }
     pub fn as_fields(&self) -> ModuleRootFields {
         ModuleRootFields {
+            bom_token: self.bom_token(),
             items: self.items(),
             eof_token: self.eof_token(),
         }
     }
+    pub fn bom_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, 0usize)
+    }
     pub fn items(&self) -> ModuleItemList {
-        support::list(&self.syntax, 0usize)
+        support::list(&self.syntax, 1usize)
     }
     pub fn eof_token(&self) -> SyntaxResult<SyntaxToken> {
-        support::required_token(&self.syntax, 1usize)
+        support::required_token(&self.syntax, 2usize)
     }
 }
 impl Serialize for ModuleRoot {
@@ -534,6 +538,7 @@ impl Serialize for ModuleRoot {
 }
 #[derive(Serialize)]
 pub struct ModuleRootFields {
+    pub bom_token: Option<SyntaxToken>,
     pub items: ModuleItemList,
     pub eof_token: SyntaxResult<SyntaxToken>,
 }
@@ -1089,6 +1094,25 @@ pub struct WildcardPatFields {
     pub underscore_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+pub enum AnyParameter {
+    BogusParameter(BogusParameter),
+    Parameter(Parameter),
+}
+impl AnyParameter {
+    pub fn as_bogus_parameter(&self) -> Option<&BogusParameter> {
+        match &self {
+            Self::BogusParameter(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_parameter(&self) -> Option<&Parameter> {
+        match &self {
+            Self::Parameter(item) => Some(item),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum Expr {
     BinExpr(BinExpr),
     BogusExpr(BogusExpr),
@@ -1216,12 +1240,19 @@ impl Pat {
 #[derive(Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum Type {
     BogusType(BogusType),
+    InferType(InferType),
     PathType(PathType),
 }
 impl Type {
     pub fn as_bogus_type(&self) -> Option<&BogusType> {
         match &self {
             Self::BogusType(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_infer_type(&self) -> Option<&InferType> {
+        match &self {
+            Self::InferType(item) => Some(item),
             _ => None,
         }
     }
@@ -1823,6 +1854,10 @@ impl std::fmt::Debug for ModuleRoot {
         let result = if current_depth < 16 {
             DEPTH.set(current_depth + 1);
             f.debug_struct("ModuleRoot")
+                .field(
+                    "bom_token",
+                    &support::DebugOptionalElement(self.bom_token()),
+                )
                 .field("items", &self.items())
                 .field("eof_token", &support::DebugSyntaxResult(self.eof_token()))
                 .finish()
@@ -2551,6 +2586,65 @@ impl From<WildcardPat> for SyntaxElement {
         n.syntax.into()
     }
 }
+impl From<BogusParameter> for AnyParameter {
+    fn from(node: BogusParameter) -> Self {
+        Self::BogusParameter(node)
+    }
+}
+impl From<Parameter> for AnyParameter {
+    fn from(node: Parameter) -> Self {
+        Self::Parameter(node)
+    }
+}
+impl AstNode for AnyParameter {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> = BogusParameter::KIND_SET.union(Parameter::KIND_SET);
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(kind, BOGUS_PARAMETER | PARAMETER)
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        let res = match syntax.kind() {
+            BOGUS_PARAMETER => Self::BogusParameter(BogusParameter { syntax }),
+            PARAMETER => Self::Parameter(Parameter { syntax }),
+            _ => return None,
+        };
+        Some(res)
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::BogusParameter(it) => it.syntax(),
+            Self::Parameter(it) => it.syntax(),
+        }
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        match self {
+            Self::BogusParameter(it) => it.into_syntax(),
+            Self::Parameter(it) => it.into_syntax(),
+        }
+    }
+}
+impl std::fmt::Debug for AnyParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BogusParameter(it) => std::fmt::Debug::fmt(it, f),
+            Self::Parameter(it) => std::fmt::Debug::fmt(it, f),
+        }
+    }
+}
+impl From<AnyParameter> for SyntaxNode {
+    fn from(n: AnyParameter) -> Self {
+        match n {
+            AnyParameter::BogusParameter(it) => it.into_syntax(),
+            AnyParameter::Parameter(it) => it.into_syntax(),
+        }
+    }
+}
+impl From<AnyParameter> for SyntaxElement {
+    fn from(n: AnyParameter) -> Self {
+        let node: SyntaxNode = n.into();
+        node.into()
+    }
+}
 impl From<BinExpr> for Expr {
     fn from(node: BinExpr) -> Self {
         Self::BinExpr(node)
@@ -2875,6 +2969,11 @@ impl From<BogusType> for Type {
         Self::BogusType(node)
     }
 }
+impl From<InferType> for Type {
+    fn from(node: InferType) -> Self {
+        Self::InferType(node)
+    }
+}
 impl From<PathType> for Type {
     fn from(node: PathType) -> Self {
         Self::PathType(node)
@@ -2882,13 +2981,16 @@ impl From<PathType> for Type {
 }
 impl AstNode for Type {
     type Language = Language;
-    const KIND_SET: SyntaxKindSet<Language> = BogusType::KIND_SET.union(PathType::KIND_SET);
+    const KIND_SET: SyntaxKindSet<Language> = BogusType::KIND_SET
+        .union(InferType::KIND_SET)
+        .union(PathType::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
-        matches!(kind, BOGUS_TYPE | PATH_TYPE)
+        matches!(kind, BOGUS_TYPE | INFER_TYPE | PATH_TYPE)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let res = match syntax.kind() {
             BOGUS_TYPE => Self::BogusType(BogusType { syntax }),
+            INFER_TYPE => Self::InferType(InferType { syntax }),
             PATH_TYPE => Self::PathType(PathType { syntax }),
             _ => return None,
         };
@@ -2897,12 +2999,14 @@ impl AstNode for Type {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             Self::BogusType(it) => it.syntax(),
+            Self::InferType(it) => it.syntax(),
             Self::PathType(it) => it.syntax(),
         }
     }
     fn into_syntax(self) -> SyntaxNode {
         match self {
             Self::BogusType(it) => it.into_syntax(),
+            Self::InferType(it) => it.into_syntax(),
             Self::PathType(it) => it.into_syntax(),
         }
     }
@@ -2911,6 +3015,7 @@ impl std::fmt::Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::BogusType(it) => std::fmt::Debug::fmt(it, f),
+            Self::InferType(it) => std::fmt::Debug::fmt(it, f),
             Self::PathType(it) => std::fmt::Debug::fmt(it, f),
         }
     }
@@ -2919,6 +3024,7 @@ impl From<Type> for SyntaxNode {
     fn from(n: Type) -> Self {
         match n {
             Type::BogusType(it) => it.into_syntax(),
+            Type::InferType(it) => it.into_syntax(),
             Type::PathType(it) => it.into_syntax(),
         }
     }
@@ -2927,6 +3033,11 @@ impl From<Type> for SyntaxElement {
     fn from(n: Type) -> Self {
         let node: SyntaxNode = n.into();
         node.into()
+    }
+}
+impl std::fmt::Display for AnyParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
     }
 }
 impl std::fmt::Display for Expr {
@@ -3252,6 +3363,62 @@ impl From<BogusExpr> for SyntaxElement {
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct BogusParameter {
+    syntax: SyntaxNode,
+}
+impl BogusParameter {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn items(&self) -> SyntaxElementChildren {
+        support::elements(&self.syntax)
+    }
+}
+impl AstNode for BogusParameter {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(BOGUS_PARAMETER as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BOGUS_PARAMETER
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for BogusParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BogusParameter")
+            .field("items", &DebugSyntaxElementChildren(self.items()))
+            .finish()
+    }
+}
+impl From<BogusParameter> for SyntaxNode {
+    fn from(n: BogusParameter) -> Self {
+        n.syntax
+    }
+}
+impl From<BogusParameter> for SyntaxElement {
+    fn from(n: BogusParameter) -> Self {
+        n.syntax.into()
+    }
+}
+#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct BogusPat {
     syntax: SyntaxNode,
 }
@@ -3363,7 +3530,7 @@ impl From<BogusType> for SyntaxElement {
         n.syntax.into()
     }
 }
-mlkc_rowan::declare_node_union! { pub AnyBogusNode = Bogus | BogusDecl | BogusExpr | BogusPat | BogusType }
+mlkc_rowan::declare_node_union! { pub AnyBogusNode = Bogus | BogusDecl | BogusExpr | BogusParameter | BogusPat | BogusType }
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ArgumentList {
     syntax_list: SyntaxList,
@@ -3664,7 +3831,7 @@ impl Serialize for ParameterList {
 }
 impl AstSeparatedList for ParameterList {
     type Language = Language;
-    type Node = Parameter;
+    type Node = AnyParameter;
     fn syntax_list(&self) -> &SyntaxList {
         &self.syntax_list
     }
@@ -3679,15 +3846,15 @@ impl Debug for ParameterList {
     }
 }
 impl IntoIterator for ParameterList {
-    type Item = SyntaxResult<Parameter>;
-    type IntoIter = AstSeparatedListNodesIterator<Language, Parameter>;
+    type Item = SyntaxResult<AnyParameter>;
+    type IntoIter = AstSeparatedListNodesIterator<Language, AnyParameter>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 impl IntoIterator for &ParameterList {
-    type Item = SyntaxResult<Parameter>;
-    type IntoIter = AstSeparatedListNodesIterator<Language, Parameter>;
+    type Item = SyntaxResult<AnyParameter>;
+    type IntoIter = AstSeparatedListNodesIterator<Language, AnyParameter>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }

@@ -32,9 +32,14 @@ const MODULE_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![@], T![fun]
 /// in, or the end of the list it belongs to.
 const PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![,], T![')']];
 
-/// Parses the root of the tree: the items of the module, and the end of the file.
+/// Parses the root of the tree: the byte order mark if the file has one, the items of the
+/// module, and the end of the file.
 pub(crate) fn parse_module_root(p: &mut MlkParser) -> CompletedMarker {
     let m = p.start();
+
+    // The mark is a token of the tree rather than trivia: it is the first thing in the
+    // file, and a file that has it is written differently from one that does not.
+    p.eat(T![UNICODE_BOM]);
 
     ModuleItemListParse.parse_list(p);
 
@@ -86,6 +91,17 @@ fn parse_module_item(p: &mut MlkParser) -> ParsedSyntax {
 ///
 /// Everything but the name and the parameter list is optional: a declaration that is only
 /// an interface — a builtin, an external function — has neither a return type nor a body.
+// test mlk a_function_of_the_prelude_has_no_body
+// @builtin
+// fun size-of(value: Int): Int
+//
+// test mlk a_function_has_a_body_holding_an_expression
+// fun main(): Int =
+//     42
+//
+// test mlk a_function_may_take_no_arguments_and_return_nothing
+// fun main() =
+//     42
 fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
     if !is_at_declaration(p, FUN_KW) {
         return ParsedSyntax::Absent;
@@ -104,6 +120,9 @@ fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses a type declaration.
+// test mlk a_type_declaration_names_a_type
+// @builtin
+// type Unit
 fn parse_type_decl(p: &mut MlkParser) -> ParsedSyntax {
     if !is_at_declaration(p, TYPE_KW) {
         return ParsedSyntax::Absent;
@@ -119,6 +138,9 @@ fn parse_type_decl(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses the parameters of a function declaration, parentheses included.
+// test mlk parameters_are_annotated_with_types
+// fun applied(value: Map[Int, String], other: Int): Unit =
+//     value
 fn parse_parameters(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T!['(']) {
         return ParsedSyntax::Absent;
@@ -156,7 +178,7 @@ impl ParseSeparatedList for ParameterListParse {
     fn recover(&mut self, p: &mut MlkParser, parsed_element: ParsedSyntax) -> RecoveryResult {
         parsed_element.or_recover_with_token_set(
             p,
-            &ParseRecoveryTokenSet::new(BOGUS, PARAMETER_RECOVERY_SET),
+            &ParseRecoveryTokenSet::new(BOGUS_PARAMETER, PARAMETER_RECOVERY_SET),
             expected_parameter,
         )
     }

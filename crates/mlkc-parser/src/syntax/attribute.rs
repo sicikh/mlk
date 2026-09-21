@@ -33,6 +33,10 @@ pub(crate) fn is_at_declaration(p: &mut MlkParser, keyword: SyntaxKind) -> bool 
 ///
 /// The list is created even when it stays empty: the parent node has a slot for it, and a
 /// missing slot would be read as a missing list by everything that reads the tree.
+// test mlk a_declaration_may_carry_several_attributes
+// @builtin
+// @extern
+// type Int
 pub(crate) fn parse_attribute_list(p: &mut MlkParser) -> CompletedMarker {
     let m = p.start();
 

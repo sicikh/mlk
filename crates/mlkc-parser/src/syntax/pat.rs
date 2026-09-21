@@ -6,6 +6,10 @@ use mlkc_syntax::{SyntaxKind::*, T};
 use crate::{parser::MlkParser, syntax::auxiliary::parse_name};
 
 /// Parses a pattern.
+// test mlk a_binding_may_be_ignored
+// fun ignored(): Int =
+//     let _ = 1 in
+//     2
 pub(crate) fn parse_pat(p: &mut MlkParser) -> ParsedSyntax {
     match p.cur() {
         IDENT => parse_ident_pat(p),

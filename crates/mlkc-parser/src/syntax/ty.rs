@@ -1,7 +1,4 @@
 //! Types and the paths they are written with.
-//!
-//! The grammar declares `InferType` (`_`) but does not offer it as an alternative of `Type`
-//! yet, so `_` has no slot to live in and is not parsed here.
 
 use mlkc_parser_core::{
     parse_lists::ParseSeparatedList,
@@ -27,8 +24,27 @@ use crate::{
 const TYPE_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![,], T![']'], T![=], T![')']];
 
 /// Parses a type.
+// test mlk a_type_may_be_left_to_be_inferred
+// fun inferred(value: _): _ =
+//     value
 pub(crate) fn parse_type(p: &mut MlkParser) -> ParsedSyntax {
-    parse_path(p).map(|path| path.precede(p).complete(p, PATH_TYPE))
+    match p.cur() {
+        UNDERSCORE => parse_infer_type(p),
+        _ => parse_path(p).map(|path| path.precede(p).complete(p, PATH_TYPE)),
+    }
+}
+
+/// Parses the type of a value the reader is meant to infer: `_`.
+fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T!["_"]) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T!["_"]);
+
+    Present(m.complete(p, INFER_TYPE))
 }
 
 /// Parses a path: a single segment, or a segment qualified by another path, as in `a.b.c`.
@@ -36,6 +52,9 @@ pub(crate) fn parse_type(p: &mut MlkParser) -> ParsedSyntax {
 /// A qualified path is a path whose qualifier is a path of its own, and the qualifier is
 /// what holds the dot: `a.b` is a path of the segment `b` qualified by `a.`. Every dot
 /// therefore closes the path parsed so far into a qualifier, and starts a path around it.
+// test mlk a_path_qualifies_its_segments
+// fun qualified(value: std.core.Int): Unit =
+//     value
 pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
     let segment = parse_path_segment(p);
 
@@ -78,6 +97,13 @@ fn parse_path_segment(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses the type arguments of a path segment.
+// test mlk type_arguments_are_applied_to_a_segment
+// fun applied(value: Map[Int, String,]): Unit =
+//     value
+//
+// test mlk type_arguments_nest
+// fun nested(value: Map[Int, Map[String, Int]]): Unit =
+//     value
 fn parse_type_args(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T!['[']) {
         return ParsedSyntax::Absent;

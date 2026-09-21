@@ -1,0 +1,5 @@
+fun inferred(value: _): _ =
+    value
+
+fun applied(value: Map[_, Int]): Unit =
+    value

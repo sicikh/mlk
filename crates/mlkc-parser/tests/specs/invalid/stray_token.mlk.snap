@@ -15,6 +15,7 @@ fun main(): Unit = 1
 
 ```
 ModuleRoot {
+    bom_token: missing (optional),
     items: ModuleItemList [
         BogusDecl {
             items: [
@@ -62,7 +63,8 @@ ModuleRoot {
 
 ```
 0: MODULE_ROOT@0..24
-  0: MODULE_ITEM_LIST@0..23
+  0: (empty)
+  1: MODULE_ITEM_LIST@0..23
     0: BOGUS_DECL@0..1
       0: PLUS@0..1 "+" [] []
     1: FUN_DECL@1..23
@@ -87,7 +89,7 @@ ModuleRoot {
         0: EQ@20..22 "=" [] [Whitespace(" ")]
         1: INT_LITERAL@22..23
           0: INT_LITERAL@22..23 "1" [] []
-  1: EOF@23..24 "" [Newline("\n")] []
+  2: EOF@23..24 "" [Newline("\n")] []
 
 ```
 

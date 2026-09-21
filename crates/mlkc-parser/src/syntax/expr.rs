@@ -45,6 +45,17 @@ pub(crate) fn parse_expr(p: &mut MlkParser) -> ParsedSyntax {
 /// The higher the precedence, the tighter the operator binds: in `a || b + c` the sum is
 /// computed first, so `+` outranks `||`. From the loosest to the tightest: `||`, `&&`,
 /// the equality operators, the comparison operators, the sums, and the products.
+// test mlk products_bind_tighter_than_sums
+// fun products(): Int =
+//     1 + 2 * 3
+//
+// test mlk comparisons_bind_looser_than_products
+// fun comparisons(): Int =
+//     1 + 2 * 3 <= 4 * 5 / 6
+//
+// test mlk logic_binds_looser_than_everything_else
+// fun logic(): Int =
+//     1 == 2 || 3 < 4 && 5 >= 6
 fn binary_precedence(kind: SyntaxKind) -> Option<u8> {
     let precedence = match kind {
         T![||] => 1,
@@ -85,6 +96,9 @@ fn parse_binary_expr(p: &mut MlkParser, min_precedence: u8) -> ParsedSyntax {
 }
 
 /// Parses an expression that may be applied to arguments: `f(a, b)(c)`.
+// test mlk calls_take_arguments_and_are_applied_to_the_result
+// fun calls(): Int =
+//     f(g(1), h(2, 3))(4)
 fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
     let mut expr = parse_primary_expr(p);
 
@@ -114,6 +128,9 @@ fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
 
 /// Parses a literal, which is the one node of the grammar whose kind is the kind of the
 /// token it holds: `IntLiteral = value: 'int_literal'`.
+// test mlk literals_are_numbers_and_strings
+// fun literals(): Int =
+//     "a string"
 fn parse_literal(p: &mut MlkParser) -> ParsedSyntax {
     let kind = p.cur();
 
@@ -134,6 +151,9 @@ fn parse_var_expr(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses an expression in parentheses.
+// test mlk parentheses_group
+// fun grouped(): Int =
+//     (1 + 2) * (3 - 4)
 fn parse_paren_expr(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T!['(']) {
         return ParsedSyntax::Absent;
@@ -152,6 +172,16 @@ fn parse_paren_expr(p: &mut MlkParser) -> ParsedSyntax {
 ///
 /// The expression before `in` is parsed with [`parse_expr`]: `in` is not an operator and
 /// not the start of one, so the expression ends at it on its own.
+// test mlk let_in_binds_a_name_and_uses_it
+// fun main(): Int =
+//     let x = 42 in
+//     x + 1
+//
+// test mlk let_in_nests_and_ignores_a_name
+// fun nested(): Int =
+//     let _ = 1 in
+//     let x = 2 in
+//     x
 fn parse_let_expr(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T![let]) {
         return ParsedSyntax::Absent;

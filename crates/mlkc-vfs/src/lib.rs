@@ -199,45 +199,75 @@ pub enum FileExcluded {
     No,
 }
 
+/// The contents of a file, as known to the [`Vfs`].
+///
+/// Whether the file exists and what it contains are one value,
+/// so a file that cannot be read cannot be mistaken for a file that has text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum FileContents {
+    /// The file exists, and its text is known.
+    Text(Arc<str>),
+    /// The file exists, but its contents are not valid UTF-8.
+    Unreadable,
+    /// The file does not exist: it was deleted, or it was never pushed to the VFS.
+    Deleted,
+    /// The file was specifically excluded by the user.
+    Excluded,
+}
+
+impl FileContents {
+    /// How this value is reported to the outside: see [`FileState`].
+    fn state(&self) -> FileState {
+        match self {
+            Self::Text(_) => FileState::Exists,
+            Self::Unreadable => FileState::Unreadable,
+            Self::Deleted => FileState::Deleted,
+            Self::Excluded => FileState::Excluded,
+        }
+    }
+
+    fn text(&self) -> Option<&Arc<str>> {
+        match self {
+            Self::Text(text) => Some(text),
+            Self::Unreadable | Self::Deleted | Self::Excluded => None,
+        }
+    }
+}
+
 /// A file tracked by the [`Vfs`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct File {
-    /// What the VFS knows about the file.
-    state: FileState,
-    /// The contents of the file, when they are known.
-    ///
-    /// Invariant: `Some` exactly when the state is [`FileState::Exists`].
-    text: Option<Arc<str>>,
-    /// Bumped on every change of the state or of the contents.
+    /// What the file contains, and whether it exists at all.
+    contents: FileContents,
+    /// Bumped on every change of the contents.
     version: FileVersion,
 }
 
 impl File {
     fn deleted() -> Self {
         Self {
-            state: FileState::Deleted,
-            text: None,
+            contents: FileContents::Deleted,
             version: FileVersion::INITIAL,
         }
     }
 
-    /// Applies the new state and contents to the file.
+    fn state(&self) -> FileState {
+        self.contents.state()
+    }
+
+    fn text(&self) -> Option<&Arc<str>> {
+        self.contents.text()
+    }
+
+    /// Replaces the contents of the file.
     ///
     /// Returns `true` if the file changed, in which case its version was bumped.
-    fn update(&mut self, state: FileState, text: Option<Arc<str>>) -> bool {
-        let changed = self.state != state
-            || match (&self.text, &text) {
-                (Some(old), Some(new)) => old.as_ref() != new.as_ref(),
-                (None, None) => false,
-                (Some(_), None) | (None, Some(_)) => true,
-            };
-
-        if !changed {
+    fn update(&mut self, contents: FileContents) -> bool {
+        if self.contents == contents {
             return false;
         }
 
-        self.state = state;
-        self.text = text;
+        self.contents = contents;
         self.version = self.version.next();
 
         true
@@ -288,7 +318,7 @@ impl Vfs {
     /// the contents of a version never change,
     /// they are only replaced by the contents of the next version.
     pub fn file_text(&self, file_id: FileId) -> Option<Arc<str>> {
-        self.file(file_id).and_then(|file| file.text.clone())
+        self.text(file_id).cloned()
     }
 
     /// The [version](FileVersion) of the contents of `file_id`.
@@ -313,6 +343,15 @@ impl Vfs {
             })
     }
 
+    /// Takes a [snapshot](Snapshot) of the current state of the VFS.
+    ///
+    /// A revision of the compiler --
+    /// from draining the changes to producing the diagnostics for them --
+    /// reads the files through a single snapshot.
+    pub fn snapshot(&self) -> Snapshot<'_> {
+        Snapshot { vfs: self }
+    }
+
     /// Update the `path` with the given `contents`. `None` means the file was deleted.
     ///
     /// Returns `true` if the contents of the file changed, and records the change for
@@ -331,21 +370,21 @@ impl Vfs {
         let index = file_id.index() as usize;
 
         // Excluded files are deliberately not tracked: an update must not resurrect them.
-        if self.files[index].state == FileState::Excluded {
+        if self.files[index].state() == FileState::Excluded {
             return false;
         }
 
-        let (state, text) = match contents {
-            None => (FileState::Deleted, None),
+        let (state, contents) = match contents {
+            None => (FileState::Deleted, FileContents::Deleted),
             Some(contents) => match String::from_utf8(contents) {
-                Ok(text) => (FileState::Exists, Some(Arc::from(text))),
-                Err(_) => (FileState::Unreadable, None),
+                Ok(text) => (FileState::Exists, FileContents::Text(Arc::from(text))),
+                Err(_) => (FileState::Unreadable, FileContents::Unreadable),
             },
         };
 
-        let old_state = self.files[index].state;
+        let old_state = self.files[index].state();
 
-        if !self.files[index].update(state, text) {
+        if !self.files[index].update(contents) {
             return false;
         }
 
@@ -399,10 +438,14 @@ impl Vfs {
         self.files.get(file_id.index() as usize)
     }
 
+    /// The contents of `file_id`, if it exists and can be read as text.
+    fn text(&self, file_id: FileId) -> Option<&Arc<str>> {
+        self.file(file_id).and_then(File::text)
+    }
+
     /// The state of `file_id`, which is [`FileState::Deleted`] if it was never seen.
     fn state(&self, file_id: FileId) -> FileState {
-        self.file(file_id)
-            .map_or(FileState::Deleted, |file| file.state)
+        self.file(file_id).map_or(FileState::Deleted, File::state)
     }
 
     /// Records the net effect of a transition from `old_state` to `new_state`.
@@ -469,7 +512,62 @@ impl Vfs {
     pub fn insert_excluded_file(&mut self, path: VfsPath) {
         let file_id = self.alloc_file_id(path);
         let index = file_id.index() as usize;
-        self.files[index].update(FileState::Excluded, None);
+        self.files[index].update(FileContents::Excluded);
+    }
+}
+
+/// A read-only view of the state of the [`Vfs`] at the moment it was taken.
+///
+/// A [`Span`](mlkc_span::Span) is a file id and a range, with no version attached:
+/// the range belongs to the text the file had when the span was created.
+/// A snapshot is what makes that text reachable again:
+///
+/// - the snapshot holds a shared borrow of the VFS,
+///   so nothing can be updated while a span is being resolved;
+/// - the contents of a version never change,
+///   so a handle taken from a snapshot
+///   stays the text of that version, whoever holds it;
+/// - a worker thread clones the handle and parses it,
+///   while the driver works with the rest of the files.
+///
+/// The borrow is as strong as the place the [`Vfs`] lives in:
+/// if it ends up behind a lock, the guard has to be held for the whole revision.
+#[derive(Copy, Clone, Debug)]
+pub struct Snapshot<'vfs> {
+    vfs: &'vfs Vfs,
+}
+
+impl<'vfs> Snapshot<'vfs> {
+    /// The contents of `file_id` as of this snapshot,
+    /// or `None` if the file does not exist or cannot be read as text.
+    ///
+    /// The handle outlives the snapshot value itself and can be cloned into a worker thread.
+    pub fn file_text(&self, file_id: FileId) -> Option<&'vfs Arc<str>> {
+        self.vfs.text(file_id)
+    }
+
+    /// The [version](FileVersion) of `file_id` as of this snapshot.
+    pub fn file_version(&self, file_id: FileId) -> FileVersion {
+        self.vfs.file_version(file_id)
+    }
+
+    /// What the VFS knows about `file_id` as of this snapshot.
+    pub fn file_state(&self, file_id: FileId) -> FileState {
+        self.vfs.file_state(file_id)
+    }
+
+    /// The path of `file_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the id is not present in the `Vfs`.
+    pub fn file_path(&self, file_id: FileId) -> &'vfs VfsPath {
+        self.vfs.file_path(file_id)
+    }
+
+    /// The files the compiler can work with, as of this snapshot.
+    pub fn iter(&self) -> impl Iterator<Item = (FileId, &'vfs VfsPath)> + 'vfs {
+        self.vfs.iter()
     }
 }
 
@@ -608,6 +706,37 @@ mod tests {
         // The contents of a version never change under the reader's feet.
         assert_eq!(old.as_ref(), "let x = 1;");
         assert_eq!(vfs.file_text(file_id).as_deref(), Some("let y = 2;"));
+    }
+
+    #[test]
+    fn a_snapshot_pins_the_revision() {
+        let mut vfs = Vfs::default();
+        let path = path("main.mlk");
+
+        vfs.set_file_contents(path.clone(), contents("let x = 1;"));
+        let (file_id, _) = vfs.file_id(&path).expect("the file exists");
+
+        // A revision reads the state of the world through one snapshot.
+        let (text, version) = {
+            let snapshot = vfs.snapshot();
+
+            assert_eq!(snapshot.file_state(file_id), FileState::Exists);
+            assert_eq!(snapshot.file_path(file_id), &path);
+            assert_eq!(snapshot.iter().count(), 1);
+
+            (
+                snapshot.file_text(file_id).cloned(),
+                snapshot.file_version(file_id),
+            )
+        };
+
+        // The file can only be updated because the snapshot is gone,
+        // while the handle it handed out still points at the text of its version.
+        vfs.set_file_contents(path, contents("let y = 2;"));
+
+        assert_eq!(text.as_deref(), Some("let x = 1;"));
+        assert_eq!(version.raw(), 1);
+        assert!(version < vfs.file_version(file_id));
     }
 
     #[test]

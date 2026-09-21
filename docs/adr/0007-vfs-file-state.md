@@ -62,9 +62,13 @@ would only recreate a query database without the queries.
 For every file it has ever seen:
 
 - the `FileId` and the path it was interned under;
-- a `FileState`: `Exists`, `Unreadable`, `Deleted`, or `Excluded`;
-- the contents, as an `Arc<str>`, when the state is `Exists`;
+- what the file contains: its text, or that it is missing,
+  cannot be read as text, or is excluded;
 - a `FileVersion`, bumped on every change.
+
+Existence and contents are one value,
+so a file that cannot be read
+cannot accidentally be treated as a file that happens to be empty.
 
 The contents are read with `file_text`,
 which hands out a shared handle that outlives the borrow of the VFS,
@@ -110,6 +114,32 @@ not two.
   and a file whose contents were pushed again unchanged
   keeps its version: a watcher may re-read a whole project
   and invalidate nothing at all.
+
+### Ranges are resolved inside the revision that produced them
+
+A `Span` is a file id and a range, with no version attached:
+the range belongs to the text the file had when the span was created.
+That is sound as long as a span is resolved against the state it was produced from,
+which the VFS makes cheap:
+
+- a revision reads the world through a single `Snapshot` of the VFS:
+  a shared borrow that keeps the state from changing
+  while the spans are produced and resolved;
+- the contents of a version never change,
+  so an `Arc<str>` handle taken from a snapshot
+  stays the text of that version for whoever holds it,
+  including a worker thread that parses it in parallel;
+- derived data that outlives the revision is keyed by file version,
+  so it is revalidated or recomputed,
+  and diagnostics that outlive it are published with the version of the document.
+
+A version inside `Span` was considered and rejected:
+it would enlarge every span and every comparison of spans
+to protect against a mismatch that must not happen,
+and it still would not say which text to resolve against,
+only that the resolver holds the wrong one.
+rustc solves the same problem by keeping the source map immutable for a session,
+and rust-analyzer by making every derived value a function of an input revision.
 
 ### What a file that cannot be read looks like
 
@@ -161,6 +191,9 @@ the driver is the one that excluded the file, and it knows it.
   and the history of a file cannot be replayed from it.
 - `FileId`s are never reused and deleted files keep their slot,
   so the id space grows with the number of paths ever seen.
+- Nothing in the type of a `Span` says which revision it belongs to:
+  the discipline is carried by the snapshot and by version-keyed invalidation,
+  not by the span itself.
 
 ## Pros and Cons of the Options
 

@@ -1,10 +1,14 @@
-use super::diagnostic::ParseDiagnostic;
+use std::{
+    collections::VecDeque,
+    iter::FusedIterator,
+    ops::{BitOr, BitOrAssign},
+};
+
 use enumflags2::{BitFlags, bitflags, make_bitflags};
 use mlkc_rowan::{SyntaxKind, TextRange, TextSize};
-use std::collections::VecDeque;
-use std::iter::FusedIterator;
-use std::ops::{BitOr, BitOrAssign};
 use unicode_bom::Bom;
+
+use super::diagnostic::ParseDiagnostic;
 
 /// `Lexer` trait defines the necessary methods a lexer must implement.
 /// Lexer is responsible for dividing the source code into meaningful parsing units (kinds).
@@ -877,8 +881,8 @@ impl<Kind: SyntaxKind> LexerCheckpoint<Kind> {
 #[bitflags]
 #[repr(u8)]
 enum TokenFlag {
-    PrecedingLineBreak = 1 << 0,
-    UnicodeEscape = 1 << 1,
+    PrecedingLineBreak  = 1 << 0,
+    UnicodeEscape       = 1 << 1,
     PrecedingWhitespace = 1 << 2,
 }
 

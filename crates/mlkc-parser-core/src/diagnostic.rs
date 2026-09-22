@@ -23,13 +23,13 @@
 //! attached later, at the boundary, by [ParseDiagnostic::to_diagnostic], which takes the
 //! [FileId] the ranges belong to as an argument.
 
-use crate::token_source::TokenSource;
-use crate::{EOF_STR, Parser};
+use std::{cmp::Ordering, fmt::Display};
+
 use mlkc_diagnostics::{AsRange, Category, DiagKind, Diagnostic, Level};
 use mlkc_rowan::{SyntaxKind, TextLen, TextRange, TextSize};
 use mlkc_span::{FileId, Span};
-use std::cmp::Ordering;
-use std::fmt::Display;
+
+use crate::{EOF_STR, Parser, token_source::TokenSource};
 
 /// A diagnostic emitted by the parser.
 ///
@@ -232,8 +232,8 @@ impl ParseDiagnostic {
     ///
     /// let range = TextRange::new(TextSize::from(0), TextSize::from(5));
     ///
-    /// let diagnostic = ParseDiagnostic::new("this is wrong!", range)
-    ///     .with_hint("You should delete the code");
+    /// let diagnostic =
+    ///     ParseDiagnostic::new("this is wrong!", range).with_hint("You should delete the code");
     ///
     /// let advice = &diagnostic.advices()[0];
     /// assert_eq!(advice.kind, AdviceKind::Hint);
@@ -315,13 +315,16 @@ impl ParseDiagnostic {
 
         for advice in &self.advices {
             diagnostic = match advice.kind {
-                AdviceKind::Detail => match advice.range {
-                    Some(range) => {
-                        diagnostic.with_secondary(Span::new(file, range), advice.message.clone())
-                    },
-                    // A detail without a range has nothing to point at, so it is kept as a
-                    // note instead of being dropped.
-                    None => diagnostic.with_note(advice.message.clone()),
+                AdviceKind::Detail => {
+                    match advice.range {
+                        Some(range) => {
+                            diagnostic
+                                .with_secondary(Span::new(file, range), advice.message.clone())
+                        },
+                        // A detail without a range has nothing to point at, so it is kept as a
+                        // note instead of being dropped.
+                        None => diagnostic.with_note(advice.message.clone()),
+                    }
                 },
                 AdviceKind::Hint => {
                     let mut note = advice.message.clone();
@@ -573,10 +576,10 @@ pub fn merge_diagnostics(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::ParserContext;
-    use crate::token_source::Trivia;
     use mlkc_syntax::SyntaxKind::{self, *};
+
+    use super::*;
+    use crate::{ParserContext, token_source::Trivia};
 
     const FILE: FileId = FileId::from_raw(0);
 
@@ -758,13 +761,10 @@ mod tests {
         assert_eq!(converted.labels[1].message, "the block starts here");
         assert!(!converted.labels[1].primary);
 
-        assert_eq!(
-            converted.notes,
-            [
-                "add a closing brace".to_string(),
-                "expected one of:\n- `}`\n- `;`".to_string(),
-            ]
-        );
+        assert_eq!(converted.notes, [
+            "add a closing brace".to_string(),
+            "expected one of:\n- `}`\n- `;`".to_string(),
+        ]);
     }
 
     #[test]

@@ -1,7 +1,10 @@
-use crate::parse_recovery::{ParseRecovery, ParseRecoveryTokenSet, RecoveryResult};
-use crate::parsed_syntax::ParsedSyntax::{Absent, Present};
-use crate::prelude::*;
 use mlkc_rowan::TextRange;
+
+use crate::{
+    parse_recovery::{ParseRecovery, ParseRecoveryTokenSet, RecoveryResult},
+    parsed_syntax::ParsedSyntax::{Absent, Present},
+    prelude::*,
+};
 
 /// Syntax that is either present in the source tree or absent.
 ///
@@ -259,18 +262,20 @@ impl ParsedSyntax {
     {
         match self {
             Present(syntax) => Ok(syntax),
-            Absent => match recovery.recover(p) {
-                Ok(recovered) => {
-                    let diagnostic = error_builder(p, recovered.range(p));
-                    p.error(diagnostic);
-                    Ok(recovered)
-                },
+            Absent => {
+                match recovery.recover(p) {
+                    Ok(recovered) => {
+                        let diagnostic = error_builder(p, recovered.range(p));
+                        p.error(diagnostic);
+                        Ok(recovered)
+                    },
 
-                Err(recovery_error) => {
-                    let diagnostic = error_builder(p, p.cur_range());
-                    p.error(diagnostic);
-                    Err(recovery_error)
-                },
+                    Err(recovery_error) => {
+                        let diagnostic = error_builder(p, p.cur_range());
+                        p.error(diagnostic);
+                        Err(recovery_error)
+                    },
+                }
             },
         }
     }
@@ -297,18 +302,20 @@ impl ParsedSyntax {
     {
         match self {
             Present(syntax) => Ok(syntax),
-            Absent => match recovery.recover(p) {
-                Ok(recovered) => {
-                    let diagnostic = error_builder(p, recovered.range(p));
-                    p.error(diagnostic);
-                    Ok(recovered)
-                },
+            Absent => {
+                match recovery.recover(p) {
+                    Ok(recovered) => {
+                        let diagnostic = error_builder(p, recovered.range(p));
+                        p.error(diagnostic);
+                        Ok(recovered)
+                    },
 
-                Err(recovery_error) => {
-                    let diagnostic = error_builder(p, p.cur_range());
-                    p.error(diagnostic);
-                    Err(recovery_error)
-                },
+                    Err(recovery_error) => {
+                        let diagnostic = error_builder(p, p.cur_range());
+                        p.error(diagnostic);
+                        Err(recovery_error)
+                    },
+                }
             },
         }
     }

@@ -1,11 +1,10 @@
 //! Events emitted by the Parser which are then constructed into a syntax tree
 
-use std::mem;
-use std::num::NonZeroU32;
+use std::{mem, num::NonZeroU32};
 
-use crate::diagnostic::ParseDiagnostic;
-use crate::tree_sink::TreeSink;
 use mlkc_rowan::{SyntaxKind, TextSize};
+
+use crate::{diagnostic::ParseDiagnostic, tree_sink::TreeSink};
 
 /// Events emitted by the Parser, these events are later
 /// made into a syntax tree with `process` into TreeSink.

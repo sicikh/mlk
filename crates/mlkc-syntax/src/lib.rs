@@ -2,13 +2,13 @@
 mod generated;
 mod syntax_node;
 
-pub use crate::generated::SyntaxKind::*;
-pub use crate::generated::*;
-pub use crate::syntax_node::*;
-use mlkc_rowan::AstNode;
+use mlkc_rowan::{AstNode, RawSyntaxKind, SyntaxKind as SyntaxKindTrait, TokenText};
 pub use mlkc_rowan::{TextLen, TextRange, TextSize, TokenAtOffset, TriviaPieceKind, WalkEvent};
 
-use mlkc_rowan::{RawSyntaxKind, SyntaxKind as SyntaxKindTrait, TokenText};
+pub use crate::{
+    generated::{SyntaxKind::*, *},
+    syntax_node::*,
+};
 
 impl From<u16> for SyntaxKind {
     fn from(d: u16) -> Self {

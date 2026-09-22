@@ -38,12 +38,14 @@ pub fn generate_ast(mode: Mode, language_kind_list: Vec<String>) -> Result<()> {
     } else {
         language_kind_list
             .iter()
-            .filter_map(|kind| match LanguageKind::from_str(kind) {
-                Ok(kind) => Some(kind),
-                Err(err) => {
-                    println_string_with_fg_color(err, Color::Red);
-                    None
-                },
+            .filter_map(|kind| {
+                match LanguageKind::from_str(kind) {
+                    Ok(kind) => Some(kind),
+                    Err(err) => {
+                        println_string_with_fg_color(err, Color::Red);
+                        None
+                    },
+                }
             })
             .collect::<Vec<_>>()
     };
@@ -229,13 +231,10 @@ fn make_ast(grammar: &Grammar) -> AstSrc {
                 separator,
                 element_name,
             } => {
-                ast.push_list(
-                    name.as_str(),
-                    AstListSrc {
-                        element_name,
-                        separator,
-                    },
-                );
+                ast.push_list(name.as_str(), AstListSrc {
+                    element_name,
+                    separator,
+                });
             },
         }
     }

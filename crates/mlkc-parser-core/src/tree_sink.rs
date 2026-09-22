@@ -1,9 +1,9 @@
-use crate::prelude::*;
-use crate::token_source::Trivia;
 use mlkc_rowan::{
     Language, NodeCache, SyntaxFactory, SyntaxKind, SyntaxNode, TextRange, TextSize, TreeBuilder,
     TriviaPiece,
 };
+
+use crate::{prelude::*, token_source::Trivia};
 
 /// Maximum depth of the green tree produced by the parser. This bounds the
 /// recursive `Drop` depth of syntax nodes on pathological input.
@@ -138,9 +138,11 @@ where
             format!("Syntax nesting exceeds maximum depth of {MAX_TREE_DEPTH}."),
             TextRange::empty(self.text_pos),
         );
-        let index = self.errors.partition_point(|error| match error.range() {
-            Some(range) => range.start() <= self.text_pos,
-            None => true,
+        let index = self.errors.partition_point(|error| {
+            match error.range() {
+                Some(range) => range.start() <= self.text_pos,
+                None => true,
+            }
         });
         self.errors.insert(index, diagnostic);
     }
@@ -272,11 +274,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{LosslessTreeSink, MAX_TREE_DEPTH, TreeSink};
     use mlkc_rowan::{
         SyntaxNode, TextRange, TextSize,
         raw_language::{RawLanguage, RawLanguageKind, RawLanguageSyntaxFactory},
     };
+
+    use super::{LosslessTreeSink, MAX_TREE_DEPTH, TreeSink};
 
     type RawTreeSink<'a> = LosslessTreeSink<'a, RawLanguage, RawLanguageSyntaxFactory>;
 
@@ -324,13 +327,10 @@ mod tests {
             .iter()
             .map(|error| error.range().unwrap())
             .collect();
-        assert_eq!(
-            spans,
-            [
-                TextRange::empty(TextSize::from(0)),
-                TextRange::empty(TextSize::from(1)),
-            ]
-        );
+        assert_eq!(spans, [
+            TextRange::empty(TextSize::from(0)),
+            TextRange::empty(TextSize::from(1)),
+        ]);
     }
 
     #[test]

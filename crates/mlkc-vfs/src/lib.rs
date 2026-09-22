@@ -376,9 +376,11 @@ impl Vfs {
 
         let (state, contents) = match contents {
             None => (FileState::Deleted, FileContents::Deleted),
-            Some(contents) => match String::from_utf8(contents) {
-                Ok(text) => (FileState::Exists, FileContents::Text(Arc::from(text))),
-                Err(_) => (FileState::Unreadable, FileContents::Unreadable),
+            Some(contents) => {
+                match String::from_utf8(contents) {
+                    Ok(text) => (FileState::Exists, FileContents::Text(Arc::from(text))),
+                    Err(_) => (FileState::Unreadable, FileContents::Unreadable),
+                }
             },
         };
 
@@ -744,7 +746,7 @@ mod tests {
         let mut vfs = Vfs::default();
         let path = path("binary.mlk");
 
-        vfs.set_file_contents(path.clone(), Some(vec![0xff, 0xfe]));
+        vfs.set_file_contents(path.clone(), Some(vec![0xFF, 0xFE]));
 
         let (file_id, excluded) = vfs.file_id(&path).expect("the file exists");
         assert_eq!(excluded, FileExcluded::No);

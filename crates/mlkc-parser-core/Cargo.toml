@@ -8,13 +8,13 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+drop_bomb.workspace = true
+enumflags2.workspace = true
 mlkc-diagnostics = { workspace = true }
 mlkc-rowan = { workspace = true }
 mlkc-span = { workspace = true }
 mlkc-syntax = { workspace = true }
-drop_bomb.workspace = true
 unicode-bom.workspace = true
-enumflags2.workspace = true
 
 [lints]
 workspace = true

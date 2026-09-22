@@ -2,22 +2,26 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 #![doc = include_str!("../CONTRIBUTING.md")]
 
-use crate::diagnostic::{ParseDiagnostic, ToDiagnostic, expected_token};
-use crate::event::Event;
-use crate::event::Event::Token;
-use crate::lexer::LexerWithCheckpoint;
-use crate::parsed_syntax::ParsedSyntax;
-use crate::parsed_syntax::ParsedSyntax::{Absent, Present};
-use crate::token_source::{BumpWithContext, NthToken, TokenSource, TokenSourceWithBufferedLexer};
+use std::{any::type_name, fmt::Display, ops::Range};
+
 pub use marker::{CompletedMarker, Marker};
 use mlkc_diagnostics::AsRange;
 use mlkc_rowan::{
     AstNode, EmbeddedSendNode, Language, SendNode, SyntaxKind, SyntaxNode, SyntaxNodeWithOffset,
     TextRange, TextSize,
 };
-use std::fmt::Display;
-use std::{any::type_name, ops::Range};
 pub use token_set::TokenSet;
+
+use crate::{
+    diagnostic::{ParseDiagnostic, ToDiagnostic, expected_token},
+    event::{Event, Event::Token},
+    lexer::LexerWithCheckpoint,
+    parsed_syntax::{
+        ParsedSyntax,
+        ParsedSyntax::{Absent, Present},
+    },
+    token_source::{BumpWithContext, NthToken, TokenSource, TokenSourceWithBufferedLexer},
+};
 
 pub mod diagnostic;
 pub mod event;
@@ -538,26 +542,22 @@ pub trait Parser: Sized {
 
     /// Returns the kind of the last bumped token.
     fn last(&self) -> Option<Self::Kind> {
-        self.context()
-            .events
-            .iter()
-            .rev()
-            .find_map(|event| match event {
+        self.context().events.iter().rev().find_map(|event| {
+            match event {
                 Token { kind, .. } => Some(*kind),
                 _ => None,
-            })
+            }
+        })
     }
 
     /// Returns the end offset of the last bumped token.
     fn last_end(&self) -> Option<TextSize> {
-        self.context()
-            .events
-            .iter()
-            .rev()
-            .find_map(|event| match event {
+        self.context().events.iter().rev().find_map(|event| {
+            match event {
                 Token { end, .. } => Some(*end),
                 _ => None,
-            })
+            }
+        })
     }
 
     /// Starts a new node in the syntax tree. All nodes and tokens

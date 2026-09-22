@@ -1,7 +1,11 @@
-use crate::prelude::*;
+use std::{
+    error::Error,
+    fmt::{Display, Formatter},
+};
+
 use mlkc_rowan::SyntaxKind;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
+
+use crate::prelude::*;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum RecoveryError {

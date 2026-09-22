@@ -1,11 +1,13 @@
-use crate::Parser;
-use crate::event::Event;
-use crate::event::Event::Token;
-use crate::token_source::TokenSource;
+use std::num::NonZeroU32;
 
 use drop_bomb::DebugDropBomb;
 use mlkc_rowan::{SyntaxKind, TextRange, TextSize};
-use std::num::NonZeroU32;
+
+use crate::{
+    Parser,
+    event::{Event, Event::Token},
+    token_source::TokenSource,
+};
 
 /// A structure signifying the start of parsing of a syntax tree node
 #[derive(Debug)]
@@ -162,9 +164,11 @@ impl CompletedMarker {
         let end = p.context().events[self.old_start as usize..self.finish_pos as usize]
             .iter()
             .rev()
-            .find_map(|event| match event {
-                Token { end, .. } => Some(*end),
-                _ => None,
+            .find_map(|event| {
+                match event {
+                    Token { end, .. } => Some(*end),
+                    _ => None,
+                }
             })
             .unwrap_or(self.offset);
 

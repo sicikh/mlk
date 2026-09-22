@@ -3,9 +3,9 @@ mod diagnostic;
 mod ice;
 mod render;
 
-pub use crate::diagnostic::{Category, DiagKind, Diagnostic, Label, Level};
-
 use mlkc_span::TextRange;
+
+pub use crate::diagnostic::{Category, DiagKind, Diagnostic, Label, Level};
 
 /// Conversion of a range-like value into an optional [TextRange].
 pub trait AsRange {

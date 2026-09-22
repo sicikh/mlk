@@ -609,6 +609,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlkc-driver"
+version = "0.1.0"
+dependencies = [
+ "mlkc-diagnostics",
+ "mlkc-parser",
+]
+
+[[package]]
 name = "mlkc-hir-def"
 version = "0.1.0"
 dependencies = [

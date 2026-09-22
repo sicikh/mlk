@@ -36,28 +36,28 @@ pub mod comparable_token;
 #[repr(u16)]
 pub enum Case {
     /// ASCII numbers
-    Number = 1 << 0,
+    Number            = 1 << 0,
     /// Alphanumeric Characters that cannot be in lowercase or uppercase (numbers and syllabary)
-    Uni = Self::Number as u16 | (1 << 1),
+    Uni               = Self::Number as u16 | (1 << 1),
     /// A, B1, C42
     NumberableCapital = 1 << 2,
     /// UPPERCASE
-    Upper = Self::NumberableCapital as u16 | (1 << 3),
+    Upper             = Self::NumberableCapital as u16 | (1 << 3),
     // CONSTANT_CASE
-    Constant = Self::Upper as u16 | (1 << 4),
+    Constant          = Self::Upper as u16 | (1 << 4),
     /// PascalCase
-    Pascal = Self::NumberableCapital as u16 | (1 << 5),
+    Pascal            = Self::NumberableCapital as u16 | (1 << 5),
     /// lowercase
-    Lower = Self::Number as u16 | (1 << 6),
+    Lower             = Self::Number as u16 | (1 << 6),
     /// snake_case
-    Snake = Self::Lower as u16 | (1 << 7),
+    Snake             = Self::Lower as u16 | (1 << 7),
     /// kebab-case
-    Kebab = Self::Lower as u16 | (1 << 8),
+    Kebab             = Self::Lower as u16 | (1 << 8),
     // camelCase
-    Camel = Self::Lower as u16 | (1 << 9),
+    Camel             = Self::Lower as u16 | (1 << 9),
     /// Unknown case
     #[default]
-    Unknown = Self::Camel as u16
+    Unknown           = Self::Camel as u16
         | Self::Kebab as u16
         | Self::Snake as u16
         | Self::Pascal as u16
@@ -172,15 +172,21 @@ impl Case {
         let mut has_consecutive_uppercase = false;
         for current_char in chars {
             result = match current_char {
-                '-' => match result {
-                    Self::Kebab | Self::Lower | Self::Number if previous_char != '-' => Self::Kebab,
-                    _ => return Self::Unknown,
+                '-' => {
+                    match result {
+                        Self::Kebab | Self::Lower | Self::Number if previous_char != '-' => {
+                            Self::Kebab
+                        },
+                        _ => return Self::Unknown,
+                    }
                 },
-                '_' => match result {
-                    Self::Constant | Self::Snake if previous_char != '_' => result,
-                    Self::NumberableCapital | Self::Upper => Self::Constant,
-                    Self::Lower | Self::Number => Self::Snake,
-                    _ => return Self::Unknown,
+                '_' => {
+                    match result {
+                        Self::Constant | Self::Snake if previous_char != '_' => result,
+                        Self::NumberableCapital | Self::Upper => Self::Constant,
+                        Self::Lower | Self::Number => Self::Snake,
+                        _ => return Self::Unknown,
+                    }
                 },
                 _ if current_char.is_uppercase() => {
                     has_consecutive_uppercase |= previous_char.is_uppercase();
@@ -194,17 +200,21 @@ impl Case {
                         _ => return Self::Unknown,
                     }
                 },
-                _ if current_char.is_lowercase() => match result {
-                    Self::Number => Self::Lower,
-                    Self::Camel | Self::Kebab | Self::Lower | Self::Snake => result,
-                    Self::Pascal | Self::NumberableCapital => Self::Pascal,
-                    Self::Upper if !strict || !has_consecutive_uppercase => Self::Pascal,
-                    _ => return Self::Unknown,
+                _ if current_char.is_lowercase() => {
+                    match result {
+                        Self::Number => Self::Lower,
+                        Self::Camel | Self::Kebab | Self::Lower | Self::Snake => result,
+                        Self::Pascal | Self::NumberableCapital => Self::Pascal,
+                        Self::Upper if !strict || !has_consecutive_uppercase => Self::Pascal,
+                        _ => return Self::Unknown,
+                    }
                 },
                 '0'..='9' => result,
-                _ if current_char.is_alphanumeric() => match result {
-                    Self::Number | Self::Uni => Self::Uni,
-                    _ => return Self::Unknown,
+                _ if current_char.is_alphanumeric() => {
+                    match result {
+                        Self::Number | Self::Uni => Self::Uni,
+                        _ => return Self::Unknown,
+                    }
                 },
                 _ => return Self::Unknown,
             };
@@ -1195,43 +1205,34 @@ mod tests {
         assert_eq!(vec(Case::Upper).as_slice(), &[Case::Upper]);
         assert_eq!(vec(Case::Uni).as_slice(), &[Case::Uni]);
         assert_eq!(vec(Case::Number).as_slice(), &[Case::Number]);
-        assert_eq!(
-            vec(Case::NumberableCapital).as_slice(),
-            &[Case::NumberableCapital]
-        );
+        assert_eq!(vec(Case::NumberableCapital).as_slice(), &[
+            Case::NumberableCapital
+        ]);
 
-        assert_eq!(
-            vec(Case::Unknown | Case::Camel).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::Kebab).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::Snake).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::Lower).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::Pascal).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::Constant).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::Upper).as_slice(),
-            &[Case::Unknown]
-        );
-        assert_eq!(
-            vec(Case::Unknown | Case::NumberableCapital).as_slice(),
-            &[Case::Unknown]
-        );
+        assert_eq!(vec(Case::Unknown | Case::Camel).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::Kebab).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::Snake).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::Lower).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::Pascal).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::Constant).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::Upper).as_slice(), &[
+            Case::Unknown
+        ]);
+        assert_eq!(vec(Case::Unknown | Case::NumberableCapital).as_slice(), &[
+            Case::Unknown
+        ]);
         assert_eq!(vec(Case::Unknown | Case::Uni).as_slice(), &[Case::Unknown]);
         assert_eq!(
             vec(Case::Unknown | Case::Pascal | Case::Camel).as_slice(),
@@ -1247,32 +1248,28 @@ mod tests {
         assert_eq!(vec(Case::Kebab | Case::Number).as_slice(), &[Case::Kebab]);
         assert_eq!(vec(Case::Snake | Case::Number).as_slice(), &[Case::Snake]);
 
-        assert_eq!(
-            vec(Case::Constant | Case::Upper).as_slice(),
-            &[Case::Constant]
-        );
+        assert_eq!(vec(Case::Constant | Case::Upper).as_slice(), &[
+            Case::Constant
+        ]);
 
-        assert_eq!(
-            vec(Case::Pascal | Case::NumberableCapital).as_slice(),
-            &[Case::Pascal]
-        );
-        assert_eq!(
-            vec(Case::Constant | Case::NumberableCapital).as_slice(),
-            &[Case::Constant]
-        );
-        assert_eq!(
-            vec(Case::Upper | Case::NumberableCapital).as_slice(),
-            &[Case::Upper]
-        );
+        assert_eq!(vec(Case::Pascal | Case::NumberableCapital).as_slice(), &[
+            Case::Pascal
+        ]);
+        assert_eq!(vec(Case::Constant | Case::NumberableCapital).as_slice(), &[
+            Case::Constant
+        ]);
+        assert_eq!(vec(Case::Upper | Case::NumberableCapital).as_slice(), &[
+            Case::Upper
+        ]);
 
-        assert_eq!(
-            vec(Case::Pascal | Case::Camel).as_slice(),
-            &[Case::Camel, Case::Pascal]
-        );
-        assert_eq!(
-            vec(Case::NumberableCapital | Case::Uni).as_slice(),
-            &[Case::NumberableCapital, Case::Uni]
-        );
+        assert_eq!(vec(Case::Pascal | Case::Camel).as_slice(), &[
+            Case::Camel,
+            Case::Pascal
+        ]);
+        assert_eq!(vec(Case::NumberableCapital | Case::Uni).as_slice(), &[
+            Case::NumberableCapital,
+            Case::Uni
+        ]);
 
         assert_eq!(
             vec(Case::Pascal

@@ -1157,19 +1157,21 @@ pub(crate) fn get_field_predicate(field: &Field, language_kind: LanguageKind) ->
                 #ast_type_name::can_cast(element.kind())
             }
         },
-        Field::Token { kind, .. } => match kind {
-            TokenKind::Single(expected) => {
-                let expected_kind = token_kind_to_code(expected, language_kind);
-                quote! { element.kind() == #expected_kind}
-            },
-            TokenKind::Many(expected) => {
-                let expected_kinds = expected
-                    .iter()
-                    .map(|kind| token_kind_to_code(kind, language_kind));
-                quote! {
-                    matches!(element.kind(), #(#expected_kinds)|*)
-                }
-            },
+        Field::Token { kind, .. } => {
+            match kind {
+                TokenKind::Single(expected) => {
+                    let expected_kind = token_kind_to_code(expected, language_kind);
+                    quote! { element.kind() == #expected_kind}
+                },
+                TokenKind::Many(expected) => {
+                    let expected_kinds = expected
+                        .iter()
+                        .map(|kind| token_kind_to_code(kind, language_kind));
+                    quote! {
+                        matches!(element.kind(), #(#expected_kinds)|*)
+                    }
+                },
+            }
         },
     }
 }

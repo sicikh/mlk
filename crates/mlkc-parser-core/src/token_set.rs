@@ -1,5 +1,6 @@
-use mlkc_rowan::SyntaxKind;
 use std::marker::PhantomData;
+
+use mlkc_rowan::SyntaxKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TokenSet<K: SyntaxKind>([u128; 3], PhantomData<K>);
@@ -73,7 +74,7 @@ mod tests {
 
     #[derive(Debug, PartialEq, Eq, Clone, Copy)]
     enum TestKind {
-        Kind0 = 0,
+        Kind0   = 0,
         Kind127 = 127,
         Kind128 = 128,
         Kind255 = 255,

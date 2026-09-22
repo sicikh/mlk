@@ -1,9 +1,8 @@
 //! A set of traits useful to parse various types of lists
 
-use crate::ParserProgress;
-use crate::parse_recovery::RecoveryResult;
-use crate::prelude::*;
 use mlkc_rowan::SyntaxKind;
+
+use crate::{ParserProgress, parse_recovery::RecoveryResult, prelude::*};
 
 /// Use this trait to parse simple lists that don't have particular requirements.
 ///

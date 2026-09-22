@@ -1,6 +1,9 @@
-use crate::lexer::{BufferedLexer, LexerWithCheckpoint};
-use crate::{diagnostic::ParseDiagnostic, lexer::LexerCheckpoint};
 use mlkc_rowan::{SyntaxKind, TextRange, TextSize, TriviaPieceKind};
+
+use crate::{
+    diagnostic::ParseDiagnostic,
+    lexer::{BufferedLexer, LexerCheckpoint, LexerWithCheckpoint},
+};
 
 /// A comment or a whitespace trivia in the source code.
 #[derive(Debug, Copy, Clone)]

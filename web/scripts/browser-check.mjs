@@ -46,11 +46,14 @@ const HELPERS = `
 	const diagnostics = () => [...inspector().querySelectorAll('li')];
 `;
 
+/** What is typed into the editor to make it say something: a module that is not one. */
+const BROKEN = "fun main(): Unit =\n    let x = 1\n";
+
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
     		panels: document.querySelectorAll('[data-panel]').length,
-    		file: text(document.querySelector('[data-panel=editor] .tab'))
+    		file: text(document.querySelector('[data-panel=editor] .tab.active .pick'))
     	})`,
 
     // Showing a view and reading it are two questions: the page renders between them.
@@ -100,7 +103,24 @@ const STEPS = {
     submitPath: `document.querySelector('[data-panel=files] form').requestSubmit(); return true`,
 
     made: `return JSON.stringify({
-    		file: document.querySelector('[data-file="/lib/sample.mlk"]') !== null
+    		file: document.querySelector('[data-file="/lib/sample.mlk"]') !== null,
+    		open: document.querySelectorAll('[data-panel=editor] [data-open]').length
+    	})`,
+
+    // The editor is a CodeMirror view, and CodeMirror reads what a browser puts into it.
+    // There are no keystrokes here, so the text goes in through the DOM instead,
+    // which is where the editor watches for what a person typed.
+    type: `const content = document.querySelector('.cm-content');
+	content.focus();
+	content.textContent = ${JSON.stringify(BROKEN)};
+	content.dispatchEvent(new Event('input', { bubbles: true }));
+	return true`,
+
+    closeTab: `document.querySelector('[data-open="/lib/arith.mlk"] .close').click(); return true`,
+
+    closed: `return JSON.stringify({
+    		open: document.querySelectorAll('[data-panel=editor] [data-open]').length,
+    		listed: document.querySelector('[data-file="/lib/arith.mlk"]') !== null
     	})`,
 
     askDrop: `document.querySelector('[data-file="/lib/sample.mlk"] .drop').click(); return true`,
@@ -111,17 +131,12 @@ const STEPS = {
     		file: document.querySelector('[data-file="/lib/sample.mlk"]') === null
     	})`,
 
-    broken: `const source = document.querySelector('textarea');
-	source.value = 'fun main(): Unit =\\n    let x = 1\\n';
-	source.dispatchEvent(new Event('input', { bubbles: true }));
-	return true`,
-
     seen: `return JSON.stringify(diagnostics().map((element) => ({
-		classes: [...element.classList],
-		code: text(element.querySelector('.code')),
-		label: text(element.querySelector('.label')),
-		whole: text(element)
-	})))`,
+    		classes: [...element.classList],
+    		code: text(element.querySelector('.code')),
+    		label: text(element.querySelector('.label')),
+    		whole: text(element)
+    	})))`,
 };
 
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
@@ -294,15 +309,19 @@ async function main() {
     await ask(STEPS.submitPath);
     const made = JSON.parse(await ask(STEPS.made));
 
-    await ask(STEPS.askDrop);
-    await ask(STEPS.confirmDrop);
-    const dropped = JSON.parse(await ask(STEPS.dropped));
-
-    await ask(STEPS.broken);
+    // Type into the buffer that was just made, the way a person would.
+    await ask(STEPS.type);
     await sleep(300);
 
     await ask(STEPS.showDiagnostics);
     const broken = JSON.parse(await ask(STEPS.seen));
+
+    await ask(STEPS.closeTab);
+    const closed = JSON.parse(await ask(STEPS.closed));
+
+    await ask(STEPS.askDrop);
+    await ask(STEPS.confirmDrop);
+    const dropped = JSON.parse(await ask(STEPS.dropped));
 
     return report(
         {
@@ -313,6 +332,7 @@ async function main() {
             program,
             width,
             made,
+            closed,
             dropped,
             tree: cst.nodes,
             broken,
@@ -370,6 +390,11 @@ function report(page, problems, warnings, asked) {
         ["the ast names its root", page.ast.root],
         ["the ast names a declaration", page.ast.decl],
         ["a buffer can be made at a path", page.made.file],
+        ["a buffer opens as a tab", page.made.open === 3],
+        [
+            "a tab closes without the file",
+            page.closed.open === 2 && page.closed.listed,
+        ],
         ["a buffer can be dropped", page.dropped.file],
         ["the console has a program tab", page.program.empty],
         ["a panel can be sized", page.width.files > 220],

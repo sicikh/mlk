@@ -1,35 +1,184 @@
 <script lang="ts">
+    import {
+        defaultKeymap,
+        history,
+        historyKeymap,
+        indentWithTab,
+    } from "@codemirror/commands";
+    import { bracketMatching, indentOnInput } from "@codemirror/language";
+    import { EditorState } from "@codemirror/state";
+    import {
+        EditorView,
+        drawSelection,
+        highlightActiveLine,
+        highlightActiveLineGutter,
+        keymap,
+        lineNumbers,
+    } from "@codemirror/view";
+
     interface Props {
-        /** The buffer being edited. */
+        /** The buffers open in the editor, in the order of their tabs. */
+        tabs: string[];
+
+        /** The buffer whose tab is in front. */
         path: string;
 
-        /** Its text, as the driver holds it. */
-        text: string;
+        /** The text of a buffer, for a tab that has not been read before. */
+        text: (path: string) => string;
 
-        /** Called with the whole text after every keystroke. */
-        onInput: (text: string) => void;
+        /** Called with the whole text of a buffer after every change. */
+        onInput: (path: string, text: string) => void;
+
+        /** Called when a person picks another tab. */
+        onSelect: (path: string) => void;
+
+        /** Called when a person closes a tab, which is not the same as dropping the buffer. */
+        onClose: (path: string) => void;
     }
 
-    let { path, text, onInput }: Props = $props();
+    let { tabs, path, text, onInput, onSelect, onClose }: Props = $props();
 
-    /** A buffer has a name, not a directory: there is no file system under the editor. */
-    const name = (path: string) => path.replace(/^\//, "");
+    /**
+     * The text and the undo history of every open tab.
+     *
+     * A tab keeps both while it is open, so that coming back to it is a step back
+     * rather than a reload: the editor holds one view over as many states as there are tabs.
+     */
+    const states = new Map<string, EditorState>();
+
+    /** The editor, which shows whatever state the tab in front holds. */
+    let view: EditorView | undefined;
+
+    /** The look of the editor: the same dark theme the rest of the page wears. */
+    const theme = EditorView.theme(
+        {
+            "&": {
+                height: "100%",
+                color: "var(--text)",
+                backgroundColor: "var(--bg)",
+            },
+            ".cm-scroller": {
+                fontFamily: "var(--mono)",
+                fontSize: "13px",
+                lineHeight: "1.6",
+            },
+            ".cm-content": { padding: "0.5rem 0", caretColor: "var(--accent)" },
+            ".cm-gutters": {
+                backgroundColor: "var(--bg)",
+                border: "none",
+                color: "var(--muted)",
+            },
+            ".cm-lineNumbers .cm-gutterElement": {
+                padding: "0 0.5rem 0 0.75rem",
+            },
+            ".cm-activeLine": { backgroundColor: "var(--raised)" },
+            ".cm-activeLineGutter": {
+                backgroundColor: "var(--raised)",
+                color: "var(--text)",
+            },
+            ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)" },
+            ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection":
+                {
+                    backgroundColor: "#2d4f7c",
+                },
+            "&.cm-focused": { outline: "none" },
+            ".cm-matchingBracket": {
+                backgroundColor: "#2d4f7c",
+                outline: "none",
+            },
+            ".cm-tooltip": { zIndex: "10" },
+        },
+        { dark: true },
+    );
+
+    /** The state of a buffer: what it holds, and how to get back to it. */
+    function stateOf(it: string): EditorState {
+        let state = states.get(it);
+
+        if (!state) {
+            state = EditorState.create({
+                doc: text(it),
+                extensions: extensions(it),
+            });
+            states.set(it, state);
+        }
+
+        return state;
+    }
+
+    /** What every tab has: the same furniture, and a way back to the buffer it belongs to. */
+    function extensions(it: string) {
+        return [
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            history(),
+            drawSelection(),
+            highlightActiveLine(),
+            indentOnInput(),
+            bracketMatching(),
+            keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+            EditorView.updateListener.of((update) => {
+                if (!update.docChanged) return;
+
+                states.set(it, update.state);
+                onInput(it, update.state.doc.toString());
+            }),
+            theme,
+        ];
+    }
+
+    /**
+     * Gives the host an editor, and shows the state of the buffer in front in it.
+     *
+     * The editor is built once and lives as long as the page: switching tabs swaps
+     * what it shows, and nothing is rebuilt.
+     */
+    function editor(host: HTMLDivElement, first: string) {
+        view = new EditorView({ parent: host, state: stateOf(first) });
+        view.focus();
+
+        return {
+            update(next: string) {
+                const state = stateOf(next);
+
+                if (view && view.state !== state) view.setState(state);
+            },
+
+            destroy() {
+                view?.destroy();
+                view = undefined;
+            },
+        };
+    }
+
+    /** A closed tab is forgotten: what it held is in the buffer, which is still there. */
+    $effect(() => {
+        for (const it of [...states.keys()]) {
+            if (!tabs.includes(it)) states.delete(it);
+        }
+    });
+
+    /** A buffer has a name, not a directory: only the last part of its path is shown. */
+    const name = (path: string) => path.split("/").at(-1) ?? path;
 </script>
 
 <div class="editor" data-panel="editor">
-    <header>
-        <span class="tab">{name(path)}</span>
-    </header>
+    <nav class="tabs">
+        {#each tabs as tab (tab)}
+            <div class="tab" class:active={tab === path} data-open={tab}>
+                <button class="pick" onclick={() => onSelect(tab)} title={tab}
+                    >{name(tab)}</button
+                >
+                <button
+                    class="close"
+                    onclick={() => onClose(tab)}
+                    aria-label="Close {name(tab)}">×</button
+                >
+            </div>
+        {/each}
+    </nav>
 
-    <!--
-		The editor proper: a text area today, and the one place a real editor
-		— one that marks ranges, folds code and highlights tokens — will stand instead.
-	-->
-    <textarea
-        value={text}
-        oninput={(event) => onInput(event.currentTarget.value)}
-        spellcheck="false"
-        autocapitalize="off"></textarea>
+    <div class="host" use:editor={path}></div>
 </div>
 
 <style>
@@ -43,33 +192,51 @@
         border-right: 1px solid var(--border);
     }
 
-    header {
+    .tabs {
         display: flex;
-        align-items: center;
-        padding: 0.4rem 0.75rem;
+        min-height: 0;
+        overflow-x: auto;
         background: var(--surface);
         border-bottom: 1px solid var(--border);
     }
 
     .tab {
-        color: var(--text);
-        font-family: var(--mono);
-        font-size: 12px;
+        display: flex;
+        align-items: center;
+        border-right: 1px solid var(--border);
     }
 
-    textarea {
-        flex: 1;
-        margin: 0;
-        padding: 0.75rem;
-        background: none;
-        border: 0;
-        color: inherit;
+    .tab.active {
+        background: var(--bg);
+        box-shadow: inset 0 2px 0 var(--accent);
+    }
+
+    .pick {
+        padding: 0.4rem 0.25rem 0.4rem 0.7rem;
+        color: var(--muted);
         font-family: var(--mono);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .tab.active .pick,
+    .pick:hover {
+        color: var(--text);
+    }
+
+    .close {
+        padding: 0 0.5rem 0 0.25rem;
+        color: var(--muted);
         font-size: 13px;
-        line-height: 1.6;
-        white-space: pre;
-        resize: none;
-        outline: none;
-        tab-size: 4;
+        line-height: 1;
+    }
+
+    .close:hover {
+        color: var(--error);
+    }
+
+    .host {
+        flex: 1;
+        min-height: 0;
     }
 </style>

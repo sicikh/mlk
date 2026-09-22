@@ -23,17 +23,17 @@
         {
             path: "/main.mlk",
             text: `fun main(): Unit =
-        let x = 42 * 2 - 10 in
-        println-int(x + 20)
-    `,
+    let x = 42 * 2 - 10 in
+    println-int(x + 20)
+`,
         },
         {
             path: "/lib/arith.mlk",
             text: `fun nested(): Int =
-        let x = 1 in
-        let y = 2 in
-        x + y
-    `,
+    let x = 1 in
+    let y = 2 in
+    x + y
+`,
         },
     ];
 
@@ -45,6 +45,10 @@
 
     let buffers = $state<Buffer[]>(STARTER);
     let active = $state(FIRST);
+
+    /** The buffers open in the editor, in the order of their tabs: opening is not reading. */
+    let open = $state<string[]>(STARTER.map((it) => it.path));
+
     let analysis = $state<Analysis | null>(null);
     let tab = $state<Tab>("diagnostics");
     let log = $state<Line[]>([
@@ -61,7 +65,6 @@
 
     let driver: Driver | null = null;
 
-    const buffer = $derived(buffers.find((it) => it.path === active));
     const diagnostics = $derived(analysis?.diagnostics ?? []);
     const errors = $derived(
         diagnostics.filter((it) => it.level === "error").length,
@@ -125,21 +128,47 @@
     }
 
     /** A keystroke: the text is the buffer's, and the driver is told about it. */
-    function onInput(text: string) {
-        const it = find(active);
+    function onText(path: string, text: string) {
+        const it = find(path);
 
         if (!it) return;
 
         it.text = text;
-        push(active);
+
+        if (path !== active) return;
+
+        push(path);
         check();
     }
 
-    /** Another buffer, and what the compiler already made of it. */
+    /** Another buffer in front, opened as a tab if it was not one ([ADR-0007]). */
     function select(path: string) {
+        if (!open.includes(path)) open = [...open, path];
+
         active = path;
         push(path);
         check();
+
+        // [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
+    }
+
+    /**
+     * A tab goes away, and the buffer stays: closing what a person is reading
+     * is not the same as dropping what it holds.
+     */
+    function closeTab(path: string) {
+        const at = open.indexOf(path);
+
+        open = open.filter((it) => it !== path);
+
+        if (active !== path) return;
+
+        const next = open[at] ?? open[at - 1] ?? "";
+
+        active = next;
+        analysis = null;
+
+        if (next !== "") select(next);
     }
 
     /** A buffer at the path a person typed, in the directories that path names ([ADR-0007]). */
@@ -147,6 +176,7 @@
         if (find(path)) return;
 
         buffers = [...buffers, { path, text: "" }];
+        open = [...open, path];
         active = path;
         say("note", `made ${name(path)}`);
         push(path);
@@ -157,18 +187,21 @@
 
     /** Drops a buffer, and tells the driver the file is gone ([ADR-0007]). */
     function remove(path: string) {
+        const at = open.indexOf(path);
+
         buffers = buffers.filter((it) => it.path !== path);
+        open = open.filter((it) => it !== path);
         driver?.push(path, null);
         say("note", `${name(path)} is gone`);
 
         if (active !== path) return;
 
-        const next = buffers[0];
+        const next = open[at] ?? open[at - 1] ?? buffers[0]?.path ?? "";
 
-        active = next?.path ?? "";
+        active = next;
         analysis = null;
 
-        if (next) select(next.path);
+        if (next !== "") select(next);
     }
 
     /** Compiles every buffer: the same work the driver does per keystroke, said out loud. */
@@ -247,10 +280,21 @@
     />
 
     <main class="editor">
-        {#if buffer}
-            <Editor path={buffer.path} text={buffer.text} {onInput} />
+        {#if active !== ""}
+            <Editor
+                tabs={open}
+                path={active}
+                text={(it) => find(it)?.text ?? ""}
+                onInput={onText}
+                onSelect={select}
+                onClose={closeTab}
+            />
         {:else}
-            <p class="empty">No buffer. Make one with <code>+</code>.</p>
+            <p class="empty">
+                No buffer is open. Pick one in Files, or make one with <code
+                    >+</code
+                >.
+            </p>
         {/if}
     </main>
 

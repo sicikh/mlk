@@ -134,28 +134,32 @@ except a single switch that turns parallel stage dispatch into a plain loop.
 
 ```rust
 impl Driver {
-    // Inputs: the driver never reaches for any of this.
+    // Inputs. The driver never reaches for any of this.
     // The file API is the `Vfs` one, re-exposed ([ADR-0007][0007-vfs-file-state.md]).
     pub fn set_file_contents(&mut self, path: VfsPath, contents: Option<Vec<u8>>) -> bool;
+    pub fn set_file_text(&mut self, path: VfsPath, text: Option<String>) -> bool;
     pub fn set_file_set(&mut self, files: FileSet);
     pub fn set_config(&mut self, config: Config);
 
-    // Pulls: may compute, never return a value from an invalid slot.
-    pub fn syntax_tree(&mut self, file: FileId) -> Arc<Parse>;
-    pub fn item_tree(&mut self, module: ModuleId) -> Arc<ItemTree>;
-    pub fn interface(&mut self, module: ModuleId) -> Arc<Interface>;
-    pub fn body(&mut self, owner: DefWithBodyKey) -> Arc<Body>;
-    pub fn diagnostics(&mut self, project: ProjectId) -> Arc<[Diagnostic]>;
-    pub fn emit(&mut self, project: ProjectId) -> Artifact;
+    // Pulls. May compute; never return a value from an invalid slot.
+    pub fn parse(&mut self, file: FileId) -> Option<Arc<Parse>>;
+    pub fn diagnostics(&mut self, file: FileId) -> Option<Vec<Diagnostic>>;
+    // The units that follow are more of the same:
+    // `item_tree`, `interface`, `body`, `def_map`, `emit`.
 
-    // Whole-project, and priced as such; the passes read interfaces per module instead.
-    pub fn def_map(&mut self, project: ProjectId) -> Arc<ProjectDefMap>;
-
-    // Reads: no computation, no `&mut self`.
+    // Reads. No computation, no `&mut self`.
+    pub fn file_id(&self, path: &VfsPath) -> Option<FileId>;
     pub fn file_text(&self, file: FileId) -> Option<Arc<str>>;
     pub fn file_version(&self, file: FileId) -> FileVersion;
+    pub fn file_state(&self, file: FileId) -> FileState;
+    pub fn file_path(&self, file: FileId) -> &VfsPath;
 }
 ```
+
+A pull answers `None` when the driver holds nothing to compute from,
+which for the parse means no text: the file was never pushed, it is gone, or it is not text.
+The `file_state` read tells those apart, and a host that needs the net changes of its pushes
+can drain `take_changes` on the `Vfs` ([ADR-0007][0007-vfs-file-state.md]).
 
 Three consequences fall out of this shape:
 
@@ -717,7 +721,7 @@ Its idea, the interface checksum, is the one this ADR adopts in memory.
 - Against Query Based Compilers: <https://matklad.github.io/2026/02/25/against-query-based-compilers.html>
 - Three Architectures for a Responsive IDE: <https://matklad.github.io/2023/12/28/three-architectures-for-responsive-ide.html>
 - Zig's incremental compilation internals: <https://mlugg.co.uk/posts/incremental-compilation-internals/>
-- Implementation: [mlkc-vfs], [mlkc-hir-def], [mlkc-diagnostics], [mlkc-cli]
+- Implementation: [mlkc-driver], [mlkc-vfs], [mlkc-hir-def], [mlkc-diagnostics], [mlkc-cli]
 
 [0002-lossless-syntax-tree.md]: 0002-lossless-syntax-tree.md
 [0003-id-based-ir.md]: 0003-id-based-ir.md
@@ -726,6 +730,7 @@ Its idea, the interface checksum, is the one this ADR adopts in memory.
 [0006-snapshot-testing.md]: 0006-snapshot-testing.md
 [0007-vfs-file-state.md]: 0007-vfs-file-state.md
 [0009-pass-contract.md]: 0009-pass-contract.md
+[mlkc-driver]: ../../crates/mlkc-driver
 [mlkc-vfs]: ../../crates/mlkc-vfs
 [mlkc-hir-def]: ../../crates/mlkc-hir-def
 [mlkc-diagnostics]: ../../crates/mlkc-diagnostics

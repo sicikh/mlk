@@ -136,5 +136,7 @@ pub trait DiagKind {
 
     fn category(&self) -> Category;
 
+    /// Two-digit code for the concrete error kind in the category,
+    /// e.g. `01` for invalid token, `02` for unexpected token, etc.
     fn code(&self) -> &'static str;
 }

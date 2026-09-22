@@ -177,11 +177,11 @@ where
 
     fn eat_trivia(&mut self, trailing: bool, token_end: TextSize) {
         for trivia in &self.trivia_list[self.trivia_pos..] {
+            // Some non-trivia tokens have zero length. In that case to check whether this
+            // trivia is that token's leading trivia we also need to take into account the
+            // trivia end offset.
             if trailing != trivia.trailing()
                 || self.text_pos != trivia.offset()
-                // Some non-trivia tokens have zero length. In that case to check whether this
-                // trivia is that token's leading trivia we also need to take into account the
-                // trivia end offset.
                 || (!trailing && trivia.end_offset() > token_end)
             {
                 break;

@@ -1,5 +1,5 @@
 [package]
-name = "mlkc-cli"
+name = "mlkc-driver"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -8,13 +8,17 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-anyhow.workspace = true
-bpaf.workspace = true
 mlkc-diagnostics.workspace = true
-mlkc-driver.workspace = true
 mlkc-line-index.workspace = true
-mlkc-span.workspace = true
+mlkc-parser.workspace = true
+mlkc-parser-core.workspace = true
+mlkc-rowan.workspace = true
+mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+mlkc-text-size.workspace = true
 
 [lints]
 workspace = true

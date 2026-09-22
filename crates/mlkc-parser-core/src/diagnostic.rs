@@ -352,10 +352,8 @@ impl DiagKind for ParseDiagnostic {
         Category::Parser
     }
 
-    /// Parse diagnostics carry no code of their own: they all share the code of the
-    /// [Category::Parser] category.
     fn code(&self) -> &'static str {
-        Category::Parser.as_code()
+        "01"
     }
 }
 

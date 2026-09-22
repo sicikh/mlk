@@ -49,7 +49,6 @@
     let log = $state<Line[]>([
         { level: "note", text: "loading the wasm driver…" },
     ]);
-    let status = $state("loading the wasm driver…");
 
     let driver: Driver | null = null;
 
@@ -62,7 +61,6 @@
     onMount(async () => {
         try {
             driver = await loadDriver();
-            status = "the driver is loaded";
             say("info", "the driver is loaded");
 
             // A driver knows nothing until a host says what it holds: every buffer goes in first.
@@ -70,7 +68,6 @@
 
             check();
         } catch (error) {
-            status = "the driver did not load";
             say("error", `the driver did not load: ${String(error)}`);
         }
     });
@@ -100,29 +97,17 @@
 
     /** Reads back what the driver made of the active buffer. */
     function check() {
-        if (!driver) return;
+        if (!driver || active === "") return;
 
         try {
             analysis = driver.analyze(active);
-            status = summary(analysis);
         } catch (error) {
             analysis = null;
-            status = "the driver refused the buffer";
             say(
                 "error",
                 `the driver refused ${name(active)}: ${String(error)}`,
             );
         }
-    }
-
-    /** What the active buffer amounts to, in a line. */
-    function summary(it: Analysis): string {
-        if (it.diagnostics.length === 0) return "no diagnostics";
-
-        const count = it.diagnostics.length;
-        const plural = count === 1 ? "" : "s";
-
-        return `${count} diagnostic${plural}`;
     }
 
     /** A buffer has a name, not a directory: there is no file system under the editor. */
@@ -148,18 +133,33 @@
         check();
     }
 
-    /** A buffer to type into, beside the one being edited, with a name nothing else holds. */
-    function add() {
-        const directory = active.slice(0, active.lastIndexOf("/") + 1);
-        let path = `${directory}untitled.mlk`;
-
-        for (let count = 2; find(path); count++)
-            path = `${directory}untitled-${count}.mlk`;
+    /** A buffer at the path a person typed, in the directories that path names ([ADR-0007]). */
+    function create(path: string) {
+        if (find(path)) return;
 
         buffers = [...buffers, { path, text: "" }];
         active = path;
+        say("note", `made ${name(path)}`);
+        push(path);
+        check();
+
+        // [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
+    }
+
+    /** Drops a buffer, and tells the driver the file is gone ([ADR-0007]). */
+    function remove(path: string) {
+        buffers = buffers.filter((it) => it.path !== path);
+        driver?.push(path, null);
+        say("note", `${name(path)} is gone`);
+
+        if (active !== path) return;
+
+        const next = buffers[0];
+
+        active = next?.path ?? "";
         analysis = null;
-        status = "an empty buffer";
+
+        if (next) select(next.path);
     }
 
     /** Compiles every buffer: the same work the driver does per keystroke, said out loud. */
@@ -208,7 +208,6 @@
 <div class="ide">
     <header class="top">
         <span class="brand">MLK</span>
-        <span class="status" class:error={errors > 0}>{status}</span>
         <span class="grow"></span>
         <span class="tool-name">{name(active)}</span>
         <button class="tool" onclick={run}>Run</button>
@@ -220,13 +219,16 @@
             files={buffers.map((it) => it.path)}
             {active}
             onSelect={select}
-            onAdd={add}
+            onCreate={create}
+            onRemove={remove}
         />
     </aside>
 
     <main class="editor">
         {#if buffer}
             <Editor path={buffer.path} text={buffer.text} {onInput} />
+        {:else}
+            <p class="empty">No buffer. Make one with <code>+</code>.</p>
         {/if}
     </main>
 
@@ -279,7 +281,7 @@
 <style>
     .ide {
         display: grid;
-        grid-template-columns: 200px minmax(0, 1fr) minmax(300px, 30%);
+        grid-template-columns: 220px minmax(0, 1fr) minmax(300px, 30%);
         grid-template-rows: auto minmax(0, 1fr) minmax(120px, 22vh);
         height: 100dvh;
     }
@@ -299,15 +301,6 @@
         letter-spacing: 0.12em;
     }
 
-    .status {
-        color: var(--muted);
-        font-size: 12px;
-    }
-
-    .status.error {
-        color: var(--error);
-    }
-
     .grow {
         flex: 1;
     }
@@ -316,6 +309,16 @@
         color: var(--muted);
         font-family: var(--mono);
         font-size: 12px;
+    }
+
+    .empty {
+        margin: 0;
+        padding: 1rem;
+        color: var(--muted);
+    }
+
+    .empty code {
+        font-family: var(--mono);
     }
 
     .tool {

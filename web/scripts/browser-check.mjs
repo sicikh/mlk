@@ -49,17 +49,17 @@ const HELPERS = `
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
-		panels: document.querySelectorAll('[data-panel]').length,
-		status: text(document.querySelector('.status'))
-	})`,
+    		panels: document.querySelectorAll('[data-panel]').length,
+    		file: text(document.querySelector('[data-panel=editor] .tab'))
+    	})`,
 
     // Showing a view and reading it are two questions: the page renders between them.
     showCst: `show('cst'); return true`,
 
     cst: `return JSON.stringify({
-		nodes: inspector().querySelectorAll('[data-kind]').length,
-		root: inspector().querySelector('[data-kind=MODULE_ROOT]') !== null
-	})`,
+    		nodes: inspector().querySelectorAll('[data-kind]').length,
+    		root: inspector().querySelector('[data-kind=MODULE_ROOT]') !== null
+    	})`,
 
     showDiagnostics: `show('diagnostics'); return true`,
 
@@ -71,6 +71,28 @@ const STEPS = {
     	})`,
 
     clean: `return JSON.stringify({ diagnostics: diagnostics().length })`,
+
+    // A buffer is made by typing a path, which is also what makes the directories in it.
+    open: `document.querySelector('[data-panel=files] .add').click(); return true`,
+
+    typePath: `const field = document.querySelector('[data-panel=files] input');
+    	field.value = 'lib/sample.mlk';
+    	field.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
+    submitPath: `document.querySelector('[data-panel=files] form').requestSubmit(); return true`,
+
+    made: `return JSON.stringify({
+    		file: document.querySelector('[data-file="/lib/sample.mlk"]') !== null
+    	})`,
+
+    askDrop: `document.querySelector('[data-file="/lib/sample.mlk"] .drop').click(); return true`,
+
+    confirmDrop: `document.querySelector('[data-panel=files] .yes').click(); return true`,
+
+    dropped: `return JSON.stringify({
+    		file: document.querySelector('[data-file="/lib/sample.mlk"]') === null
+    	})`,
 
     broken: `const source = document.querySelector('textarea');
 	source.value = 'fun main(): Unit =\\n    let x = 1\\n';
@@ -243,6 +265,15 @@ async function main() {
     await ask(STEPS.showAst);
     const ast = JSON.parse(await ask(STEPS.ast));
 
+    await ask(STEPS.open);
+    await ask(STEPS.typePath);
+    await ask(STEPS.submitPath);
+    const made = JSON.parse(await ask(STEPS.made));
+
+    await ask(STEPS.askDrop);
+    await ask(STEPS.confirmDrop);
+    const dropped = JSON.parse(await ask(STEPS.dropped));
+
     await ask(STEPS.broken);
     await sleep(300);
 
@@ -251,10 +282,12 @@ async function main() {
 
     return report(
         {
-            status: state.status,
+            status: state.file,
             hydrated,
             clean: { root: cst.root, diagnostics: clean.diagnostics },
             ast,
+            made,
+            dropped,
             tree: cst.nodes,
             broken,
         },
@@ -310,6 +343,8 @@ function report(page, problems, warnings, asked) {
         ["the tree is more than its root", page.tree > 5],
         ["the ast names its root", page.ast.root],
         ["the ast names a declaration", page.ast.decl],
+        ["a buffer can be made at a path", page.made.file],
+        ["a buffer can be dropped", page.dropped.file],
         ["a clean buffer reports nothing", page.clean.diagnostics === 0],
         [
             "a broken buffer reports a diagnostic",
@@ -328,7 +363,7 @@ function report(page, problems, warnings, asked) {
 
     const held = checks.every(([, it]) => it);
 
-    console.log(`the page at ${base} says: ${page.status || "(nothing)"}`);
+    console.log(`the page at ${base} shows: ${page.status || "(nothing)"}`);
     console.log(`the cst holds ${page.tree} elements`);
     console.log(
         `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,

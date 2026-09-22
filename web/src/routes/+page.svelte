@@ -6,6 +6,7 @@
     import Diagnostics from "$lib/components/Diagnostics.svelte";
     import Editor from "$lib/components/Editor.svelte";
     import FileList from "$lib/components/FileList.svelte";
+    import Splitter from "$lib/components/Splitter.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
     import { loadDriver, type Analysis, type Driver } from "$lib/driver";
 
@@ -49,6 +50,14 @@
     let log = $state<Line[]>([
         { level: "note", text: "loading the wasm driver…" },
     ]);
+
+    /**
+     * How much room each panel takes, which a person drags the handles between them for.
+     * The editor takes what is left, so only these three are kept.
+     */
+    let files = $state(220);
+    let inspector = $state(380);
+    let console = $state(160);
 
     let driver: Driver | null = null;
 
@@ -205,7 +214,10 @@
     <title>MLK editor</title>
 </svelte:head>
 
-<div class="ide">
+<div
+    class="ide"
+    style="--files: {files}px; --inspector: {inspector}px; --console: {console}px"
+>
     <header class="top">
         <span class="brand">MLK</span>
         <span class="grow"></span>
@@ -224,6 +236,16 @@
         />
     </aside>
 
+    <Splitter
+        style="grid-column: 2; grid-row: 2"
+        direction="x"
+        size={files}
+        min={150}
+        max={480}
+        label="Size of the files panel"
+        onResize={(size) => (files = size)}
+    />
+
     <main class="editor">
         {#if buffer}
             <Editor path={buffer.path} text={buffer.text} {onInput} />
@@ -231,6 +253,17 @@
             <p class="empty">No buffer. Make one with <code>+</code>.</p>
         {/if}
     </main>
+
+    <Splitter
+        style="grid-column: 4; grid-row: 2"
+        direction="x"
+        size={inspector}
+        min={240}
+        max={760}
+        flip
+        label="Size of the inspector panel"
+        onResize={(size) => (inspector = size)}
+    />
 
     <aside class="inspector" data-panel="inspector">
         <nav class="tabs">
@@ -273,17 +306,73 @@
         </div>
     </aside>
 
+    <Splitter
+        style="grid-column: 1 / -1; grid-row: 3"
+        direction="y"
+        size={console}
+        min={80}
+        max={480}
+        flip
+        label="Size of the console"
+        onResize={(size) => (console = size)}
+    />
+
     <section class="console">
         <Console lines={log} />
     </section>
 </div>
 
 <style>
+    /*
+     * The shell: a header, the three panels, and the console under them.
+     *
+     * The lanes the handles sit in are nothing wide: a handle lies on the seam itself,
+     * so that the panels meet along the borders they already have
+     * and no lane is drawn behind them.
+     */
     .ide {
         display: grid;
-        grid-template-columns: 220px minmax(0, 1fr) minmax(300px, 30%);
-        grid-template-rows: auto minmax(0, 1fr) minmax(120px, 22vh);
+        grid-template-columns: var(--files) 0 minmax(0, 1fr) 0 var(--inspector);
+        grid-template-rows: auto minmax(0, 1fr) 0 var(--console);
         height: 100dvh;
+    }
+
+    .files {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .editor {
+        grid-column: 3;
+        grid-row: 2;
+    }
+
+    .inspector {
+        display: flex;
+        flex-direction: column;
+        grid-column: 5;
+        grid-row: 2;
+        min-height: 0;
+        min-width: 0;
+        background: var(--surface);
+    }
+
+    .console {
+        grid-column: 1 / -1;
+        grid-row: 4;
+    }
+
+    /*
+     * Each of these holds one panel, and a one-cell grid is the shortest way to say
+     * that whatever is inside it fills it: a percentage height asks the same question
+     * and does not always get an answer.
+     */
+    .files,
+    .editor,
+    .console {
+        display: grid;
+        min-height: 0;
+        min-width: 0;
     }
 
     .top {
@@ -341,37 +430,6 @@
 
     .tool.primary:hover {
         background: #33507f;
-    }
-
-    .files,
-    .editor,
-    .inspector,
-    .console {
-        min-height: 0;
-        min-width: 0;
-    }
-
-    .files {
-        grid-column: 1;
-        grid-row: 2;
-    }
-
-    .editor {
-        grid-column: 2;
-        grid-row: 2;
-    }
-
-    .inspector {
-        display: flex;
-        flex-direction: column;
-        grid-column: 3;
-        grid-row: 2;
-        background: var(--surface);
-    }
-
-    .console {
-        grid-column: 1 / -1;
-        grid-row: 3;
     }
 
     .tabs {

@@ -1,82 +1,91 @@
 /**
- * The look of the editor.
- *
- * One dark theme as variables, and the few things every panel shares:
- * the page and the components style themselves from these.
- */
+ /*
+  * The look of the editor.
+  *
+  * One dark theme as variables, and the few things every panel shares:
+  * the page and the components style themselves from these.
+  */
 :root {
-	color-scheme: dark;
+    color-scheme: dark;
 
-	--bg: #0e1116;
-	--surface: #14181f;
-	--raised: #1a2029;
-	--border: #262d38;
-	--text: #d6dde6;
-	--muted: #8593a3;
-	--accent: #7aa2f7;
-	--error: #f7768e;
-	--warning: #e0af68;
-	--ok: #9ece6a;
+    --bg: #0e1116;
+    --surface: #14181f;
+    --raised: #1a2029;
+    --border: #262d38;
+    --text: #d6dde6;
+    --muted: #8593a3;
+    --accent: #7aa2f7;
+    --error: #f7768e;
+    --warning: #e0af68;
+    --ok: #9ece6a;
 
-	--sans: ui-sans-serif, system-ui, sans-serif;
-	--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-	--radius: 4px;
+    --radius: 4px;
+
+    /* Scrollbars are the page's, not the browser's: a dark thumb on nothing at all. */
+    scrollbar-color: #2b333f transparent;
 }
 
 * {
-	box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 html,
 body {
-	height: 100%;
+    height: 100%;
 }
 
 body {
-	margin: 0;
-	background: var(--bg);
-	color: var(--text);
-	font-family: var(--sans);
-	font-size: 13px;
-	line-height: 1.5;
-	-webkit-font-smoothing: antialiased;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 /* A button that looks like the thing it is: a tab, a tool, a line of text. */
 button {
-	padding: 0;
-	background: none;
-	border: 0;
-	color: inherit;
-	font: inherit;
-	cursor: pointer;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 }
 
 button:disabled {
-	cursor: default;
-	opacity: 0.4;
+    cursor: default;
+    opacity: 0.4;
 }
 
 :focus-visible {
-	outline: 1px solid var(--accent);
-	outline-offset: 1px;
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
 }
 
 ::-webkit-scrollbar {
-	width: 10px;
-	height: 10px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-	background: #2b333f;
-	border-radius: 5px;
+    background: #2b333f;
+    border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: #38414f;
+    background: #38414f;
+}
+
+/* Where two scrollbars meet, the corner is not a patch of someone else's colour. */
+::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 ::selection {
-	background: #2d4f7c;
+    background: #2d4f7c;
 }

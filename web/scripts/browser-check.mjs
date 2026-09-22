@@ -72,6 +72,23 @@ const STEPS = {
 
     clean: `return JSON.stringify({ diagnostics: diagnostics().length })`,
 
+    showProgram: `document.querySelector('[data-console=program]').click(); return true`,
+
+    program: `return JSON.stringify({
+    		empty: document.querySelector('[data-panel=console] .empty') !== null
+    	})`,
+
+    showCompiler: `document.querySelector('[data-console=compiler]').click(); return true`,
+
+    // A handle answers the arrow keys, which is how a person sizes a panel without a pointer.
+    widen: `document.querySelector('[aria-label="Size of the files panel"]')
+    		.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    	return true`,
+
+    width: `return JSON.stringify({
+    		files: Math.round(document.querySelector('[data-panel=files]').getBoundingClientRect().width)
+    	})`,
+
     // A buffer is made by typing a path, which is also what makes the directories in it.
     open: `document.querySelector('[data-panel=files] .add').click(); return true`,
 
@@ -262,6 +279,13 @@ async function main() {
     await ask(STEPS.showDiagnostics);
     const clean = JSON.parse(await ask(STEPS.clean));
 
+    await ask(STEPS.showProgram);
+    const program = JSON.parse(await ask(STEPS.program));
+    await ask(STEPS.showCompiler);
+
+    await ask(STEPS.widen);
+    const width = JSON.parse(await ask(STEPS.width));
+
     await ask(STEPS.showAst);
     const ast = JSON.parse(await ask(STEPS.ast));
 
@@ -286,6 +310,8 @@ async function main() {
             hydrated,
             clean: { root: cst.root, diagnostics: clean.diagnostics },
             ast,
+            program,
+            width,
             made,
             dropped,
             tree: cst.nodes,
@@ -345,6 +371,8 @@ function report(page, problems, warnings, asked) {
         ["the ast names a declaration", page.ast.decl],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer can be dropped", page.dropped.file],
+        ["the console has a program tab", page.program.empty],
+        ["a panel can be sized", page.width.files > 220],
         ["a clean buffer reports nothing", page.clean.diagnostics === 0],
         [
             "a broken buffer reports a diagnostic",

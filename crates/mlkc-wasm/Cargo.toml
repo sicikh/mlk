@@ -11,14 +11,14 @@ publish.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-bindgen.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde-wasm-bindgen.workspace = true
 mlkc-diagnostics.workspace = true
 mlkc-driver.workspace = true
 mlkc-line-index.workspace = true
 mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

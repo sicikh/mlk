@@ -167,13 +167,15 @@ impl Diagnostic {
             labels: diagnostic
                 .labels
                 .iter()
-                .map(|label| Label {
-                    start: u32::from(label.span.range.start()),
-                    end: u32::from(label.span.range.end()),
-                    line: index.line_col(label.span.range.start()).line,
-                    column: index.line_col(label.span.range.start()).col,
-                    primary: label.primary,
-                    message: label.message.clone(),
+                .map(|label| {
+                    Label {
+                        start: u32::from(label.span.range.start()),
+                        end: u32::from(label.span.range.end()),
+                        line: index.line_col(label.span.range.start()).line,
+                        column: index.line_col(label.span.range.start()).col,
+                        primary: label.primary,
+                        message: label.message.clone(),
+                    }
                 })
                 .collect(),
             notes: diagnostic.notes.clone(),

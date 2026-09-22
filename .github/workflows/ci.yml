@@ -1,0 +1,177 @@
+# What has to hold before anything is built or published.
+#
+# The steps are the recipes of the justfile — `just ready` is this file, run on a laptop —
+# and the tools are the ones `just install-tools` brings, so a version that changes there
+# changes here. What is published is built once more, at the path Pages serves it from.
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+# Nothing here writes to the repository: the two jobs that publish ask for more.
+permissions:
+    contents: read
+
+# A branch pushed again while its checks run is checked once, on what was pushed last.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    rust:
+        name: rust
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: clippy
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: ci
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: just
+            - run: just lint
+            - run: just test
+            - run: just test-doc
+
+    generated:
+        name: generated files
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            # `just format` is `cargo +nightly fmt`, because the style the repository is written
+            # in needs a nightly rustfmt.
+            - uses: dtolnay/rust-toolchain@nightly
+              with:
+                  components: rustfmt
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: ci
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  # The version a laptop uses is in `.nvmrc`, so the runner reads it there too.
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: just
+            - run: pnpm install
+            # The grammar of the compiler and the grammar of the editor are both written into
+            # files that are committed: this writes them again, and the diff below says whether
+            # what is committed is what the generators make of them.
+            - run: just gen-all
+            - name: nothing that is generated is out of date
+              run: |
+                  git diff --exit-code
+                  # A generated file that is new is untracked, and `git diff` does not see those.
+                  if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+                      echo "the generation left files behind:" >&2
+                      git ls-files --others --exclude-standard >&2
+                      exit 1
+                  fi
+
+    web:
+        name: web
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: ci
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: just,cargo-binstall
+            - run: just install-tools
+            # Obscura is the browser the check drives the page in. It comes from a release until
+            # it comes from nix: the archive holds the browser and its worker, which is why it is
+            # unpacked into a directory on the path rather than into the workspace.
+            - name: obscura
+              run: |
+                  curl -fsSLo /tmp/obscura.tar.gz https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-x86_64-linux.tar.gz
+                  mkdir -p "$HOME/.local/bin"
+                  tar xzf /tmp/obscura.tar.gz -C "$HOME/.local/bin"
+                  echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+                  "$HOME/.local/bin/obscura" --version
+            # The site is built on every pull request and not only where it is published: the
+            # wasm package is not committed, and the build is where a bundling mistake shows.
+            - run: just build-web
+            - run: just check-web
+            - name: the editor in a browser
+              run: just check-browser
+
+    pages:
+        name: pages
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        needs: [rust, generated, web]
+        if: github.ref == 'refs/heads/main'
+        permissions:
+            contents: read
+            pages: write
+            id-token: write
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: wasm32-unknown-unknown
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  shared-key: ci
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - uses: taiki-e/install-action@v2
+              with:
+                  tool: just,cargo-binstall
+            - run: just install-tools
+            - uses: actions/configure-pages@v5
+              id: pages
+            # Pages serves the site under the name of the repository and says which path that is;
+            # the build is told it, so that the editor looks for its assets there and not at the
+            # root of the domain.
+            - name: the site, at the path pages serves it from
+              run: BASE_PATH="${{ steps.pages.outputs.base_path }}" pnpm --filter @mlk/web build
+            # Pages hands everything to Jekyll, which keeps to itself anything whose name starts
+            # with an underscore — which is every asset of a SvelteKit site.
+            - run: touch web/build/.nojekyll
+            - uses: actions/upload-pages-artifact@v3
+              with:
+                  path: web/build
+
+    deploy:
+        name: deploy
+        runs-on: ubuntu-latest
+        needs: pages
+        if: github.ref == 'refs/heads/main'
+        permissions:
+            pages: write
+            id-token: write
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - id: deployment
+              uses: actions/deploy-pages@v4

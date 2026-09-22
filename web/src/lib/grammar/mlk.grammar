@@ -1,0 +1,141 @@
+// The grammar of MLK, for the editor.
+//
+// This is not the parser of the compiler: it is the one the client paints code with,
+// the way an editor knows the syntax of a language on its own and asks a language server
+// only for what it cannot see — the names that are resolved, the types, the meanings.
+// The compiler stays the one that says what the language is (its grammar is
+// `xtask/codegen/mlk.ungram`); this file follows it, and is allowed to be behind it.
+//
+// It is also allowed to be wrong in a way the compiler is not: a tree from here
+// only decides colours, so a construct this file does not know is not an error,
+// it is text with the colour of text.
+//
+// `mlk.ts` next to this file is generated from it, and is what the editor loads:
+//
+//     pnpm --filter @mlk/web build:grammar
+
+@top ModuleRoot { item* }
+
+// Operators, from the tightest to the loosest, which is the order the generator reads:
+// a call binds tighter than `*`, `*` tighter than `+`, `+` tighter than a comparison,
+// and so on (the compiler climbs the same ladder in `parse_binary_expr`). The order is
+// worth a word because it is not the one the rest of this file is written in: read the
+// other way round, this list parses `1 + 2 * 3` as `(1 + 2) * 3`.
+@precedence {
+	call @left,
+	product @left,
+	sum @left,
+	comparison @left,
+	equality @left,
+	and @left,
+	or @left
+}
+
+@skip { space | Comment }
+
+item { Attribute* (ModulePreamble | FunDecl | TypeDecl) }
+
+// The keywords are not tokens of their own.
+//
+// The lexer of the compiler matches the longest text, and a keyword only wins where
+// a keyword and a name are the same length: `let` is the keyword while `letter` and
+// `let-x` are names. A token per keyword cannot say that — a word like `let` would win
+// over `letter` — so a keyword is a *name* here, read as a keyword in the places the
+// grammar says a keyword goes: the same thing the compiler's lexer does with its
+// priority, one level up.
+kw<term> { @specialize[@name={term}]<identifier, term> }
+
+ModulePreamble { kw<"module"> Path }
+
+Attribute { "@" Name }
+
+FunDecl { kw<"fun"> Name Parameters ReturnType? FunBody? }
+
+Parameters { "(" (Parameter ("," Parameter)*)? ")" }
+
+Parameter { Name TypeAnnotation? }
+
+TypeAnnotation { ":" Type }
+
+ReturnType { ":" Type }
+
+FunBody { "=" Expr }
+
+TypeDecl { kw<"type"> Name }
+
+Name { identifier }
+
+Type { Path | InferType }
+
+Path { PathSegment ("." PathSegment)* }
+
+PathSegment { Name TypeArgs? }
+
+TypeArgs { "[" (Type ("," Type)* ","?)? "]" }
+
+InferType { kw<"_"> }
+
+Expr { BinaryExpr | PostfixExpr }
+
+// A call applies to what can be called, which is what keeps `let x = 1 in f(x)`
+// from being ambiguous: the decision whether `(` continues the call is taken here,
+// inside one expression, and not across the whole of it.
+PostfixExpr { PrimaryExpr | CallExpr }
+
+CallExpr { PostfixExpr !call "(" (Expr ("," Expr)* ","?)? ")" }
+
+PrimaryExpr { LetExpr | Literal | VarExpr | ParenExpr }
+
+LetExpr { kw<"let"> Pat "=" Expr kw<"in"> Expr }
+
+Pat { IdentPat | WildcardPat }
+
+IdentPat { Name }
+
+WildcardPat { kw<"_"> }
+
+BinaryExpr {
+	Expr !product ("*" | "/") Expr |
+	Expr !sum ("+" | "-") Expr |
+	Expr !comparison ("<=" | ">=" | "<" | ">") Expr |
+	Expr !equality ("==" | "!=") Expr |
+	Expr !and "&&" Expr |
+	Expr !or "||" Expr
+}
+
+ParenExpr { "(" Expr ")" }
+
+Literal { IntLiteral | StringLiteral }
+
+IntLiteral { int_literal }
+
+StringLiteral { string_literal }
+
+VarExpr { Name }
+
+@tokens {
+	// Two tokens that can match the same text are resolved by this order, and the order
+	// outranks the length of the match: the earlier name wins even where the later one
+	// would have matched more. That is why no keyword is declared as a token here —
+	// written this way, `let` would eat the first three letters of `letter` — and this
+	// pair is safe to write down because a comment is never the shorter of the two:
+	// `//` opens a comment while `/` divides.
+	@precedence { Comment, "/" }
+
+	// The trivia the parser of the compiler skips as well: a line break is not part
+	// of the syntax of MLK, an expression ends where its last token ends.
+	space { $[ \t\r\n]+ }
+
+	Comment { "//" ![\n\r]* | "/*" (![*] | "*" ![/])* "*/" }
+
+	// A name may hold `-` between its parts, so `println-int` is one name while
+	// `x - 1` is a subtraction. The narrowest way to write this down is what makes
+	// `x-1` a name as well, and that is what the lexer of the compiler does.
+	identifier { $[a-zA-Z_] $[a-zA-Z0-9_]* ("-" $[a-zA-Z0-9_]+)* }
+
+	int_literal { $[0-9]+ }
+
+	// Strings have neither escapes nor interpolation yet: they end at the first quote,
+	// so an unterminated string is not a string at all (the same rule as the lexer's).
+	string_literal { '"' !["\n\r]* '"' }
+}

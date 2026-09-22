@@ -6,6 +6,12 @@
         indentWithTab,
     } from "@codemirror/commands";
     import { bracketMatching, indentOnInput } from "@codemirror/language";
+    import {
+        lintGutter,
+        lintKeymap,
+        setDiagnostics,
+        type Diagnostic as LintDiagnostic,
+    } from "@codemirror/lint";
     import { EditorState } from "@codemirror/state";
     import {
         EditorView,
@@ -15,6 +21,10 @@
         keymap,
         lineNumbers,
     } from "@codemirror/view";
+
+    import { codeOf, mainLabel, rangeOf, severityOf } from "$lib/diagnostics";
+    import type { Diagnostic } from "$lib/driver";
+    import { mlkLanguageSupport } from "$lib/highlight";
 
     interface Props {
         /** The buffers open in the editor, in the order of their tabs. */
@@ -26,6 +36,9 @@
         /** The text of a buffer, for a tab that has not been read before. */
         text: (path: string) => string;
 
+        /** What the compiler reported about the buffer in front. */
+        diagnostics?: Diagnostic[];
+
         /** Called with the whole text of a buffer after every change. */
         onInput: (path: string, text: string) => void;
 
@@ -36,7 +49,15 @@
         onClose: (path: string) => void;
     }
 
-    let { tabs, path, text, onInput, onSelect, onClose }: Props = $props();
+    let {
+        tabs,
+        path,
+        text,
+        diagnostics = [],
+        onInput,
+        onSelect,
+        onClose,
+    }: Props = $props();
 
     /**
      * The text and the undo history of every open tab.
@@ -47,7 +68,7 @@
     const states = new Map<string, EditorState>();
 
     /** The editor, which shows whatever state the tab in front holds. */
-    let view: EditorView | undefined;
+    let view = $state<EditorView | undefined>();
 
     /** The look of the editor: the same dark theme the rest of the page wears. */
     const theme = EditorView.theme(
@@ -87,6 +108,18 @@
                 outline: "none",
             },
             ".cm-tooltip": { zIndex: "10" },
+
+            /* And what the compiler has to say about the text, marked the way an editor
+               marks mistakes. The colours of the code itself are the language's:
+               see `$lib/highlight`. */
+            ".cm-lintRange-error": {
+                backgroundImage: "none",
+                textDecoration: "underline wavy var(--error)",
+            },
+            ".cm-lintRange-warning": {
+                backgroundImage: "none",
+                textDecoration: "underline wavy var(--warning)",
+            },
         },
         { dark: true },
     );
@@ -116,7 +149,14 @@
             highlightActiveLine(),
             indentOnInput(),
             bracketMatching(),
-            keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+            mlkLanguageSupport(),
+            lintGutter(),
+            keymap.of([
+                ...defaultKeymap,
+                ...historyKeymap,
+                ...lintKeymap,
+                indentWithTab,
+            ]),
             EditorView.updateListener.of((update) => {
                 if (!update.docChanged) return;
 
@@ -126,6 +166,46 @@
             theme,
         ];
     }
+
+    /** What a diagnostic of the compiler is, as the editor marks one. */
+    function lintOf(diagnostic: Diagnostic, text: string): LintDiagnostic {
+        const label = mainLabel(diagnostic);
+        const range = label ? rangeOf(label, text) : { from: 0, to: 0 };
+        const says = label && label.message !== "" ? ` — ${label.message}` : "";
+
+        return {
+            ...range,
+            severity: severityOf(diagnostic.level),
+            message: `${codeOf(diagnostic)} ${diagnostic.message}${says}`,
+            source: diagnostic.category,
+        };
+    }
+
+    /**
+     * Shows what the compiler made of the buffer that is in front.
+     *
+     * The colours are the editor's own ([`$lib/highlight`]), so what arrives here is
+     * what the compiler has to say about the text: the places it complained about.
+     */
+    function show() {
+        if (!view) return;
+
+        const text = view.state.doc.toString();
+
+        // A mark of a diagnostic is made against the state the text is in, which is this one.
+        view.dispatch(
+            setDiagnostics(
+                view.state,
+                diagnostics.map((it) => lintOf(it, text)),
+            ),
+        );
+    }
+
+    /** Another parse arrives with every keystroke: the editor is marked up with it. */
+    $effect(() => {
+        diagnostics;
+        show();
+    });
 
     /**
      * Gives the host an editor, and shows the state of the buffer in front in it.
@@ -142,6 +222,8 @@
                 const state = stateOf(next);
 
                 if (view && view.state !== state) view.setState(state);
+
+                show();
             },
 
             destroy() {

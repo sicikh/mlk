@@ -8,6 +8,7 @@
         "dev": "vite dev",
         "prebuild": "pnpm --filter @mlk/wasm build",
         "build": "vite build",
+        "build:grammar": "lezer-generator --noTerms --typeScript src/lib/grammar/mlk.grammar -o src/lib/grammar/mlk.ts",
         "preview": "vite preview",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
         "check:browser": "pnpm build && node scripts/browser-check.mjs"
@@ -15,11 +16,15 @@
     "dependencies": {
         "@codemirror/commands": "^6.11.1",
         "@codemirror/language": "^6.12.4",
+        "@codemirror/lint": "^6.9.7",
         "@codemirror/state": "^6.7.5",
         "@codemirror/view": "^6.43.12",
+        "@lezer/highlight": "^1.2.3",
+        "@lezer/lr": "^1.4.10",
         "@mlk/wasm": "workspace:*"
     },
     "devDependencies": {
+        "@lezer/generator": "^1.8.0",
         "@sveltejs/adapter-static": "^3.0.10",
         "@sveltejs/kit": "^2.70.3",
         "@sveltejs/vite-plugin-svelte": "^7.3.0",

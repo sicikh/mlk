@@ -134,9 +134,29 @@ const STEPS = {
     seen: `return JSON.stringify(diagnostics().map((element) => ({
     		classes: [...element.classList],
     		code: text(element.querySelector('.code')),
-    		label: text(element.querySelector('.label')),
+    		message: text(element.querySelector('.message')),
+    		number: text(element.querySelector('.number')),
+    		caret: text(element.querySelector('.caret')),
     		whole: text(element)
     	})))`,
+
+    // What the editor itself paints and marks, which the panel does not say.
+    //
+    // The colours are read off the view rather than off the classes it happens to use,
+    // because a colour is what a person sees: a keyword and a number against a name,
+    // which the language leaves the colour of text (see `src/lib/highlight.ts`).
+    painted: `const spans = [...document.querySelectorAll('.cm-content .cm-line span')];
+    	const colour = (text) => {
+    		const span = spans.find((it) => it.textContent === text);
+    		return span ? getComputedStyle(span).color : '';
+    	};
+    	return JSON.stringify({
+    		keyword: colour('fun'),
+    		number: colour('42'),
+    		type: colour('Unit'),
+    		name: colour('main'),
+    		marks: document.querySelectorAll('.cm-content [class*=cm-lintRange], .cm-content [class*=cm-lintPoint]').length
+    	})`,
 };
 
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
@@ -291,6 +311,9 @@ async function main() {
     await ask(STEPS.showCst);
     const cst = JSON.parse(await ask(STEPS.cst));
 
+    // The editor paints the buffer in front, before anything is typed into it.
+    const painted = JSON.parse(await ask(STEPS.painted));
+
     await ask(STEPS.showDiagnostics);
     const clean = JSON.parse(await ask(STEPS.clean));
 
@@ -316,6 +339,8 @@ async function main() {
     await ask(STEPS.showDiagnostics);
     const broken = JSON.parse(await ask(STEPS.seen));
 
+    const marks = JSON.parse(await ask(STEPS.painted));
+
     await ask(STEPS.closeTab);
     const closed = JSON.parse(await ask(STEPS.closed));
 
@@ -335,6 +360,8 @@ async function main() {
             closed,
             dropped,
             tree: cst.nodes,
+            painted,
+            marks,
             broken,
         },
         problems,
@@ -389,6 +416,18 @@ function report(page, problems, warnings, asked) {
         ["the tree is more than its root", page.tree > 5],
         ["the ast names its root", page.ast.root],
         ["the ast names a declaration", page.ast.decl],
+        ["the editor paints a keyword", page.painted.keyword !== ""],
+        [
+            "the editor paints code in more than one colour",
+            page.painted.keyword !== page.painted.number &&
+                page.painted.number !== page.painted.type &&
+                page.painted.keyword !== page.painted.name,
+        ],
+        [
+            "the editor leaves a name the colour of text",
+            page.painted.name === "",
+        ],
+        ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 3],
         [
@@ -407,9 +446,11 @@ function report(page, problems, warnings, asked) {
             "the diagnostic is an error",
             (diagnostic.classes ?? []).includes("error"),
         ],
+        ["the diagnostic has a code", /^E\d{4}$/.test(diagnostic.code ?? "")],
         [
-            "the diagnostic says where it is",
-            /\d+:\d+/.test(diagnostic.label ?? ""),
+            "the diagnostic shows the line it is about",
+            /^\d+$/.test(diagnostic.number ?? "") &&
+                (diagnostic.caret ?? "").includes("^"),
         ],
         ["the page said nothing it should not have", problems.length === 0],
     ];
@@ -418,6 +459,9 @@ function report(page, problems, warnings, asked) {
 
     console.log(`the page at ${base} shows: ${page.status || "(nothing)"}`);
     console.log(`the cst holds ${page.tree} elements`);
+    console.log(
+        `the editor paints a keyword ${page.painted.keyword}, a number ${page.painted.number}, a type ${page.painted.type}`,
+    );
     console.log(
         `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,
     );

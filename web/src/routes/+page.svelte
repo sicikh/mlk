@@ -22,7 +22,10 @@
     const STARTER: Buffer[] = [
         {
             path: "/main.mlk",
-            text: `fun main(): Unit =
+            text: `@extern
+fun println-int(x: Int): Unit
+
+fun main(): Unit =
     let x = 42 * 2 - 10 in
     println-int(x + 20)
 `,
@@ -285,6 +288,7 @@
                 tabs={open}
                 path={active}
                 text={(it) => find(it)?.text ?? ""}
+                {diagnostics}
                 onInput={onText}
                 onSelect={select}
                 onClose={closeTab}
@@ -337,7 +341,7 @@
 
         <div class="view">
             {#if tab === "diagnostics"}
-                <Diagnostics {diagnostics} />
+                <Diagnostics {diagnostics} text={find(active)?.text ?? ""} />
             {:else if !analysis}
                 <p class="empty">Waiting for a parse.</p>
             {:else if tab === "cst"}

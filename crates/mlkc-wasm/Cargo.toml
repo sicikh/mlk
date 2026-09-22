@@ -1,0 +1,23 @@
+[package]
+name = "mlkc-wasm"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen.workspace = true
+mlkc-diagnostics.workspace = true
+mlkc-driver.workspace = true
+mlkc-line-index.workspace = true
+mlkc-vfs.workspace = true
+
+[lints]
+workspace = true

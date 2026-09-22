@@ -3,6 +3,9 @@ debug
 **/node_modules
 **/dist
 **/build
+**/.svelte-kit
+**/.pnpm-store
+packages/wasm/lib
 
 **/*.rs.bk
 

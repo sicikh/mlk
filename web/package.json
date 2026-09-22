@@ -1,0 +1,27 @@
+{
+    "name": "@mlk/web",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "predev": "pnpm --filter @mlk/wasm build",
+        "dev": "vite dev",
+        "prebuild": "pnpm --filter @mlk/wasm build",
+        "build": "vite build",
+        "preview": "vite preview",
+        "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "check:browser": "pnpm build && node scripts/browser-check.mjs"
+    },
+    "dependencies": {
+        "@mlk/wasm": "workspace:*"
+    },
+    "devDependencies": {
+        "@sveltejs/adapter-static": "^3.0.10",
+        "@sveltejs/kit": "^2.70.3",
+        "@sveltejs/vite-plugin-svelte": "^7.3.0",
+        "svelte": "^5.57.1",
+        "svelte-check": "^4.7.6",
+        "typescript": "^6.0.3",
+        "vite": "^8.3.0"
+    }
+}

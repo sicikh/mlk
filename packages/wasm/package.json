@@ -1,0 +1,22 @@
+{
+    "name": "@mlk/wasm",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "The MLK compiler driver, compiled to WebAssembly.",
+    "exports": {
+        ".": {
+            "types": "./lib/mlkc_wasm.d.ts",
+            "default": "./lib/mlkc_wasm.js"
+        },
+        "./mlkc_wasm_bg.wasm": "./lib/mlkc_wasm_bg.wasm"
+    },
+    "files": [
+        "lib"
+    ],
+    "scripts": {
+        "build": "pnpm run build:wasm && pnpm run build:glue",
+        "build:wasm": "cargo build --manifest-path ../../Cargo.toml -p mlkc-wasm --target wasm32-unknown-unknown --release",
+        "build:glue": "wasm-bindgen --target web --out-dir lib --out-name mlkc_wasm ../../target/wasm32-unknown-unknown/release/mlkc_wasm.wasm"
+    }
+}

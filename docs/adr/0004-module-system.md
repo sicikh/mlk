@@ -184,3 +184,4 @@ is the subject of [0005-compiler-pipeline.md].
 
 [0005-compiler-pipeline.md]: 0005-compiler-pipeline.md
 [mlkc-hir-def]: ../../crates/mlkc-hir-def
+[against-query-based-compilers]: https://matklad.github.io/2026/02/25/against-query-based-compilers.html

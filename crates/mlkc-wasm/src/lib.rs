@@ -9,10 +9,17 @@
 //! The boundary is deliberately thin: this module converts values and nothing else,
 //! so the browser and the CLI cannot drift apart in what they ask the driver to do.
 //!
+//! The trees cross it in the shape the syntax tree itself defines ([ADR-0002]):
+//! a node is its kind, its range and its children, a token is its kind, its range and its text.
+//! A host walks that as deeply as it likes — folds it, prints it, jumps from it to the text —
+//! and no conversion here decides what a tree is.
+//!
+//! [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
 //! [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
 
 use mlkc_driver::Driver;
 use mlkc_line_index::LineIndex;
+use mlkc_syntax::{ModuleRoot, SyntaxNode};
 use mlkc_vfs::VfsPath;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -50,14 +57,22 @@ impl WasmDriver {
     }
 
     /// Everything a host reads from the parse of one file:
-    /// the dump of the concrete syntax tree, the dump of its typed view,
-    /// and the diagnostics of the parse.
+    /// the concrete syntax tree, the typed view over it, and the diagnostics of the parse.
+    ///
+    /// The trees are values a host navigates, not text it re-parses:
+    /// a node is its kind, its range and its children, a token is its kind, its range and its text.
     ///
     /// Throws when the driver holds no text for the file:
     /// an editor pushes the buffer before it asks about it.
     pub fn analyze(&mut self, path: &str) -> Result<JsValue, JsValue> {
-        let file = self.file(path)?;
+        to_js(&self.analysis(path)?)
+    }
+}
 
+impl WasmDriver {
+    /// Everything the editor shows about one buffer.
+    fn analysis(&mut self, path: &str) -> Result<Analysis, JsValue> {
+        let file = self.file(path)?;
         let parse = self
             .driver
             .parse(file)
@@ -71,21 +86,16 @@ impl WasmDriver {
             .line_index(file)
             .ok_or_else(|| failure(&format!("{path} has no lines to read")))?;
 
-        let analysis = Analysis {
-            cst: format!("{:#?}", parse.syntax()),
-            ast: parse.module_root().map(|root| format!("{root:#?}")),
+        Ok(Analysis {
+            cst: parse.syntax(),
+            ast: parse.module_root(),
             diagnostics: diagnostics
                 .iter()
                 .map(|it| Diagnostic::of(it, &index))
                 .collect(),
-        };
-
-        serde_wasm_bindgen::to_value(&analysis)
-            .map_err(|error| failure(&format!("failed to cross the boundary: {error}")))
+        })
     }
-}
 
-impl WasmDriver {
     /// The id the driver knows a path under, or a thrown error when it holds nothing for it.
     fn file(&self, path: &str) -> Result<mlkc_vfs::FileId, JsValue> {
         self.driver
@@ -102,19 +112,17 @@ impl Default for WasmDriver {
 
 /// Everything the editor shows about one buffer.
 ///
-/// The shape is mirrored by the types of the editor,
-/// which is the one place where the two sides of the boundary have to be kept in step.
+/// The shape of the trees is the one the syntax tree serializes itself into ([ADR-0002]),
+/// and the one of the diagnostics is the one an editor marks a buffer with;
+/// the types of the editor mirror both, and that is the only place the two sides meet.
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct Analysis {
     /// The concrete syntax tree: lossless, tokens and trivia included ([ADR-0002]).
-    ///
-    /// [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
-    cst: String,
+    cst: SyntaxNode,
 
-    /// The typed view over the tree ([ADR-0002]),
+    /// The typed view over the same tree ([ADR-0002]),
     /// or `null` when the parse did not find a module root.
-    ast: Option<String>,
+    ast: Option<ModuleRoot>,
 
     /// What the parser reported, in the shape an editor marks the buffer with.
     diagnostics: Vec<Diagnostic>,
@@ -211,6 +219,21 @@ fn failure(message: &str) -> JsValue {
     JsValue::from_str(message)
 }
 
+/// Hands a value to a JavaScript host the way a host reads it.
+///
+/// The trees of the syntax are maps, and a host reads a map as an object, not as a `Map`;
+/// an absent value is `null`, not `undefined`, so that what a host sees
+/// does not depend on where it looks.
+fn to_js(value: &impl Serialize) -> Result<JsValue, JsValue> {
+    let serializer = serde_wasm_bindgen::Serializer::new()
+        .serialize_maps_as_objects(true)
+        .serialize_missing_as_null(true);
+
+    value
+        .serialize(&serializer)
+        .map_err(|error| failure(&format!("failed to cross the boundary: {error}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,24 +254,58 @@ mod tests {
         let mut driver = WasmDriver::new();
 
         assert!(driver.set_text("/main.mlk", Some("fun main(): Unit =\n    x\n".to_string())));
-        let file = driver.file("/main.mlk").expect("the file to be known");
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
 
-        let parse = driver.driver.parse(file).expect("the file to be parsed");
-        let analysis = Analysis {
-            cst: format!("{:#?}", parse.syntax()),
-            ast: parse.module_root().map(|root| format!("{root:#?}")),
-            diagnostics: driver
-                .driver
-                .diagnostics(file)
-                .expect("the file to be parsed")
-                .iter()
-                .map(|it| Diagnostic::of(it, &driver.driver.line_index(file).unwrap()))
-                .collect(),
-        };
+        let cst = &json["cst"];
 
-        assert!(analysis.cst.contains("MODULE_ROOT"));
-        assert!(analysis.ast.expect("a module root").contains("ModuleRoot"));
+        assert_eq!(cst["kind"], "MODULE_ROOT");
+        assert!(
+            cst["text_range"].is_array(),
+            "a host reads the range of a node as a pair of offsets"
+        );
+        assert!(cst["children"].is_array(), "a host walks the children");
+        assert_eq!(
+            token_text(cst, "FUN_KW").as_deref(),
+            Some("fun "),
+            "a token carries the trivia that follows it"
+        );
+        assert_eq!(token_text(cst, "IDENT").as_deref(), Some("main"));
+        assert!(
+            token_text(cst, "WHITESPACE").is_none(),
+            "trivia is not a child: it belongs to the token it follows"
+        );
+
+        let ast = &json["ast"];
+        let decl = &ast["fields"]["items"]["items"][0];
+
+        assert_eq!(ast["kind"], "ModuleRoot", "a node says what it is");
+        assert_eq!(ast["fields"]["items"]["kind"], "ModuleItemList");
+        assert_eq!(
+            decl["kind"], "FunDecl",
+            "a union serializes as the node it holds"
+        );
+        assert_eq!(
+            decl["fields"]["fun_token"]["Ok"]["kind"], "FUN_KW",
+            "a required field holds a token, or nothing"
+        );
+        assert!(
+            ast["fields"]["bom_token"].is_null(),
+            "an optional field that is missing is null"
+        );
         assert!(analysis.diagnostics.is_empty(), "the module parses cleanly");
+    }
+
+    /// The text of the first token of a kind, wherever in a serialized tree it sits.
+    fn token_text(node: &serde_json::Value, kind: &str) -> Option<String> {
+        if node["kind"] == kind {
+            return node["text"].as_str().map(str::to_string);
+        }
+
+        node["children"]
+            .as_array()?
+            .iter()
+            .find_map(|child| token_text(child, kind))
     }
 
     #[test]

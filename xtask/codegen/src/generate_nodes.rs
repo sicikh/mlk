@@ -303,7 +303,12 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
                         where
                         S: Serializer,
                         {
-                            self.as_fields().serialize(serializer)
+                            // What the node is comes first, and what it holds under `fields`,
+                            // so that a field a grammar calls `kind` cannot be read as the kind.
+                            let mut state = serializer.serialize_map(Some(2))?;
+                            state.serialize_entry("kind", #string_name)?;
+                            state.serialize_entry("fields", &self.as_fields())?;
+                            state.end()
                         }
                     }
 
@@ -574,9 +579,22 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
             (
                 quote! {
                     // #[doc = #doc]
-                    #[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+                    #[derive(Clone, PartialEq, Eq, Hash)]
                     pub enum #name {
                         #(#variants_for_union),*
+                    }
+
+                    impl Serialize for #name {
+                        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                        where
+                        S: Serializer,
+                        {
+                            // A union is one of its variants and nothing of its own:
+                            // it serializes as the variant it holds.
+                            match self {
+                                #(Self::#all_variant_names(it) => it.serialize(serializer),)*
+                            }
+                        }
                     }
 
                     impl #name {
@@ -811,11 +829,11 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
                         where
                         S: Serializer,
                         {
-                            let mut seq = serializer.serialize_seq(Some(self.len()))?;
-                            for e in self.iter() {
-                                seq.serialize_element(&e)?;
-                            }
-                            seq.end()
+                            // A list says what it is and holds its elements, like a node holds fields.
+                            let mut state = serializer.serialize_map(Some(2))?;
+                            state.serialize_entry("kind", #name)?;
+                            state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+                            state.end()
                         }
                 }
 
@@ -862,11 +880,11 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
                         where
                         S: Serializer,
                         {
-                            let mut seq = serializer.serialize_seq(Some(self.len()))?;
-                            for e in self.iter() {
-                                seq.serialize_element(&e)?;
-                            }
-                            seq.end()
+                            // A list says what it is and holds its elements, like a node holds fields.
+                            let mut state = serializer.serialize_map(Some(2))?;
+                            state.serialize_entry("kind", #name)?;
+                            state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+                            state.end()
                         }
                 }
 
@@ -932,7 +950,7 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
 
     let serde_import = quote! {
         use serde::{Serialize, Serializer};
-        use serde::ser::SerializeSeq;
+        use serde::ser::{SerializeMap, SerializeSeq};
     };
 
     let ast = quote! {

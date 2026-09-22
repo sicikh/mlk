@@ -8,7 +8,10 @@ use mlkc_rowan::{
     AstNode, AstNodeList, AstNodeListIterator, AstNodeSlotMap, AstSeparatedList,
     AstSeparatedListNodesIterator, RawSyntaxKind, SyntaxKindSet, SyntaxResult, support,
 };
-use serde::{Serialize, Serializer, ser::SerializeSeq};
+use serde::{
+    Serialize, Serializer,
+    ser::{SerializeMap, SerializeSeq},
+};
 
 use crate::{
     MlkLanguage as Language, SyntaxElement, SyntaxElementChildren,
@@ -51,7 +54,10 @@ impl Serialize for Attribute {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Attribute")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -95,7 +101,10 @@ impl Serialize for BinExpr {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BinExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -144,7 +153,10 @@ impl Serialize for CallExpr {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "CallExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -186,7 +198,10 @@ impl Serialize for FunBody {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "FunBody")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -242,7 +257,10 @@ impl Serialize for FunDecl {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "FunDecl")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -286,7 +304,10 @@ impl Serialize for FunReturnTypeAnnotation {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "FunReturnTypeAnnotation")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -320,7 +341,10 @@ impl Serialize for IdentPat {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "IdentPat")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -355,7 +379,10 @@ impl Serialize for InferType {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "InferType")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -390,7 +417,10 @@ impl Serialize for IntLiteral {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "IntLiteral")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -445,7 +475,10 @@ impl Serialize for LetExpr {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "LetExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -489,7 +522,10 @@ impl Serialize for ModulePreamble {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ModulePreamble")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -533,7 +569,10 @@ impl Serialize for ModuleRoot {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ModuleRoot")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -570,7 +609,10 @@ impl Serialize for Name {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Name")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -609,7 +651,10 @@ impl Serialize for Parameter {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Parameter")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -653,7 +698,10 @@ impl Serialize for Parameters {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Parameters")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -698,7 +746,10 @@ impl Serialize for ParenExpr {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ParenExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -739,7 +790,10 @@ impl Serialize for Path {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Path")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -779,7 +833,10 @@ impl Serialize for PathQualifier {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "PathQualifier")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -819,7 +876,10 @@ impl Serialize for PathSegment {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "PathSegment")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -853,7 +913,10 @@ impl Serialize for PathType {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "PathType")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -888,7 +951,10 @@ impl Serialize for StringLiteral {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "StringLiteral")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -927,7 +993,10 @@ impl Serialize for TypeAnnotation {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "TypeAnnotation")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -971,7 +1040,10 @@ impl Serialize for TypeArgs {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "TypeArgs")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -1016,7 +1088,10 @@ impl Serialize for TypeDecl {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "TypeDecl")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -1051,7 +1126,10 @@ impl Serialize for VarExpr {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "VarExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
@@ -1086,17 +1164,31 @@ impl Serialize for WildcardPat {
     where
         S: Serializer,
     {
-        self.as_fields().serialize(serializer)
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "WildcardPat")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
     }
 }
 #[derive(Serialize)]
 pub struct WildcardPatFields {
     pub underscore_token: SyntaxResult<SyntaxToken>,
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum AnyParameter {
     BogusParameter(BogusParameter),
     Parameter(Parameter),
+}
+impl Serialize for AnyParameter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::BogusParameter(it) => it.serialize(serializer),
+            Self::Parameter(it) => it.serialize(serializer),
+        }
+    }
 }
 impl AnyParameter {
     pub fn as_bogus_parameter(&self) -> Option<&BogusParameter> {
@@ -1112,7 +1204,7 @@ impl AnyParameter {
         }
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     BinExpr(BinExpr),
     BogusExpr(BogusExpr),
@@ -1121,6 +1213,22 @@ pub enum Expr {
     Literal(Literal),
     ParenExpr(ParenExpr),
     VarExpr(VarExpr),
+}
+impl Serialize for Expr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::BinExpr(it) => it.serialize(serializer),
+            Self::BogusExpr(it) => it.serialize(serializer),
+            Self::CallExpr(it) => it.serialize(serializer),
+            Self::LetExpr(it) => it.serialize(serializer),
+            Self::Literal(it) => it.serialize(serializer),
+            Self::ParenExpr(it) => it.serialize(serializer),
+            Self::VarExpr(it) => it.serialize(serializer),
+        }
+    }
 }
 impl Expr {
     pub fn as_bin_expr(&self) -> Option<&BinExpr> {
@@ -1166,10 +1274,21 @@ impl Expr {
         }
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
     IntLiteral(IntLiteral),
     StringLiteral(StringLiteral),
+}
+impl Serialize for Literal {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::IntLiteral(it) => it.serialize(serializer),
+            Self::StringLiteral(it) => it.serialize(serializer),
+        }
+    }
 }
 impl Literal {
     pub fn as_int_literal(&self) -> Option<&IntLiteral> {
@@ -1185,11 +1304,23 @@ impl Literal {
         }
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ModuleItem {
     BogusDecl(BogusDecl),
     FunDecl(FunDecl),
     TypeDecl(TypeDecl),
+}
+impl Serialize for ModuleItem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::BogusDecl(it) => it.serialize(serializer),
+            Self::FunDecl(it) => it.serialize(serializer),
+            Self::TypeDecl(it) => it.serialize(serializer),
+        }
+    }
 }
 impl ModuleItem {
     pub fn as_bogus_decl(&self) -> Option<&BogusDecl> {
@@ -1211,11 +1342,23 @@ impl ModuleItem {
         }
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Pat {
     BogusPat(BogusPat),
     IdentPat(IdentPat),
     WildcardPat(WildcardPat),
+}
+impl Serialize for Pat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::BogusPat(it) => it.serialize(serializer),
+            Self::IdentPat(it) => it.serialize(serializer),
+            Self::WildcardPat(it) => it.serialize(serializer),
+        }
+    }
 }
 impl Pat {
     pub fn as_bogus_pat(&self) -> Option<&BogusPat> {
@@ -1237,11 +1380,23 @@ impl Pat {
         }
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     BogusType(BogusType),
     InferType(InferType),
     PathType(PathType),
+}
+impl Serialize for Type {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::BogusType(it) => it.serialize(serializer),
+            Self::InferType(it) => it.serialize(serializer),
+            Self::PathType(it) => it.serialize(serializer),
+        }
+    }
 }
 impl Type {
     pub fn as_bogus_type(&self) -> Option<&BogusType> {
@@ -3576,11 +3731,10 @@ impl Serialize for ArgumentList {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        for e in self.iter() {
-            seq.serialize_element(&e)?;
-        }
-        seq.end()
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ArgumentList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
     }
 }
 impl AstSeparatedList for ArgumentList {
@@ -3658,11 +3812,10 @@ impl Serialize for AttributeList {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        for e in self.iter() {
-            seq.serialize_element(&e)?;
-        }
-        seq.end()
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "AttributeList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
     }
 }
 impl AstNodeList for AttributeList {
@@ -3740,11 +3893,10 @@ impl Serialize for ModuleItemList {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        for e in self.iter() {
-            seq.serialize_element(&e)?;
-        }
-        seq.end()
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ModuleItemList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
     }
 }
 impl AstNodeList for ModuleItemList {
@@ -3822,11 +3974,10 @@ impl Serialize for ParameterList {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        for e in self.iter() {
-            seq.serialize_element(&e)?;
-        }
-        seq.end()
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ParameterList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
     }
 }
 impl AstSeparatedList for ParameterList {
@@ -3904,11 +4055,10 @@ impl Serialize for TypeArgList {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        for e in self.iter() {
-            seq.serialize_element(&e)?;
-        }
-        seq.end()
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "TypeArgList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
     }
 }
 impl AstSeparatedList for TypeArgList {

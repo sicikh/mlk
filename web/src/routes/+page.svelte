@@ -1,255 +1,425 @@
 <script lang="ts">
     import { onMount } from "svelte";
 
+    import AstView from "$lib/components/AstView.svelte";
+    import Console, { type Line } from "$lib/components/Console.svelte";
+    import Diagnostics from "$lib/components/Diagnostics.svelte";
+    import Editor from "$lib/components/Editor.svelte";
+    import FileList from "$lib/components/FileList.svelte";
+    import TreeView from "$lib/components/TreeView.svelte";
     import { loadDriver, type Analysis, type Driver } from "$lib/driver";
 
+    interface Buffer {
+        path: string;
+        text: string;
+    }
+
     /**
-     * A module that parses cleanly, so the trees have something to show
-     * before anybody types.
+     * The buffers the editor opens with: modules that parse cleanly,
+     * so the trees have something to show before anybody types.
      */
-    const EXAMPLE = `fun main(): Unit =
-    let x = 42 * 2 - 10 in
-    println-int(x + 20)
-`;
+    const STARTER: Buffer[] = [
+        {
+            path: "/main.mlk",
+            text: `fun main(): Unit =
+        let x = 42 * 2 - 10 in
+        println-int(x + 20)
+    `,
+        },
+        {
+            path: "/lib/arith.mlk",
+            text: `fun nested(): Int =
+        let x = 1 in
+        let y = 2 in
+        x + y
+    `,
+        },
+    ];
 
-    /** The name of the buffer: a browser has no file system, so the editor invents one. */
-    const PATH = "/main.mlk";
+    /** The name of the buffer the editor opens with. */
+    const FIRST = STARTER[0].path;
 
-    let source = $state(EXAMPLE);
+    /** The views of what the compiler makes of the buffer on the right. */
+    type Tab = "diagnostics" | "cst" | "ast";
+
+    let buffers = $state<Buffer[]>(STARTER);
+    let active = $state(FIRST);
     let analysis = $state<Analysis | null>(null);
+    let tab = $state<Tab>("diagnostics");
+    let log = $state<Line[]>([
+        { level: "note", text: "loading the wasm driver…" },
+    ]);
     let status = $state("loading the wasm driver…");
 
     let driver: Driver | null = null;
+
+    const buffer = $derived(buffers.find((it) => it.path === active));
+    const diagnostics = $derived(analysis?.diagnostics ?? []);
+    const errors = $derived(
+        diagnostics.filter((it) => it.level === "error").length,
+    );
 
     onMount(async () => {
         try {
             driver = await loadDriver();
             status = "the driver is loaded";
-            analyze();
+            say("info", "the driver is loaded");
+
+            // A driver knows nothing until a host says what it holds: every buffer goes in first.
+            for (const it of buffers) push(it.path);
+
+            check();
         } catch (error) {
-            status = `the driver did not load: ${String(error)}`;
+            status = "the driver did not load";
+            say("error", `the driver did not load: ${String(error)}`);
         }
     });
 
-    /**
-     * Pushes the buffer into the driver and reads back everything it made of it.
-     *
-     * The driver compares the text it already holds with what it is handed ([ADR-0008]),
-     * so a keystroke that changes nothing it cares about costs a comparison.
-     */
-    function analyze() {
-        if (!driver) return;
+    /** Says one line to the console. */
+    function say(level: Line["level"], text: string) {
+        log = [...log, { level, text }];
+    }
+
+    /** The buffer a path names, if the editor holds it. */
+    function find(path: string): Buffer | undefined {
+        return buffers.find((it) => it.path === path);
+    }
+
+    /** Hands the text of a buffer to the driver; nothing is computed until it is asked for. */
+    function push(path: string) {
+        const it = find(path);
+
+        if (!driver || !it) return;
 
         try {
-            driver.push(PATH, source);
-            analysis = driver.analyze(PATH);
+            driver.push(it.path, it.text);
         } catch (error) {
-            status = `the driver refused the buffer: ${String(error)}`;
+            say("error", `the driver refused ${name(path)}: ${String(error)}`);
         }
     }
 
-    function onInput(event: Event & { currentTarget: HTMLTextAreaElement }) {
-        source = event.currentTarget.value;
-        analyze();
+    /** Reads back what the driver made of the active buffer. */
+    function check() {
+        if (!driver) return;
+
+        try {
+            analysis = driver.analyze(active);
+            status = summary(analysis);
+        } catch (error) {
+            analysis = null;
+            status = "the driver refused the buffer";
+            say(
+                "error",
+                `the driver refused ${name(active)}: ${String(error)}`,
+            );
+        }
     }
 
-    let diagnostics = $derived(analysis?.diagnostics ?? []);
+    /** What the active buffer amounts to, in a line. */
+    function summary(it: Analysis): string {
+        if (it.diagnostics.length === 0) return "no diagnostics";
+
+        const count = it.diagnostics.length;
+        const plural = count === 1 ? "" : "s";
+
+        return `${count} diagnostic${plural}`;
+    }
+
+    /** A buffer has a name, not a directory: there is no file system under the editor. */
+    function name(path: string): string {
+        return path.replace(/^\//, "");
+    }
+
+    /** A keystroke: the text is the buffer's, and the driver is told about it. */
+    function onInput(text: string) {
+        const it = find(active);
+
+        if (!it) return;
+
+        it.text = text;
+        push(active);
+        check();
+    }
+
+    /** Another buffer, and what the compiler already made of it. */
+    function select(path: string) {
+        active = path;
+        push(path);
+        check();
+    }
+
+    /** A buffer to type into, beside the one being edited, with a name nothing else holds. */
+    function add() {
+        const directory = active.slice(0, active.lastIndexOf("/") + 1);
+        let path = `${directory}untitled.mlk`;
+
+        for (let count = 2; find(path); count++)
+            path = `${directory}untitled-${count}.mlk`;
+
+        buffers = [...buffers, { path, text: "" }];
+        active = path;
+        analysis = null;
+        status = "an empty buffer";
+    }
+
+    /** Compiles every buffer: the same work the driver does per keystroke, said out loud. */
+    function compile() {
+        if (!driver) return;
+
+        for (const it of buffers) {
+            const started = performance.now();
+
+            push(it.path);
+
+            try {
+                const result = driver.analyze(it.path);
+                const took = Math.round(performance.now() - started);
+                const count = result.diagnostics.length;
+
+                say(
+                    "note",
+                    `${name(it.path)}: ${count === 0 ? "no diagnostics" : `${count} diagnostic${count === 1 ? "" : "s"}`} in ${took} ms`,
+                );
+            } catch (error) {
+                say(
+                    "error",
+                    `the driver refused ${name(it.path)}: ${String(error)}`,
+                );
+            }
+        }
+
+        check();
+
+        if (errors > 0) tab = "diagnostics";
+    }
+
+    /** Running needs a code generator, which the pipeline does not reach yet ([ADR-0005]). */
+    function run() {
+        say("note", "nothing to run yet: the compiler stops at the typed tree");
+
+        // [ADR-0005]: https://github.com/sicikh/mlk/blob/main/docs/adr/0005-compiler-pipeline.md
+    }
 </script>
 
 <svelte:head>
     <title>MLK editor</title>
 </svelte:head>
 
-<main>
-    <header>
-        <h1>MLK editor</h1>
-        <p class="status">{status}</p>
+<div class="ide">
+    <header class="top">
+        <span class="brand">MLK</span>
+        <span class="status" class:error={errors > 0}>{status}</span>
+        <span class="grow"></span>
+        <span class="tool-name">{name(active)}</span>
+        <button class="tool" onclick={run}>Run</button>
+        <button class="tool primary" onclick={compile}>Compile</button>
     </header>
 
-    <section class="panes">
-        <div class="pane">
-            <h2>Source</h2>
-            <textarea value={source} oninput={onInput} spellcheck="false"
-            ></textarea>
-        </div>
+    <aside class="files">
+        <FileList
+            files={buffers.map((it) => it.path)}
+            {active}
+            onSelect={select}
+            onAdd={add}
+        />
+    </aside>
 
-        <div class="pane">
-            <h2>
+    <main class="editor">
+        {#if buffer}
+            <Editor path={buffer.path} text={buffer.text} {onInput} />
+        {/if}
+    </main>
+
+    <aside class="inspector" data-panel="inspector">
+        <nav class="tabs">
+            <button
+                data-tab="diagnostics"
+                class:active={tab === "diagnostics"}
+                onclick={() => (tab = "diagnostics")}
+            >
                 Diagnostics
                 {#if diagnostics.length > 0}
-                    <span class="count">{diagnostics.length}</span>
+                    <span class="badge" class:error={errors > 0}
+                        >{diagnostics.length}</span
+                    >
                 {/if}
-            </h2>
-            {#if !analysis}
-                <p class="empty">Waiting for the driver.</p>
-            {:else if diagnostics.length === 0}
-                <p class="empty">No diagnostics.</p>
+            </button>
+            <button
+                data-tab="cst"
+                class:active={tab === "cst"}
+                onclick={() => (tab = "cst")}>CST</button
+            >
+            <button
+                data-tab="ast"
+                class:active={tab === "ast"}
+                onclick={() => (tab = "ast")}>AST</button
+            >
+        </nav>
+
+        <div class="view">
+            {#if tab === "diagnostics"}
+                <Diagnostics {diagnostics} />
+            {:else if !analysis}
+                <p class="empty">Waiting for a parse.</p>
+            {:else if tab === "cst"}
+                <TreeView node={analysis.cst} />
+            {:else if analysis.ast === null}
+                <p class="empty">The root of the tree is not a module.</p>
             {:else}
-                <ul>
-                    {#each diagnostics as diagnostic (diagnostic.code + diagnostic.message)}
-                        <li class={diagnostic.level}>
-                            <span class="code"
-                                >{diagnostic.category}:{diagnostic.code}</span
-                            >
-                            {diagnostic.message}
-                            {#each diagnostic.labels as label}
-                                <span class="label">
-                                    {label.line + 1}:{label.column +
-                                        1}{label.message
-                                        ? ` — ${label.message}`
-                                        : ""}
-                                </span>
-                            {/each}
-                            {#each diagnostic.notes as note}
-                                <span class="note">{note}</span>
-                            {/each}
-                        </li>
-                    {/each}
-                </ul>
+                <AstView value={analysis.ast} />
             {/if}
         </div>
-    </section>
+    </aside>
 
-    <section class="panes">
-        <div class="pane">
-            <h2>AST</h2>
-            <pre>{analysis?.ast ?? "…"}</pre>
-        </div>
-
-        <div class="pane">
-            <h2>CST</h2>
-            <pre>{analysis?.cst ?? "…"}</pre>
-        </div>
+    <section class="console">
+        <Console lines={log} />
     </section>
-</main>
+</div>
 
 <style>
-    :global(body) {
-        margin: 0;
-        background: #101418;
-        color: #e6e6e6;
-        font-family: ui-sans-serif, system-ui, sans-serif;
+    .ide {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr) minmax(300px, 30%);
+        grid-template-rows: auto minmax(0, 1fr) minmax(120px, 22vh);
+        height: 100dvh;
     }
 
-    main {
+    .top {
         display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        height: 100vh;
-        box-sizing: border-box;
-        padding: 1rem;
+        gap: 0.75rem;
+        align-items: center;
+        grid-column: 1 / -1;
+        padding: 0.4rem 0.75rem;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
     }
 
-    header {
-        display: flex;
-        align-items: baseline;
-        gap: 1rem;
-    }
-
-    h1 {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
+    .brand {
+        font-weight: 700;
+        letter-spacing: 0.12em;
     }
 
     .status {
-        margin: 0;
-        color: #8ba3b8;
-        font-size: 0.85rem;
+        color: var(--muted);
+        font-size: 12px;
     }
 
-    .panes {
-        display: grid;
+    .status.error {
+        color: var(--error);
+    }
+
+    .grow {
         flex: 1;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        min-height: 0;
     }
 
-    .pane {
+    .tool-name {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+    }
+
+    .tool {
+        padding: 0.2rem 0.7rem;
+        background: var(--raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-size: 12px;
+    }
+
+    .tool:hover {
+        border-color: #38414f;
+    }
+
+    .tool.primary {
+        background: #2a3f63;
+        border-color: #35507d;
+        color: #d8e6ff;
+    }
+
+    .tool.primary:hover {
+        background: #33507f;
+    }
+
+    .files,
+    .editor,
+    .inspector,
+    .console {
+        min-height: 0;
+        min-width: 0;
+    }
+
+    .files {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .editor {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    .inspector {
         display: flex;
         flex-direction: column;
-        min-height: 0;
-        border: 1px solid #253038;
-        border-radius: 0.4rem;
-        overflow: hidden;
+        grid-column: 3;
+        grid-row: 2;
+        background: var(--surface);
     }
 
-    h2 {
+    .console {
+        grid-column: 1 / -1;
+        grid-row: 3;
+    }
+
+    .tabs {
         display: flex;
-        gap: 0.5rem;
+        padding: 0 0.25rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .tabs button {
+        display: flex;
+        gap: 0.35rem;
         align-items: center;
-        margin: 0;
-        padding: 0.4rem 0.6rem;
-        background: #172027;
-        border-bottom: 1px solid #253038;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
+        padding: 0.4rem 0.55rem;
+        border-bottom: 2px solid transparent;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.03em;
         text-transform: uppercase;
     }
 
-    .count {
-        padding: 0 0.35rem;
-        background: #4a2020;
-        border-radius: 0.6rem;
-        color: #ffb4b4;
-        font-size: 0.7rem;
+    .tabs button:hover {
+        color: var(--text);
     }
 
-    textarea,
-    pre {
+    .tabs button.active {
+        border-bottom-color: var(--accent);
+        color: var(--text);
+    }
+
+    .badge {
+        padding: 0 0.3rem;
+        background: var(--raised);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 10px;
+    }
+
+    .badge.error {
+        color: var(--error);
+    }
+
+    .view {
         flex: 1;
-        margin: 0;
-        padding: 0.6rem;
+        min-height: 0;
+        padding: 0.4rem 0.5rem;
         overflow: auto;
-        background: #0c1013;
-        border: 0;
-        color: inherit;
-        font-family: ui-monospace, SFMono-Regular, monospace;
-        font-size: 0.8rem;
-        line-height: 1.5;
-        white-space: pre;
-    }
-
-    textarea {
-        resize: none;
-        outline: none;
-    }
-
-    ul {
-        margin: 0;
-        padding: 0.6rem;
-        overflow: auto;
-        list-style: none;
-        font-size: 0.8rem;
-    }
-
-    li {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-        padding: 0.4rem 0;
-        border-bottom: 1px solid #1b242b;
-    }
-
-    .code {
-        color: #ffb4b4;
-        font-family: ui-monospace, SFMono-Regular, monospace;
-    }
-
-    .label,
-    .note {
-        color: #8ba3b8;
-        font-family: ui-monospace, SFMono-Regular, monospace;
     }
 
     .empty {
         margin: 0;
-        padding: 0.6rem;
-        color: #6b7f8f;
-        font-size: 0.8rem;
+        padding: 0.35rem 0.25rem;
+        color: var(--muted);
     }
 </style>

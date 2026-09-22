@@ -832,9 +832,11 @@ dependencies = [
  "mlkc-diagnostics",
  "mlkc-driver",
  "mlkc-line-index",
+ "mlkc-syntax",
  "mlkc-vfs",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "wasm-bindgen",
 ]
 

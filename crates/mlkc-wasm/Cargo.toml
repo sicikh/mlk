@@ -17,7 +17,11 @@ serde-wasm-bindgen.workspace = true
 mlkc-diagnostics.workspace = true
 mlkc-driver.workspace = true
 mlkc-line-index.workspace = true
+mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

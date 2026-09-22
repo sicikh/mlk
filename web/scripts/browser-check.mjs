@@ -34,62 +34,56 @@ let base = options.base ?? "http://127.0.0.1:4173";
 const started = [];
 
 /**
- * What the page is asked to tell about itself.
+ * The page is asked one question at a time, and the browser runs it between questions.
  *
- * It waits for the driver on its own and types into the source pane,
- * because both are things a person does and neither is visible from the outside.
+ * Nothing here waits: a question that awaited something would hold the page still
+ * for as long as it waited, because the browser runs the page and the answer on one thread.
  */
-const PROBE = `(async () => {
-	const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-	const pane = (title) => [...document.querySelectorAll('.pane')]
-		.find((element) => element.querySelector('h2')?.textContent?.trim().startsWith(title));
+const HELPERS = `
 	const text = (element) => element?.textContent ?? '';
-	const status = () => text(document.querySelector('.status'));
+	const inspector = () => document.querySelector('[data-panel="inspector"]');
+	const show = (which) => document.querySelector('[data-tab=' + which + ']').click();
+	const diagnostics = () => [...inspector().querySelectorAll('li')];
+`;
 
-	const settled = () => {
-		const value = status();
-		return value !== '' && !value.startsWith('loading');
-	};
+/** The questions themselves, each answered by one round trip. */
+const STEPS = {
+    state: `return JSON.stringify({
+		panels: document.querySelectorAll('[data-panel]').length,
+		status: text(document.querySelector('.status'))
+	})`,
 
-	const deadline = Date.now() + 20000;
-	while (!settled() && Date.now() < deadline) await sleep(100);
+    // Showing a view and reading it are two questions: the page renders between them.
+    showCst: `show('cst'); return true`,
 
-	const source = pane('Source')?.querySelector('textarea');
-	const diagnostics = () => [...(pane('Diagnostics')?.querySelectorAll('li') ?? [])];
-	const report = {
-		status: status(),
-		hydrated: Boolean(source),
-		clean: {
-			cst: text(pane('CST')?.querySelector('pre')),
-			ast: text(pane('AST')?.querySelector('pre')),
-			diagnostics: diagnostics().length
-		},
-		broken: null,
-		debug: {
-			readyState: document.readyState,
-			bodyBytes: document.body.innerHTML.length,
-			panes: document.querySelectorAll('.pane').length,
-			resources: performance.getEntriesByType('resource')
-				.map((entry) => entry.name.split('/').pop() + ' ' + (entry.responseStatus ?? '?') + ' ' + Math.round(entry.duration) + 'ms')
-				.slice(-10)
-		}
-	};
+    cst: `return JSON.stringify({
+		nodes: inspector().querySelectorAll('[data-kind]').length,
+		root: inspector().querySelector('[data-kind=MODULE_ROOT]') !== null
+	})`,
 
-	if (source) {
-		source.value = 'fun main(): Unit =\\n    let x = 1\\n';
-		source.dispatchEvent(new Event('input', { bubbles: true }));
-		await sleep(200);
+    showDiagnostics: `show('diagnostics'); return true`,
 
-		report.broken = diagnostics().map((element) => ({
-			classes: [...element.classList],
-			code: text(element.querySelector('.code')),
-			label: text(element.querySelector('.label')),
-			whole: text(element)
-		}));
-	}
+    showAst: `show('ast'); return true`,
 
-	return report;
-})()`;
+    ast: `return JSON.stringify({
+    		root: inspector().textContent.includes('ModuleRoot'),
+    		decl: inspector().textContent.includes('FunDecl')
+    	})`,
+
+    clean: `return JSON.stringify({ diagnostics: diagnostics().length })`,
+
+    broken: `const source = document.querySelector('textarea');
+	source.value = 'fun main(): Unit =\\n    let x = 1\\n';
+	source.dispatchEvent(new Event('input', { bubbles: true }));
+	return true`,
+
+    seen: `return JSON.stringify(diagnostics().map((element) => ({
+		classes: [...element.classList],
+		code: text(element.querySelector('.code')),
+		label: text(element.querySelector('.label')),
+		whole: text(element)
+	})))`,
+};
 
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
 class Connection {
@@ -106,9 +100,7 @@ class Connection {
             socket.addEventListener(
                 "error",
                 () => reject(new Error(`cannot connect to ${url}`)),
-                {
-                    once: true,
-                },
+                { once: true },
             );
         });
 
@@ -156,9 +148,6 @@ class Connection {
 }
 
 async function main() {
-    // A probe that does not parse is a bug in the checker, and it would look like a broken page.
-    new Function(PROBE);
-
     if (!options.base) base = `http://127.0.0.1:${await freePort(4173)}`;
 
     await ensureStaticServer();
@@ -167,6 +156,7 @@ async function main() {
     const { connection, session } = await openPage();
     const problems = [];
     const warnings = [];
+    const asked = [];
 
     /** Everything the page said that it should not have. */
     connection.on((message) => {
@@ -191,11 +181,18 @@ async function main() {
                 problems.push(`${entry.source}: ${entry.text}`);
             else if (entry.level === "warning") warnings.push(entry.text);
         }
+
+        /** What the page asked for: a page that does not run is usually a request. */
+        if (message.method === "Network.responseReceived")
+            asked.push(
+                `${message.params.response.url} ${message.params.response.status}`,
+            );
     });
 
     await connection.send("Runtime.enable", {}, session);
     await connection.send("Log.enable", {}, session);
     await connection.send("Page.enable", {}, session);
+    await connection.send("Network.enable", {}, session);
 
     const loaded = deferred();
     connection.on((message) => {
@@ -208,16 +205,63 @@ async function main() {
         timeout(20000, `the page at ${base} never finished loading`),
     ]);
 
-    const result = await connection.send(
-        "Runtime.evaluate",
-        { expression: PROBE, awaitPromise: true, returnByValue: true },
-        session,
+    /** One question, and the answer the page gave. */
+    const ask = async (body) => {
+        const result = await connection.send(
+            "Runtime.evaluate",
+            {
+                expression: `(() => { ${HELPERS} ${body} })()`,
+                returnByValue: true,
+            },
+            session,
+        );
+
+        if (result.exceptionDetails)
+            throw new Error(describe(result.exceptionDetails));
+
+        return result.result.value;
+    };
+
+    // The page hydrates after it has loaded, which is also when the kernel is fetched.
+    const hydrated = await waitFor(
+        async () => {
+            const state = JSON.parse(await ask(STEPS.state));
+
+            return state.panels > 0;
+        },
+        { timeout: 30000 },
     );
 
-    if (result.exceptionDetails)
-        throw new Error(describe(result.exceptionDetails));
+    const state = JSON.parse(await ask(STEPS.state));
 
-    return report(result.result.value, problems, warnings);
+    await ask(STEPS.showCst);
+    const cst = JSON.parse(await ask(STEPS.cst));
+
+    await ask(STEPS.showDiagnostics);
+    const clean = JSON.parse(await ask(STEPS.clean));
+
+    await ask(STEPS.showAst);
+    const ast = JSON.parse(await ask(STEPS.ast));
+
+    await ask(STEPS.broken);
+    await sleep(300);
+
+    await ask(STEPS.showDiagnostics);
+    const broken = JSON.parse(await ask(STEPS.seen));
+
+    return report(
+        {
+            status: state.status,
+            hydrated,
+            clean: { root: cst.root, diagnostics: clean.diagnostics },
+            ast,
+            tree: cst.nodes,
+            broken,
+        },
+        problems,
+        warnings,
+        asked,
+    );
 }
 
 /**
@@ -244,20 +288,28 @@ async function openPage() {
 }
 
 /** What the run found, said the way a person reads it. */
-function report(page, problems, warnings) {
+function report(page, problems, warnings, asked) {
+    // A page that never came up fails everything below it in the same way,
+    // and saying so once is the whole of what can be said about it.
+    if (!page.hydrated) {
+        console.log(`the page at ${base} did not come up`);
+        console.log(`what it answered: ${page.status || "(nothing)"}`);
+        console.log(
+            `what it asked for:\n  ${[...new Set(asked)].join("\n  ")}`,
+        );
+        console.log(`console: ${[...problems, ...warnings].join(" | ")}`);
+
+        return false;
+    }
+
     const diagnostic = page.broken?.[0] ?? {};
 
     const checks = [
         ["the page hydrated", page.hydrated],
-        ["the driver loaded", page.status === "the driver is loaded"],
-        [
-            "the cst of a clean buffer is a module",
-            page.clean.cst.includes("MODULE_ROOT@"),
-        ],
-        [
-            "the ast of a clean buffer is a module root",
-            page.clean.ast.includes("ModuleRoot"),
-        ],
+        ["the cst of a clean buffer is a module", page.clean.root],
+        ["the tree is more than its root", page.tree > 5],
+        ["the ast names its root", page.ast.root],
+        ["the ast names a declaration", page.ast.decl],
         ["a clean buffer reports nothing", page.clean.diagnostics === 0],
         [
             "a broken buffer reports a diagnostic",
@@ -277,6 +329,7 @@ function report(page, problems, warnings) {
     const held = checks.every(([, it]) => it);
 
     console.log(`the page at ${base} says: ${page.status || "(nothing)"}`);
+    console.log(`the cst holds ${page.tree} elements`);
     console.log(
         `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,
     );
@@ -295,7 +348,7 @@ function report(page, problems, warnings) {
 
     if (!held)
         console.log(
-            `what the page was: ${JSON.stringify(page.debug, null, 2)}`,
+            `what it asked for:\n  ${[...new Set(asked)].join("\n  ")}`,
         );
 
     return held;
@@ -369,11 +422,10 @@ async function ensureServedSite() {
 
     const response = await fetch(`${base}/${asset}`);
 
-    if (!response.ok) {
+    if (!response.ok)
         throw new Error(
             `${base} serves another build: ${asset} answers ${response.status}`,
         );
-    }
 }
 
 async function ensureBrowser() {
@@ -398,6 +450,7 @@ async function reachable(url) {
         const response = await fetch(url, {
             signal: AbortSignal.timeout(1000),
         });
+
         return response.ok;
     } catch {
         return false;
@@ -433,10 +486,14 @@ async function waitFor(check, { timeout: limit = 30000, interval = 250 } = {}) {
 
     while (Date.now() < deadline) {
         if (await check()) return true;
-        await new Promise((accept) => setTimeout(accept, interval));
+        await sleep(interval);
     }
 
     return false;
+}
+
+function sleep(ms) {
+    return new Promise((accept) => setTimeout(accept, ms));
 }
 
 async function json(url) {

@@ -47,6 +47,14 @@ const HELPERS = `
 /** What is typed into the editor to make it say something: a module that is not one. */
 const BROKEN = "fun main(): Unit =\n    let x = 1\n";
 
+/**
+ * What is typed to leave the parser with a node it has no room for: a name among declarations.
+ *
+ * The parser keeps what it cannot place as a node of the tree — `BogusDecl` here — which the
+ * ast has to show the way it shows any other node.
+ */
+const STRAY = "fun main(): Unit =\n    x\nabc\n";
+
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
@@ -138,6 +146,29 @@ const STEPS = {
 	content.textContent = ${JSON.stringify(BROKEN)};
 	content.dispatchEvent(new Event('input', { bubbles: true }));
 	return true`,
+
+    // The same, with a mistake the parser cannot place anywhere: it keeps what it found as a
+    // node of the tree, which the ast has to show the way it shows any other node.
+    typeStray: `const content = document.querySelector('.cm-content');
+	content.focus();
+	content.textContent = ${JSON.stringify(STRAY)};
+	content.dispatchEvent(new Event('input', { bubbles: true }));
+	return true`,
+
+    bogus: `return JSON.stringify({
+		object: inspector().textContent.includes('[object Object]'),
+		shown: inspector().textContent.includes('Bogus')
+	})`,
+
+    // A node of the syntax tree inside the typed one covers what its children cover, which is
+    // what a pointer on its row asks the editor to mark.
+    hoverBogus: `const row = [...document.querySelectorAll('[data-panel=inspector] .row')]
+		.find((it) => text(it.querySelector('.kind')) === 'BogusDecl');
+	row.dispatchEvent(new MouseEvent('mouseenter'));
+	return true`,
+
+    bogusMark: `const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
+	return JSON.stringify({ count: parts.length, marked: parts.map((it) => it.textContent).join('') })`,
 
     closeTab: `document.querySelector('[data-open="/lib/arith.mlk"] .close').click(); return true`,
 
@@ -372,6 +403,15 @@ async function main() {
 
     const marks = JSON.parse(await ask(STEPS.painted));
 
+    // A mistake the parser cannot place is a node of the tree, and the ast shows it as one.
+    await ask(STEPS.typeStray);
+    await sleep(300);
+    await ask(STEPS.showAst);
+    const bogus = JSON.parse(await ask(STEPS.bogus));
+
+    await ask(STEPS.hoverBogus);
+    const bogusMark = JSON.parse(await ask(STEPS.bogusMark));
+
     await ask(STEPS.closeTab);
     const closed = JSON.parse(await ask(STEPS.closed));
 
@@ -396,6 +436,8 @@ async function main() {
             astHover,
             marks,
             broken,
+            bogus,
+            bogusMark,
         },
         problems,
         warnings,
@@ -486,6 +528,18 @@ function report(page, problems, warnings, asked) {
         ["a panel can be sized", page.width.files > 220],
         ["a clean buffer reports nothing", page.clean.diagnostics === 0],
         [
+            "a node the grammar has no room for is shown as a node",
+            page.bogus.shown,
+        ],
+        [
+            "nothing the ast shows reads as an object",
+            !page.bogus.object,
+        ],
+        [
+            "a node the grammar has no room for marks what it holds",
+            page.bogusMark.count > 0 && page.bogusMark.marked.includes("abc"),
+        ],
+        [
             "a broken buffer reports a diagnostic",
             (page.broken?.length ?? 0) > 0,
         ],
@@ -514,6 +568,12 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a row of the ast marks ${JSON.stringify(page.astHover.marked.slice(0, 40))}`,
+    );
+    console.log(
+        `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,
+    );
+    console.log(
+        `its elements mark ${JSON.stringify(page.bogusMark.marked.slice(0, 24))}`,
     );
     console.log(
         `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,

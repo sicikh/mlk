@@ -43,6 +43,9 @@
      * and holds its elements under `items`; a token is the one the syntax tree serializes:
      * its kind, its range and its text. A field that has to be there but is not is an `Err`,
      * and a field that may be missing is `null`.
+     *
+     * A node of the syntax tree is a node here too, though it names no fields: a node the
+     * grammar has no room for holds the elements themselves, under `children`.
      */
     const shapeOf = (value: unknown): Shape => {
         if (value === null) return "optional";
@@ -51,7 +54,9 @@
         if (typeof value.text === "string" && Array.isArray(value.text_range))
             return "token";
         if (typeof value.kind === "string")
-            return isObject(value.fields) ? "node" : "list";
+            return isObject(value.fields) || Array.isArray(value.children)
+                ? "node"
+                : "list";
 
         return "unknown";
     };
@@ -59,13 +64,22 @@
     /** What a folded value opens into, in the order the compiler holds it. */
     const rowsOf = (value: unknown, shape: Shape): Row[] => {
         if (shape === "node") {
-            const fields =
-                isObject(value) && isObject(value.fields) ? value.fields : {};
+            if (isObject(value) && isObject(value.fields))
+                return Object.entries(value.fields).map(([name, field]) => ({
+                    key: name,
+                    name,
+                    value: field,
+                }));
 
-            return Object.entries(fields).map(([name, field]) => ({
-                key: name,
-                name,
-                value: field,
+            // A node of the syntax tree names nothing: what it holds is its children.
+            const children =
+                isObject(value) && Array.isArray(value.children)
+                    ? value.children
+                    : [];
+
+            return children.map((child, index) => ({
+                key: `${index}`,
+                value: child,
             }));
         }
 
@@ -170,11 +184,7 @@
     const opening = $derived(shape === "list" ? "[" : "{");
     const closing = $derived(shape === "list" ? "]" : "}");
 
-    const text = $derived(
-        typeof unwrapped === "string"
-            ? JSON.stringify(unwrapped)
-            : String(unwrapped),
-    );
+    const text = $derived(JSON.stringify(unwrapped) ?? String(unwrapped));
 </script>
 
 {#snippet Field({ name }: { name?: string })}

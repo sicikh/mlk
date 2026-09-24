@@ -684,9 +684,25 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
         let kind = format_ident!("{}", Case::Constant.convert(bogus_name));
 
         quote! {
-            #[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+            #[derive(Clone, PartialEq, Eq, Hash)]
             pub struct #ident {
                 syntax: SyntaxNode
+            }
+
+            impl Serialize for #ident {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: Serializer,
+                {
+                    // A node the grammar has no room for holds whatever the parser could not
+                    // fit into it, so it has no fields to name: what it holds is the elements
+                    // themselves, node or token, which is the shape of a list of the typed
+                    // tree. Without this a host would read the private `syntax` of the struct.
+                    let mut state = serializer.serialize_map(Some(2))?;
+                    state.serialize_entry("kind", #string_name)?;
+                    state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+                    state.end()
+                }
             }
 
             impl #ident {

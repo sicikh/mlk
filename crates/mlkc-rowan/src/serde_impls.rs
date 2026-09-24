@@ -4,7 +4,7 @@ use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 
 use crate::{
     NodeOrToken,
-    syntax::{Language, SyntaxNode, SyntaxToken},
+    syntax::{Language, SyntaxElement, SyntaxNode, SyntaxToken},
 };
 
 struct SerDisplay<T>(T);
@@ -51,6 +51,18 @@ impl<L: Language> Serialize for SyntaxToken<L> {
         // state.serialize_entry("leading", &self.leading())?;
         // state.serialize_entry("trailing", &self.trailing())?;
         state.end()
+    }
+}
+
+impl<L: Language> Serialize for SyntaxElement<L> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Node(it) => it.serialize(serializer),
+            Self::Token(it) => it.serialize(serializer),
+        }
     }
 }
 

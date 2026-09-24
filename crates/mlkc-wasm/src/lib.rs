@@ -338,4 +338,41 @@ mod tests {
         );
         assert!(label.end >= label.start);
     }
+
+    #[test]
+    fn a_node_the_grammar_has_no_room_for_serializes_what_it_holds() {
+        let mut driver = WasmDriver::new();
+
+        driver.set_text(
+            "/main.mlk",
+            Some("fun main(): Unit =\n    x\nabc\n".to_string()),
+        );
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let bogus = bogus_node(&json["ast"]).expect("the mistake to leave a node of no kind");
+
+        assert!(
+            bogus["items"].is_array(),
+            "what such a node holds is a list of elements, as it is for any list"
+        );
+        assert!(
+            bogus.get("syntax").is_none(),
+            "the syntax a node wraps is its own business, not something a host reads"
+        );
+    }
+
+    /// The first value of a serialized tree whose kind is one the grammar has no room for.
+    fn bogus_node(value: &serde_json::Value) -> Option<&serde_json::Value> {
+        if let Some(kind) = value["kind"].as_str()
+            && kind.starts_with("Bogus")
+        {
+            return Some(value);
+        }
+
+        match value {
+            serde_json::Value::Array(items) => items.iter().find_map(bogus_node),
+            serde_json::Value::Object(entries) => entries.values().find_map(bogus_node),
+            _ => None,
+        }
+    }
 }

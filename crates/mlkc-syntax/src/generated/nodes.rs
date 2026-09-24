@@ -3350,9 +3350,20 @@ impl std::fmt::Display for WildcardPat {
         std::fmt::Display::fmt(self.syntax(), f)
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Bogus {
     syntax: SyntaxNode,
+}
+impl Serialize for Bogus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Bogus")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
 }
 impl Bogus {
     #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
@@ -3405,9 +3416,20 @@ impl From<Bogus> for SyntaxElement {
         n.syntax.into()
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BogusDecl {
     syntax: SyntaxNode,
+}
+impl Serialize for BogusDecl {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BogusDecl")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
 }
 impl BogusDecl {
     #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
@@ -3461,9 +3483,20 @@ impl From<BogusDecl> for SyntaxElement {
         n.syntax.into()
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BogusExpr {
     syntax: SyntaxNode,
+}
+impl Serialize for BogusExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BogusExpr")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
 }
 impl BogusExpr {
     #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
@@ -3517,9 +3550,20 @@ impl From<BogusExpr> for SyntaxElement {
         n.syntax.into()
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BogusParameter {
     syntax: SyntaxNode,
+}
+impl Serialize for BogusParameter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BogusParameter")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
 }
 impl BogusParameter {
     #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
@@ -3573,9 +3617,20 @@ impl From<BogusParameter> for SyntaxElement {
         n.syntax.into()
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BogusPat {
     syntax: SyntaxNode,
+}
+impl Serialize for BogusPat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BogusPat")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
 }
 impl BogusPat {
     #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
@@ -3629,9 +3684,20 @@ impl From<BogusPat> for SyntaxElement {
         n.syntax.into()
     }
 }
-#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BogusType {
     syntax: SyntaxNode,
+}
+impl Serialize for BogusType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BogusType")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
 }
 impl BogusType {
     #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]

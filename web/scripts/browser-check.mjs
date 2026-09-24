@@ -62,6 +62,18 @@ const STEPS = {
     		root: inspector().querySelector('[data-kind=MODULE_ROOT]') !== null
     	})`,
 
+    // What a pointer on a row of a tree does in the editor. A row says what it stands for in
+    // its own words — a name of the module is a token, and a row that says so — and the
+    // editor is asked to have marked exactly that.
+    hoverTree: `const row = document.querySelector('[data-panel=inspector] [data-kind=IDENT] .row');
+    	row.dispatchEvent(new MouseEvent('mouseenter'));
+    	return JSON.stringify({ says: row.querySelector('.text').textContent })`,
+
+    hovered: `return JSON.stringify({
+    		count: document.querySelectorAll('.cm-content .cm-hovered').length,
+    		marked: text(document.querySelector('.cm-content .cm-hovered'))
+    	})`,
+
     showDiagnostics: `show('diagnostics'); return true`,
 
     showAst: `show('ast'); return true`,
@@ -69,6 +81,19 @@ const STEPS = {
     ast: `return JSON.stringify({
     		root: inspector().textContent.includes('ModuleRoot'),
     		decl: inspector().textContent.includes('FunDecl')
+    	})`,
+
+    // A node of the typed tree says nothing about where it is: it covers what the tokens under
+    // it cover, which is what a pointer on its row is asked to mark.
+    hoverAst: `const row = [...document.querySelectorAll('[data-panel=inspector] .row')]
+    		.find((it) => text(it.querySelector('.kind')) === 'FunDecl');
+    	row.dispatchEvent(new MouseEvent('mouseenter'));
+    	return true`,
+
+    astHovered: `const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
+    	return JSON.stringify({
+    		count: parts.length,
+    		marked: parts.map((it) => it.textContent).join('')
     	})`,
 
     clean: `return JSON.stringify({ diagnostics: diagnostics().length })`,
@@ -312,6 +337,10 @@ async function main() {
     // The editor paints the buffer in front, before anything is typed into it.
     const painted = JSON.parse(await ask(STEPS.painted));
 
+    // And a pointer on a row of the tree marks the code that row stands for.
+    const says = JSON.parse(await ask(STEPS.hoverTree));
+    const hover = { ...says, ...JSON.parse(await ask(STEPS.hovered)) };
+
     await ask(STEPS.showDiagnostics);
     const clean = JSON.parse(await ask(STEPS.clean));
 
@@ -324,6 +353,10 @@ async function main() {
 
     await ask(STEPS.showAst);
     const ast = JSON.parse(await ask(STEPS.ast));
+
+    // A node of the typed tree covers the tokens under it, and a pointer on its row marks as much.
+    await ask(STEPS.hoverAst);
+    const astHover = JSON.parse(await ask(STEPS.astHovered));
 
     await ask(STEPS.open);
     await ask(STEPS.typePath);
@@ -359,6 +392,8 @@ async function main() {
             dropped,
             tree: cst.nodes,
             painted,
+            hover,
+            astHover,
             marks,
             broken,
         },
@@ -425,6 +460,20 @@ function report(page, problems, warnings, asked) {
             "the editor leaves a name the colour of text",
             page.painted.name === "",
         ],
+        ["a row of a tree marks code in the editor", page.hover.count === 1],
+        [
+            "the mark is the code the row says it stands for",
+            JSON.parse(page.hover.says) === page.hover.marked,
+        ],
+        ["a row of the ast marks code in the editor", page.astHover.count > 0],
+        [
+            "a node of the ast marks what it holds",
+            // What a node covers is written over as many lines as it takes, and a mark is a
+            // piece of a line: the pieces together are what the node covers.
+            page.astHover.marked.includes(page.hover.marked.trim()) &&
+                page.astHover.marked.trim().length >
+                    page.hover.marked.trim().length,
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 3],
@@ -459,6 +508,12 @@ function report(page, problems, warnings, asked) {
     console.log(`the cst holds ${page.tree} elements`);
     console.log(
         `the editor paints a keyword ${page.painted.keyword}, a number ${page.painted.number}, a type ${page.painted.type}`,
+    );
+    console.log(
+        `the row that says ${page.hover.says} marks ${page.hover.marked || "nothing"} in the editor`,
+    );
+    console.log(
+        `a row of the ast marks ${JSON.stringify(page.astHover.marked.slice(0, 40))}`,
     );
     console.log(
         `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,

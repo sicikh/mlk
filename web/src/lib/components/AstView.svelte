@@ -78,6 +78,44 @@
         // An element of a list names itself: an index in front of it would only be noise.
         return items.map((item, index) => ({ key: `${index}`, value: item }));
     };
+
+    /**
+     * A field that is there reads as it is; one that sits under `Ok` is only wrapped.
+     */
+    const unwrappedOf = (value: unknown): unknown =>
+        isObject(value) && "Ok" in value && Object.keys(value).length === 1
+            ? value.Ok
+            : value;
+
+    /**
+     * The part of the source a value covers.
+     *
+     * Only a token says where it is: what a node or a list covers is what the tokens under
+     * it cover, which is the answer a person expects when they point at one — the code it
+     * was written from. A value the compiler made up rather than read holds no token, and so
+     * covers nothing.
+     */
+    const rangeOf = (value: unknown): [number, number] | null => {
+        const unwrapped = unwrappedOf(value);
+        const shape = shapeOf(unwrapped);
+
+        if (shape === "token") return (unwrapped as Token).text_range;
+        if (shape !== "node" && shape !== "list") return null;
+
+        let from = Infinity;
+        let to = -Infinity;
+
+        for (const row of rowsOf(unwrapped, shape)) {
+            const range = rangeOf(row.value);
+
+            if (range) {
+                from = Math.min(from, range[0]);
+                to = Math.max(to, range[1]);
+            }
+        }
+
+        return from <= to ? [from, to] : null;
+    };
 </script>
 
 <script lang="ts">
@@ -89,19 +127,37 @@
 
         /** What the value is called where it sits: the field it is, or nothing under a list. */
         name?: string;
+
+        /**
+         * Called with the range a row stands for while a pointer is on it, and with `null`
+         * once the pointer leaves it: the editor marks that range in the text.
+         */
+        onHover: (range: [number, number] | null) => void;
     }
 
-    let { value, name }: Props = $props();
+    let { value, name, onHover }: Props = $props();
 
     /** Whether the value shows what it holds: a person folds what they are not reading. */
     let open = $state(true);
 
     /** A field that is there reads as it is; one that sits under `Ok` is only wrapped. */
-    const unwrapped = $derived(
-        isObject(value) && "Ok" in value && Object.keys(value).length === 1
-            ? value.Ok
-            : value,
-    );
+    const unwrapped = $derived(unwrappedOf(value));
+
+    /** What part of the source the value covers, which is what a pointer on its row asks for. */
+    const range = $derived(rangeOf(value));
+
+    /**
+     * What a row tells the page about the pointer: the part of the source it stands for.
+     *
+     * A row says what a node is, and the code says what it was written as, so a pointer on
+     * one is a question about the other: the editor marks that part of the buffer while
+     * the pointer is on the row. A row that stands for no token at all — a field the
+     * compiler made up — says as much, and nothing is marked.
+     */
+    const pointing = (at: [number, number] | null) => ({
+        onmouseenter: () => onHover(at),
+        onmouseleave: () => onHover(null),
+    });
 
     const shape = $derived(shapeOf(unwrapped));
     const rows = $derived(rowsOf(unwrapped, shape));
@@ -128,7 +184,7 @@
 {/snippet}
 
 {#if token}
-    <div class="row">
+    <div class="row" {...pointing(range)}>
         <span class="spacer"></span>
         {@render Field({ name })}
         <span class="kind">{token.kind}</span>
@@ -136,7 +192,7 @@
         <span class="text">{JSON.stringify(token.text ?? "")}</span>
     </div>
 {:else if shape === "missing" || shape === "optional"}
-    <div class="row">
+    <div class="row" {...pointing(range)}>
         <span class="spacer"></span>
         {@render Field({ name })}
         <span class="missing"
@@ -144,7 +200,12 @@
         >
     </div>
 {:else if named && rows.length > 0}
-    <button class="row" onclick={() => (open = !open)} aria-expanded={open}>
+    <button
+        class="row"
+        {...pointing(range)}
+        onclick={() => (open = !open)}
+        aria-expanded={open}
+    >
         <span class="caret">{open ? "▾" : "▸"}</span>
         {@render Field({ name })}
         <span class="kind">{named.kind}</span>
@@ -155,19 +216,19 @@
     {#if open}
         <div class="children">
             {#each rows as row (row.key)}
-                <AstView value={row.value} name={row.name} />
+                <AstView value={row.value} name={row.name} {onHover} />
             {/each}
         </div>
     {/if}
 {:else if named}
-    <div class="row">
+    <div class="row" {...pointing(range)}>
         <span class="spacer"></span>
         {@render Field({ name })}
         <span class="kind">{named.kind}</span>
         <span class="bracket">{opening}{closing}</span>
     </div>
 {:else}
-    <div class="row">
+    <div class="row" {...pointing(range)}>
         <span class="spacer"></span>
         {@render Field({ name })}
         <span class="value">{text}</span>

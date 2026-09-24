@@ -12,8 +12,10 @@
         setDiagnostics,
         type Diagnostic as LintDiagnostic,
     } from "@codemirror/lint";
-    import { EditorState } from "@codemirror/state";
+    import { EditorState, StateEffect, StateField } from "@codemirror/state";
     import {
+        Decoration,
+        type DecorationSet,
         EditorView,
         drawSelection,
         highlightActiveLine,
@@ -25,6 +27,7 @@
     import { codeOf, mainLabel, rangeOf, severityOf } from "$lib/diagnostics";
     import type { Diagnostic } from "$lib/driver";
     import { mlkLanguageSupport } from "$lib/highlight";
+    import { utf16At } from "$lib/offsets";
 
     interface Props {
         /** The buffers open in the editor, in the order of their tabs. */
@@ -38,6 +41,12 @@
 
         /** What the compiler reported about the buffer in front. */
         diagnostics?: Diagnostic[];
+
+        /**
+         * The part of the source a pointer is on in a tree of the inspector, counted the
+         * way the compiler counts it: the editor marks that part of the buffer.
+         */
+        hovered?: [number, number] | null;
 
         /** Called with the whole text of a buffer after every change. */
         onInput: (path: string, text: string) => void;
@@ -54,6 +63,7 @@
         path,
         text,
         diagnostics = [],
+        hovered = null,
         onInput,
         onSelect,
         onClose,
@@ -109,6 +119,13 @@
             },
             ".cm-tooltip": { zIndex: "10" },
 
+            /* The code a row of a tree in the inspector stands for, marked while the pointer
+               is on the row. It is the colour the row itself is painted in when it is read. */
+            ".cm-hovered": {
+                backgroundColor: "var(--raised)",
+                borderRadius: "2px",
+            },
+
             /* And what the compiler has to say about the text, marked the way an editor
                marks mistakes. The colours of the code itself are the language's:
                see `$lib/highlight`. */
@@ -123,6 +140,49 @@
         },
         { dark: true },
     );
+
+    /** The place in the text a pointer is on in a tree of the inspector. */
+    const setHover = StateEffect.define<{ from: number; to: number } | null>();
+
+    /** One mark, reused: the code a row of a tree stands for, painted in the editor. */
+    const hoveredCode = Decoration.mark({ class: "cm-hovered" });
+
+    /**
+     * What a tree of the inspector points at, marked in the text it stands for.
+     *
+     * The mark is kept as the text changes, so that typing under the pointer does not move
+     * it to somewhere the row never pointed at; the next move of the pointer sets it again.
+     */
+    const hover = StateField.define<DecorationSet>({
+        create: () => Decoration.none,
+        update: (marked, change) => {
+            for (const effect of change.effects) {
+                if (!effect.is(setHover)) continue;
+
+                const at = effect.value;
+
+                return at
+                    ? Decoration.set([hoveredCode.range(at.from, at.to)])
+                    : Decoration.none;
+            }
+
+            return marked.map(change.changes);
+        },
+        provide: (field) => EditorView.decorations.from(field),
+    });
+
+    /**
+     * A range of the text, or nothing where the range has no width.
+     *
+     * A token the parser expected and did not find sits at a place without code, and a
+     * mark of no width is not a mark.
+     */
+    function rangeIn(from: number, to: number): { from: number; to: number } | null {
+        const start = Math.min(from, to);
+        const end = Math.max(from, to);
+
+        return start < end ? { from: start, to: end } : null;
+    }
 
     /** The state of a buffer: what it holds, and how to get back to it. */
     function stateOf(it: string): EditorState {
@@ -150,6 +210,7 @@
             indentOnInput(),
             bracketMatching(),
             mlkLanguageSupport(),
+            hover,
             lintGutter(),
             keymap.of([
                 ...defaultKeymap,
@@ -205,6 +266,24 @@
     $effect(() => {
         diagnostics;
         show();
+    });
+
+    /**
+     * A pointer on a row of a tree marks the code the row stands for.
+     *
+     * A tree of the inspector and the editor hold the same buffer, so a range of one is a
+     * range of the other: the compiler counts the source in bytes, which is what a tree
+     * hands over, while the editor counts the way a string does.
+     */
+    $effect(() => {
+        if (!view) return;
+
+        const text = view.state.doc.toString();
+        const at = hovered
+            ? rangeIn(utf16At(text, hovered[0]), utf16At(text, hovered[1]))
+            : null;
+
+        view.dispatch({ effects: setHover.of(at) });
     });
 
     /**

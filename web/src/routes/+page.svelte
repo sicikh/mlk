@@ -54,6 +54,14 @@ fun main(): Unit =
 
     let analysis = $state<Analysis | null>(null);
     let tab = $state<Tab>("diagnostics");
+
+    /**
+     * What a pointer is on in a tree of the inspector, as the compiler counts it.
+     *
+     * The trees and the editor show the same buffer, so a range of one is a range of the
+     * other: the editor marks it while the pointer is on the row.
+     */
+    let hovered = $state<[number, number] | null>(null);
     let log = $state<Line[]>([
         { level: "note", text: "loading the wasm driver…" },
     ]);
@@ -113,6 +121,9 @@ fun main(): Unit =
     /** Reads back what the driver made of the active buffer. */
     function check() {
         if (!driver || active === "") return;
+
+        // Whatever a pointer was on belongs to the parse this one replaces.
+        hovered = null;
 
         try {
             analysis = driver.analyze(active);
@@ -283,6 +294,7 @@ fun main(): Unit =
                 path={active}
                 text={(it) => find(it)?.text ?? ""}
                 {diagnostics}
+                {hovered}
                 onInput={onText}
                 onSelect={select}
                 onClose={closeTab}
@@ -339,11 +351,11 @@ fun main(): Unit =
             {:else if !analysis}
                 <p class="empty">Waiting for a parse.</p>
             {:else if tab === "cst"}
-                <TreeView node={analysis.cst} />
+                <TreeView node={analysis.cst} onHover={(range) => (hovered = range)} />
             {:else if analysis.ast === null}
                 <p class="empty">The root of the tree is not a module.</p>
             {:else}
-                <AstView value={analysis.ast} />
+                <AstView value={analysis.ast} onHover={(range) => (hovered = range)} />
             {/if}
         </div>
     </aside>

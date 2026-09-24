@@ -4,7 +4,7 @@
  *
  * The wasm boundary is the one part of the editor no other kind of test can reach:
  * the module has to be fetched, instantiated and asked to compile a buffer
- * by a real JavaScript host, and the page has to show what it got back ([ADR-0008]).
+ * by a real JavaScript host, and the page has to show what it got back.
  * This drives the built site in a headless browser over CDP and reads the page afterwards,
  * so what it asserts is what a person would see.
  *
@@ -14,8 +14,6 @@
  * does that. `vite preview` takes a free port, and `obscura serve` is started when no
  * browser answers; both are taken down on the way out unless `--keep` asks otherwise.
  * Pass `--base` to check a site that already runs — the dev server, say.
- *
- * [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
  */
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";

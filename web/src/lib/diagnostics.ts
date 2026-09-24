@@ -1,10 +1,8 @@
 /**
  * What a diagnostic of the compiler looks like where a person reads it.
  *
- * The compiler says what it found and where ([ADR-0002]); this decides what
+ * The compiler says what it found and where; this decides what
  * that is called in an editor, which is a question of presentation and nobody else's.
- *
- * [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
  */
 import type { Diagnostic, Label } from './driver';
 import { utf16At } from './offsets';
@@ -26,11 +24,9 @@ function letterOf(level: string): string {
 /**
  * The code of a diagnostic, as a person reads it: `E0001`.
  *
- * The compiler holds the kind of a diagnostic as a short code within its category
- * ([ADR-0005]), which is what the CLI prints as `error[0201]`.
+ * The compiler holds the kind of a diagnostic as a short code within its category,
+ * which is what the CLI prints as `error[0201]`.
  * Here the level leads and the kind's number follows.
- *
- * [ADR-0005]: https://github.com/sicikh/mlk/blob/main/docs/adr/0005-compiler-pipeline.md
  */
 export function codeOf(diagnostic: Diagnostic): string {
 	return `${letterOf(diagnostic.level)}${diagnostic.code.padStart(4, '0')}`;

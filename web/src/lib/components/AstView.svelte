@@ -9,7 +9,7 @@
         | "value"
         | "unknown";
 
-    /** A token of the syntax tree, as the tree itself serializes it ([ADR-0002]). */
+    /** A token of the syntax tree, as the tree itself serializes it. */
     interface Token {
         kind: string;
         text_range: [number, number];
@@ -42,9 +42,7 @@
      * A node says what it is and holds its fields under `fields`; a list says what it is
      * and holds its elements under `items`; a token is the one the syntax tree serializes:
      * its kind, its range and its text. A field that has to be there but is not is an `Err`,
-     * and a field that may be missing is `null` ([ADR-0002]).
-     *
-     * [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
+     * and a field that may be missing is `null`.
      */
     const shapeOf = (value: unknown): Shape => {
         if (value === null) return "optional";
@@ -98,7 +96,7 @@
     /** Whether the value shows what it holds: a person folds what they are not reading. */
     let open = $state(true);
 
-    /** A field that is there reads as it is; one that sits under `Ok` is only wrapped ([ADR-0002]). */
+    /** A field that is there reads as it is; one that sits under `Ok` is only wrapped. */
     const unwrapped = $derived(
         isObject(value) && "Ok" in value && Object.keys(value).length === 1
             ? value.Ok

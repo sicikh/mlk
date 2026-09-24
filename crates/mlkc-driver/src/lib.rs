@@ -1,31 +1,31 @@
 //! The driver of the compiler.
 //!
 //! The driver is the component that owns the inputs and the memoized passes,
-//! and the only one that decides what has to be recomputed ([ADR-0008]).
-//! The pipeline it drives is the one of [ADR-0005];
+//! and the only one that decides what has to be recomputed.
+//! The pipeline it drives is the compiler pipeline;
 //! today that pipeline is the parser,
 //! so the table holds the values that are derived from the text of a file:
 //! the parse, the diagnostics a host renders, and the line index positions are read with.
 //! The units that follow — the item tree, the interface, the checked bodies —
 //! are more slots in the same table rather than a different design.
 //!
-//! Three rules of the records are visible in the code.
+//! Three rules are visible in the code.
 //!
-//! - **Inputs are pushed, values are pulled** ([ADR-0008]).
+//! - **Inputs are pushed, values are pulled**.
 //!   The driver never opens a file, never reads a clock, never writes anywhere:
 //!   a host hands it bytes, and asks it for values.
-//! - **The key of a slot is the identity of what the pass read** ([ADR-0008]).
+//! - **The key of a slot is the identity of what the pass read**.
 //!   Everything here is a function of the text of one file,
 //!   so the identity of that text — its [`FileVersion`] — is the whole key,
 //!   while the text itself is handed to the pass by reference.
-//! - **A pass is a function of its input** ([ADR-0009]).
+//! - **A pass is a function of its input**.
 //!   [`Parse`] is what [`mlkc_parser::parse`] returned, and nothing more:
 //!   the value and the diagnostics of the pass, stored as they came.
 //!
 //! # Concurrency
 //!
 //! A pull takes `&mut self`, because it may compute, so the driver is not shared:
-//! one thread owns it and asks it for values ([ADR-0008]).
+//! one thread owns it and asks it for values.
 //! What that thread hands out are `Arc`s, which are immutable and safe to read anywhere,
 //! so a host answers the requests that only read from the values it already pulled,
 //! and sends the ones that need computing to the thread that owns the driver.
@@ -33,12 +33,6 @@
 //! Nothing read takes a lock on the driver, so a long pull cannot block a reader;
 //! and a pull a host abandons leaves the table as valid as it found it,
 //! because a slot is written only when its value is complete.
-//!
-//! [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
-//! [ADR-0005]: https://github.com/sicikh/mlk/blob/main/docs/adr/0005-compiler-pipeline.md
-//! [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
-//! [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
-//! [ADR-0009]: https://github.com/sicikh/mlk/blob/main/docs/adr/0009-pass-contract.md
 
 use std::sync::Arc;
 
@@ -53,7 +47,7 @@ use rustc_hash::FxHashMap;
 /// The driver: the only mutable component, and the owner of the memo table.
 #[derive(Default)]
 pub struct Driver {
-    /// The state of every file a host has pushed ([ADR-0007]).
+    /// The state of every file a host has pushed.
     vfs: Vfs,
     /// The parse of every file that has been parsed.
     parses: FxHashMap<FileId, TextSlot<Parse>>,
@@ -63,7 +57,7 @@ pub struct Driver {
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
 }
 
-/// The shape of a slot whose input is the text of one file ([ADR-0008]).
+/// The shape of a slot whose input is the text of one file.
 ///
 /// The version is the whole key: everything the driver derives from a file
 /// is a function of the text of that file, so a slot whose version is still the version
@@ -78,7 +72,7 @@ struct TextSlot<T: ?Sized> {
 /// The value of the parse slot: what the parser returned, whole.
 ///
 /// The tree is immutable and shared, so whoever holds it
-/// holds the text it was parsed from, whatever the file holds now ([ADR-0007]).
+/// holds the text it was parsed from, whatever the file holds now.
 pub struct Parse {
     parse: AnyParse,
 }
@@ -88,25 +82,25 @@ impl Parse {
     ///
     /// This is the only place where the driver touches the parser:
     /// the value is stored as the parser produced it,
-    /// which is what makes the slot's key the input of the pass ([ADR-0009]).
+    /// which is what makes the slot's key the input of the pass.
     fn of(source: &str) -> Self {
         Self {
             parse: mlkc_parser::parse(source),
         }
     }
 
-    /// The concrete syntax tree: lossless, and never absent, however broken the input ([ADR-0002]).
+    /// The concrete syntax tree: lossless, and never absent, however broken the input.
     pub fn syntax(&self) -> SyntaxNode {
         self.parse.syntax()
     }
 
-    /// The typed view over the tree ([ADR-0002]),
+    /// The typed view over the tree,
     /// or `None` when the parse did not find a module root — a tree is not a module by itself.
     pub fn module_root(&self) -> Option<ModuleRoot> {
         ModuleRoot::cast(self.syntax())
     }
 
-    /// The diagnostics the parse produced, in the shape the parser knows them ([ADR-0009]).
+    /// The diagnostics the parse produced, in the shape the parser knows them.
     pub fn diagnostics(&self) -> &[ParseDiagnostic] {
         self.parse.diagnostics()
     }
@@ -136,20 +130,20 @@ impl Driver {
     /// Feeds the contents of a file into the driver; `None` means the file is gone.
     ///
     /// Returns whether the contents changed,
-    /// and pushing the same contents again changes nothing ([ADR-0007]).
+    /// and pushing the same contents again changes nothing.
     pub fn set_file_contents(&mut self, path: VfsPath, contents: Option<Vec<u8>>) -> bool {
         self.vfs.set_file_contents(path, contents)
     }
 
     /// A convenience for a host that already holds text:
-    /// an editor, a WASM shim, a test ([ADR-0007]).
+    /// an editor, a WASM shim, a test.
     pub fn set_file_text(&mut self, path: VfsPath, text: Option<String>) -> bool {
         self.vfs.set_file_text(path, text)
     }
 
     // Reads: no computation, and none of them takes `&mut self`.
 
-    /// The id of a path the driver knows, if the file is there ([ADR-0007]).
+    /// The id of a path the driver knows, if the file is there.
     pub fn file_id(&self, path: &VfsPath) -> Option<FileId> {
         self.vfs.file_id(path).map(|(file, _)| file)
     }
@@ -159,7 +153,7 @@ impl Driver {
         self.vfs.file_text(file)
     }
 
-    /// The version of the contents of a file, which is the identity of its state ([ADR-0007]).
+    /// The version of the contents of a file, which is the identity of its state.
     pub fn file_version(&self, file: FileId) -> FileVersion {
         self.vfs.file_version(file)
     }
@@ -188,13 +182,13 @@ impl Driver {
         // There is nothing to back-date here: the parse is a function of the text,
         // and the tree of different text is a different tree.
         // The stages where a recomputation can end up equal to the retained value —
-        // the item tree, the interface — are the ones that follow ([ADR-0008]).
+        // the item tree, the interface — are the ones that follow.
         Self::text_derived(&mut self.parses, file, version, || {
             text.map(|text| Arc::new(Parse::of(&text)))
         })
     }
 
-    /// The diagnostics of the parse of `file`, in the shape a host renders ([ADR-0009]).
+    /// The diagnostics of the parse of `file`, in the shape a host renders.
     ///
     /// The conversion is a value of its own, not work done per call:
     /// it is computed once per version of the file and shared as an `Arc`.
@@ -224,7 +218,7 @@ impl Driver {
     /// A person and a protocol read a position as a line and a column, a diagnostic points
     /// at a byte range, and the index is the mapping between the two.
     /// It is derived from the text like everything else here,
-    /// so nothing computes it before somebody asks ([ADR-0008]).
+    /// so nothing computes it before somebody asks.
     pub fn line_index(&mut self, file: FileId) -> Option<Arc<LineIndex>> {
         let version = self.file_version(file);
         let text = self.file_text(file);
@@ -234,7 +228,7 @@ impl Driver {
         })
     }
 
-    /// The net effect of the pushes a host made since its last call ([ADR-0007]).
+    /// The net effect of the pushes a host made since its last call.
     ///
     /// The driver does not need this: a slot decides its own validity by comparing versions,
     /// and the driver knows which files were pushed.
@@ -291,7 +285,7 @@ mod tests {
     /// The same module with the `in` of the `let` missing.
     const BROKEN: &str = "fun main(): Unit =\n    let x = 1\n";
 
-    /// A path in the virtual file system: a test has no file system ([ADR-0007]).
+    /// A path in the virtual file system: a test has no file system.
     fn path(name: &str) -> VfsPath {
         VfsPath::new_virtual_path(format!("/{name}"))
     }

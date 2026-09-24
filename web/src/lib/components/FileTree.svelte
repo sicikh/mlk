@@ -21,9 +21,7 @@
      *
      * A browser has no directories to read, so the paths of the buffers are the whole truth:
      * `/lib/vector.mlk` is a file called `vector.mlk` in a directory called `lib`,
-     * and a directory exists for as long as a buffer does ([ADR-0007]).
-     *
-     * [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
+     * and a directory exists for as long as a buffer does.
      */
     export function foldersOf(paths: string[]): Folder {
         const root: Node = { folders: new Map(), files: [] };

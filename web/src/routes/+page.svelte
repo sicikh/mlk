@@ -144,15 +144,13 @@ fun main(): Unit =
         check();
     }
 
-    /** Another buffer in front, opened as a tab if it was not one ([ADR-0007]). */
+    /** Another buffer in front, opened as a tab if it was not one. */
     function select(path: string) {
         if (!open.includes(path)) open = [...open, path];
 
         active = path;
         push(path);
         check();
-
-        // [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
     }
 
     /**
@@ -174,7 +172,7 @@ fun main(): Unit =
         if (next !== "") select(next);
     }
 
-    /** A buffer at the path a person typed, in the directories that path names ([ADR-0007]). */
+    /** A buffer at the path a person typed, in the directories that path names. */
     function create(path: string) {
         if (find(path)) return;
 
@@ -184,11 +182,9 @@ fun main(): Unit =
         say("note", `made ${name(path)}`);
         push(path);
         check();
-
-        // [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
     }
 
-    /** Drops a buffer, and tells the driver the file is gone ([ADR-0007]). */
+    /** Drops a buffer, and tells the driver the file is gone. */
     function remove(path: string) {
         const at = open.indexOf(path);
 
@@ -238,11 +234,9 @@ fun main(): Unit =
         if (errors > 0) tab = "diagnostics";
     }
 
-    /** Running needs a code generator, which the pipeline does not reach yet ([ADR-0005]). */
+    /** Running needs a code generator, which the pipeline does not reach yet. */
     function run() {
         say("note", "nothing to run yet: the compiler stops at the typed tree");
-
-        // [ADR-0005]: https://github.com/sicikh/mlk/blob/main/docs/adr/0005-compiler-pipeline.md
     }
 </script>
 

@@ -41,9 +41,7 @@
      * What to put in front of a label's message so that it sits under the mark it is about.
      *
      * The marker is padded with what a reader sees, which is not what a string counts:
-     * a tab stays a tab, everything else becomes a space ([ADR-0002]).
-     *
-     * [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
+     * a tab stays a tab, everything else becomes a space.
      */
     const pad = (before: string) => before.replace(/[^\t]/g, " ");
 

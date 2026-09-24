@@ -1,6 +1,6 @@
 //! The CLI host of the driver.
 //!
-//! A host owns what the driver must not: the file system, the process, the exit code ([ADR-0008]).
+//! A host owns what the driver must not: the file system, the process, the exit code.
 //! This one reads the bytes of a file, pushes them into the [`Driver`], pulls the parse,
 //! and prints what a person reads:
 //! the typed view of the tree, the tree itself, and the diagnostics.
@@ -44,7 +44,7 @@ fn run(options: &Options) -> anyhow::Result<bool> {
     let path = std::path::absolute(&options.file)
         .with_context(|| format!("failed to resolve {}", options.file.display()))?;
 
-    // The host reads the bytes; whether they are text is the driver's business (ADR-0007).
+    // The host reads the bytes; whether they are text is the driver's business.
     let contents = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
     let vfs_path = VfsPath::new_real_path(path.to_string_lossy().into_owned());
 
@@ -69,7 +69,7 @@ fn run(options: &Options) -> anyhow::Result<bool> {
     Ok(print_diagnostics(&mut driver, file, &vfs_path))
 }
 
-/// Prints the typed view over the tree, which is the AST of the records (ADR-0002).
+/// Prints the typed view over the tree, which is the AST.
 fn print_ast(parse: &Parse) {
     println!("## AST");
     println!();
@@ -80,7 +80,7 @@ fn print_ast(parse: &Parse) {
     }
 }
 
-/// Prints the concrete syntax tree, tokens and trivia included (ADR-0002).
+/// Prints the concrete syntax tree, tokens and trivia included.
 fn print_cst(parse: &Parse) {
     println!();
     println!("## CST");

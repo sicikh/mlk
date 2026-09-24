@@ -2,10 +2,8 @@
  * The compiler counts text in bytes; a browser counts it in UTF-16 code units.
  *
  * Everything the compiler hands over — the range of a token, the place a diagnostic points at —
- * is in bytes, because that is what the text is ([ADR-0002]). Everything a JavaScript string
+ * is in bytes, because that is what the text is. Everything a JavaScript string
  * and an editor say is in UTF-16 code units. This is the one place that translates.
- *
- * [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
  */
 
 /** How many bytes a character takes in UTF-8. */

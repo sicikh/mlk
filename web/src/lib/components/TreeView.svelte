@@ -15,7 +15,7 @@
 	const token = $derived(isToken(node));
 	const children = $derived(node.children ?? []);
 
-	/** Whether the parser is saying that something here is wrong ([ADR-0002]). */
+	/** Whether the parser is saying that something here is wrong. */
 	const broken = (kind: string) => kind === 'ERROR_TOKEN' || kind.startsWith('BOGUS');
 
 	const range = $derived(`${node.text_range[0]}..${node.text_range[1]}`);

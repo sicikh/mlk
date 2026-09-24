@@ -6,10 +6,8 @@
  * `crates/mlkc-wasm/src/lib.rs`, and this file is the one place they have to be kept in step.
  *
  * Nothing here decides anything about the compiler: the editor pushes the text of a buffer
- * and reads back what the pipeline made of it ([ADR-0008]). The same driver answers the CLI,
+ * and reads back what the pipeline made of it. The same driver answers the CLI,
  * which is the point of keeping the boundary this thin.
- *
- * [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
  */
 import init, { WasmDriver } from "@mlk/wasm";
 
@@ -56,9 +54,9 @@ export interface Diagnostic {
 }
 
 /**
- * A node or a token of a syntax tree, as the compiler hands it over ([ADR-0002]).
+ * A node or a token of a syntax tree, as the compiler hands it over.
  *
- * The shape is the one the syntax tree serializes itself into ([ADR-0002]):
+ * The shape is the one the syntax tree serializes itself into:
  * a node is its kind, the range of text it covers and its children,
  * a token is its kind, its range and its text, with no children of its own.
  * A token's text carries the trivia around it — the spaces and newlines before and after it —
@@ -66,8 +64,6 @@ export interface Diagnostic {
  *
  * Nothing here parses the tree: the editor folds and prints the same values
  * the compiler walks, and there is no second representation of them anywhere.
- *
- * [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
  */
 export interface SyntaxNode {
     /** The kind of the node: `MODULE_ROOT`, `FUN_DECL`, `IDENT`, `EOF`. */
@@ -112,9 +108,7 @@ export interface Driver {
      * Feeds the text of a buffer into the driver; `null` means the buffer is gone.
      *
      * Returns whether the contents changed: pushing the same text again changes nothing,
-     * which is what makes analyzing after every keystroke affordable ([ADR-0007]).
-     *
-     * [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
+     * which is what makes analyzing after every keystroke affordable.
      */
     push(path: string, text: string | null): boolean;
 

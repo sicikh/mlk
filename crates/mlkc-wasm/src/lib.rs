@@ -1,7 +1,7 @@
 //! The driver, for a browser.
 //!
 //! This is the wasm host of [`mlkc_driver`]: the same driver the CLI drives,
-//! with the text of a buffer pushed into it and the trees pulled out ([ADR-0008]).
+//! with the text of a buffer pushed into it and the trees pulled out.
 //! Nothing here knows about a file system —
 //! in a browser there is none, and the driver never wanted one:
 //! an editor pushes the text it holds, and reads back what the pipeline made of it.
@@ -9,13 +9,10 @@
 //! The boundary is deliberately thin: this module converts values and nothing else,
 //! so the browser and the CLI cannot drift apart in what they ask the driver to do.
 //!
-//! The trees cross it in the shape the syntax tree itself defines ([ADR-0002]):
+//! The trees cross it in the shape the syntax tree itself defines:
 //! a node is its kind, its range and its children, a token is its kind, its range and its text.
 //! A host walks that as deeply as it likes — folds it, prints it, jumps from it to the text —
 //! and no conversion here decides what a tree is.
-//!
-//! [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
-//! [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
 
 use mlkc_driver::Driver;
 use mlkc_line_index::LineIndex;
@@ -43,14 +40,11 @@ impl WasmDriver {
     /// Feeds the text of a file into the driver; `null` or `undefined` means the file is gone.
     ///
     /// Returns whether the contents changed.
-    /// Pushing the same text again changes nothing and rebuilds nothing ([ADR-0007]),
+    /// Pushing the same text again changes nothing and rebuilds nothing,
     /// which is what makes "analyze the buffer after every keystroke" affordable.
     ///
     /// The name a host sees is `setText`: wasm-bindgen keeps the Rust name otherwise,
-    /// and the editor around this module is written in JavaScript ([ADR-0008]).
-    ///
-    /// [ADR-0007]: https://github.com/sicikh/mlk/blob/main/docs/adr/0007-vfs-file-state.md
-    /// [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
+    /// and the editor around this module is written in JavaScript.
     #[wasm_bindgen(js_name = setText)]
     pub fn set_text(&mut self, path: &str, text: Option<String>) -> bool {
         self.driver.set_file_text(path_of(path), text)
@@ -112,15 +106,15 @@ impl Default for WasmDriver {
 
 /// Everything the editor shows about one buffer.
 ///
-/// The shape of the trees is the one the syntax tree serializes itself into ([ADR-0002]),
+/// The shape of the trees is the one the syntax tree serializes itself into,
 /// and the one of the diagnostics is the one an editor marks a buffer with;
 /// the types of the editor mirror both, and that is the only place the two sides meet.
 #[derive(Serialize)]
 struct Analysis {
-    /// The concrete syntax tree: lossless, tokens and trivia included ([ADR-0002]).
+    /// The concrete syntax tree: lossless, tokens and trivia included.
     cst: SyntaxNode,
 
-    /// The typed view over the same tree ([ADR-0002]),
+    /// The typed view over the same tree,
     /// or `null` when the parse did not find a module root.
     ast: Option<ModuleRoot>,
 

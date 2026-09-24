@@ -5,17 +5,14 @@
  * hands out semantic tokens — the names that are resolved, the types, the meanings —
  * and leaves the syntax to whoever is holding the text; of those two, this file is the
  * second, and the first is not built yet: the compiler does not resolve a name to
- * what it means as something an editor can ask for ([ADR-0008]).
+ * what it means as something an editor can ask for.
  *
  * So the colours come from a parse of the editor's own, next to the compiler's — and a
  * much smaller one, because all it has to do is say what a piece of text *is*: a tree
- * only decides colours here, never whether the code is right. That stays the compiler's
- * ([ADR-0002]): what it complains about is marked by the diagnostics, not by the grammar.
+ * only decides colours here, never whether the code is right. That stays the compiler's:
+ * what it complains about is marked by the diagnostics, not by the grammar.
  * The grammar is allowed to be behind the language it follows: what it does not know is
  * not an error, it is text with the colour of text.
- *
- * [ADR-0002]: https://github.com/sicikh/mlk/blob/main/docs/adr/0002-lossless-syntax-tree.md
- * [ADR-0008]: https://github.com/sicikh/mlk/blob/main/docs/adr/0008-compiler-driver.md
  */
 import {
     HighlightStyle,

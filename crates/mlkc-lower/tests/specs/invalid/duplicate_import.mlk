@@ -1,0 +1,6 @@
+// A module that imports one name twice: the first import is what the name denotes, and the
+// second is what lowering reports.
+
+use std.core.Int
+
+use std.core.Int

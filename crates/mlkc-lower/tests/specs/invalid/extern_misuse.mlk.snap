@@ -1,0 +1,58 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// `@extern` on a function that declares a body, and on a type: an external function is
+// implemented outside the project, and an external type is a declaration the language does
+// not have yet.
+
+@extern
+type Handle
+
+@extern
+fun open(handle: Handle): Int =
+    1
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Handle  @2.0
+    attributes: @extern
+    visibility: private
+  fun open  @2.1
+    attributes: @extern
+    visibility: private
+    param handle: Handle -> type Handle
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun open in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  literal 1
+pats
+  pat#0  bind handle
+```
+
+## Lowering Diagnostics
+
+198..217: `type Handle` is declared `@extern`, and the language has no external types yet
+257..264: `fun open` is declared `@extern`, and an external function is implemented outside the project: it has no body here
+
+## Parse Diagnostics
+
+No diagnostics.

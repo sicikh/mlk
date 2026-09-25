@@ -1,0 +1,51 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A module that imports a name and declares one of it: a name means one thing in a module, and
+// what it means is the declaration. The rule is about the two of them, so the import is
+// reported wherever in the module either of them is written.
+
+use std.core.Handle
+
+type Handle
+
+type Point
+
+use std.geometry.Point
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  use Handle  @2.0
+    path: std.core.Handle
+    visibility: private
+  type Handle  @2.1
+    visibility: private
+  type Point  @2.2
+    visibility: private
+  use Point  @2.3
+    path: std.geometry.Point
+    visibility: private
+```
+
+## Bodies
+
+No bodies.
+
+## Lowering Diagnostics
+
+248..267: the name `Handle` is imported and declared in this module as `type Handle`: a use of it means the declaration
+294..316: the name `Point` is imported and declared in this module as `type Point`: a use of it means the declaration
+
+## Parse Diagnostics
+
+No diagnostics.

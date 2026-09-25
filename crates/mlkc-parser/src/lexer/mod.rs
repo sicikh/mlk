@@ -68,6 +68,8 @@ enum Tok {
     #[regex(r"/\*([^*]|\*[^/])*\*/")]
     MultilineComment,
 
+    #[token("as")]
+    AsKw,
     #[token("fun")]
     FunKw,
     #[token("in")]
@@ -80,6 +82,8 @@ enum Tok {
     PubKw,
     #[token("type")]
     TypeKw,
+    #[token("use")]
+    UseKw,
 
     #[regex(r"[0-9]+")]
     IntLiteral,
@@ -156,12 +160,14 @@ impl Tok {
             Self::Newline => NEWLINE,
             Self::Comment => COMMENT,
             Self::MultilineComment => MULTILINE_COMMENT,
+            Self::AsKw => AS_KW,
             Self::FunKw => FUN_KW,
             Self::InKw => IN_KW,
             Self::LetKw => LET_KW,
             Self::ModuleKw => MODULE_KW,
             Self::PubKw => PUB_KW,
             Self::TypeKw => TYPE_KW,
+            Self::UseKw => USE_KW,
             Self::IntLiteral => INT_LITERAL,
             Self::StringLiteral => STRING_LITERAL,
             // Reported as a broken token, with a diagnostic of its own:

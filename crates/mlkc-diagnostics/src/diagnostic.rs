@@ -4,6 +4,11 @@ use mlkc_span::Span;
 pub enum Category {
     Lexer,
     Parser,
+    /// The stage that lowers a module into the HIR: the local half of name resolution
+    /// ([ADR-0005][adr-0005]).
+    ///
+    /// [adr-0005]: ../../docs/adr/0005-compiler-pipeline.md
+    Lowering,
     Resolver,
     TypeChecker,
     Codegen,
@@ -14,19 +19,23 @@ impl Category {
         match self {
             Category::Lexer => "lexer",
             Category::Parser => "parser",
+            Category::Lowering => "lowering",
             Category::Resolver => "resolver",
             Category::TypeChecker => "typechecker",
             Category::Codegen => "codegen",
         }
     }
 
+    /// Two digits of the category, in the order the pipeline runs its stages, so that a
+    /// reader of `error[0301]` knows which stage is talking before knowing what it says.
     pub fn as_code(&self) -> &'static str {
         match self {
             Category::Lexer => "01",
             Category::Parser => "02",
-            Category::Resolver => "03",
-            Category::TypeChecker => "04",
-            Category::Codegen => "05",
+            Category::Lowering => "03",
+            Category::Resolver => "04",
+            Category::TypeChecker => "05",
+            Category::Codegen => "06",
         }
     }
 }

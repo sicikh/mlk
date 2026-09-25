@@ -1116,6 +1116,102 @@ pub struct TypeDeclFields {
     pub name: SyntaxResult<Name>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct UseAlias {
+    pub(crate) syntax: SyntaxNode,
+}
+impl UseAlias {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> UseAliasFields {
+        UseAliasFields {
+            as_token: self.as_token(),
+            name: self.name(),
+        }
+    }
+    pub fn as_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn name(&self) -> SyntaxResult<Name> {
+        support::required_node(&self.syntax, 1usize)
+    }
+}
+impl Serialize for UseAlias {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UseAlias")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct UseAliasFields {
+    pub as_token: SyntaxResult<SyntaxToken>,
+    pub name: SyntaxResult<Name>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct UseDecl {
+    pub(crate) syntax: SyntaxNode,
+}
+impl UseDecl {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> UseDeclFields {
+        UseDeclFields {
+            visibility_token: self.visibility_token(),
+            use_token: self.use_token(),
+            path: self.path(),
+            alias: self.alias(),
+        }
+    }
+    pub fn visibility_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, 0usize)
+    }
+    pub fn use_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+    pub fn path(&self) -> SyntaxResult<Path> {
+        support::required_node(&self.syntax, 2usize)
+    }
+    pub fn alias(&self) -> Option<UseAlias> {
+        support::node(&self.syntax, 3usize)
+    }
+}
+impl Serialize for UseDecl {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UseDecl")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct UseDeclFields {
+    pub visibility_token: Option<SyntaxToken>,
+    pub use_token: SyntaxResult<SyntaxToken>,
+    pub path: SyntaxResult<Path>,
+    pub alias: Option<UseAlias>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct VarExpr {
     pub(crate) syntax: SyntaxNode,
 }
@@ -1324,6 +1420,7 @@ pub enum ModuleItem {
     BogusDecl(BogusDecl),
     FunDecl(FunDecl),
     TypeDecl(TypeDecl),
+    UseDecl(UseDecl),
 }
 impl Serialize for ModuleItem {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1334,6 +1431,7 @@ impl Serialize for ModuleItem {
             Self::BogusDecl(it) => it.serialize(serializer),
             Self::FunDecl(it) => it.serialize(serializer),
             Self::TypeDecl(it) => it.serialize(serializer),
+            Self::UseDecl(it) => it.serialize(serializer),
         }
     }
 }
@@ -1353,6 +1451,12 @@ impl ModuleItem {
     pub fn as_type_decl(&self) -> Option<&TypeDecl> {
         match &self {
             Self::TypeDecl(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_use_decl(&self) -> Option<&UseDecl> {
+        match &self {
+            Self::UseDecl(item) => Some(item),
             _ => None,
         }
     }
@@ -2668,6 +2772,107 @@ impl From<TypeDecl> for SyntaxElement {
         n.syntax.into()
     }
 }
+impl AstNode for UseAlias {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(USE_ALIAS as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == USE_ALIAS
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for UseAlias {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("UseAlias")
+                .field("as_token", &support::DebugSyntaxResult(self.as_token()))
+                .field("name", &support::DebugSyntaxResult(self.name()))
+                .finish()
+        } else {
+            f.debug_struct("UseAlias").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<UseAlias> for SyntaxNode {
+    fn from(n: UseAlias) -> Self {
+        n.syntax
+    }
+}
+impl From<UseAlias> for SyntaxElement {
+    fn from(n: UseAlias) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for UseDecl {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(USE_DECL as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == USE_DECL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for UseDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("UseDecl")
+                .field(
+                    "visibility_token",
+                    &support::DebugOptionalElement(self.visibility_token()),
+                )
+                .field("use_token", &support::DebugSyntaxResult(self.use_token()))
+                .field("path", &support::DebugSyntaxResult(self.path()))
+                .field("alias", &support::DebugOptionalElement(self.alias()))
+                .finish()
+        } else {
+            f.debug_struct("UseDecl").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<UseDecl> for SyntaxNode {
+    fn from(n: UseDecl) -> Self {
+        n.syntax
+    }
+}
+impl From<UseDecl> for SyntaxElement {
+    fn from(n: UseDecl) -> Self {
+        n.syntax.into()
+    }
+}
 impl AstNode for VarExpr {
     type Language = Language;
     const KIND_SET: SyntaxKindSet<Language> =
@@ -3016,19 +3221,26 @@ impl From<TypeDecl> for ModuleItem {
         Self::TypeDecl(node)
     }
 }
+impl From<UseDecl> for ModuleItem {
+    fn from(node: UseDecl) -> Self {
+        Self::UseDecl(node)
+    }
+}
 impl AstNode for ModuleItem {
     type Language = Language;
     const KIND_SET: SyntaxKindSet<Language> = BogusDecl::KIND_SET
         .union(FunDecl::KIND_SET)
-        .union(TypeDecl::KIND_SET);
+        .union(TypeDecl::KIND_SET)
+        .union(UseDecl::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
-        matches!(kind, BOGUS_DECL | FUN_DECL | TYPE_DECL)
+        matches!(kind, BOGUS_DECL | FUN_DECL | TYPE_DECL | USE_DECL)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let res = match syntax.kind() {
             BOGUS_DECL => Self::BogusDecl(BogusDecl { syntax }),
             FUN_DECL => Self::FunDecl(FunDecl { syntax }),
             TYPE_DECL => Self::TypeDecl(TypeDecl { syntax }),
+            USE_DECL => Self::UseDecl(UseDecl { syntax }),
             _ => return None,
         };
         Some(res)
@@ -3038,6 +3250,7 @@ impl AstNode for ModuleItem {
             Self::BogusDecl(it) => it.syntax(),
             Self::FunDecl(it) => it.syntax(),
             Self::TypeDecl(it) => it.syntax(),
+            Self::UseDecl(it) => it.syntax(),
         }
     }
     fn into_syntax(self) -> SyntaxNode {
@@ -3045,6 +3258,7 @@ impl AstNode for ModuleItem {
             Self::BogusDecl(it) => it.into_syntax(),
             Self::FunDecl(it) => it.into_syntax(),
             Self::TypeDecl(it) => it.into_syntax(),
+            Self::UseDecl(it) => it.into_syntax(),
         }
     }
 }
@@ -3054,6 +3268,7 @@ impl std::fmt::Debug for ModuleItem {
             Self::BogusDecl(it) => std::fmt::Debug::fmt(it, f),
             Self::FunDecl(it) => std::fmt::Debug::fmt(it, f),
             Self::TypeDecl(it) => std::fmt::Debug::fmt(it, f),
+            Self::UseDecl(it) => std::fmt::Debug::fmt(it, f),
         }
     }
 }
@@ -3063,6 +3278,7 @@ impl From<ModuleItem> for SyntaxNode {
             ModuleItem::BogusDecl(it) => it.into_syntax(),
             ModuleItem::FunDecl(it) => it.into_syntax(),
             ModuleItem::TypeDecl(it) => it.into_syntax(),
+            ModuleItem::UseDecl(it) => it.into_syntax(),
         }
     }
 }
@@ -3360,6 +3576,16 @@ impl std::fmt::Display for TypeArgs {
     }
 }
 impl std::fmt::Display for TypeDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UseAlias {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UseDecl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }

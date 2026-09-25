@@ -1,0 +1,11 @@
+// A module that imports a name and declares one of it: a name means one thing in a module, and
+// what it means is the declaration. The rule is about the two of them, so the import is
+// reported wherever in the module either of them is written.
+
+use std.core.Handle
+
+type Handle
+
+type Point
+
+use std.geometry.Point

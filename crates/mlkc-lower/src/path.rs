@@ -34,6 +34,24 @@ pub(crate) fn ident(name: Name, anchor: PathAnchor) -> PathData {
     PathData::ident(name, anchor)
 }
 
+/// The type arguments written at a path, if it carries any.
+///
+/// A path that names something of the project is a path of names: an argument written at a
+/// segment is what a type of the language is applied to, and it is the first such argument
+/// that a caller reports.
+pub(crate) fn type_args(path: &Path) -> Option<TypeArgs> {
+    // The qualifier comes first, so the arguments of a path are read from its innermost
+    // segment outwards, which is the order they are written in.
+    if let Some(qualifier) = path.qualifier()
+        && let Ok(prefix) = qualifier.path()
+        && let Some(args) = type_args(&prefix)
+    {
+        return Some(args);
+    }
+
+    path.segment().ok().and_then(|segment| segment.type_args())
+}
+
 /// The segments of a path, in the order they are written.
 ///
 /// A path is written as a qualifier and a segment, one inside the other, so the segments of

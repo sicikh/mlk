@@ -68,7 +68,7 @@
 //!
 //! # Modules
 //!
-//! - [`diagnostic`] — what lowering could not hold, and where it is.
+//! - [`diagnostic`] — what lowering found, as typed errors and the spans they are at.
 
 mod body;
 mod decl;
@@ -85,14 +85,17 @@ pub use mlkc_hir_def::{Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{FunDecl, ModuleRoot};
 
-pub use crate::{diagnostic::LoweringDiag, syntax::syntax_at};
+pub use crate::{
+    diagnostic::{LoweringDiag, LoweringError},
+    syntax::syntax_at,
+};
 
 /// The HIR of one module, and what lowering it reported.
 #[derive(Debug)]
 pub struct LoweredModule {
     /// The surface of the module: its entities, their names, and their data.
     pub item_tree: ItemTree,
-    /// What lowering could not hold, in the order of the source.
+    /// What lowering found, in the order of the source.
     pub diagnostics: Vec<LoweringDiag>,
     /// The entities that own a body, in the order the module declares them.
     pub bodies: Vec<BodyDecl>,
@@ -127,7 +130,7 @@ impl fmt::Debug for BodyDecl {
 pub struct LoweredBody {
     /// The body: its expressions, its patterns, its paths, and its parameters.
     pub body: Body,
-    /// What lowering could not hold, in the order of the source.
+    /// What lowering found, in the order of the source.
     pub diagnostics: Vec<LoweringDiag>,
 }
 

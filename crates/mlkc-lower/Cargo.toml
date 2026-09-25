@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+mlkc-diagnostics.workspace = true
 mlkc-hir-def.workspace = true
 mlkc-intern.workspace = true
 mlkc-rowan.workspace = true

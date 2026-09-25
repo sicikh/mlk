@@ -1,0 +1,92 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// What a module takes from the rest of the project: a name, a name it is renamed to, a name it
+// is brought in under, and the path of a module, which is what the names after a path of it
+// are resolved against.
+
+module my-proj.app
+
+use std.core.Int
+
+pub use std.core.io as IO
+
+use my-proj.data
+
+use my-proj.data.start-app
+
+fun main(): IO =
+    start-app(1)
+
+fun handle(value: data.Handle): Int =
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0 my-proj.app
+
+ITEM TREE
+  use Int  @2.0
+    path: std.core.Int
+    visibility: private
+  use IO  @2.1
+    path: std.core.io
+    alias: IO
+    visibility: public
+  use data  @2.2
+    path: my-proj.data
+    visibility: private
+  use start-app  @2.3
+    path: my-proj.data.start-app
+    visibility: private
+  fun main  @2.4
+    visibility: private
+    ret: IO -> use IO
+  fun handle  @2.5
+    visibility: private
+    param value: data.Handle -> use data
+    ret: Int -> use Int
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  start-app -> use start-app
+```
+
+```
+BODY fun handle in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

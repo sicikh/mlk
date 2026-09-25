@@ -332,6 +332,46 @@ impl TypeDeclBuilder {
         ]))
     }
 }
+pub fn use_alias(as_token: SyntaxToken, name: Name) -> UseAlias {
+    UseAlias::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_ALIAS, [
+        Some(SyntaxElement::Token(as_token)),
+        Some(SyntaxElement::Node(name.into_syntax())),
+    ]))
+}
+pub fn use_decl(use_token: SyntaxToken, path: Path) -> UseDeclBuilder {
+    UseDeclBuilder {
+        use_token,
+        path,
+        visibility_token: None,
+        alias: None,
+    }
+}
+pub struct UseDeclBuilder {
+    use_token: SyntaxToken,
+    path: Path,
+    visibility_token: Option<SyntaxToken>,
+    alias: Option<UseAlias>,
+}
+impl UseDeclBuilder {
+    pub fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+        self.visibility_token = Some(visibility_token);
+        self
+    }
+    pub fn with_alias(mut self, alias: UseAlias) -> Self {
+        self.alias = Some(alias);
+        self
+    }
+    pub fn build(self) -> UseDecl {
+        UseDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_DECL, [
+            self.visibility_token
+                .map(|token| SyntaxElement::Token(token)),
+            Some(SyntaxElement::Token(self.use_token)),
+            Some(SyntaxElement::Node(self.path.into_syntax())),
+            self.alias
+                .map(|token| SyntaxElement::Node(token.into_syntax())),
+        ]))
+    }
+}
 pub fn var_expr(name: Name) -> VarExpr {
     VarExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::VAR_EXPR, [Some(
         SyntaxElement::Node(name.into_syntax()),

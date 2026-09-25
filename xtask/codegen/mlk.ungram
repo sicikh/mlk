@@ -75,6 +75,7 @@ ModuleItemList = ModuleItem*
 ModuleItem =
     FunDecl
     | TypeDecl
+    | UseDecl
     | BogusDecl
 
 AttributeList = Attribute*
@@ -127,6 +128,25 @@ Parameter =
 TypeAnnotation =
     ':'
     type: Type
+
+//****************************//
+//           Imports          //
+//****************************//
+
+// An import: a name the module takes from another path of the project. The name it brings in
+// is the last segment of the path, or the name it is renamed to.
+//
+// An import carries no attributes: what an import is, is what it brings in and how far it is
+// visible.
+UseDecl =
+    visibility: 'pub'?
+    'use'
+    path: Path
+    alias: UseAlias?
+
+UseAlias =
+    'as'
+    name: Name
 
 //****************************//
 //        Expressions         //

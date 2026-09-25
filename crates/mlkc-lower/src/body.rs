@@ -17,7 +17,7 @@ use mlkc_syntax::{
 use mlkc_vfs::FileId;
 
 use crate::{
-    LoweredBody, LoweringDiag, decl, pat, path,
+    LoweredBody, LoweringDiag, LoweringError, decl, pat, path,
     syntax::{self, span},
 };
 
@@ -200,9 +200,10 @@ impl BodyLowering<'_> {
                     // wrote one that does not fit: the value is not there, and the parse says
                     // the literal was.
                     Err(_) => {
-                        let message = "the integer literal does not fit a 64-bit integer";
-                        let diagnostic =
-                            LoweringDiag::new(message, span(self.file(), int.syntax()));
+                        let error = LoweringError::IntegerLiteralTooLarge {
+                            literal: token.text_trimmed().to_owned(),
+                        };
+                        let diagnostic = LoweringDiag::new(error, span(self.file(), int.syntax()));
                         self.diagnostics.push(diagnostic);
 
                         return self.missing();

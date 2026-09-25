@@ -1,0 +1,41 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A module that imports one name twice: the first import is what the name denotes, and the
+// second is what lowering reports.
+
+use std.core.Int
+
+use std.core.Int
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  use Int  @2.0
+    path: std.core.Int
+    visibility: private
+  use Int#1  @2.1
+    path: std.core.Int
+    visibility: private
+```
+
+## Bodies
+
+No bodies.
+
+## Lowering Diagnostics
+
+147..163: `use Int` is declared more than once in this module
+
+## Parse Diagnostics
+
+No diagnostics.

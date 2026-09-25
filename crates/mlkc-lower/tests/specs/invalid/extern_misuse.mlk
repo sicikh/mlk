@@ -1,0 +1,10 @@
+// `@extern` on a function that declares a body, and on a type: an external function is
+// implemented outside the project, and an external type is a declaration the language does
+// not have yet.
+
+@extern
+type Handle
+
+@extern
+fun open(handle: Handle): Int =
+    1

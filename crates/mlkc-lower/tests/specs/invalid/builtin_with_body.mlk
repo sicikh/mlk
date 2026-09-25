@@ -1,0 +1,7 @@
+// `@builtin` on a function that declares a body: what a builtin does is the compiler's, and
+// the declaration is what puts its name in the scope of the module, so a body here is a body
+// nothing calls.
+
+@builtin
+fun max(left: Int, right: Int): Int =
+    left

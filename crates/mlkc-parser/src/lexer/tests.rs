@@ -189,7 +189,7 @@ fn underscore_is_not_an_identifier() {
 
 #[test]
 fn keywords() {
-    let keywords = ["fun", "in", "let", "module", "pub", "type"];
+    let keywords = ["as", "fun", "in", "let", "module", "pub", "type", "use"];
 
     for keyword in keywords {
         let kind = SyntaxKind::from_keyword(keyword)

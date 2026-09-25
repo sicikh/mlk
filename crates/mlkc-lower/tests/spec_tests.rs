@@ -56,6 +56,10 @@ spec_tests! {
     // How far a declaration is visible, and the attributes it carries next to it.
     visibility: "valid/visibility.mlk",
 
+    // What a module takes from the rest of the project: a name, a name it is renamed to, and
+    // the name of a module of the project.
+    imports: "valid/imports.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign.
     literals: "valid/literals.mlk",
@@ -89,6 +93,27 @@ spec_tests! {
     // An attribute the language does not have: the HIR holds the attributes the compiler knows
     // what to do with, and this one is a mistake.
     unknown_attribute: "invalid/unknown_attribute.mlk",
+
+    // A module that imports one name twice: the first import is what the name denotes.
+    duplicate_import: "invalid/duplicate_import.mlk",
+
+    // A path of the project carrying a type argument, in a preamble and in an import.
+    path_with_type_args: "invalid/path_with_type_args.mlk",
+
+    // `@extern` on a function with a body, and on a type: neither is a thing the language has.
+    extern_misuse: "invalid/extern_misuse.mlk",
+
+    // `@builtin` on a function with a body: a builtin is implemented by the compiler, and the
+    // declaration is what puts its name in the scope of the module.
+    builtin_with_body: "invalid/builtin_with_body.mlk",
+
+    // A name an import brings in is a name the module declares: the declaration is what the
+    // name means, and the import is told about wherever either of them is written.
+    import_of_declared_name: "invalid/import_of_declared_name.mlk",
+
+    // A public function whose signature is not complete: what a caller of it depends on is the
+    // surface of the module.
+    public_without_signature: "invalid/public_without_signature.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

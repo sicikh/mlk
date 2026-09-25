@@ -36,7 +36,7 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         ("&&", "AND2"),
         ("||", "OR2"),
     ],
-    keywords: &["fun", "in", "let", "module", "pub", "type"],
+    keywords: &["as", "fun", "in", "let", "module", "pub", "type", "use"],
     literals: &["INT_LITERAL", "STRING_LITERAL"],
     tokens: &[
         "ERROR_TOKEN",
@@ -61,6 +61,8 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "ATTRIBUTE",
         "TYPE_DECL",
         "FUN_DECL",
+        "USE_DECL",
+        "USE_ALIAS",
         "FUN_RETURN_TYPE_ANNOTATION",
         "FUN_BODY",
         "PARAMETERS",

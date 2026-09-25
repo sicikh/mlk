@@ -1,0 +1,19 @@
+// What a module takes from the rest of the project: a name, a name it is renamed to, a name it
+// is brought in under, and the path of a module, which is what the names after a path of it
+// are resolved against.
+
+module my-proj.app
+
+use std.core.Int
+
+pub use std.core.io as IO
+
+use my-proj.data
+
+use my-proj.data.start-app
+
+fun main(): IO =
+    start-app(1)
+
+fun handle(value: data.Handle): Int =
+    value

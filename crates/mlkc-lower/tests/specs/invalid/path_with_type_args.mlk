@@ -1,0 +1,9 @@
+// A path of the project carrying a type argument: what a module is named by and what an
+// import names is a path of names, and an argument written at a segment is a type.
+
+module my-proj.main[Int]
+
+use std.core.Map[Int, String]
+
+fun main(): Int =
+    1

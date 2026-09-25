@@ -33,7 +33,7 @@
 
 @skip { space | Comment }
 
-item { Attribute* (ModulePreamble | FunDecl | TypeDecl) }
+item { Attribute* (ModulePreamble | FunDecl | TypeDecl | UseDecl) }
 
 // The keywords are not tokens of their own.
 //
@@ -66,6 +66,12 @@ ReturnType { ":" Type }
 FunBody { "=" Expr }
 
 TypeDecl { Visibility? kw<"type"> Name }
+
+// An import: a path of the project, under the name it is brought in as, which is the last
+// segment of the path or what it is renamed to.
+UseDecl { Visibility? kw<"use"> Path UseAlias? }
+
+UseAlias { kw<"as"> Name }
 
 Name { identifier }
 

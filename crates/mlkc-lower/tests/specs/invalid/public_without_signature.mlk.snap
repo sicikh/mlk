@@ -1,0 +1,71 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A public function whose signature is not complete: a caller of it depends on the surface of
+// the module, and the surface has to say what a call of the function takes and gives back.
+
+pub fun size(value: Int) =
+    value
+
+pub fun weight(value): Int =
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun size  @2.0
+    visibility: public
+    param value: Int -> unresolved
+  fun weight  @2.1
+    visibility: public
+    param value
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun size in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun weight in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+212..212: `fun size` is public and does not declare the type of its result, which a caller of it depends on
+241..246: the parameter `value` of the public function `fun weight` does not declare its type, which a caller of it depends on
+
+## Parse Diagnostics
+
+No diagnostics.

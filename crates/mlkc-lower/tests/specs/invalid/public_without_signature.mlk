@@ -1,0 +1,8 @@
+// A public function whose signature is not complete: a caller of it depends on the surface of
+// the module, and the surface has to say what a call of the function takes and gives back.
+
+pub fun size(value: Int) =
+    value
+
+pub fun weight(value): Int =
+    value

@@ -25,10 +25,10 @@ use crate::{
     },
 };
 
-/// The tokens a broken module item is recovered at: the start of the next declaration,
-/// which is `@`, `pub`, or the keyword of one of the declarations the language has.
+/// The tokens a broken module item is recovered at: the start of the next declaration or
+/// import, which is `@`, `pub`, or the keyword of one of the items the language has.
 const MODULE_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
-    token_set![T![@], T![pub], T![fun], T![type]];
+    token_set![T![@], T![pub], T![fun], T![type], T![use]];
 
 /// The tokens a broken parameter is recovered at: the end of the parameter it was written
 /// in, or the end of the list it belongs to.
@@ -105,13 +105,61 @@ impl ParseNodeList for ModuleItemListParse {
 
 /// Parses a single item of a module.
 fn parse_module_item(p: &mut MlkParser) -> ParsedSyntax {
-    if is_at_declaration(p, FUN_KW) {
+    if is_at_use(p) {
+        parse_use_decl(p)
+    } else if is_at_declaration(p, FUN_KW) {
         parse_fun_decl(p)
     } else if is_at_declaration(p, TYPE_KW) {
         parse_type_decl(p)
     } else {
         ParsedSyntax::Absent
     }
+}
+
+/// Whether the parser is at an import: `use`, possibly with `pub` in front of it.
+///
+/// An import carries no attributes, so this is not [`is_at_declaration`]: a `@` in front of a
+/// `use` is a mistake the reader made, and the tokens of it are foreign to an import.
+fn is_at_use(p: &mut MlkParser) -> bool {
+    p.at(T![use]) || (p.at(T![pub]) && p.nth_at(1, T![use]))
+}
+
+/// Parses an import: a path of the project, and the name it is brought in under.
+// test mlk an_import_brings_a_name_in
+// use std.core.Int
+//
+// test mlk an_import_may_be_renamed
+// use std.core.Int as Integer
+//
+// test mlk an_import_may_be_public
+// pub use std.core.Int
+fn parse_use_decl(p: &mut MlkParser) -> ParsedSyntax {
+    if !is_at_use(p) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    parse_visibility(p);
+    p.expect(T![use]);
+    parse_path(p).or_add_diagnostic(p, expected_path);
+    parse_use_alias(p).ok();
+
+    Present(m.complete(p, USE_DECL))
+}
+
+/// Parses the name an import is renamed to: `as name`.
+fn parse_use_alias(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T![as]) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T![as]);
+    parse_name(p).or_add_diagnostic(p, expected_name);
+
+    Present(m.complete(p, USE_ALIAS))
 }
 
 /// Parses a function declaration.

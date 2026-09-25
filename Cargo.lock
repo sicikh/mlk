@@ -695,6 +695,7 @@ name = "mlkc-lower"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "mlkc-diagnostics",
  "mlkc-hir-def",
  "mlkc-intern",
  "mlkc-parser",

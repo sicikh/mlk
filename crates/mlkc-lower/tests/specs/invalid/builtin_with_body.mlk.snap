@@ -1,0 +1,56 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// `@builtin` on a function that declares a body: what a builtin does is the compiler's, and
+// the declaration is what puts its name in the scope of the module, so a body here is a body
+// nothing calls.
+
+@builtin
+fun max(left: Int, right: Int): Int =
+    left
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun max  @2.0
+    attributes: @builtin
+    visibility: private
+    param left: Int -> unresolved
+    param right: Int -> unresolved
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun max in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+251..261: `fun max` is declared `@builtin`, and what a builtin does is the compiler's: it has no body here
+
+## Parse Diagnostics
+
+No diagnostics.

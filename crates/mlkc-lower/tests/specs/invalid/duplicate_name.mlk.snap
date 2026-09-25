@@ -77,8 +77,8 @@ paths
 
 ## Lowering Diagnostics
 
-296..333: `fun size#1` is declared more than once in this module
-347..357: `type Point#1` is declared more than once in this module
+296..333: `fun size` is declared more than once in this module
+347..357: `type Point` is declared more than once in this module
 
 ## Parse Diagnostics
 

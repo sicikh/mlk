@@ -10,7 +10,7 @@
 use mlkc_hir_def::{ItemSyntaxLoc, Name};
 use mlkc_rowan::{AstNode, SyntaxResult};
 use mlkc_span::Span;
-use mlkc_syntax::{ModuleRoot, Name as NameSyntax, SyntaxNode};
+use mlkc_syntax::{ModuleRoot, Name as NameSyntax, SyntaxNode, TextRange};
 use mlkc_vfs::FileId;
 
 /// The name a declaration or a reference is written with, or a name that is not there.
@@ -42,6 +42,14 @@ pub(crate) fn item_position(list: &SyntaxNode, item: &SyntaxNode) -> ItemSyntaxL
 /// Where a node is in the file it was read from, without the trivia around it.
 pub(crate) fn span(file: FileId, node: &SyntaxNode) -> Span {
     Span::new(file, node.text_trimmed_range())
+}
+
+/// Where a thing that is not there would be written: right after `node`.
+///
+/// A diagnostic about what a module did not write points at the place it belongs rather than
+/// at the whole declaration: a reader reads an empty range as the place to put it.
+pub(crate) fn after(file: FileId, node: &SyntaxNode) -> Span {
+    Span::new(file, TextRange::empty(node.text_trimmed_range().end()))
 }
 
 /// The syntax at a position of an item tree.

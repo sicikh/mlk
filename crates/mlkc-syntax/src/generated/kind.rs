@@ -38,12 +38,14 @@ pub enum SyntaxKind {
     GT_EQ,
     AND2,
     OR2,
+    AS_KW,
     FUN_KW,
     IN_KW,
     LET_KW,
     MODULE_KW,
     PUB_KW,
     TYPE_KW,
+    USE_KW,
     INT_LITERAL,
     STRING_LITERAL,
     ERROR_TOKEN,
@@ -66,6 +68,8 @@ pub enum SyntaxKind {
     ATTRIBUTE,
     TYPE_DECL,
     FUN_DECL,
+    USE_DECL,
+    USE_ALIAS,
     FUN_RETURN_TYPE_ANNOTATION,
     FUN_BODY,
     PARAMETERS,
@@ -139,12 +143,14 @@ impl SyntaxKind {
     }
     pub fn from_keyword(ident: &str) -> Option<Self> {
         let kw = match ident {
+            "as" => AS_KW,
             "fun" => FUN_KW,
             "in" => IN_KW,
             "let" => LET_KW,
             "module" => MODULE_KW,
             "pub" => PUB_KW,
             "type" => TYPE_KW,
+            "use" => USE_KW,
             _ => return None,
         };
         Some(kw)
@@ -177,12 +183,14 @@ impl SyntaxKind {
             GT_EQ => ">=",
             AND2 => "&&",
             OR2 => "||",
+            AS_KW => "as",
             FUN_KW => "fun",
             IN_KW => "in",
             LET_KW => "let",
             MODULE_KW => "module",
             PUB_KW => "pub",
             TYPE_KW => "type",
+            USE_KW => "use",
             EOF => "",
             _ => return None,
         };
@@ -191,4 +199,4 @@ impl SyntaxKind {
 }
 #[doc = r" Utility macro for creating a SyntaxKind through simple macro syntax"]
 #[macro_export]
-macro_rules ! T { [.] => { $ crate :: SyntaxKind :: DOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['{'] => { $ crate :: SyntaxKind :: L_CURLY } ; ['}'] => { $ crate :: SyntaxKind :: R_CURLY } ; [@] => { $ crate :: SyntaxKind :: AT } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [;] => { $ crate :: SyntaxKind :: SEMICOLON } ; [=] => { $ crate :: SyntaxKind :: EQ } ; [->] => { $ crate :: SyntaxKind :: ARROW } ; ["_"] => { $ crate :: SyntaxKind :: UNDERSCORE } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: STAR } ; [/] => { $ crate :: SyntaxKind :: SLASH } ; [==] => { $ crate :: SyntaxKind :: EQ2 } ; [!=] => { $ crate :: SyntaxKind :: BANG_EQ } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LT_EQ } ; [>=] => { $ crate :: SyntaxKind :: GT_EQ } ; [&&] => { $ crate :: SyntaxKind :: AND2 } ; [||] => { $ crate :: SyntaxKind :: OR2 } ; [fun] => { $ crate :: SyntaxKind :: FUN_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [let] => { $ crate :: SyntaxKind :: LET_KW } ; [module] => { $ crate :: SyntaxKind :: MODULE_KW } ; [pub] => { $ crate :: SyntaxKind :: PUB_KW } ; [type] => { $ crate :: SyntaxKind :: TYPE_KW } ; [ident] => { $ crate :: SyntaxKind :: IDENT } ; [EOF] => { $ crate :: SyntaxKind :: EOF } ; [UNICODE_BOM] => { $ crate :: SyntaxKind :: UNICODE_BOM } ; }
+macro_rules ! T { [.] => { $ crate :: SyntaxKind :: DOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['{'] => { $ crate :: SyntaxKind :: L_CURLY } ; ['}'] => { $ crate :: SyntaxKind :: R_CURLY } ; [@] => { $ crate :: SyntaxKind :: AT } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [;] => { $ crate :: SyntaxKind :: SEMICOLON } ; [=] => { $ crate :: SyntaxKind :: EQ } ; [->] => { $ crate :: SyntaxKind :: ARROW } ; ["_"] => { $ crate :: SyntaxKind :: UNDERSCORE } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: STAR } ; [/] => { $ crate :: SyntaxKind :: SLASH } ; [==] => { $ crate :: SyntaxKind :: EQ2 } ; [!=] => { $ crate :: SyntaxKind :: BANG_EQ } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LT_EQ } ; [>=] => { $ crate :: SyntaxKind :: GT_EQ } ; [&&] => { $ crate :: SyntaxKind :: AND2 } ; [||] => { $ crate :: SyntaxKind :: OR2 } ; [as] => { $ crate :: SyntaxKind :: AS_KW } ; [fun] => { $ crate :: SyntaxKind :: FUN_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [let] => { $ crate :: SyntaxKind :: LET_KW } ; [module] => { $ crate :: SyntaxKind :: MODULE_KW } ; [pub] => { $ crate :: SyntaxKind :: PUB_KW } ; [type] => { $ crate :: SyntaxKind :: TYPE_KW } ; [use] => { $ crate :: SyntaxKind :: USE_KW } ; [ident] => { $ crate :: SyntaxKind :: IDENT } ; [EOF] => { $ crate :: SyntaxKind :: EOF } ; [UNICODE_BOM] => { $ crate :: SyntaxKind :: UNICODE_BOM } ; }

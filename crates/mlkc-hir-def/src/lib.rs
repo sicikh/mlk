@@ -92,7 +92,7 @@ pub mod type_ref;
 
 pub use crate::{
     body::{BinaryOp, Body, BodyBuilder, Expr, ExprId, Literal, Pat, PatId},
-    def_map::{LocalEntry, LocalScope, ModuleScope, PerNs, ProjectDefMap},
+    def_map::{LocalEntry, LocalScope, LocalTarget, ModuleScope, Namespace, PerNs, ProjectDefMap},
     id::{
         BodyEntityLoc, BodyLoc, ClassLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind,
         ItemLoc, ItemLocData, ItemLocLike, LocalConstId, LocalDefId, LocalFunctionId, ModuleDefId,
@@ -102,7 +102,7 @@ pub use crate::{
         ClassData, ConstData, EntityData, FunctionData, ImplData, ParamData, Signature, UseData,
         ValueData, Visibility,
     },
-    item_tree::{Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
+    item_tree::{Declared, Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
     name::Name,
     path::{PathAnchor, PathData, PathId, PlainPath, PlainPathId},
     project_graph::{ModuleLocator, ProjectData, ProjectGraph, ProjectId},

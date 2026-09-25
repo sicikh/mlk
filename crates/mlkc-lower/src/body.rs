@@ -6,7 +6,7 @@
 //! against the names of the module.
 
 use mlkc_hir_def::{
-    BinaryOp, BodyBuilder, Expr, ExprId, ItemTree, Literal, Name, Pat, PatId, PathAnchor,
+    BinaryOp, BodyBuilder, Expr, ExprId, ItemTree, Literal, Name, Namespace, Pat, PatId, PathAnchor,
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
@@ -21,8 +21,14 @@ use crate::{
     syntax::{self, span},
 };
 
-/// Lowers the body of `decl`, a function of the module `tree` describes.
-pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> LoweredBody {
+/// Lowers the body of `decl`, a function of the module `tree` describes, or nothing if the
+/// declaration declares no body.
+pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
+    // A function that declares no body of its own has none: what it is is its signature, and a
+    // caller that gets nothing does not have to tell the absence of a body from a missing
+    // expression inside one.
+    let body = decl.body()?;
+
     let mut lowering = BodyLowering {
         tree,
         builder: BodyBuilder::new(),
@@ -30,7 +36,11 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> LoweredBody {
         diagnostics: Vec::new(),
     };
 
-    let root = lowering.function(decl);
+    lowering.parameters(decl);
+
+    // A body whose expression is not there is what the parser reported; the parameters of the
+    // function are read, and the body holds a missing expression.
+    let root = lowering.optional(body.expr().ok());
     lowering.builder.set_root(root);
 
     let BodyLowering {
@@ -39,10 +49,10 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> LoweredBody {
         ..
     } = lowering;
 
-    LoweredBody {
+    Some(LoweredBody {
         body: builder.finish(),
         diagnostics,
-    }
+    })
 }
 
 /// The lowering of one body.
@@ -56,22 +66,6 @@ struct BodyLowering<'a> {
 }
 
 impl BodyLowering<'_> {
-    /// Lowers the parameters and the root expression of the function.
-    fn function(&mut self, decl: &FunDecl) -> ExprId {
-        self.parameters(decl);
-
-        let Some(body) = decl.body() else {
-            // A function that declares no body is what its signature says it is: the body of
-            // it holds a missing expression, so that a caller has a body to hold and does not
-            // need a case for a declaration that has none.
-            return self.missing();
-        };
-
-        // A body whose expression is not there is what the parser reported;
-        // the parameters of the function are read, and the body is missing.
-        self.optional(body.expr().ok())
-    }
-
     /// Lowers the parameters of the function into patterns of its body.
     ///
     /// A parameter is a name and a type in the signature of the function, and a binding of
@@ -231,11 +225,13 @@ impl BodyLowering<'_> {
     /// module declares.
     ///
     /// The bindings come first, and the innermost of them: a `let` shadows a parameter of the
-    /// same name, which is the order the bindings are held in.
+    /// same name, which is the order the bindings are held in. A name that is not a binding of
+    /// the body is read where a value belongs: a path of an expression names a value, and what
+    /// the value is is worked out later.
     fn anchor(&self, name: &Name) -> PathAnchor {
         match self.binding(name) {
             Some(pat) => PathAnchor::Binding(pat),
-            None => self.tree.scope().anchor(name),
+            None => self.tree.scope().anchor(name, Namespace::Value),
         }
     }
 
@@ -285,4 +281,68 @@ fn operator(kind: SyntaxKind) -> Option<BinaryOp> {
     };
 
     Some(operator)
+}
+
+#[cfg(test)]
+mod tests {
+    use mlkc_hir_def::{ItemLocLike, ModuleId, Name, Namespace, PathAnchor};
+    use mlkc_rowan::AstNode;
+    use mlkc_syntax::ModuleRoot;
+    use mlkc_vfs::FileId;
+
+    use super::*;
+
+    /// A declaration that declares no body, and one that declares a body.
+    const SOURCE: &str = "\
+@extern
+fun add(left: Int, right: Int): Int
+
+fun main(): Int = 1
+";
+
+    /// The declaration of the function `name`, found the way a caller that holds an item tree
+    /// and the syntax it was lowered from finds it.
+    fn declaration(root: &ModuleRoot, lowered: &crate::LoweredModule, name: &str) -> FunDecl {
+        let anchor = lowered
+            .item_tree
+            .scope()
+            .anchor(&Name::new(name), Namespace::Value);
+        let PathAnchor::Item(item) = anchor else {
+            panic!("the module to declare an entity named `{name}`");
+        };
+        let position = lowered
+            .item_tree
+            .syntax_loc(item.item)
+            .expect("the entity to have a position");
+        let syntax = crate::syntax_at(root, position).expect("the declaration to be there");
+
+        FunDecl::cast(syntax).expect("a function declaration")
+    }
+
+    #[test]
+    fn a_declaration_that_declares_no_body_has_no_body() {
+        let parsed = mlkc_parser::parse(SOURCE);
+        let root = parsed.tree::<ModuleRoot>();
+        let lowered = crate::lower_module(ModuleId(FileId::from_raw(0)), &root);
+
+        // The work list holds the declaration of a body.
+        assert_eq!(lowered.bodies.len(), 1);
+        assert_eq!(
+            lowered.bodies[0].owner.item().name(),
+            Some(&Name::new("main")),
+        );
+
+        // The declaration that declares none is an entity of the module all the same, and it
+        // has no body to lower: a caller is told what is there rather than handed a body that
+        // is not.
+        let add = declaration(&root, &lowered, "add");
+        assert!(crate::lower_body(&lowered.item_tree, &add).is_none());
+        assert_eq!(lowered.item_tree.scope().len(), 2);
+
+        // The declaration that declares one has it, and it is the body of the expression.
+        let main = declaration(&root, &lowered, "main");
+        let body = crate::lower_body(&lowered.item_tree, &main).expect("a body");
+        assert!(body.diagnostics.is_empty());
+        assert_eq!(body.body[body.body.root()], Expr::Literal(Literal::Int(1)),);
+    }
 }

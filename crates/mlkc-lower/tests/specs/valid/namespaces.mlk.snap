@@ -1,0 +1,83 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A class and a function that share a name: the namespaces of a module are separate, and a
+// name is read in the namespace the place it is written in asks for.
+
+type Box
+
+fun Box(): Box =
+    Box
+
+// A name written where a type belongs, where the module declares nothing of that name: what
+// the name denotes is not for the module alone to say, and the stage that holds the scopes of
+// the project is the one that reports it.
+
+fun helper(): Int =
+    1
+
+fun misused(): helper =
+    helper
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Box  @1.0
+    visibility: private
+  fun Box  @1.1
+    visibility: private
+    ret: Box -> type Box
+  fun helper  @1.2
+    visibility: private
+    ret: Int -> unresolved
+  fun misused  @1.3
+    visibility: private
+    ret: helper -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun Box in module #0
+
+root expr#0
+exprs
+  expr#0  path path#0
+paths
+  path#0  Box -> fun Box
+```
+
+```
+BODY fun helper in module #0
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+```
+BODY fun misused in module #0
+
+root expr#0
+exprs
+  expr#0  path path#0
+paths
+  path#0  helper -> fun helper
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

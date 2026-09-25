@@ -7,7 +7,7 @@ use mlkc_la_arena::Idx;
 
 use crate::{
     body::PatId,
-    def_map::LocalScope,
+    def_map::{LocalScope, Namespace},
     id::{EntityLoc, LocalDefId, UseLoc},
     name::Name,
     type_ref::{TypeRef, TypeVarId},
@@ -132,16 +132,22 @@ impl PathData {
     /// and a stage that holds the scopes resolves the segments *after* the base,
     /// never the base itself.
     ///
+    /// `namespace` is where the name is looked for: the base of a path written where a type
+    /// belongs is read in the type namespace of the module, and the base of one written where a
+    /// value belongs in its value namespace.
+    ///
     /// An anchor a caller already resolved is left alone,
     /// because a caller that knows about a binding or a type variable
     /// knows more than a module scope does.
-    pub(crate) fn resolve(&mut self, scope: &LocalScope) {
+    pub(crate) fn resolve(&mut self, scope: &LocalScope, namespace: Namespace) {
         if matches!(self.anchor, PathAnchor::Unresolved)
             && let Some(first) = self.segments.first()
         {
-            self.anchor = scope.anchor(&first.name);
+            self.anchor = scope.anchor(&first.name, namespace);
         }
 
+        // The arguments written at a segment are types, wherever the path itself is written:
+        // they are read in the type namespace of the module.
         for segment in &mut self.segments {
             for arg in &mut segment.args {
                 arg.resolve(scope);
@@ -195,7 +201,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        def_map::LocalEntry,
+        def_map::{LocalTarget, Namespace},
         id::{FunctionLoc, ItemLoc, ItemLocData, ModuleId},
         type_ref::TypeRef,
     };
@@ -214,9 +220,20 @@ mod tests {
         }
     }
 
+    /// The name of a class, which is a name of the type namespace.
+    fn class(name: &str) -> EntityLoc {
+        EntityLoc {
+            module: module(),
+            item: ItemLoc::Class(crate::id::ClassLoc(ItemLocData {
+                name: Some(Name::new(name)),
+                disambiguator: 0,
+            })),
+        }
+    }
+
     fn scope_with(name: &str) -> LocalScope {
         let mut scope = LocalScope::default();
-        scope.declare(Name::new(name), LocalEntry::Item(item(name)));
+        scope.declare(Name::new(name), LocalTarget::Item(class(name)));
         scope
     }
 
@@ -227,15 +244,25 @@ mod tests {
     #[test]
     fn a_path_resolves_against_the_names_of_the_module() {
         let mut path = path_of("foo");
-        path.resolve(&scope_with("foo"));
+        path.resolve(&scope_with("foo"), Namespace::Ty);
 
-        assert_eq!(path.anchor, PathAnchor::Item(item("foo")));
+        assert_eq!(path.anchor, PathAnchor::Item(class("foo")));
     }
 
     #[test]
     fn a_path_that_names_nothing_stays_unresolved() {
         let mut path = path_of("bar");
-        path.resolve(&scope_with("foo"));
+        path.resolve(&scope_with("foo"), Namespace::Ty);
+
+        assert_eq!(path.anchor, PathAnchor::Unresolved);
+    }
+
+    #[test]
+    fn a_path_is_resolved_in_the_namespace_it_is_read_in() {
+        // A class is a type, not a value: a path written where a value belongs is not
+        // answered for by a name of the type namespace.
+        let mut path = path_of("foo");
+        path.resolve(&scope_with("foo"), Namespace::Value);
 
         assert_eq!(path.anchor, PathAnchor::Unresolved);
     }
@@ -249,7 +276,7 @@ mod tests {
             }],
             anchor: PathAnchor::Unresolved,
         };
-        path.resolve(&scope_with("bar"));
+        path.resolve(&scope_with("bar"), Namespace::Ty);
 
         assert_eq!(path.anchor, PathAnchor::Unresolved);
         assert_eq!(path.segments[0].args, [TypeRef::Path(PathData {
@@ -257,7 +284,9 @@ mod tests {
                 name: Name::new("bar"),
                 args: Vec::new(),
             }],
-            anchor: PathAnchor::Item(item("bar")),
+            // An argument is a type wherever the path itself is written, so it is read in
+            // the type namespace of the module.
+            anchor: PathAnchor::Item(class("bar")),
         })],);
     }
 
@@ -267,8 +296,8 @@ mod tests {
         // and a module scope has no business overriding it.
         let mut path = PathData::ident(Name::new("foo"), PathAnchor::Item(item("foo")));
         let mut scope = LocalScope::default();
-        scope.declare(Name::new("foo"), LocalEntry::Item(item("other")));
-        path.resolve(&scope);
+        scope.declare(Name::new("foo"), LocalTarget::Item(item("other")));
+        path.resolve(&scope, Namespace::Value);
 
         assert_eq!(path.anchor, PathAnchor::Item(item("foo")));
     }

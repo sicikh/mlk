@@ -1,0 +1,17 @@
+// A class and a function that share a name: the namespaces of a module are separate, and a
+// name is read in the namespace the place it is written in asks for.
+
+type Box
+
+fun Box(): Box =
+    Box
+
+// A name written where a type belongs, where the module declares nothing of that name: what
+// the name denotes is not for the module alone to say, and the stage that holds the scopes of
+// the project is the one that reports it.
+
+fun helper(): Int =
+    1
+
+fun misused(): helper =
+    helper

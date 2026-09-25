@@ -1,6 +1,10 @@
 //! A reference to a type, and a type variable.
 
-use crate::{def_map::LocalScope, id::EntityLoc, path::PathData};
+use crate::{
+    def_map::{LocalScope, Namespace},
+    id::EntityLoc,
+    path::PathData,
+};
 
 /// A type as it is written.
 ///
@@ -20,9 +24,12 @@ pub enum TypeRef {
 
 impl TypeRef {
     /// Resolves the anchors the paths of this type left unresolved.
+    ///
+    /// A type is read where a type belongs, so the names of it are looked for in the type
+    /// namespace of the module that wrote them.
     pub(crate) fn resolve(&mut self, scope: &LocalScope) {
         match self {
-            Self::Path(path) => path.resolve(scope),
+            Self::Path(path) => path.resolve(scope, Namespace::Ty),
             Self::Infer | Self::Missing => {},
         }
     }

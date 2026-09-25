@@ -42,6 +42,9 @@ macro_rules! define_identity_family {
         /// The order of the variants is the order of the kinds in the identity model:
         /// it orders the erased name and the entries of a scope,
         /// so a variant is appended, never inserted, renamed, or removed.
+        ///
+        /// Where a name of an entity is looked for is
+        /// [`ItemKind::namespaces`](crate::def_map::Namespace).
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum ItemKind {
             $( $variant, )*

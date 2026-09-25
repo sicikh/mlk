@@ -6,7 +6,8 @@ expression: snapshot
 
 ```mlk
 // A module that declares one name twice: the first declaration is what the name means, and
-// the second is what the lowering reports.
+// the second is what the lowering reports. A name declared in another namespace is not a
+// duplicate of it, which is what `valid/namespaces.mlk` shows.
 
 type Int
 
@@ -15,6 +16,10 @@ fun size(value: Int): Int =
 
 fun size(value: Int): Int =
     value
+
+type Point
+
+type Point
 
 ```
 
@@ -34,6 +39,10 @@ ITEM TREE
     visibility: private
     param value: Int -> type Int
     ret: Int -> type Int
+  type Point  @1.3
+    visibility: private
+  type Point#1  @1.4
+    visibility: private
 ```
 
 ## Bodies
@@ -68,7 +77,8 @@ paths
 
 ## Lowering Diagnostics
 
-186..223: `fun size#1` is declared more than once in this module
+296..333: `fun size#1` is declared more than once in this module
+347..357: `type Point#1` is declared more than once in this module
 
 ## Parse Diagnostics
 

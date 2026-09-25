@@ -9,7 +9,7 @@
 //!
 //! [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 
-use mlkc_hir_def::{Body, BodyLoc, EntityLoc, ItemLocLike, ItemTree, LocalEntry, ModuleId, Name};
+use mlkc_hir_def::{Body, BodyLoc, ItemLocLike, ItemTree, ModuleId, Name, Namespace, PathAnchor};
 use mlkc_lower::{LoweredModule, lower_body, lower_module};
 use mlkc_parser_core::AnyParse;
 use mlkc_syntax::ModuleRoot;
@@ -38,6 +38,22 @@ fun added(): Int = 0
 fun second(): Int = 2
 ";
 
+/// A module where a function is called, and no other kind of entity is named after it.
+const CALLED: &str = "\
+fun Box(): Int = 1
+
+fun use_box(): Int = Box
+";
+
+/// The same module with a class declared under the name the function has.
+const CALLED_AND_NAMED_ELSEWHERE: &str = "\
+type Box
+
+fun Box(): Int = 1
+
+fun use_box(): Int = Box
+";
+
 fn parse(source: &str) -> AnyParse {
     mlkc_parser::parse(source)
 }
@@ -49,17 +65,17 @@ fn lower(source: &str) -> LoweredModule {
     lower_module(ModuleId(FileId::from_raw(0)), &root)
 }
 
-/// The name of a module-level entity the module declares, as a dependent records it.
-fn entity_loc(tree: &ItemTree, name: &str) -> EntityLoc {
-    let entry = tree
-        .scope()
-        .get(&Name::new(name))
-        .unwrap_or_else(|| panic!("the module to declare `{name}`"));
+/// The anchor of a name the module declares where a value belongs, which is what a dependent
+/// of an entity records about it.
+fn entity_anchor(tree: &ItemTree, name: &str) -> PathAnchor {
+    let anchor = tree.scope().anchor(&Name::new(name), Namespace::Value);
 
-    match entry {
-        LocalEntry::Item(item) => item.clone(),
-        LocalEntry::Use(item) => panic!("`{name}` is an import, not an entity: {item:?}"),
-    }
+    assert!(
+        matches!(anchor, PathAnchor::Item(_)),
+        "the module to declare an entity named `{name}`",
+    );
+
+    anchor
 }
 
 /// The body of the function `name`, lowered from the declaration it is written in.
@@ -75,7 +91,9 @@ fn body_of(lowered: &LoweredModule, name: &str) -> Body {
         })
         .unwrap_or_else(|| panic!("the module to declare a body of `{name}`"));
 
-    lower_body(&lowered.item_tree, &decl.decl).body
+    lower_body(&lowered.item_tree, &decl.decl)
+        .expect("a declaration of the work list to declare a body")
+        .body
 }
 
 #[test]
@@ -108,7 +126,9 @@ fn an_added_entity_leaves_the_data_of_its_neighbours_alone() {
     // name means. The positions the item tree records do change, since the module is longer,
     // and a position is not what a dependent keys on.
     for name in ["first", "second"] {
-        let loc = entity_loc(&before.item_tree, name);
+        let PathAnchor::Item(loc) = entity_anchor(&before.item_tree, name) else {
+            panic!("`{name}` to be an entity of the module");
+        };
         let data = before
             .item_tree
             .entity_data(loc.item.clone())
@@ -129,4 +149,16 @@ fn an_added_entity_leaves_the_bodies_of_its_neighbours_alone() {
 
     assert_eq!(body_of(&before, "first"), body_of(&after, "first"));
     assert_eq!(body_of(&before, "second"), body_of(&after, "second"));
+}
+
+#[test]
+fn an_entity_added_in_another_namespace_leaves_a_body_alone() {
+    let before = lower(CALLED);
+    let after = lower(CALLED_AND_NAMED_ELSEWHERE);
+
+    // A class named like a function is not what a call of the function is anchored to, however
+    // the module is ordered: what the name denotes where a value belongs did not change, so the
+    // body that wrote it is the body the driver already holds. With one scope for all names it
+    // would have been the class, and every call of the function would have been re-lowered.
+    assert_eq!(body_of(&before, "use_box"), body_of(&after, "use_box"));
 }

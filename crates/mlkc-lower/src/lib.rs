@@ -52,8 +52,11 @@
 //!
 //! // The bodies, lowered one at a time, from the declarations they are written in.
 //! for decl in &lowered.bodies {
-//!     let lowered_body = lower_body(tree, &decl.decl);
-//!     assert!(lowered_body.diagnostics.is_empty());
+//!     // The work list holds the declarations that declare a body, so every one of them has
+//!     // one; a declaration that declares none has no body to lower.
+//!     if let Some(lowered_body) = lower_body(tree, &decl.decl) {
+//!         assert!(lowered_body.diagnostics.is_empty());
+//!     }
 //! }
 //! ```
 //!
@@ -96,7 +99,8 @@ pub struct LoweredModule {
 /// One entity that owns a body, and the declaration the body is written in.
 ///
 /// The name is what a body is remembered by: a body has no name of its own, and the entity
-/// that owns it plus the syntax it was lowered from identify it.
+/// that owns it plus the syntax it was lowered from identify it. What the declaration
+/// declares is a body: a declaration that declares none is not in the list.
 #[derive(Clone)]
 pub struct BodyDecl {
     /// The name of the entity that owns the body.
@@ -134,14 +138,15 @@ pub fn lower_module(module: ModuleId, root: &ModuleRoot) -> LoweredModule {
     item::lower(module, root)
 }
 
-/// Lowers the body of a function.
+/// Lowers the body of a function, or nothing if the declaration declares no body.
 ///
 /// `tree` is the item tree of the module the function is declared in: a path of the body
-/// that names nothing inside the body is anchored against the names that module declares.
+/// that names nothing inside the body is anchored against the names that module declares,
+/// where a value belongs.
 ///
-/// A function that declares no body of its own lowers to a body whose root is a missing
-/// expression: its parameters are read, and a caller does not need a case for a declaration
-/// that has no body.
-pub fn lower_body(tree: &ItemTree, decl: &FunDecl) -> LoweredBody {
+/// A declaration that declares no body --- a function of a prelude, or an external one --- has
+/// none here: there is no body to hold, and [`LoweredModule::bodies`] is the list of the
+/// declarations that declare one.
+pub fn lower_body(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
     body::lower(tree, decl)
 }

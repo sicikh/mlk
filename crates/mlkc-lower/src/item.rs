@@ -1,8 +1,8 @@
 //! The surface of one module: the items it declares, and the bodies they own.
 
 use mlkc_hir_def::{
-    BodyEntityLoc, ClassData, EntityData, EntityLoc, FunctionData, ItemLocLike, ItemSyntaxLoc,
-    ItemTreeBuilder, ModuleId, Name, Visibility,
+    BodyEntityLoc, ClassData, EntityData, EntityLoc, FunctionData, ItemSyntaxLoc, ItemTreeBuilder,
+    ModuleId, Name, Visibility,
 };
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl};
@@ -114,22 +114,22 @@ impl ItemLowering {
         name: Option<Name>,
         data: EntityData,
     ) -> EntityLoc {
-        // A name that is not there is not a name the module declared twice, however many
-        // entities are missing one: the parse reports the missing name, and there is nothing
-        // for a duplicate to be about.
-        let named = name.as_ref().is_some_and(|name| !name.is_missing());
-        let loc = self.builder.declare(name, data, position);
+        let declared = self.builder.declare(name, data, position);
 
-        // The first declaration of a name wins, and the one that lost is what a diagnostic
-        // is about: the module declared the same name twice, and which of the two its uses
-        // mean is not for a scope to decide.
-        if named && loc.item.disambiguator() > 0 {
-            let message = format!("`{:?}` is declared more than once in this module", loc.item);
+        // The first declaration of a name in a namespace wins, and the one that lost is what a
+        // diagnostic is about: the module declared the same name twice, and which of the two
+        // its uses mean is not for a scope to decide. A name a module declares in another
+        // namespace is not in the way of this one, and is not what this is about.
+        if declared.duplicate {
+            let message = format!(
+                "`{:?}` is declared more than once in this module",
+                declared.loc.item,
+            );
             let diagnostic = LoweringDiag::new(message, syntax::span(self.file, node));
 
             self.diagnostics.push(diagnostic);
         }
 
-        loc
+        declared.loc
     }
 }

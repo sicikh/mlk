@@ -1,5 +1,6 @@
 // A module that declares one name twice: the first declaration is what the name means, and
-// the second is what the lowering reports.
+// the second is what the lowering reports. A name declared in another namespace is not a
+// duplicate of it, which is what `valid/namespaces.mlk` shows.
 
 type Int
 
@@ -8,3 +9,7 @@ fun size(value: Int): Int =
 
 fun size(value: Int): Int =
     value
+
+type Point
+
+type Point

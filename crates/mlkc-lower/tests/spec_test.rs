@@ -97,7 +97,10 @@ fn bodies(lowered: &LoweredModule) -> Vec<LoweredBody> {
     lowered
         .bodies
         .iter()
-        .map(|decl| lower_body(&lowered.item_tree, &decl.decl))
+        .map(|decl| {
+            lower_body(&lowered.item_tree, &decl.decl)
+                .expect("a declaration of the work list to declare a body")
+        })
         .collect()
 }
 

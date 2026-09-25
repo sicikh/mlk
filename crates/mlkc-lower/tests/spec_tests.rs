@@ -43,8 +43,12 @@ spec_tests! {
     // to be inferred.
     types: "valid/types.mlk",
 
-    // A module of declarations that declare no body: what they are is their signature.
+    // Declarations that declare no body: what they are is their signature.
     no_body: "valid/no_body.mlk",
+
+    // A class and a function that share a name: the two are names of different namespaces, and
+    // a name is read in the one the place it is written in asks for.
+    namespaces: "valid/namespaces.mlk",
 
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign.

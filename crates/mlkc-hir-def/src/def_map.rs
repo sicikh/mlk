@@ -6,20 +6,134 @@ use std::collections::BTreeMap;
 use indexmap::IndexMap;
 
 use crate::{
-    id::{EntityLoc, ModuleId, UseLoc},
+    id::{EntityLoc, ItemKind, ItemLocLike, ModuleId, UseLoc},
     item_data::Visibility,
     name::Name,
     path::PathAnchor,
     project_graph::ModuleLocator,
 };
 
-/// What one name of a module denotes once only that module has been read.
+/// A namespace of a name: where a name is looked for, and what it denotes there.
+///
+/// The language has the same namespaces a resolved scope has ([`PerNs`]), so that a name
+/// written in one of them means the same thing whether the module alone or the whole project
+/// is what answers for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Namespace {
+    /// Where a name written in the place of a type is looked for.
+    Ty,
+    /// Where a name written in the place of a value is looked for.
+    Value,
+    /// Where a name that starts a path to a module is looked for.
+    Module,
+}
+
+impl ItemKind {
+    /// The namespaces an entity of this kind is declared in.
+    ///
+    /// The rule is here, next to the namespaces it is about, and a caller that records a
+    /// declaration asks it rather than deciding for itself.
+    ///
+    /// - a class is in the type namespace, and a function, a value, and a constant are in the
+    ///   value namespace. A class that has a value of its own --- a constructor, or an
+    ///   instance of it as a value --- is in both, which is what putting its name in both
+    ///   here would say;
+    /// - an `impl` has no name of its own, and a `use` is an entry of the import table:
+    ///   the namespace an import lands in is what the import resolves to, which is not
+    ///   something the module alone can say ([ADR-0004]).
+    ///
+    /// [ADR-0004]: ../../docs/adr/0004-module-system.md
+    pub const fn namespaces(self) -> &'static [Namespace] {
+        match self {
+            Self::Class => &[Namespace::Ty],
+            Self::Function | Self::Value | Self::Const => &[Namespace::Value],
+            Self::Impl | Self::Use => &[],
+        }
+    }
+}
+
+/// What one name of a module denotes in one namespace.
+///
+/// Both variants are names by the rules of [ADR-0010]: an entity of this module, or an entry
+/// of the import table of this module. Neither of them points outside the module.
+///
+/// [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LocalEntry {
+pub enum LocalTarget {
     /// An entity the module declares.
     Item(EntityLoc),
     /// An entry of the module's import table.
     Use(UseLoc),
+}
+
+impl LocalTarget {
+    /// What a path that names this target is anchored to.
+    pub fn anchor(&self) -> PathAnchor {
+        match self {
+            Self::Item(item) => PathAnchor::Item(item.clone()),
+            Self::Use(entry) => PathAnchor::Use(entry.clone()),
+        }
+    }
+}
+
+/// What one name of a module denotes, in the namespaces of that module.
+///
+/// A name may denote more than one thing at once: a class and a value may share a name, and a
+/// name an import brings in may be a name an entity of the module has as well. What a name
+/// denotes is therefore read per namespace, and the place a name is written in is what says
+/// which namespace it is read in.
+///
+/// An import is held apart from the namespaces rather than written into them: which namespace
+/// an import lands in is what the import resolves to, and the module alone cannot say
+/// ([ADR-0004]). A name the module declares is what the name denotes in a namespace it is
+/// declared in, and an import of the name is what it denotes in a namespace the module
+/// declares nothing in.
+///
+/// [ADR-0004]: ../../docs/adr/0004-module-system.md
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LocalEntry {
+    /// The type namespace: what the name denotes where a type belongs.
+    pub ty: Option<LocalTarget>,
+    /// The value namespace: what the name denotes where a value belongs.
+    pub value: Option<LocalTarget>,
+    /// The module namespace: what the name denotes at the start of a path to a module.
+    pub module: Option<LocalTarget>,
+    /// What an import of the name brings in, whichever namespace it lands in.
+    pub import: Option<UseLoc>,
+}
+
+impl LocalEntry {
+    /// What the name denotes in `namespace`.
+    pub fn get(&self, namespace: Namespace) -> Option<&LocalTarget> {
+        match namespace {
+            Namespace::Ty => self.ty.as_ref(),
+            Namespace::Value => self.value.as_ref(),
+            Namespace::Module => self.module.as_ref(),
+        }
+    }
+
+    /// The namespaces the name denotes something in, in the order of [`Namespace`].
+    pub fn iter(&self) -> impl Iterator<Item = (Namespace, &LocalTarget)> {
+        [Namespace::Ty, Namespace::Value, Namespace::Module]
+            .into_iter()
+            .filter_map(|namespace| Some((namespace, self.get(namespace)?)))
+    }
+
+    /// Whether the name denotes nothing at all.
+    ///
+    /// A name that only an import brings in is not empty: what it denotes is that import.
+    pub fn is_none(&self) -> bool {
+        self.ty.is_none() && self.value.is_none() && self.module.is_none() && self.import.is_none()
+    }
+
+    /// The slot of one namespace of the name.
+    fn slot_mut(&mut self, namespace: Namespace) -> &mut Option<LocalTarget> {
+        match namespace {
+            Namespace::Ty => &mut self.ty,
+            Namespace::Value => &mut self.value,
+            Namespace::Module => &mut self.module,
+        }
+    }
 }
 
 /// The names a module declares, and what each of them denotes.
@@ -28,6 +142,11 @@ pub enum LocalEntry {
 /// or to an entry of its import table, and no other module is read ([ADR-0004]).
 /// The targets of imports appear when a [`ModuleScope`] resolves them.
 ///
+/// The namespaces of a name are separate ([`Namespace`]), which is what keeps a name of one of
+/// them out of the way of a name of another: a module that is edited to declare a function
+/// named like a class of its own changes what the name means where a value belongs, and leaves
+/// what it means where a type belongs alone.
+///
 /// [ADR-0004]: ../../docs/adr/0004-module-system.md
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalScope {
@@ -35,35 +154,82 @@ pub struct LocalScope {
 }
 
 impl LocalScope {
-    /// Records a declaration of a name.
+    /// Records what the module declares under a name, and returns whether the name was free.
     ///
-    /// The first declaration of a name wins: a duplicate is an error that a diagnostic
-    /// reports, and a scope does not decide which of the two the module meant.
-    /// Returns whether the name was new.
-    pub fn declare(&mut self, name: Name, entry: LocalEntry) -> bool {
-        if self.entries.contains_key(&name) {
-            return false;
+    /// The namespaces a declaration takes are the namespaces of its kind, and an import takes
+    /// the import table. The first declaration of a name in a namespace wins: a declaration
+    /// that finds the name taken there is not recorded in that namespace, and what is left for
+    /// a diagnostic to report is that the module wrote the name twice. A name that is not
+    /// there is not a name the module declared, so nothing is recorded and no name is taken.
+    ///
+    /// A name is inserted where the module first declares it, in any namespace; a declaration
+    /// of the same name in another namespace joins the entry that is already there. The order
+    /// of the entries is therefore the order of the module's names, not of its declarations.
+    pub fn declare(&mut self, name: Name, target: LocalTarget) -> bool {
+        if records_nothing(&name, &target) {
+            return true;
         }
 
-        self.entries.insert(name, entry);
-        true
+        let entry = self.entries.entry(name).or_default();
+
+        match target {
+            LocalTarget::Item(entity) => {
+                let mut free = true;
+
+                for &namespace in entity.item.kind().namespaces() {
+                    let slot = entry.slot_mut(namespace);
+
+                    if slot.is_some() {
+                        free = false;
+                    } else {
+                        *slot = Some(LocalTarget::Item(entity.clone()));
+                    }
+                }
+
+                free
+            },
+            // An import is an entry of the import table, and a name of the module is not an
+            // import of it: the two are separate, and a name the module declares is what it
+            // denotes in a namespace it is declared in.
+            LocalTarget::Use(import) => {
+                if entry.import.is_some() {
+                    return false;
+                }
+
+                entry.import = Some(import);
+                true
+            },
+        }
     }
 
-    /// What a name denotes, if the module declares one.
+    /// What the module declares under a name, in every namespace it declares it in.
     pub fn get(&self, name: &Name) -> Option<&LocalEntry> {
         self.entries.get(name)
     }
 
     /// The anchor a name resolves to against the names of this module alone.
     ///
-    /// The rule lives here, once, so that the item tree's builder
-    /// and the lowering of a body resolve a module-level name the same way.
+    /// The rule lives here, once, so that the item tree's builder and the lowering of a body
+    /// resolve a name the same way. A name the module declares is what it denotes in a
+    /// namespace it is declared in; in a namespace the module declares nothing in, an import
+    /// of the name is what it denotes, since which namespace an import lands in is what the
+    /// import resolves to. A name the module says nothing about is unresolved, and so is a
+    /// name it declares in another namespace, which only the scope of the whole project can
+    /// tell apart from a name of another module.
+    ///
     /// A caller that also knows the bindings and the type variables of the body it lowers
     /// checks those first, and falls back to this.
-    pub fn anchor(&self, name: &Name) -> PathAnchor {
-        match self.get(name) {
-            Some(LocalEntry::Item(item)) => PathAnchor::Item(item.clone()),
-            Some(LocalEntry::Use(entry)) => PathAnchor::Use(entry.clone()),
+    pub fn anchor(&self, name: &Name, namespace: Namespace) -> PathAnchor {
+        let Some(entry) = self.entries.get(name) else {
+            return PathAnchor::Unresolved;
+        };
+
+        if let Some(target) = entry.get(namespace) {
+            return target.anchor();
+        }
+
+        match &entry.import {
+            Some(import) => PathAnchor::Use(import.clone()),
             None => PathAnchor::Unresolved,
         }
     }
@@ -84,7 +250,26 @@ impl LocalScope {
     }
 }
 
+/// Whether a declaration has nothing to record, and so takes no name.
+///
+/// A name that is not there is not a name the module declared, and so is not a duplicate of
+/// one; and an entity of a kind whose namespaces are none --- an `impl`, which has no name of
+/// its own either --- has no name to lodge anywhere.
+fn records_nothing(name: &Name, target: &LocalTarget) -> bool {
+    if name.is_missing() {
+        return true;
+    }
+
+    match target {
+        LocalTarget::Item(entity) => entity.item.kind().namespaces().is_empty(),
+        LocalTarget::Use(_) => false,
+    }
+}
+
 /// What one name denotes in the namespaces of a resolved scope.
+///
+/// The same three namespaces a [`LocalScope`] holds, filled in with what the import tables of
+/// the project resolved to rather than with what one module says on its own.
 ///
 /// An empty namespace is `None`; a name may be in more than one at once,
 /// because a class and a value may share a name.
@@ -188,7 +373,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        id::{FunctionLoc, ItemKind, ItemLoc, ItemLocData, UseLoc},
+        id::ItemLoc,
         path::{PlainPath, PlainPathId},
     };
 
@@ -196,26 +381,134 @@ mod tests {
         ModuleId(FileId::from_raw(index))
     }
 
-    fn entity(name: &str) -> EntityLoc {
+    fn entity(name: &str, kind: ItemKind) -> EntityLoc {
         EntityLoc {
             module: module(0),
-            item: ItemLoc::Function(FunctionLoc(ItemLocData {
-                name: Some(Name::new(name)),
-                disambiguator: 0,
-            })),
+            item: ItemLoc::new(kind, Some(Name::new(name)), 0),
         }
     }
 
+    fn function(name: &str) -> LocalTarget {
+        LocalTarget::Item(entity(name, ItemKind::Function))
+    }
+
+    fn class(name: &str) -> LocalTarget {
+        LocalTarget::Item(entity(name, ItemKind::Class))
+    }
+
+    fn import(name: &str) -> LocalTarget {
+        LocalTarget::Use(
+            UseLoc::try_from(ItemLoc::new(ItemKind::Use, Some(Name::new(name)), 0)).expect("a use"),
+        )
+    }
+
     #[test]
-    fn the_first_declaration_of_a_name_wins() {
+    fn the_first_declaration_of_a_name_in_a_namespace_wins() {
         let mut scope = LocalScope::default();
 
-        assert!(scope.declare(Name::new("foo"), LocalEntry::Item(entity("first"))));
-        assert!(!scope.declare(Name::new("foo"), LocalEntry::Item(entity("second"))));
+        assert!(scope.declare(Name::new("foo"), function("first")));
+        assert!(!scope.declare(Name::new("foo"), function("second")));
         assert_eq!(scope.len(), 1);
+
+        let entry = scope.get(&Name::new("foo")).expect("the name to be there");
+        assert_eq!(entry.value, Some(function("first")));
+    }
+
+    #[test]
+    fn a_class_and_a_function_may_share_a_name() {
+        let mut scope = LocalScope::default();
+
+        assert!(scope.declare(Name::new("Box"), class("Box")));
+        assert!(scope.declare(Name::new("Box"), function("Box")));
+        assert_eq!(scope.len(), 1);
+
+        // The two are separate, and a name is read in the namespace the place it is written
+        // in asks for.
+        let entry = scope.get(&Name::new("Box")).expect("the name to be there");
+        assert_eq!(entry.ty, Some(class("Box")));
+        assert_eq!(entry.value, Some(function("Box")));
         assert_eq!(
-            scope.get(&Name::new("foo")),
-            Some(&LocalEntry::Item(entity("first")))
+            scope.anchor(&Name::new("Box"), Namespace::Ty),
+            class("Box").anchor(),
+        );
+        assert_eq!(
+            scope.anchor(&Name::new("Box"), Namespace::Value),
+            function("Box").anchor(),
+        );
+    }
+
+    #[test]
+    fn a_name_declared_in_one_namespace_is_not_in_another() {
+        let mut scope = LocalScope::default();
+        scope.declare(Name::new("helper"), function("helper"));
+
+        // A function is not a type: the module alone has nothing to say about `helper` where a
+        // type belongs, and a name that is not there is a name the scope does not answer for.
+        assert_eq!(
+            scope.anchor(&Name::new("helper"), Namespace::Ty),
+            PathAnchor::Unresolved,
+        );
+        assert_eq!(
+            scope.anchor(&Name::new("helper"), Namespace::Value),
+            function("helper").anchor(),
+        );
+    }
+
+    #[test]
+    fn a_name_an_import_brings_in_is_what_it_denotes_in_every_namespace() {
+        let mut scope = LocalScope::default();
+        assert!(scope.declare(Name::new("bar"), import("bar")));
+
+        // Which namespace an import lands in is what the import resolves to, so a name the
+        // module only imports is what the name denotes wherever it is written.
+        let anchor = scope.anchor(&Name::new("bar"), Namespace::Ty);
+        assert_eq!(anchor, scope.anchor(&Name::new("bar"), Namespace::Value));
+        assert_eq!(anchor, scope.anchor(&Name::new("bar"), Namespace::Module));
+        assert_eq!(anchor, import("bar").anchor());
+    }
+
+    #[test]
+    fn a_name_the_module_declares_shadows_an_import_of_it() {
+        let mut scope = LocalScope::default();
+        scope.declare(Name::new("foo"), import("foo"));
+        assert!(scope.declare(Name::new("foo"), class("foo")));
+
+        // The declaration is what the name denotes where a type belongs, and the import is
+        // what it denotes where the module declares nothing.
+        assert_eq!(
+            scope.anchor(&Name::new("foo"), Namespace::Ty),
+            class("foo").anchor(),
+        );
+        assert_eq!(
+            scope.anchor(&Name::new("foo"), Namespace::Value),
+            import("foo").anchor(),
+        );
+    }
+
+    #[test]
+    fn an_entity_of_a_kind_with_no_namespace_of_its_own_is_in_no_scope() {
+        let mut scope = LocalScope::default();
+
+        // An `impl` has no name of its own to declare, and a name that would have lodged
+        // nothing anywhere is not a name of the module.
+        assert!(scope.declare(
+            Name::new("impl"),
+            LocalTarget::Item(entity("impl", ItemKind::Impl))
+        ));
+        assert!(scope.is_empty());
+    }
+
+    #[test]
+    fn a_name_that_is_not_there_is_not_a_name_the_module_declares() {
+        let mut scope = LocalScope::default();
+
+        // Nothing is recorded, and nothing is taken: a name that is not there is no duplicate
+        // of a name that is, and no path can name it.
+        assert!(scope.declare(Name::missing(), function("foo")));
+        assert!(scope.is_empty());
+        assert_eq!(
+            scope.anchor(&Name::missing(), Namespace::Value),
+            PathAnchor::Unresolved,
         );
     }
 
@@ -236,19 +529,28 @@ mod tests {
     }
 
     #[test]
-    fn a_name_anchors_to_what_the_module_declares() {
+    fn the_entry_of_a_name_reads_in_every_namespace_it_denotes_in() {
         let mut scope = LocalScope::default();
-        scope.declare(Name::new("foo"), LocalEntry::Item(entity("foo")));
-        let import = UseLoc::try_from(ItemLoc::new(ItemKind::Use, Some(Name::new("bar")), 0))
-            .expect("a use");
-        scope.declare(Name::new("bar"), LocalEntry::Use(import.clone()));
+        scope.declare(Name::new("Box"), class("Box"));
+        scope.declare(Name::new("Box"), function("Box"));
 
-        assert_eq!(
-            scope.anchor(&Name::new("foo")),
-            PathAnchor::Item(entity("foo"))
-        );
-        assert_eq!(scope.anchor(&Name::new("bar")), PathAnchor::Use(import));
-        assert_eq!(scope.anchor(&Name::new("baz")), PathAnchor::Unresolved);
+        let entry = scope.get(&Name::new("Box")).expect("the name to be there");
+        let namespaces: Vec<_> = entry.iter().map(|(namespace, _)| namespace).collect();
+
+        assert_eq!(namespaces, [Namespace::Ty, Namespace::Value]);
+        assert!(!entry.is_none());
+    }
+
+    #[test]
+    fn the_names_of_a_module_read_in_the_order_it_declares_them() {
+        let mut scope = LocalScope::default();
+        scope.declare(Name::new("second"), function("second"));
+        scope.declare(Name::new("first"), function("first"));
+        // A name declared in another namespace is not a second name of the module.
+        scope.declare(Name::new("second"), class("second"));
+
+        let names: Vec<_> = scope.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["second", "first"]);
     }
 
     #[test]
@@ -272,5 +574,15 @@ mod tests {
 
         let order: Vec<_> = map.iter().map(|(module, _)| module).collect();
         assert_eq!(order, [module(0), module(1)]);
+    }
+
+    #[test]
+    fn the_kinds_of_a_namespace_are_the_ones_the_language_declares() {
+        assert_eq!(ItemKind::Class.namespaces(), [Namespace::Ty]);
+        assert_eq!(ItemKind::Function.namespaces(), [Namespace::Value]);
+        assert_eq!(ItemKind::Value.namespaces(), [Namespace::Value]);
+        assert_eq!(ItemKind::Const.namespaces(), [Namespace::Value]);
+        assert!(ItemKind::Impl.namespaces().is_empty());
+        assert!(ItemKind::Use.namespaces().is_empty());
     }
 }

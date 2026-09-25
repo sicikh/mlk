@@ -44,6 +44,9 @@ pub struct Signature {
 
 impl Signature {
     /// Resolves the anchors the paths of this signature left unresolved.
+    ///
+    /// Every type of a signature is read where a type belongs: the names it is made of are
+    /// looked for in the type namespace of the module.
     pub(crate) fn resolve(&mut self, scope: &LocalScope) {
         for param in &mut self.params {
             if let Some(ty) = &mut param.ty {
@@ -133,6 +136,10 @@ impl EntityData {
     }
 
     /// Resolves the anchors the paths of this data left unresolved.
+    ///
+    /// The paths a kind of entity holds are read where the language writes them: a class, a
+    /// constant, and an `impl` name types, and a `use` names an import, which is a path of the
+    /// import table rather than a path in a namespace of the module.
     pub(crate) fn resolve(&mut self, scope: &LocalScope) {
         match self {
             Self::Function(data) => data.signature.resolve(scope),
@@ -184,7 +191,10 @@ mod tests {
     #[test]
     fn a_signature_resolves_its_anchors() {
         let mut scope = LocalScope::default();
-        scope.declare(Name::new("T"), crate::def_map::LocalEntry::Item(class("T")));
+        scope.declare(
+            Name::new("T"),
+            crate::def_map::LocalTarget::Item(class("T")),
+        );
 
         let mut data = FunctionData {
             visibility: Visibility::Public,

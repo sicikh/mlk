@@ -6,7 +6,7 @@ use mlkc_la_arena::{Arena, Idx};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    def_map::{LocalEntry, LocalScope},
+    def_map::{LocalScope, LocalTarget},
     id::{
         BodyLoc, ClassLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind, ItemLoc,
         ItemLocLike, ModuleClassId, ModuleConstId, ModuleDefId, ModuleDefWithBodyId,
@@ -245,6 +245,20 @@ pub trait ModuleEntity: Copy + Into<ModuleDefId> + TryFrom<ModuleDefId> {
     fn data(self, tree: &ItemTree) -> &Self::Data;
 }
 
+/// What declaring an entity of a module produced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Declared {
+    /// The name of the entity, which is what it is addressed by.
+    pub loc: EntityLoc,
+    /// Whether the module declared the name in a namespace this entity is declared in.
+    ///
+    /// The scope keeps the first declaration and the item tree keeps both entities, so that a
+    /// name the module wrote twice is still nameable; what the duplicate means is a diagnostic
+    /// the caller reports. An entity whose name is not there is no duplicate of anything, and
+    /// neither is an entity with no name of its own.
+    pub duplicate: bool,
+}
+
 /// Builds the item tree of one module.
 ///
 /// The builder is the only thing that mints names: it owns the counter that disambiguates
@@ -276,7 +290,7 @@ impl ItemTreeBuilder {
         }
     }
 
-    /// Declares one entity of the module, and returns its name.
+    /// Declares one entity of the module, and returns what declaring it produced.
     ///
     /// `name` is `None` for an entity that has no name of its own, such as an `impl`;
     /// such an entity takes part in the order of the module and in nothing else.
@@ -285,7 +299,7 @@ impl ItemTreeBuilder {
         name: Option<Name>,
         data: EntityData,
         syntax: ItemSyntaxLoc,
-    ) -> EntityLoc {
+    ) -> Declared {
         let kind = data.kind();
         let disambiguator = {
             let counter = self.declared.entry((kind, name.clone())).or_default();
@@ -302,27 +316,35 @@ impl ItemTreeBuilder {
         let id = def_id(self.entities[ix].data(), ix);
         self.names.insert(item.clone(), id);
 
-        if let Some(name) = name {
-            // A `use` is an entry of the module's import table and not a definition of it:
-            // a name it introduces denotes whatever the use resolves to, which the module alone
-            // cannot know, and the stage that holds the scopes is what resolves it further.
-            let entry = match &item {
-                ItemLoc::Use(use_loc) => LocalEntry::Use(use_loc.clone()),
-                _ => {
-                    LocalEntry::Item(EntityLoc {
-                        module: self.module,
-                        item: item.clone(),
-                    })
-                },
-            };
-            // The first declaration of a name wins; a duplicate is an error
-            // that the diagnostics of the stage report, not a thing a scope decides.
-            self.scope.declare(name, entry);
-        }
+        // What a name denotes in this module is recorded as the module declares it: a target
+        // of this module, or an entry of its import table, since a `use` is not a definition
+        // of it.
+        let duplicate = match name {
+            Some(name) => {
+                let target = match &item {
+                    ItemLoc::Use(import) => LocalTarget::Use(import.clone()),
+                    _ => {
+                        LocalTarget::Item(EntityLoc {
+                            module: self.module,
+                            item: item.clone(),
+                        })
+                    },
+                };
 
-        EntityLoc {
-            module: self.module,
-            item,
+                // The scope keeps the first declaration of a name in a namespace, and the one
+                // that was not recorded is what a diagnostic is about.
+                !self.scope.declare(name, target)
+            },
+            // An entity with no name of its own is in no scope, and is no duplicate of one.
+            None => false,
+        };
+
+        Declared {
+            loc: EntityLoc {
+                module: self.module,
+                item,
+            },
+            duplicate,
         }
     }
 
@@ -349,6 +371,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        def_map::{LocalEntry, LocalTarget, Namespace},
         id::{FunctionLoc, UseLoc, WrongKind},
         item_data::{ParamData, Signature, Visibility},
         path::{PathAnchor, PathData, PlainPath, PlainPathId},
@@ -477,25 +500,72 @@ mod tests {
         // The scope keeps the first declaration of a name.
         assert_eq!(
             tree.scope().get(&Name::new("f")),
-            Some(&LocalEntry::Item(EntityLoc {
-                module: module(),
-                item: first,
-            })),
+            Some(&LocalEntry {
+                value: Some(LocalTarget::Item(EntityLoc {
+                    module: module(),
+                    item: first,
+                })),
+                ..LocalEntry::default()
+            }),
         );
     }
 
     #[test]
     fn an_entity_with_no_name_of_its_own_is_in_no_scope() {
         let mut builder = ItemTreeBuilder::new(module());
-        let loc = builder.declare(None, anonymous_impl(), syntax(0));
+        let declared = builder.declare(None, anonymous_impl(), syntax(0));
         let tree = builder.finish();
 
-        assert!(loc.item.name().is_none());
-        assert_eq!(loc.item.kind(), ItemKind::Impl);
+        assert!(declared.loc.item.name().is_none());
+        assert_eq!(declared.loc.item.kind(), ItemKind::Impl);
+        assert!(!declared.duplicate);
         assert_eq!(tree.scope().len(), 0);
         assert_eq!(
-            tree.entity_data(loc.item).map(EntityData::kind),
+            tree.entity_data(declared.loc.item).map(EntityData::kind),
             Some(ItemKind::Impl)
+        );
+    }
+
+    #[test]
+    fn an_entity_whose_name_is_not_there_is_in_no_scope() {
+        let mut builder = ItemTreeBuilder::new(module());
+        let first = builder.declare(Some(Name::missing()), function("f"), syntax(0));
+        let second = builder.declare(Some(Name::missing()), function("f"), syntax(1));
+        let tree = builder.finish();
+
+        // A name that is not there is not a name the module declares: nothing is recorded,
+        // and two entities whose names are lost are not duplicates of one another.
+        assert!(tree.scope().is_empty());
+        assert!(!first.duplicate);
+        assert!(!second.duplicate);
+        // Both entities are still entities of the module, told apart by their names.
+        assert_ne!(first.loc, second.loc);
+        assert_eq!(first.loc.item.disambiguator(), 0);
+        assert_eq!(second.loc.item.disambiguator(), 1);
+    }
+
+    #[test]
+    fn a_class_and_a_function_may_share_a_name() {
+        let mut builder = ItemTreeBuilder::new(module());
+        let class = builder.declare(Some(Name::new("Box")), class("Box"), syntax(0));
+        let function = builder.declare(Some(Name::new("Box")), function("Box"), syntax(1));
+        let tree = builder.finish();
+
+        // The two are names of the module in different namespaces, and neither is in the
+        // way of the other.
+        assert!(!class.duplicate);
+        assert!(!function.duplicate);
+        assert_eq!(
+            tree.scope().get(&Name::new("Box")).map(LocalEntry::is_none),
+            Some(false)
+        );
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Box"), Namespace::Ty),
+            PathAnchor::Item(class.loc),
+        );
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Box"), Namespace::Value),
+            PathAnchor::Item(function.loc),
         );
     }
 
@@ -505,9 +575,10 @@ mod tests {
 
         assert_eq!(
             tree.scope().get(&Name::new("project")),
-            Some(&LocalEntry::Use(
-                UseLoc::try_from(item("project", ItemKind::Use)).expect("a use"),
-            )),
+            Some(&LocalEntry {
+                import: Some(UseLoc::try_from(item("project", ItemKind::Use)).expect("a use")),
+                ..LocalEntry::default()
+            }),
         );
     }
 

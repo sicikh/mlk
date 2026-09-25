@@ -393,6 +393,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        body::Pat,
         def_map::{LocalEntry, LocalTarget, Namespace},
         id::{FunctionLoc, UseLoc, WrongKind},
         item_data::{Attributes, ParamData, Signature, Visibility},
@@ -617,7 +618,7 @@ mod tests {
                 visibility: Visibility::Public,
                 signature: Signature {
                     params: vec![ParamData {
-                        name: Name::new("x"),
+                        pat: Pat::Bind(Name::new("x")),
                         ty: Some(TypeRef::Path(PathData::ident(
                             Name::new("T"),
                             PathAnchor::Unresolved,

@@ -179,14 +179,14 @@ pub fn name(value_token: SyntaxToken) -> Name {
         SyntaxElement::Token(value_token),
     )]))
 }
-pub fn parameter(name: Name) -> ParameterBuilder {
+pub fn parameter(pat: Pat) -> ParameterBuilder {
     ParameterBuilder {
-        name,
+        pat,
         type_annotation: None,
     }
 }
 pub struct ParameterBuilder {
-    name: Name,
+    pat: Pat,
     type_annotation: Option<TypeAnnotation>,
 }
 impl ParameterBuilder {
@@ -196,7 +196,7 @@ impl ParameterBuilder {
     }
     pub fn build(self) -> Parameter {
         Parameter::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PARAMETER, [
-            Some(SyntaxElement::Node(self.name.into_syntax())),
+            Some(SyntaxElement::Node(self.pat.into_syntax())),
             self.type_annotation
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
         ]))
@@ -242,6 +242,11 @@ impl PathBuilder {
             Some(SyntaxElement::Node(self.segment.into_syntax())),
         ]))
     }
+}
+pub fn path_expr(path: Path) -> PathExpr {
+    PathExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_EXPR, [Some(
+        SyntaxElement::Node(path.into_syntax()),
+    )]))
 }
 pub fn path_qualifier(path: Path, dot_token: SyntaxToken) -> PathQualifier {
     PathQualifier::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_QUALIFIER, [
@@ -332,6 +337,12 @@ impl TypeDeclBuilder {
         ]))
     }
 }
+pub fn unary_expr(operator_token_token: SyntaxToken, operand: Expr) -> UnaryExpr {
+    UnaryExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::UNARY_EXPR, [
+        Some(SyntaxElement::Token(operator_token_token)),
+        Some(SyntaxElement::Node(operand.into_syntax())),
+    ]))
+}
 pub fn use_alias(as_token: SyntaxToken, name: Name) -> UseAlias {
     UseAlias::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_ALIAS, [
         Some(SyntaxElement::Token(as_token)),
@@ -371,11 +382,6 @@ impl UseDeclBuilder {
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
         ]))
     }
-}
-pub fn var_expr(name: Name) -> VarExpr {
-    VarExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::VAR_EXPR, [Some(
-        SyntaxElement::Node(name.into_syntax()),
-    )]))
 }
 pub fn wildcard_pat(underscore_token: SyntaxToken) -> WildcardPat {
     WildcardPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::WILDCARD_PAT, [Some(

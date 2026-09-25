@@ -1,0 +1,18 @@
+// A parameter is a pattern: a name the body binds and reads, and a wildcard it ignores. The
+// type is what a caller reads either way, and a parameter may leave it to be inferred where
+// the function is not public.
+
+@builtin
+type Int
+
+fun used(value: Int): Int =
+    value
+
+fun ignored(_: Int): Int =
+    1
+
+fun mixed(value: Int, _: Int): Int =
+    value
+
+fun inferred(value, _) =
+    value

@@ -40,7 +40,7 @@ params
 exprs
   expr#0  literal 1
 pats
-  pat#0  bind <missing>
+  pat#0  missing
 ```
 
 ```

@@ -50,6 +50,17 @@ pub enum Expr {
         /// The right operand.
         rhs: ExprId,
     },
+    /// A prefix operation: a sign written in front of an expression.
+    ///
+    /// The sign is kept as a node of its own rather than folded into what it applies to:
+    /// what it means is a question about the type of the operand, which the HIR does not
+    /// answer.
+    Unary {
+        /// The operator.
+        op: UnaryOp,
+        /// The operand.
+        operand: ExprId,
+    },
     /// The first expression, then the second.
     Seq {
         /// The expression evaluated first.
@@ -118,6 +129,31 @@ impl BinaryOp {
 }
 
 impl fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A unary operator, as the language spells it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum UnaryOp {
+    /// `-`
+    Neg,
+    /// `+`
+    Pos,
+}
+
+impl UnaryOp {
+    /// The operator as it is written.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Neg => "-",
+            Self::Pos => "+",
+        }
+    }
+}
+
+impl fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }

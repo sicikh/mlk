@@ -1,0 +1,123 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A parameter is a pattern: a name the body binds and reads, and a wildcard it ignores. The
+// type is what a caller reads either way, and a parameter may leave it to be inferred where
+// the function is not public.
+
+@builtin
+type Int
+
+fun used(value: Int): Int =
+    value
+
+fun ignored(_: Int): Int =
+    1
+
+fun mixed(value: Int, _: Int): Int =
+    value
+
+fun inferred(value, _) =
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @2.0
+    attributes: @builtin
+    visibility: private
+  fun used  @2.1
+    visibility: private
+    param value: Int -> type Int
+    ret: Int -> type Int
+  fun ignored  @2.2
+    visibility: private
+    param _: Int -> type Int
+    ret: Int -> type Int
+  fun mixed  @2.3
+    visibility: private
+    param value: Int -> type Int
+    param _: Int -> type Int
+    ret: Int -> type Int
+  fun inferred  @2.4
+    visibility: private
+    param value
+    param _
+```
+
+## Bodies
+
+```
+BODY fun used in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun ignored in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  literal 1
+pats
+  pat#0  _
+```
+
+```
+BODY fun mixed in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+  pat#1  _
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun inferred in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+  pat#1  _
+paths
+  path#0  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

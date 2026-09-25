@@ -79,8 +79,10 @@ ModuleRoot {
                 l_paren_token: L_PAREN@102..103 "(" [] [],
                 items: ParameterList [
                     Parameter {
-                        name: Name {
-                            value_token: IDENT@103..109 "value" [] [Whitespace(" ")],
+                        pat: IdentPat {
+                            name: Name {
+                                value_token: IDENT@103..109 "value" [] [Whitespace(" ")],
+                            },
                         },
                         type_annotation: TypeAnnotation {
                             colon_token: COLON@109..111 ":" [] [Whitespace(" ")],
@@ -169,17 +171,29 @@ ModuleRoot {
                     },
                     in_token: IN_KW@166..168 "in" [] [],
                     body: CallExpr {
-                        function: VarExpr {
-                            name: Name {
-                                value_token: IDENT@168..184 "println-int" [Newline("\n"), Whitespace("    ")] [],
+                        function: PathExpr {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    name: Name {
+                                        value_token: IDENT@168..184 "println-int" [Newline("\n"), Whitespace("    ")] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
                             },
                         },
                         l_paren_token: L_PAREN@184..185 "(" [] [],
                         arguments: ArgumentList [
                             BinExpr {
-                                lhs: VarExpr {
-                                    name: Name {
-                                        value_token: IDENT@185..187 "x" [] [Whitespace(" ")],
+                                lhs: PathExpr {
+                                    path: Path {
+                                        qualifier: missing (optional),
+                                        segment: PathSegment {
+                                            name: Name {
+                                                value_token: IDENT@185..187 "x" [] [Whitespace(" ")],
+                                            },
+                                            type_args: missing (optional),
+                                        },
                                     },
                                 },
                                 operator_token: PLUS@187..189 "+" [] [Whitespace(" ")],
@@ -239,8 +253,9 @@ ModuleRoot {
         0: L_PAREN@102..103 "(" [] []
         1: PARAMETER_LIST@103..114
           0: PARAMETER@103..114
-            0: NAME@103..109
-              0: IDENT@103..109 "value" [] [Whitespace(" ")]
+            0: IDENT_PAT@103..109
+              0: NAME@103..109
+                0: IDENT@103..109 "value" [] [Whitespace(" ")]
             1: TYPE_ANNOTATION@109..114
               0: COLON@109..111 ":" [] [Whitespace(" ")]
               1: PATH_TYPE@111..114
@@ -300,15 +315,23 @@ ModuleRoot {
               0: INT_LITERAL@163..166 "10" [] [Whitespace(" ")]
           4: IN_KW@166..168 "in" [] []
           5: CALL_EXPR@168..192
-            0: VAR_EXPR@168..184
-              0: NAME@168..184
-                0: IDENT@168..184 "println-int" [Newline("\n"), Whitespace("    ")] []
+            0: PATH_EXPR@168..184
+              0: PATH@168..184
+                0: (empty)
+                1: PATH_SEGMENT@168..184
+                  0: NAME@168..184
+                    0: IDENT@168..184 "println-int" [Newline("\n"), Whitespace("    ")] []
+                  1: (empty)
             1: L_PAREN@184..185 "(" [] []
             2: ARGUMENT_LIST@185..191
               0: BIN_EXPR@185..191
-                0: VAR_EXPR@185..187
-                  0: NAME@185..187
-                    0: IDENT@185..187 "x" [] [Whitespace(" ")]
+                0: PATH_EXPR@185..187
+                  0: PATH@185..187
+                    0: (empty)
+                    1: PATH_SEGMENT@185..187
+                      0: NAME@185..187
+                        0: IDENT@185..187 "x" [] [Whitespace(" ")]
+                      1: (empty)
                 1: PLUS@187..189 "+" [] [Whitespace(" ")]
                 2: INT_LITERAL@189..191
                   0: INT_LITERAL@189..191 "20" [] []

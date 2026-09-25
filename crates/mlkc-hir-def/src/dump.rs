@@ -178,14 +178,29 @@ fn entity_data(dump: &mut Dump, data: &EntityData, module: ModuleId) {
 /// The lines of a signature, parameters first.
 fn signature(dump: &mut Dump, signature: &Signature, module: ModuleId) {
     for param in &signature.params {
+        let pat = parameter_text(&param.pat);
+
         match &param.ty {
-            Some(ty) => dump.line(format!("param {:?}: {}", param.name, type_ref(ty, module))),
-            None => dump.line(format!("param {:?}", param.name)),
+            Some(ty) => dump.line(format!("param {pat}: {}", type_ref(ty, module))),
+            None => dump.line(format!("param {pat}")),
         }
     }
 
     if let Some(ret) = &signature.ret {
         dump.line(format!("ret: {}", type_ref(ret, module)));
+    }
+}
+
+/// The shape of one parameter, read as a reader of the module reads it.
+///
+/// A parameter is a pattern, but a signature reads as the source does: the name it binds is
+/// printed under its name rather than under the word `bind` a body's patterns are printed
+/// with, and a wildcard is the wildcard.
+fn parameter_text(pat: &Pat) -> String {
+    match pat {
+        Pat::Missing => MISSING.to_owned(),
+        Pat::Wildcard => "_".to_owned(),
+        Pat::Bind(name) => format!("{name:?}"),
     }
 }
 
@@ -324,6 +339,7 @@ fn expr_text(expr: &Expr) -> String {
         Expr::Binary { lhs, op, rhs } => {
             format!("binary {} {op} {}", expr_ref(*lhs), expr_ref(*rhs))
         },
+        Expr::Unary { op, operand } => format!("unary {op} {}", expr_ref(*operand)),
         Expr::Seq { first, then } => format!("seq {} {}", expr_ref(*first), expr_ref(*then)),
         Expr::Let { pat, expr, body } => {
             format!(
@@ -457,7 +473,7 @@ mod tests {
     use super::*;
     use crate::{
         Name,
-        body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData},
+        body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData, Pat},
         id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc},
         item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
@@ -509,7 +525,7 @@ mod tests {
                 visibility: Visibility::Private,
                 signature: Signature {
                     params: vec![ParamData {
-                        name: Name::new("value"),
+                        pat: Pat::Bind(Name::new("value")),
                         ty: Some(type_path("Int", PathAnchor::Unresolved)),
                     }],
                     ret: Some(type_path("Unit", PathAnchor::Unresolved)),
@@ -567,7 +583,7 @@ ITEM TREE
                 visibility: Visibility::Private,
                 signature: Signature {
                     params: vec![ParamData {
-                        name: Name::new("value"),
+                        pat: Pat::Bind(Name::new("value")),
                         ty: Some(type_path("Int", PathAnchor::Unresolved)),
                     }],
                     ret: Some(type_path("Unit", PathAnchor::Unresolved)),
@@ -676,7 +692,7 @@ ITEM TREE
             name: Name::new("helper"),
             signature: Signature {
                 params: vec![ParamData {
-                    name: Name::new("y"),
+                    pat: Pat::Bind(Name::new("y")),
                     ty: Some(type_path(
                         "Int",
                         PathAnchor::Item(entity("Int", ItemKind::Class)),

@@ -9,7 +9,7 @@
 use std::fmt;
 
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Level};
-use mlkc_hir_def::{ClassLoc, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, Name, PlainPath};
+use mlkc_hir_def::{ClassLoc, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, Name, Pat, PlainPath};
 use mlkc_span::Span;
 
 /// What a module says that the HIR cannot hold, and what the language does not allow.
@@ -26,6 +26,15 @@ pub enum LoweringError {
     },
     /// A declaration carries an attribute the language has no meaning for.
     UnknownAttribute {
+        /// The name written after the `@`.
+        name: Name,
+    },
+    /// A declaration writes the same attribute twice.
+    ///
+    /// An attribute is a thing the declaration says about itself, and a declaration that
+    /// says it twice says no more than one that says it once: the second writing is what a
+    /// reader is told about.
+    RepeatedAttribute {
         /// The name written after the `@`.
         name: Name,
     },
@@ -74,8 +83,9 @@ pub enum LoweringError {
     PublicParameterWithoutType {
         /// The function.
         function: FunctionLoc,
-        /// The parameter.
-        parameter: Name,
+        /// The parameter, as the pattern it is written as: a name it binds, or the wildcard
+        /// it is where it binds none.
+        parameter: Pat,
     },
     /// A name an import brings in is also a name the module declares.
     ///
@@ -116,6 +126,9 @@ impl LoweringError {
             Self::UnknownAttribute { name } => {
                 format!("the language has no attribute `{name:?}`")
             },
+            Self::RepeatedAttribute { name } => {
+                format!("the attribute `@{name:?}` is written more than once on one declaration")
+            },
             Self::IntegerLiteralTooLarge { literal } => {
                 format!(
                     "the integer literal `{literal}` does not fit the value the HIR holds it in"
@@ -155,8 +168,9 @@ impl LoweringError {
                 parameter,
             } => {
                 format!(
-                    "the parameter `{parameter:?}` of the public function `{function:?}` does not \
-                 declare its type, which a caller of it depends on",
+                    "the parameter {} of the public function `{function:?}` does not declare its \
+                 type, which a caller of it depends on",
+                    parameter_text(parameter),
                 )
             },
             Self::ImportOfDeclaredName { name, declaration } => {
@@ -197,7 +211,19 @@ impl DiagKind for LoweringError {
             Self::PublicParameterWithoutType { .. } => "08",
             Self::BuiltinFunctionHasBody { .. } => "09",
             Self::ImportOfDeclaredName { .. } => "10",
+            Self::RepeatedAttribute { .. } => "11",
         }
+    }
+}
+/// What a parameter is called in a message: the name it binds, or the wildcard where it binds
+/// none.
+fn parameter_text(parameter: &Pat) -> String {
+    match parameter {
+        Pat::Bind(name) => format!("`{name:?}`"),
+        Pat::Wildcard => "`_`".to_owned(),
+        // A parameter the parser could not read is not one of a signature, so a message is
+        // never about it; a reader is told the parameter is not there all the same.
+        Pat::Missing => "that is not there".to_owned(),
     }
 }
 

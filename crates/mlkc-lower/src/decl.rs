@@ -1,10 +1,10 @@
 //! What a declaration says about a function: its parameters, and the type of its result.
 
-use mlkc_hir_def::{Name, ParamData, Signature, TypeRef, Visibility};
+use mlkc_hir_def::{ParamData, Pat, Signature, TypeRef, Visibility};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{AnyParameter, Attribute, AttributeList, FunDecl, Parameter, SyntaxToken};
 
-use crate::{syntax, ty};
+use crate::{pat, ty};
 
 /// The visibility a declaration is written with.
 ///
@@ -48,7 +48,7 @@ fn ret(decl: &FunDecl) -> Option<TypeRef> {
 /// The parameters of a declaration, in the order they are written.
 ///
 /// A parameter the parser could not read is one of them, and `None` stands for it: the
-/// declaration wrote an argument list of this arity, and the name and the type of the one
+/// declaration wrote an argument list of this arity, and the pattern and the type of the one
 /// that broke are not there. What a caller reads is therefore the arity the module wrote,
 /// and a reader of the HIR sees that the parameter is broken rather than a function that
 /// takes one argument fewer.
@@ -72,27 +72,26 @@ pub(crate) fn parameters(decl: &FunDecl) -> Vec<Option<Parameter>> {
 
 /// One parameter of a signature.
 fn parameter(parameter: &Option<Parameter>) -> ParamData {
-    let Some(parameter) = parameter else {
-        return ParamData {
-            name: Name::missing(),
-            ty: None,
-        };
-    };
-
-    let ty = parameter
-        .type_annotation()
-        .map(|annotation| ty::type_ref(annotation.ty().ok()));
+    let ty = parameter.as_ref().and_then(|parameter| {
+        parameter
+            .type_annotation()
+            .map(|annotation| ty::type_ref(annotation.ty().ok()))
+    });
 
     ParamData {
-        name: syntax::name(parameter.name()),
+        pat: pattern(parameter),
         ty,
     }
 }
 
-/// The name a parameter is declared under, or a name that is not there.
-pub(crate) fn parameter_name(parameter: &Option<Parameter>) -> Name {
+/// The pattern a parameter is written as, or a pattern that is not there.
+///
+/// A parameter is a pattern rather than a name: a function that ignores an argument writes
+/// the wildcard where a function that uses it writes a name, and a parameter the parser could
+/// not read is a pattern that is missing rather than a name that is.
+pub(crate) fn pattern(parameter: &Option<Parameter>) -> Pat {
     match parameter {
-        Some(parameter) => syntax::name(parameter.name()),
-        None => Name::missing(),
+        Some(parameter) => pat::at(parameter.pat().ok()),
+        None => Pat::Missing,
     }
 }

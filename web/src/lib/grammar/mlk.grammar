@@ -57,7 +57,7 @@ FunDecl { Visibility? kw<"fun"> Name Parameters ReturnType? FunBody? }
 
 Parameters { "(" (Parameter ("," Parameter)*)? ")" }
 
-Parameter { Name TypeAnnotation? }
+Parameter { Pat TypeAnnotation? }
 
 TypeAnnotation { ":" Type }
 
@@ -85,7 +85,7 @@ TypeArgs { "[" (Type ("," Type)* ","?)? "]" }
 
 InferType { kw<"_"> }
 
-Expr { BinaryExpr | PostfixExpr }
+Expr { BinaryExpr | UnaryExpr | PostfixExpr }
 
 // A call applies to what can be called, which is what keeps `let x = 1 in f(x)`
 // from being ambiguous: the decision whether `(` continues the call is taken here,
@@ -94,7 +94,11 @@ PostfixExpr { PrimaryExpr | CallExpr }
 
 CallExpr { PostfixExpr !call "(" (Expr ("," Expr)* ","?)? ")" }
 
-PrimaryExpr { LetExpr | Literal | VarExpr | ParenExpr }
+// A sign in front of an expression, which binds tighter than any binary operator:
+// `-1 + 2` is `(-1) + 2`, and `-f(x)` is the negation of the call.
+UnaryExpr { !call ("-" | "+") Expr }
+
+PrimaryExpr { LetExpr | Literal | PathExpr | ParenExpr }
 
 LetExpr { kw<"let"> Pat "=" Expr kw<"in"> Expr }
 
@@ -121,7 +125,9 @@ IntLiteral { int_literal }
 
 StringLiteral { string_literal }
 
-VarExpr { Name }
+// A path written where a value belongs: a name, or a name of the project with the names
+// inside it after it.
+PathExpr { Path }
 
 @tokens {
 	// Two tokens that can match the same text are resolved by this order, and the order

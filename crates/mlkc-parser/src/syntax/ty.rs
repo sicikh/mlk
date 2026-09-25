@@ -1,4 +1,9 @@
-//! Types and the paths they are written with.
+//! Types, and the paths they are written with.
+//!
+//! A path is written the same way wherever it is written: what a type is named by and what a
+//! value is named by are one rule of the grammar, and an expression reads it by the same
+//! [`parse_path`]. What a path means is what differs, and that is the business of whoever
+//! reads the tree.
 
 use mlkc_parser_core::{
     parse_lists::ParseSeparatedList,
@@ -52,6 +57,9 @@ fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
 /// A qualified path is a path whose qualifier is a path of its own, and the qualifier is
 /// what holds the dot: `a.b` is a path of the segment `b` qualified by `a.`. Every dot
 /// therefore closes the path parsed so far into a qualifier, and starts a path around it.
+//
+// A path is what a type is written as and what an expression names a value by, so the rule
+// is read from both sides of the grammar and lives apart from either.
 // test mlk a_path_qualifies_its_segments
 // fun qualified(value: std.core.Int): Unit =
 //     value

@@ -8,6 +8,7 @@
 //! [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
 
 use crate::{
+    body::Pat,
     def_map::LocalScope,
     id::ItemKind,
     macros::{define_entity_data, for_each_item_kind},
@@ -68,6 +69,19 @@ impl Attributes {
         true
     }
 
+    /// Whether the declaration already carries the attribute of that name.
+    ///
+    /// A caller that reads the attributes of a declaration asks this before
+    /// [`insert`](Self::insert): an attribute written twice means what it means written once,
+    /// so the second writing is what a reader is told about rather than a thing to record.
+    pub fn contains(&self, name: &Name) -> bool {
+        match name.as_str() {
+            "builtin" => self.builtin,
+            "extern" => self.external,
+            _ => false,
+        }
+    }
+
     /// Whether the declaration carries no attribute at all.
     pub fn is_none(&self) -> bool {
         !self.builtin && !self.external
@@ -103,8 +117,10 @@ impl Signature {
 /// One parameter of a function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamData {
-    /// The name the parameter is declared under.
-    pub name: Name,
+    /// The pattern the parameter is written as: the name it binds, or the wildcard where it
+    /// binds none. What a caller reads is [`ParamData::ty`]; the pattern is what the body of
+    /// the function receives the argument as.
+    pub pat: Pat,
     /// The type as written, if it was written.
     pub ty: Option<TypeRef>,
 }
@@ -233,6 +249,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        body::Pat,
         id::{ClassLoc, EntityLoc, ItemLoc, ItemLocData, ModuleId},
         path::{PathAnchor, PathData},
         type_ref::TypeRef,
@@ -265,7 +282,7 @@ mod tests {
             visibility: Visibility::Public,
             signature: Signature {
                 params: vec![ParamData {
-                    name: Name::new("x"),
+                    pat: Pat::Bind(Name::new("x")),
                     ty: Some(TypeRef::Path(PathData::ident(
                         Name::new("T"),
                         PathAnchor::Unresolved,
@@ -317,5 +334,13 @@ mod tests {
         assert!(attributes.builtin);
         assert!(attributes.external);
         assert!(!attributes.is_none());
+
+        // What is already read is what a reading of it again finds: an attribute written
+        // twice adds nothing to a declaration, and the two questions agree about which names
+        // the language has.
+        assert!(attributes.contains(&Name::new("builtin")));
+        assert!(attributes.contains(&Name::new("extern")));
+        assert!(!attributes.contains(&Name::new("biultin")));
+        assert!(!Attributes::default().contains(&Name::new("builtin")));
     }
 }

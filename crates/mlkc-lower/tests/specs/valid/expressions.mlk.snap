@@ -5,7 +5,9 @@ expression: snapshot
 ## Input
 
 ```mlk
-// Where every operator sits in the precedence table, and what calls and parentheses do to it.
+// Where every operator sits in the precedence table, and what calls and parentheses do to
+// it; a sign in front of an expression reads the same way, and a path names a value the way
+// it names a type.
 
 @builtin
 type Int
@@ -24,6 +26,18 @@ fun parentheses(): Int =
 
 fun calls(): Int =
     f(g(1), h(2, 3))
+
+fun signs(): Int =
+    -1 + +2 - -3
+
+fun negated_call(): Int =
+    -f(1)
+
+fun path_to_a_value(): Int =
+    data.main-module.start-app(1)
+
+fun qualified_call(): Int =
+    std.core.size(1)
 
 ```
 
@@ -49,6 +63,18 @@ ITEM TREE
     visibility: private
     ret: Int -> type Int
   fun calls  @2.5
+    visibility: private
+    ret: Int -> type Int
+  fun signs  @2.6
+    visibility: private
+    ret: Int -> type Int
+  fun negated_call  @2.7
+    visibility: private
+    ret: Int -> type Int
+  fun path_to_a_value  @2.8
+    visibility: private
+    ret: Int -> type Int
+  fun qualified_call  @2.9
     visibility: private
     ret: Int -> type Int
 ```
@@ -135,6 +161,58 @@ paths
   path#0  f -> unresolved
   path#1  g -> unresolved
   path#2  h -> unresolved
+```
+
+```
+BODY fun signs in module #0
+
+root expr#7
+exprs
+  expr#0  literal 1
+  expr#1  unary - expr#0
+  expr#2  literal 2
+  expr#3  unary + expr#2
+  expr#4  binary expr#1 + expr#3
+  expr#5  literal 3
+  expr#6  unary - expr#5
+  expr#7  binary expr#4 - expr#6
+```
+
+```
+BODY fun negated_call in module #0
+
+root expr#3
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+  expr#3  unary - expr#2
+paths
+  path#0  f -> unresolved
+```
+
+```
+BODY fun path_to_a_value in module #0
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  data.main-module.start-app -> unresolved
+```
+
+```
+BODY fun qualified_call in module #0
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  std.core.size -> unresolved
 ```
 
 ## Lowering Diagnostics

@@ -29,8 +29,9 @@ import { parser } from "./grammar/mlk";
  *
  * A name is not listed: a page of code is mostly names, and painting them all makes the
  * rest harder to read. Only the names the grammar can tell apart from the others are
- * painted — a path segment in a type is a type name wherever it stands — and everything
- * else keeps the colour of text.
+ * painted — a path written where a type belongs is a type name — and everything else keeps
+ * the colour of text. A path written where a value belongs names whatever resolution says
+ * it names, which a grammar does not know, so nothing of it is painted.
  */
 const syntax = styleTags({
     // The keywords, which the grammar reads out of names: see `kw<...>` in the grammar.
@@ -38,7 +39,7 @@ const syntax = styleTags({
     Comment: tags.comment,
     IntLiteral: tags.number,
     StringLiteral: tags.string,
-    "PathSegment/Name": tags.typeName,
+    "Type/Path/PathSegment/Name": tags.typeName,
 });
 
 /** The grammar, dressed as the language of a CodeMirror view. */

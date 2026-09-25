@@ -25,6 +25,12 @@ fun main(): IO =
 fun handle(value: data.Handle): Int =
     value
 
+// A path that starts at a name of the module: what follows the first name is read inside
+// what it denotes, and the module of the import is what the names after it are resolved
+// against.
+fun start(): Int =
+    data.main-module.start-app()
+
 ```
 
 ## Item Tree
@@ -52,6 +58,9 @@ ITEM TREE
   fun handle  @2.5
     visibility: private
     param value: data.Handle -> use data
+    ret: Int -> use Int
+  fun start  @2.6
+    visibility: private
     ret: Int -> use Int
 ```
 
@@ -81,6 +90,17 @@ pats
   pat#0  bind value
 paths
   path#0  value -> binding pat#0
+```
+
+```
+BODY fun start in module #0
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  data.main-module.start-app -> use data
 ```
 
 ## Lowering Diagnostics

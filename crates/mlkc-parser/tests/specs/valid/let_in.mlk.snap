@@ -80,15 +80,27 @@ ModuleRoot {
                         },
                         in_token: IN_KW@51..53 "in" [] [],
                         body: BinExpr {
-                            lhs: VarExpr {
-                                name: Name {
-                                    value_token: IDENT@53..60 "x" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                            lhs: PathExpr {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        name: Name {
+                                            value_token: IDENT@53..60 "x" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                                        },
+                                        type_args: missing (optional),
+                                    },
                                 },
                             },
                             operator_token: PLUS@60..62 "+" [] [Whitespace(" ")],
-                            rhs: VarExpr {
-                                name: Name {
-                                    value_token: IDENT@62..63 "y" [] [],
+                            rhs: PathExpr {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        name: Name {
+                                            value_token: IDENT@62..63 "y" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
                                 },
                             },
                         },
@@ -177,9 +189,15 @@ ModuleRoot {
                     },
                     eq_token: EQ@149..151 "=" [] [Whitespace(" ")],
                     expr: CallExpr {
-                        function: VarExpr {
-                            name: Name {
-                                value_token: IDENT@151..152 "f" [] [],
+                        function: PathExpr {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    name: Name {
+                                        value_token: IDENT@151..152 "f" [] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
                             },
                         },
                         l_paren_token: L_PAREN@152..153 "(" [] [],
@@ -192,22 +210,40 @@ ModuleRoot {
                     },
                     in_token: IN_KW@156..158 "in" [] [],
                     body: CallExpr {
-                        function: VarExpr {
-                            name: Name {
-                                value_token: IDENT@158..164 "g" [Newline("\n"), Whitespace("    ")] [],
+                        function: PathExpr {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    name: Name {
+                                        value_token: IDENT@158..164 "g" [Newline("\n"), Whitespace("    ")] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
                             },
                         },
                         l_paren_token: L_PAREN@164..165 "(" [] [],
                         arguments: ArgumentList [
-                            VarExpr {
-                                name: Name {
-                                    value_token: IDENT@165..166 "x" [] [],
+                            PathExpr {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        name: Name {
+                                            value_token: IDENT@165..166 "x" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
                                 },
                             },
                             COMMA@166..168 "," [] [Whitespace(" ")],
-                            VarExpr {
-                                name: Name {
-                                    value_token: IDENT@168..169 "x" [] [],
+                            PathExpr {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        name: Name {
+                                            value_token: IDENT@168..169 "x" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
                                 },
                             },
                         ],
@@ -268,13 +304,21 @@ ModuleRoot {
               0: INT_LITERAL@49..51 "2" [] [Whitespace(" ")]
             4: IN_KW@51..53 "in" [] []
             5: BIN_EXPR@53..63
-              0: VAR_EXPR@53..60
-                0: NAME@53..60
-                  0: IDENT@53..60 "x" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+              0: PATH_EXPR@53..60
+                0: PATH@53..60
+                  0: (empty)
+                  1: PATH_SEGMENT@53..60
+                    0: NAME@53..60
+                      0: IDENT@53..60 "x" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+                    1: (empty)
               1: PLUS@60..62 "+" [] [Whitespace(" ")]
-              2: VAR_EXPR@62..63
-                0: NAME@62..63
-                  0: IDENT@62..63 "y" [] []
+              2: PATH_EXPR@62..63
+                0: PATH@62..63
+                  0: (empty)
+                  1: PATH_SEGMENT@62..63
+                    0: NAME@62..63
+                      0: IDENT@62..63 "y" [] []
+                    1: (empty)
     1: FUN_DECL@63..108
       0: ATTRIBUTE_LIST@63..63
       1: (empty)
@@ -334,9 +378,13 @@ ModuleRoot {
               0: IDENT@147..149 "x" [] [Whitespace(" ")]
           2: EQ@149..151 "=" [] [Whitespace(" ")]
           3: CALL_EXPR@151..156
-            0: VAR_EXPR@151..152
-              0: NAME@151..152
-                0: IDENT@151..152 "f" [] []
+            0: PATH_EXPR@151..152
+              0: PATH@151..152
+                0: (empty)
+                1: PATH_SEGMENT@151..152
+                  0: NAME@151..152
+                    0: IDENT@151..152 "f" [] []
+                  1: (empty)
             1: L_PAREN@152..153 "(" [] []
             2: ARGUMENT_LIST@153..154
               0: INT_LITERAL@153..154
@@ -344,18 +392,30 @@ ModuleRoot {
             3: R_PAREN@154..156 ")" [] [Whitespace(" ")]
           4: IN_KW@156..158 "in" [] []
           5: CALL_EXPR@158..170
-            0: VAR_EXPR@158..164
-              0: NAME@158..164
-                0: IDENT@158..164 "g" [Newline("\n"), Whitespace("    ")] []
+            0: PATH_EXPR@158..164
+              0: PATH@158..164
+                0: (empty)
+                1: PATH_SEGMENT@158..164
+                  0: NAME@158..164
+                    0: IDENT@158..164 "g" [Newline("\n"), Whitespace("    ")] []
+                  1: (empty)
             1: L_PAREN@164..165 "(" [] []
             2: ARGUMENT_LIST@165..169
-              0: VAR_EXPR@165..166
-                0: NAME@165..166
-                  0: IDENT@165..166 "x" [] []
+              0: PATH_EXPR@165..166
+                0: PATH@165..166
+                  0: (empty)
+                  1: PATH_SEGMENT@165..166
+                    0: NAME@165..166
+                      0: IDENT@165..166 "x" [] []
+                    1: (empty)
               1: COMMA@166..168 "," [] [Whitespace(" ")]
-              2: VAR_EXPR@168..169
-                0: NAME@168..169
-                  0: IDENT@168..169 "x" [] []
+              2: PATH_EXPR@168..169
+                0: PATH@168..169
+                  0: (empty)
+                  1: PATH_SEGMENT@168..169
+                    0: NAME@168..169
+                      0: IDENT@168..169 "x" [] []
+                    1: (empty)
             3: R_PAREN@169..170 ")" [] []
   3: EOF@170..171 "" [Newline("\n")] []
 

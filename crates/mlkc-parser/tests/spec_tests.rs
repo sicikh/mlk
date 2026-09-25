@@ -34,13 +34,15 @@ spec_tests! {
     // function that binds a name and calls another one.
     hello: "valid/hello.mlk",
 
-    // Where every operator sits in the precedence table, and what parentheses do to it.
+    // Where every operator sits in the precedence table, and what parentheses, calls and the
+    // signs in front of an expression do to it.
     expressions: "valid/expressions.mlk",
 
     // Bindings: nested, ignored, and bound to the result of a call.
     let_in: "valid/let_in.mlk",
 
-    // Paths of types, qualified and applied to type arguments.
+    // Paths of types, qualified and applied to type arguments, and paths of values, which
+    // are written the same way.
     paths: "valid/paths.mlk",
 
     // Types left to be inferred, in a return type, a parameter and a type argument.

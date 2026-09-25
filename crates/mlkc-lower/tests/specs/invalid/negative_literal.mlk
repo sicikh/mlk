@@ -1,9 +1,0 @@
-// A negative number: the language has a minus operator and no sign, so `-42` is an
-// expression the parser cannot read, and the body of the function holds a missing expression.
-// Giving the language a prefix `-` needs a unary expression in the HIR as well.
-
-@builtin
-type Int
-
-fun negative(): Int =
-    -42

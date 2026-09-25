@@ -430,7 +430,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
-                    && Name::can_cast(element.kind())
+                    && Pat::can_cast(element.kind())
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -539,6 +539,25 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     return RawSyntaxNode::new(PATH.to_bogus(), children.into_iter().map(Some));
                 }
                 slots.into_node(PATH, children)
+            },
+            PATH_EXPR => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<1usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && Path::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        PATH_EXPR.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(PATH_EXPR, children)
             },
             PATH_QUALIFIER => {
                 let mut elements = (&children).into_iter();
@@ -729,6 +748,32 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.into_node(TYPE_DECL, children)
             },
+            UNARY_EXPR => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && matches!(element.kind(), T ! [-] | T ! [+])
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        UNARY_EXPR.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(UNARY_EXPR, children)
+            },
             USE_ALIAS => {
                 let mut elements = (&children).into_iter();
                 let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
@@ -791,22 +836,6 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     return RawSyntaxNode::new(USE_DECL.to_bogus(), children.into_iter().map(Some));
                 }
                 slots.into_node(USE_DECL, children)
-            },
-            VAR_EXPR => {
-                let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<1usize> = RawNodeSlots::default();
-                let mut current_element = elements.next();
-                if let Some(element) = &current_element
-                    && Name::can_cast(element.kind())
-                {
-                    slots.mark_present();
-                    current_element = elements.next();
-                }
-                slots.next_slot();
-                if current_element.is_some() {
-                    return RawSyntaxNode::new(VAR_EXPR.to_bogus(), children.into_iter().map(Some));
-                }
-                slots.into_node(VAR_EXPR, children)
             },
             WILDCARD_PAT => {
                 let mut elements = (&children).into_iter();

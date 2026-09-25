@@ -17,3 +17,9 @@ fun main(): IO =
 
 fun handle(value: data.Handle): Int =
     value
+
+// A path that starts at a name of the module: what follows the first name is read inside
+// what it denotes, and the module of the import is what the names after it are resolved
+// against.
+fun start(): Int =
+    data.main-module.start-app()

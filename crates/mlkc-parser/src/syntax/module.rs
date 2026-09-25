@@ -21,6 +21,7 @@ use crate::{
             expected_declaration, expected_expr, expected_name, expected_parameter,
             expected_parameters, expected_path, expected_type,
         },
+        pat::parse_pat,
         ty::{parse_path, parse_type},
     },
 };
@@ -272,15 +273,22 @@ impl ParseSeparatedList for ParameterListParse {
     }
 }
 
-/// Parses a single parameter: its name, and the type it takes if it is written down.
+/// Parses a single parameter: the pattern it binds, and the type it takes if it is written.
+///
+/// A parameter is a pattern rather than a name: a function that ignores an argument writes
+/// the wildcard where a function that uses it writes a name, and the type is what a caller
+/// reads either way.
+// test mlk parameters_are_patterns_with_types
+// fun ignored(_: Int, value: Int): Int =
+//     value
 fn parse_parameter(p: &mut MlkParser) -> ParsedSyntax {
-    let name = parse_name(p);
+    let pat = parse_pat(p);
 
-    if name.is_absent() {
+    if pat.is_absent() {
         return ParsedSyntax::Absent;
     }
 
-    let m = name.precede(p);
+    let m = pat.precede(p);
 
     parse_type_annotation(p).ok();
 

@@ -1,0 +1,10 @@
+// The same attribute written twice on one declaration: an attribute is what a declaration
+// says about itself, and what it says is what its first writing says.
+
+@builtin
+@builtin
+type Int
+
+@extern
+@extern
+fun open(): Int

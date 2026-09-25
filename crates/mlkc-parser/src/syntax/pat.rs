@@ -1,4 +1,5 @@
-//! Patterns: the left-hand side of a `let`.
+//! Patterns: what a name is bound by --- the left-hand side of a `let`, and a parameter of a
+//! function declaration.
 
 use mlkc_parser_core::{parsed_syntax::ParsedSyntax::Present, prelude::*};
 use mlkc_syntax::{SyntaxKind::*, T};

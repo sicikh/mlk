@@ -86,6 +86,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::Path::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::PATH_EXPR => {
+                        let $pattern = unsafe { $crate::PathExpr::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::PATH_QUALIFIER => {
                         let $pattern = unsafe { $crate::PathQualifier::new_unchecked(node) };
                         $body
@@ -114,16 +118,16 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::TypeDecl::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::UNARY_EXPR => {
+                        let $pattern = unsafe { $crate::UnaryExpr::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::USE_ALIAS => {
                         let $pattern = unsafe { $crate::UseAlias::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::USE_DECL => {
                         let $pattern = unsafe { $crate::UseDecl::new_unchecked(node) };
-                        $body
-                    },
-                    $crate::SyntaxKind::VAR_EXPR => {
-                        let $pattern = unsafe { $crate::VarExpr::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::WILDCARD_PAT => {

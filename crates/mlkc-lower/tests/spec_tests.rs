@@ -32,8 +32,8 @@ spec_tests! {
     // and calls another one.
     hello: "valid/hello.mlk",
 
-    // Where every operator sits in the precedence table, and what calls and parentheses do to
-    // it.
+    // Where every operator sits in the precedence table, and what calls, parentheses and the
+    // signs in front of an expression do to it.
     expressions: "valid/expressions.mlk",
 
     // Bindings: nested, ignored, and bound to the result of a call.
@@ -45,6 +45,9 @@ spec_tests! {
 
     // Declarations that declare no body: what they are is their signature.
     no_body: "valid/no_body.mlk",
+
+    // A parameter is a pattern: a name the body binds, and a wildcard it ignores.
+    parameters: "valid/parameters.mlk",
 
     // A class and a function that share a name: the two are names of different namespaces, and
     // a name is read in the one the place it is written in asks for.
@@ -86,10 +89,6 @@ spec_tests! {
     // A call that is never closed: the arguments that are there are read.
     unclosed_call: "invalid/unclosed_call.mlk",
 
-    // A negative number: the language has no sign, so the expression is one the parser cannot
-    // read, and the body of the function holds a missing expression.
-    negative_literal: "invalid/negative_literal.mlk",
-
     // An attribute the language does not have: the HIR holds the attributes the compiler knows
     // what to do with, and this one is a mistake.
     unknown_attribute: "invalid/unknown_attribute.mlk",
@@ -106,6 +105,10 @@ spec_tests! {
     // `@builtin` on a function with a body: a builtin is implemented by the compiler, and the
     // declaration is what puts its name in the scope of the module.
     builtin_with_body: "invalid/builtin_with_body.mlk",
+
+    // The same attribute written twice on one declaration: what it says is what its first
+    // writing says.
+    repeated_attribute: "invalid/repeated_attribute.mlk",
 
     // A name an import brings in is a name the module declares: the declaration is what the
     // name means, and the import is told about wherever either of them is written.

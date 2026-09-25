@@ -248,7 +248,7 @@ impl Name {
     }
 }
 impl Parameter {
-    pub fn with_name(self, element: Name) -> Self {
+    pub fn with_pat(self, element: Pat) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
@@ -312,6 +312,14 @@ impl Path {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(1usize..=1usize, once(Some(element.into_syntax().into()))),
+        )
+    }
+}
+impl PathExpr {
+    pub fn with_path(self, element: Path) -> Self {
+        Self::unwrap_cast(
+            self.syntax
+                .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
         )
     }
 }
@@ -419,6 +427,20 @@ impl TypeDecl {
         )
     }
 }
+impl UnaryExpr {
+    pub fn with_operator_token_token(self, element: SyntaxToken) -> Self {
+        Self::unwrap_cast(
+            self.syntax
+                .splice_slots(0usize..=0usize, once(Some(element.into()))),
+        )
+    }
+    pub fn with_operand(self, element: Expr) -> Self {
+        Self::unwrap_cast(
+            self.syntax
+                .splice_slots(1usize..=1usize, once(Some(element.into_syntax().into()))),
+        )
+    }
+}
 impl UseAlias {
     pub fn with_as_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
@@ -457,14 +479,6 @@ impl UseDecl {
             3usize..=3usize,
             once(element.map(|element| element.into_syntax().into())),
         ))
-    }
-}
-impl VarExpr {
-    pub fn with_name(self, element: Name) -> Self {
-        Self::unwrap_cast(
-            self.syntax
-                .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
-        )
     }
 }
 impl WildcardPat {

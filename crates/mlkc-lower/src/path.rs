@@ -1,6 +1,6 @@
 //! A path as a module wrote it, and its segments.
 
-use mlkc_hir_def::{Name, PathAnchor, PathData, PlainPath, TypeRef, path::PathSegmentData};
+use mlkc_hir_def::{PathAnchor, PathData, PlainPath, TypeRef, path::PathSegmentData};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{Path, PathSegment, Type as TypeSyntax, TypeArgs};
 
@@ -27,11 +27,6 @@ pub(crate) fn data(path: &Path) -> PathData {
 /// something in the project, and what it names is what the stage that holds the scopes says.
 pub(crate) fn plain(path: &Path) -> PlainPath {
     PlainPath::from_segments(segments(path).into_iter().map(|segment| segment.name))
-}
-
-/// A path of one segment: a name a body refers to, anchored by the caller.
-pub(crate) fn ident(name: Name, anchor: PathAnchor) -> PathData {
-    PathData::ident(name, anchor)
 }
 
 /// The type arguments written at a path, if it carries any.

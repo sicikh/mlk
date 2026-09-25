@@ -6,20 +6,18 @@
 //! against the names of the module.
 
 use mlkc_hir_def::{
-    BinaryOp, BodyBuilder, Expr, ExprId, ItemTree, Literal, Name, Namespace, Pat, PatId, PathAnchor,
+    BinaryOp, BodyBuilder, Expr, ExprId, ItemTree, Literal, Name, Namespace, Pat, PatId,
+    PathAnchor, PathData, UnaryOp,
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{
     BinExpr, CallExpr, Expr as ExprSyntax, FunDecl, LetExpr, Literal as LiteralSyntax,
-    Pat as PatSyntax, SyntaxKind, SyntaxToken, VarExpr,
+    Pat as PatSyntax, Path as PathSyntax, PathExpr, SyntaxKind, SyntaxToken, UnaryExpr,
 };
 use mlkc_vfs::FileId;
 
-use crate::{
-    LoweredBody, LoweringDiag, LoweringError, decl, pat, path,
-    syntax::{self, span},
-};
+use crate::{LoweredBody, LoweringDiag, LoweringError, decl, pat, path, syntax::span};
 
 /// Lowers the body of `decl`, a function of the module `tree` describes, or nothing if the
 /// declaration declares no body.
@@ -68,19 +66,19 @@ struct BodyLowering<'a> {
 impl BodyLowering<'_> {
     /// Lowers the parameters of the function into patterns of its body.
     ///
-    /// A parameter is a name and a type in the signature of the function, and a binding of
-    /// its body: the pattern is what the body binds the name with, and the signature is what
-    /// a caller reads. A parameter the parser could not read is bound under a name that is
-    /// not there, which is what a body cannot refer to.
+    /// A parameter is a pattern and a type in the signature of the function, and a binding of
+    /// its body: the pattern is what the body receives the argument as, and the signature is
+    /// what a caller reads. A pattern that binds no name --- the wildcard, or one the parser
+    /// could not read --- binds nothing, and the argument is not reachable from the body.
     fn parameters(&mut self, decl: &FunDecl) {
         for parameter in decl::parameters(decl) {
-            let name = decl::parameter_name(&parameter);
-            let pat = self.builder.alloc_pat(Pat::Bind(name.clone()));
-            self.builder.push_param(pat);
+            let lowered = decl::pattern(&parameter);
+            let names = pat::bindings(&lowered);
+            let pat = self.builder.alloc_pat(lowered);
 
-            if !name.is_missing() {
-                self.bindings.push((name, pat));
-            }
+            self.builder.push_param(pat);
+            self.bindings
+                .extend(names.into_iter().map(|name| (name, pat)));
         }
     }
 
@@ -88,8 +86,9 @@ impl BodyLowering<'_> {
     fn expr(&mut self, expr: &ExprSyntax) -> ExprId {
         match expr {
             ExprSyntax::Literal(literal) => self.literal(literal),
-            ExprSyntax::VarExpr(var) => self.variable(var),
+            ExprSyntax::PathExpr(path) => self.path_expr(path),
             ExprSyntax::CallExpr(call) => self.call(call),
+            ExprSyntax::UnaryExpr(unary) => self.unary_expr(unary),
             ExprSyntax::BinExpr(binary) => self.binary(binary),
             ExprSyntax::LetExpr(let_expr) => self.let_expr(let_expr),
             // A parenthesized expression is the expression it holds: how the source is
@@ -112,13 +111,40 @@ impl BodyLowering<'_> {
         self.builder.alloc_expr(Expr::Missing)
     }
 
-    /// Lowers a reference to a name.
-    fn variable(&mut self, var: &VarExpr) -> ExprId {
-        let name = syntax::name(var.name());
-        let anchor = self.anchor(&name);
-        let path = self.builder.alloc_path(path::ident(name, anchor));
+    /// Lowers an expression that names something by a path.
+    fn path_expr(&mut self, expr: &PathExpr) -> ExprId {
+        // A path that is not there is what a broken declaration holds: the expression is one
+        // the body cannot read, and the parse is what reported the mistake.
+        let Ok(path) = expr.path() else {
+            return self.missing();
+        };
+
+        let data = self.path_data(&path);
+        let path = self.builder.alloc_path(data);
 
         self.builder.alloc_expr(Expr::Path(path))
+    }
+
+    /// The path of an expression, anchored to what the body can tell of it.
+    ///
+    /// A path of one segment is a name of the body if the body binds one --- a parameter or
+    /// a `let` is what a bare name denotes --- and otherwise a name of the module, read where
+    /// a value belongs. A path of several segments starts at a name of the module rather than
+    /// of the body: what follows it are names inside what the first one denotes, and nothing
+    /// a body binds has names inside it.
+    fn path_data(&mut self, path: &PathSyntax) -> PathData {
+        let mut data = path::data(path);
+
+        let anchor = match data.segments.as_slice() {
+            [segment] => self.anchor(&segment.name),
+            // A path the parser could not read has no segments to anchor: what it names is
+            // what the stage that holds the scopes of the project says, and it says nothing.
+            [] => PathAnchor::Unresolved,
+            [first, ..] => self.tree.scope().anchor(&first.name, Namespace::Module),
+        };
+        data.anchor = anchor;
+
+        data
     }
 
     /// Lowers a call.
@@ -133,6 +159,25 @@ impl BodyLowering<'_> {
             .collect();
 
         self.builder.alloc_expr(Expr::Call { callee, args })
+    }
+
+    /// Lowers a sign written in front of an expression.
+    fn unary_expr(&mut self, unary: &UnaryExpr) -> ExprId {
+        let operator = unary
+            .operator_token()
+            .ok()
+            .and_then(|token| unary_operator(token.kind()));
+
+        let Some(op) = operator else {
+            // A unary expression is built around the sign that was read, so a tree without
+            // one is not a tree the parser makes: a reader of the HIR is handed a missing
+            // expression rather than a sign the source does not have.
+            return self.missing();
+        };
+
+        let operand = self.optional(unary.operand().ok());
+
+        self.builder.alloc_expr(Expr::Unary { op, operand })
     }
 
     /// Lowers a binary operation.
@@ -261,6 +306,17 @@ fn string_text(token: &SyntaxToken) -> &str {
     text.strip_prefix('"')
         .and_then(|text| text.strip_suffix('"'))
         .unwrap_or(text)
+}
+
+/// The sign a token is, if the language has one.
+fn unary_operator(kind: SyntaxKind) -> Option<UnaryOp> {
+    let operator = match kind {
+        SyntaxKind::MINUS => UnaryOp::Neg,
+        SyntaxKind::PLUS => UnaryOp::Pos,
+        _ => return None,
+    };
+
+    Some(operator)
 }
 
 /// The operator a token is, if the language has one.

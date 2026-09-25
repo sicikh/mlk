@@ -46,9 +46,15 @@ ModuleRoot {
             body: FunBody {
                 eq_token: EQ@17..18 "=" [] [],
                 expr: CallExpr {
-                    function: VarExpr {
-                        name: Name {
-                            value_token: IDENT@18..24 "f" [Newline("\n"), Whitespace("    ")] [],
+                    function: PathExpr {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                name: Name {
+                                    value_token: IDENT@18..24 "f" [Newline("\n"), Whitespace("    ")] [],
+                                },
+                                type_args: missing (optional),
+                            },
                         },
                     },
                     l_paren_token: L_PAREN@24..25 "(" [] [],
@@ -99,9 +105,13 @@ ModuleRoot {
       6: FUN_BODY@17..29
         0: EQ@17..18 "=" [] []
         1: CALL_EXPR@18..29
-          0: VAR_EXPR@18..24
-            0: NAME@18..24
-              0: IDENT@18..24 "f" [Newline("\n"), Whitespace("    ")] []
+          0: PATH_EXPR@18..24
+            0: PATH@18..24
+              0: (empty)
+              1: PATH_SEGMENT@18..24
+                0: NAME@18..24
+                  0: IDENT@18..24 "f" [Newline("\n"), Whitespace("    ")] []
+                1: (empty)
           1: L_PAREN@24..25 "(" [] []
           2: ARGUMENT_LIST@25..29
             0: INT_LITERAL@25..26

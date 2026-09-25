@@ -16,6 +16,14 @@ pub(crate) fn pat(pat: &PatSyntax) -> Pat {
     }
 }
 
+/// A pattern at a position that may hold none, or one the parser could not read.
+pub(crate) fn at(pattern: Option<PatSyntax>) -> Pat {
+    match pattern {
+        Some(pattern) => pat(&pattern),
+        None => Pat::Missing,
+    }
+}
+
 /// The names a pattern binds, in the order they are written.
 ///
 /// A pattern that binds no name --- the wildcard, or one the parser could not read --- binds

@@ -31,8 +31,10 @@ ModuleRoot {
                 l_paren_token: L_PAREN@12..13 "(" [] [],
                 items: ParameterList [
                     Parameter {
-                        name: Name {
-                            value_token: IDENT@13..18 "value" [] [],
+                        pat: IdentPat {
+                            name: Name {
+                                value_token: IDENT@13..18 "value" [] [],
+                            },
                         },
                         type_annotation: TypeAnnotation {
                             colon_token: COLON@18..20 ":" [] [Whitespace(" ")],
@@ -52,9 +54,15 @@ ModuleRoot {
             },
             body: FunBody {
                 eq_token: EQ@26..27 "=" [] [],
-                expr: VarExpr {
-                    name: Name {
-                        value_token: IDENT@27..37 "value" [Newline("\n"), Whitespace("    ")] [],
+                expr: PathExpr {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@27..37 "value" [Newline("\n"), Whitespace("    ")] [],
+                            },
+                            type_args: missing (optional),
+                        },
                     },
                 },
             },
@@ -70,8 +78,10 @@ ModuleRoot {
                 l_paren_token: L_PAREN@50..51 "(" [] [],
                 items: ParameterList [
                     Parameter {
-                        name: Name {
-                            value_token: IDENT@51..56 "value" [] [],
+                        pat: IdentPat {
+                            name: Name {
+                                value_token: IDENT@51..56 "value" [] [],
+                            },
                         },
                         type_annotation: TypeAnnotation {
                             colon_token: COLON@56..58 ":" [] [Whitespace(" ")],
@@ -127,9 +137,15 @@ ModuleRoot {
             },
             body: FunBody {
                 eq_token: EQ@77..78 "=" [] [],
-                expr: VarExpr {
-                    name: Name {
-                        value_token: IDENT@78..88 "value" [Newline("\n"), Whitespace("    ")] [],
+                expr: PathExpr {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            name: Name {
+                                value_token: IDENT@78..88 "value" [Newline("\n"), Whitespace("    ")] [],
+                            },
+                            type_args: missing (optional),
+                        },
                     },
                 },
             },
@@ -156,8 +172,9 @@ ModuleRoot {
         0: L_PAREN@12..13 "(" [] []
         1: PARAMETER_LIST@13..21
           0: PARAMETER@13..21
-            0: NAME@13..18
-              0: IDENT@13..18 "value" [] []
+            0: IDENT_PAT@13..18
+              0: NAME@13..18
+                0: IDENT@13..18 "value" [] []
             1: TYPE_ANNOTATION@18..21
               0: COLON@18..20 ":" [] [Whitespace(" ")]
               1: INFER_TYPE@20..21
@@ -169,9 +186,13 @@ ModuleRoot {
           0: UNDERSCORE@24..26 "_" [] [Whitespace(" ")]
       6: FUN_BODY@26..37
         0: EQ@26..27 "=" [] []
-        1: VAR_EXPR@27..37
-          0: NAME@27..37
-            0: IDENT@27..37 "value" [Newline("\n"), Whitespace("    ")] []
+        1: PATH_EXPR@27..37
+          0: PATH@27..37
+            0: (empty)
+            1: PATH_SEGMENT@27..37
+              0: NAME@27..37
+                0: IDENT@27..37 "value" [Newline("\n"), Whitespace("    ")] []
+              1: (empty)
     1: FUN_DECL@37..88
       0: ATTRIBUTE_LIST@37..37
       1: (empty)
@@ -182,8 +203,9 @@ ModuleRoot {
         0: L_PAREN@50..51 "(" [] []
         1: PARAMETER_LIST@51..69
           0: PARAMETER@51..69
-            0: NAME@51..56
-              0: IDENT@51..56 "value" [] []
+            0: IDENT_PAT@51..56
+              0: NAME@51..56
+                0: IDENT@51..56 "value" [] []
             1: TYPE_ANNOTATION@56..69
               0: COLON@56..58 ":" [] [Whitespace(" ")]
               1: PATH_TYPE@58..69
@@ -218,9 +240,13 @@ ModuleRoot {
               1: (empty)
       6: FUN_BODY@77..88
         0: EQ@77..78 "=" [] []
-        1: VAR_EXPR@78..88
-          0: NAME@78..88
-            0: IDENT@78..88 "value" [Newline("\n"), Whitespace("    ")] []
+        1: PATH_EXPR@78..88
+          0: PATH@78..88
+            0: (empty)
+            1: PATH_SEGMENT@78..88
+              0: NAME@78..88
+                0: IDENT@78..88 "value" [Newline("\n"), Whitespace("    ")] []
+              1: (empty)
   3: EOF@88..89 "" [Newline("\n")] []
 
 ```

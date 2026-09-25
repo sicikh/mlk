@@ -122,7 +122,7 @@ AnyParameter =
 ParameterList = (AnyParameter (',' AnyParameter)*)
 
 Parameter =
-    name: Name
+    pat: Pat
     type_annotation: TypeAnnotation?
 
 TypeAnnotation =
@@ -154,8 +154,9 @@ UseAlias =
 
 Expr =
     Literal
-    | VarExpr
+    | PathExpr
     | CallExpr
+    | UnaryExpr
     | BinExpr
     | LetExpr
     | ParenExpr
@@ -168,7 +169,15 @@ Literal =
     IntLiteral
     | StringLiteral
 
-VarExpr = name: Name
+// A path written where a value belongs: a name the body binds, a name the module declares,
+// or a path that starts with a name of the project.
+PathExpr = path: Path
+
+// A sign in front of an expression: `-1`, `+x`, `-f(1)`. It binds tighter than a binary
+// operator and looser than a call, so `-f(1) + 2` is `(-f(1)) + 2`.
+UnaryExpr =
+    operator_token: ('-' | '+')
+    operand: Expr
 
 CallExpr =
     function: Expr

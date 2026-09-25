@@ -12,3 +12,12 @@ fun parentheses(): Int =
 
 fun calls(): Int =
     f(g(1), h(2, 3))
+
+fun signs(): Int =
+    -1 + +2 - -3
+
+fun signs_chain(): Int =
+    - -1
+
+fun negated_call(): Int =
+    -f(1)

@@ -10,7 +10,7 @@ use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, Ty
 use mlkc_vfs::FileId;
 
 use crate::{
-    BodyDecl, LoweredModule, LoweringDiag, LoweringError, decl, path,
+    BodyDecl, LoweredModule, LoweringDiag, LoweringError, decl, pat, path,
     syntax::{self, item_position, syntax_at},
 };
 
@@ -257,7 +257,7 @@ impl ItemLowering<'_> {
 
             let error = LoweringError::PublicParameterWithoutType {
                 function: function.clone(),
-                parameter: syntax::name(parameter.name()),
+                parameter: pat::at(parameter.pat().ok()),
             };
             let diagnostic = LoweringDiag::new(error, syntax::span(self.file, parameter.syntax()));
 
@@ -325,20 +325,26 @@ impl ItemLowering<'_> {
     /// Reads the attributes a declaration writes in front of itself.
     ///
     /// The attributes the language has are the ones the HIR has fields for; a name that
-    /// nothing knows is a mistake of the module, and the HIR has nowhere to put it.
+    /// nothing knows is a mistake of the module, and the HIR has nowhere to put it. An
+    /// attribute written twice is a mistake as well: what it says is what the first writing
+    /// says, and the second one is not needed.
     fn attributes(&mut self, list: &AttributeList) -> Attributes {
         let mut attributes = Attributes::default();
 
         for attribute in decl::attributes(list) {
             let name = syntax::name(attribute.name());
 
-            if !attributes.insert(&name) {
-                let error = LoweringError::UnknownAttribute { name: name.clone() };
-                let diagnostic =
-                    LoweringDiag::new(error, syntax::span(self.file, attribute.syntax()));
+            let error = if attributes.contains(&name) {
+                LoweringError::RepeatedAttribute { name }
+            } else if !attributes.insert(&name) {
+                LoweringError::UnknownAttribute { name }
+            } else {
+                continue;
+            };
 
-                self.diagnostics.push(diagnostic);
-            }
+            let diagnostic = LoweringDiag::new(error, syntax::span(self.file, attribute.syntax()));
+
+            self.diagnostics.push(diagnostic);
         }
 
         attributes
@@ -393,7 +399,7 @@ impl ItemLowering<'_> {
 mod tests {
     use mlkc_diagnostics::{Category, DiagKind, Level};
     use mlkc_hir_def::{
-        ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, PathAnchor,
+        ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, Pat, PathAnchor,
     };
     use mlkc_vfs::FileId;
 
@@ -417,6 +423,10 @@ use std.core.Int
 @builtin
 fun max(left: Int, right: Int): Int =
     left
+
+@builtin
+@builtin
+type Point
 
 pub fun size(value) =
     value
@@ -491,9 +501,12 @@ pub fun size(value) =
             &LoweringError::BuiltinFunctionHasBody {
                 function: function(tree, "max"),
             },
+            &LoweringError::RepeatedAttribute {
+                name: Name::new("builtin"),
+            },
             &LoweringError::PublicParameterWithoutType {
                 function: function(tree, "size"),
-                parameter: Name::new("value"),
+                parameter: Pat::Bind(Name::new("value")),
             },
             &LoweringError::PublicFunctionWithoutResult {
                 function: function(tree, "size"),
@@ -510,7 +523,7 @@ pub fun size(value) =
             .iter()
             .map(|diagnostic| diagnostic.error().code())
             .collect();
-        assert_eq!(codes, ["06", "05", "10", "01", "09", "08", "07"]);
+        assert_eq!(codes, ["06", "05", "10", "01", "09", "11", "08", "07"]);
 
         // The error a host renders is the error, its kind, and where it is: nothing of it is
         // text that a caller has to parse back.

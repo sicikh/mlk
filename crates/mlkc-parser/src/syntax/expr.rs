@@ -6,6 +6,11 @@
 //! parses the right-hand side with the operators that bind tighter. The right-hand side
 //! therefore stops at an operator of the same precedence, which is what makes the operators
 //! left-associative: `1 - 2 - 3` is `(1 - 2) - 3`.
+//!
+//! The left-hand side a binary operator is applied to is read by [`parse_unary_expr`], which
+//! is where a sign in front of an expression belongs: the ladder of the rules is
+//! [`parse_binary_expr`], [`parse_unary_expr`], [`parse_postfix_expr`],
+//! [`parse_primary_expr`], from the loosest to the tightest.
 
 use mlkc_parser_core::{
     parse_lists::ParseSeparatedList,
@@ -21,9 +26,9 @@ use mlkc_syntax::{
 use crate::{
     parser::MlkParser,
     syntax::{
-        auxiliary::parse_name,
         parse_error::{expected_expr, expected_pattern},
         pat::parse_pat,
+        ty::parse_path,
     },
 };
 
@@ -72,7 +77,7 @@ fn binary_precedence(kind: SyntaxKind) -> Option<u8> {
 
 /// Parses a binary expression whose operators bind at least as tightly as `min_precedence`.
 fn parse_binary_expr(p: &mut MlkParser, min_precedence: u8) -> ParsedSyntax {
-    let lhs = parse_postfix_expr(p);
+    let lhs = parse_unary_expr(p);
 
     let ParsedSyntax::Present(mut lhs) = lhs else {
         return ParsedSyntax::Absent;
@@ -93,6 +98,35 @@ fn parse_binary_expr(p: &mut MlkParser, min_precedence: u8) -> ParsedSyntax {
     }
 
     Present(lhs)
+}
+
+/// Parses an expression a sign may be written in front of.
+///
+/// A sign binds tighter than any binary operator and looser than a call: `-f(1) + 2` is
+/// `(-f(1)) + 2`, and `-1 - 2` is `(-1) - 2`. What a sign is applied to may be signed as
+/// well, so `- -1` is `-(-1)`.
+// test mlk a_sign_binds_tighter_than_a_binary_operator
+// fun signed(): Int =
+//     -1 + 2
+//
+// test mlk a_sign_may_be_written_twice
+// fun doubly_signed(): Int =
+//     - -1
+//
+// test mlk a_sign_applies_to_the_result_of_a_call
+// fun negated(): Int =
+//     -f(1)
+fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
+    if !(p.at(T![-]) || p.at(T![+])) {
+        return parse_postfix_expr(p);
+    }
+
+    let m = p.start();
+
+    p.bump_any();
+    parse_unary_expr(p).or_add_diagnostic(p, expected_expr);
+
+    Present(m.complete(p, UNARY_EXPR))
 }
 
 /// Parses an expression that may be applied to arguments: `f(a, b)(c)`.
@@ -119,7 +153,7 @@ fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
 fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
     match p.cur() {
         INT_LITERAL | STRING_LITERAL => parse_literal(p),
-        IDENT => parse_var_expr(p),
+        IDENT => parse_path_expr(p),
         LET_KW => parse_let_expr(p),
         L_PAREN => parse_paren_expr(p),
         _ => ParsedSyntax::Absent,
@@ -145,9 +179,17 @@ fn parse_literal(p: &mut MlkParser) -> ParsedSyntax {
     Present(m.complete(p, kind))
 }
 
-/// Parses an expression that is a name: a variable, or the function of a call.
-fn parse_var_expr(p: &mut MlkParser) -> ParsedSyntax {
-    parse_name(p).map(|name| name.precede(p).complete(p, VAR_EXPR))
+/// Parses an expression that is a path: a name the body refers to, or a name the module or
+/// the project declares under a path.
+///
+/// A path of one segment is what a body binds or what the module declares; a path of several
+/// segments starts at a name of the module, and the names after it are names inside what the
+/// first one denotes, which is what the stage that holds the scopes of the project reads.
+// test mlk a_value_may_be_named_by_a_qualified_path
+// fun main(): Int =
+//     data.main-module.start-app(1)
+fn parse_path_expr(p: &mut MlkParser) -> ParsedSyntax {
+    parse_path(p).map(|path| path.precede(p).complete(p, PATH_EXPR))
 }
 
 /// Parses an expression in parentheses.

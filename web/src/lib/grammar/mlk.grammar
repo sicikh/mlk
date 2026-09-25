@@ -49,7 +49,11 @@ ModulePreamble { kw<"module"> Path }
 
 Attribute { "@" Name }
 
-FunDecl { kw<"fun"> Name Parameters ReturnType? FunBody? }
+// How far a declaration is visible, which the language writes in front of it, after the
+// attributes it carries.
+Visibility { kw<"pub"> }
+
+FunDecl { Visibility? kw<"fun"> Name Parameters ReturnType? FunBody? }
 
 Parameters { "(" (Parameter ("," Parameter)*)? ")" }
 
@@ -61,7 +65,7 @@ ReturnType { ":" Type }
 
 FunBody { "=" Expr }
 
-TypeDecl { kw<"type"> Name }
+TypeDecl { Visibility? kw<"type"> Name }
 
 Name { identifier }
 

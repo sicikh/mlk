@@ -31,15 +31,15 @@ fun misused(): helper =
 MODULE #0
 
 ITEM TREE
-  type Box  @1.0
+  type Box  @2.0
     visibility: private
-  fun Box  @1.1
+  fun Box  @2.1
     visibility: private
     ret: Box -> type Box
-  fun helper  @1.2
+  fun helper  @2.2
     visibility: private
     ret: Int -> unresolved
-  fun misused  @1.3
+  fun misused  @2.3
     visibility: private
     ret: helper -> unresolved
 ```

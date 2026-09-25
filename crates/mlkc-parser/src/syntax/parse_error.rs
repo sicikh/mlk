@@ -9,8 +9,8 @@ use mlkc_rowan::TextRange;
 
 use crate::parser::MlkParser;
 
-/// The parser expected a declaration: `fun`, `type`, or an attribute list in front of one
-/// of them.
+/// The parser expected a declaration: `fun`, `type`, an attribute list in front of one of
+/// them, or `pub`.
 pub(crate) fn expected_declaration(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("declaration", range, p)
 }
@@ -38,6 +38,11 @@ pub(crate) fn expected_expr(p: &MlkParser, range: TextRange) -> ParseDiagnostic 
 /// The parser expected a type.
 pub(crate) fn expected_type(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("type", range, p)
+}
+
+/// The parser expected a path, which is what a preamble and a type are written with.
+pub(crate) fn expected_path(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new_single_node("path", range, p)
 }
 
 /// The parser expected a pattern, which is what the left-hand side of `let` is.

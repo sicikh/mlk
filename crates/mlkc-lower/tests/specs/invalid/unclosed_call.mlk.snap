@@ -19,7 +19,7 @@ fun main(): Int =
 MODULE #0
 
 ITEM TREE
-  fun main  @1.0
+  fun main  @2.0
     visibility: private
     ret: Int -> unresolved
 ```

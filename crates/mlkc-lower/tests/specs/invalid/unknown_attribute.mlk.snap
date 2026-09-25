@@ -5,12 +5,11 @@ expression: snapshot
 ## Input
 
 ```mlk
-// A token where a declaration belongs: the parse keeps it in a bogus declaration, and the
-// declarations around it are read as if it were not there.
+// An attribute the language does not have: the HIR holds the attributes the compiler knows
+// what to do with, and a name nothing knows is a mistake of the module.
 
+@biultin
 type Int
-
-+
 
 fun main(): Int =
     1
@@ -25,7 +24,7 @@ MODULE #0
 ITEM TREE
   type Int  @2.0
     visibility: private
-  fun main  @2.2
+  fun main  @2.1
     visibility: private
     ret: Int -> type Int
 ```
@@ -42,8 +41,8 @@ exprs
 
 ## Lowering Diagnostics
 
-No diagnostics.
+166..174: the language has no attribute `biultin`
 
 ## Parse Diagnostics
 
-162..163: Expected a declaration but instead found '+'.
+No diagnostics.

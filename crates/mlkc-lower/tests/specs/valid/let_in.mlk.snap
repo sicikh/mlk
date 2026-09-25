@@ -35,18 +35,19 @@ fun shadows_a_parameter(x: Int): Int =
 MODULE #0
 
 ITEM TREE
-  type Int  @1.0
+  type Int  @2.0
+    attributes: @builtin
     visibility: private
-  fun nested  @1.1
-    visibility: private
-    ret: Int -> type Int
-  fun ignored  @1.2
+  fun nested  @2.1
     visibility: private
     ret: Int -> type Int
-  fun bound_to_a_call  @1.3
+  fun ignored  @2.2
     visibility: private
     ret: Int -> type Int
-  fun shadows_a_parameter  @1.4
+  fun bound_to_a_call  @2.3
+    visibility: private
+    ret: Int -> type Int
+  fun shadows_a_parameter  @2.4
     visibility: private
     param x: Int -> type Int
     ret: Int -> type Int

@@ -29,6 +29,7 @@ fun main(): Unit =
 ```
 ModuleRoot {
     bom_token: missing (optional),
+    preamble: missing (optional),
     items: ModuleItemList [
         TypeDecl {
             attributes: AttributeList [
@@ -39,6 +40,7 @@ ModuleRoot {
                     },
                 },
             ],
+            visibility_token: missing (optional),
             type_token: TYPE_KW@27..33 "type" [Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@33..37 "Unit" [] [],
@@ -53,6 +55,7 @@ ModuleRoot {
                     },
                 },
             ],
+            visibility_token: missing (optional),
             type_token: TYPE_KW@47..53 "type" [Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@53..56 "Int" [] [],
@@ -67,6 +70,7 @@ ModuleRoot {
                     },
                 },
             ],
+            visibility_token: missing (optional),
             fun_token: FUN_KW@86..91 "fun" [Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@91..102 "println-int" [] [],
@@ -114,6 +118,7 @@ ModuleRoot {
         },
         FunDecl {
             attributes: AttributeList [],
+            visibility_token: missing (optional),
             fun_token: FUN_KW@121..127 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@127..131 "main" [] [],
@@ -198,15 +203,17 @@ ModuleRoot {
 ```
 0: MODULE_ROOT@0..193
   0: (empty)
-  1: MODULE_ITEM_LIST@0..192
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..192
     0: TYPE_DECL@0..37
       0: ATTRIBUTE_LIST@0..27
         0: ATTRIBUTE@0..27
           0: AT@0..20 "@" [Comments("// --- stdlib.mlk"), Newline("\n"), Newline("\n")] []
           1: NAME@20..27
             0: IDENT@20..27 "builtin" [] []
-      1: TYPE_KW@27..33 "type" [Newline("\n")] [Whitespace(" ")]
-      2: NAME@33..37
+      1: (empty)
+      2: TYPE_KW@27..33 "type" [Newline("\n")] [Whitespace(" ")]
+      3: NAME@33..37
         0: IDENT@33..37 "Unit" [] []
     1: TYPE_DECL@37..56
       0: ATTRIBUTE_LIST@37..47
@@ -214,8 +221,9 @@ ModuleRoot {
           0: AT@37..40 "@" [Newline("\n"), Newline("\n")] []
           1: NAME@40..47
             0: IDENT@40..47 "builtin" [] []
-      1: TYPE_KW@47..53 "type" [Newline("\n")] [Whitespace(" ")]
-      2: NAME@53..56
+      1: (empty)
+      2: TYPE_KW@47..53 "type" [Newline("\n")] [Whitespace(" ")]
+      3: NAME@53..56
         0: IDENT@53..56 "Int" [] []
     2: FUN_DECL@56..121
       0: ATTRIBUTE_LIST@56..86
@@ -223,10 +231,11 @@ ModuleRoot {
           0: AT@56..80 "@" [Newline("\n"), Newline("\n"), Comments("// --- main.mlk ---"), Newline("\n"), Newline("\n")] []
           1: NAME@80..86
             0: IDENT@80..86 "extern" [] []
-      1: FUN_KW@86..91 "fun" [Newline("\n")] [Whitespace(" ")]
-      2: NAME@91..102
+      1: (empty)
+      2: FUN_KW@86..91 "fun" [Newline("\n")] [Whitespace(" ")]
+      3: NAME@91..102
         0: IDENT@91..102 "println-int" [] []
-      3: PARAMETERS@102..115
+      4: PARAMETERS@102..115
         0: L_PAREN@102..103 "(" [] []
         1: PARAMETER_LIST@103..114
           0: PARAMETER@103..114
@@ -242,7 +251,7 @@ ModuleRoot {
                       0: IDENT@111..114 "Int" [] []
                     1: (empty)
         2: R_PAREN@114..115 ")" [] []
-      4: FUN_RETURN_TYPE_ANNOTATION@115..121
+      5: FUN_RETURN_TYPE_ANNOTATION@115..121
         0: COLON@115..117 ":" [] [Whitespace(" ")]
         1: PATH_TYPE@117..121
           0: PATH@117..121
@@ -251,17 +260,18 @@ ModuleRoot {
               0: NAME@117..121
                 0: IDENT@117..121 "Unit" [] []
               1: (empty)
-      5: (empty)
+      6: (empty)
     3: FUN_DECL@121..192
       0: ATTRIBUTE_LIST@121..121
-      1: FUN_KW@121..127 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: NAME@127..131
+      1: (empty)
+      2: FUN_KW@121..127 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@127..131
         0: IDENT@127..131 "main" [] []
-      3: PARAMETERS@131..133
+      4: PARAMETERS@131..133
         0: L_PAREN@131..132 "(" [] []
         1: PARAMETER_LIST@132..132
         2: R_PAREN@132..133 ")" [] []
-      4: FUN_RETURN_TYPE_ANNOTATION@133..140
+      5: FUN_RETURN_TYPE_ANNOTATION@133..140
         0: COLON@133..135 ":" [] [Whitespace(" ")]
         1: PATH_TYPE@135..140
           0: PATH@135..140
@@ -270,7 +280,7 @@ ModuleRoot {
               0: NAME@135..140
                 0: IDENT@135..140 "Unit" [] [Whitespace(" ")]
               1: (empty)
-      5: FUN_BODY@140..192
+      6: FUN_BODY@140..192
         0: EQ@140..141 "=" [] []
         1: LET_EXPR@141..192
           0: LET_KW@141..150 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
@@ -303,7 +313,7 @@ ModuleRoot {
                 2: INT_LITERAL@189..191
                   0: INT_LITERAL@189..191 "20" [] []
             3: R_PAREN@191..192 ")" [] []
-  2: EOF@192..193 "" [Newline("\n")] []
+  3: EOF@192..193 "" [Newline("\n")] []
 
 ```
 

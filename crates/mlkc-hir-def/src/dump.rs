@@ -19,7 +19,7 @@ use std::fmt::{self, Write as _};
 use crate::{
     body::{Body, Expr, Literal, Pat},
     id::{BodyEntityLoc, EntityLoc, LocalConstId, LocalFunctionId, ModuleId, arena_index},
-    item_data::{EntityData, Signature, Visibility},
+    item_data::{Attributes, EntityData, Signature, Visibility},
     item_tree::ItemTree,
     path::{PathAnchor, PathData, PathSegmentData},
     type_ref::TypeRef,
@@ -33,14 +33,19 @@ const MISSING: &str = "<missing>";
 
 /// A reading of the item tree of a module.
 ///
-/// The entities are listed in the order the module declares them, and each of them is headed
-/// by its name and the position it is at in the syntax, which is what a reader compares
-/// between revisions.
+/// The module is headed by the file it is read from and by the path it declares itself as,
+/// and the entities follow in the order the module declares them, each of them headed by its
+/// name and by the position it is at in the syntax, which is what a reader compares between
+/// revisions.
 pub fn item_tree(tree: &ItemTree) -> String {
     let module = tree.module();
     let mut dump = Dump::new();
 
-    dump.line(format!("MODULE #{}", module_index(module)));
+    match tree.path() {
+        Some(path) => dump.line(format!("MODULE #{} {path}", module_index(module))),
+        None => dump.line(format!("MODULE #{}", module_index(module))),
+    }
+
     dump.blank();
 
     dump.section("ITEM TREE", |dump| {
@@ -137,6 +142,8 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
 
 /// The lines of the data of one entity.
 fn entity_data(dump: &mut Dump, data: &EntityData, module: ModuleId) {
+    attributes(dump, data.attributes());
+
     match data {
         EntityData::Function(data) => {
             visibility(dump, data.visibility);
@@ -180,6 +187,32 @@ fn signature(dump: &mut Dump, signature: &Signature, module: ModuleId) {
     if let Some(ret) = &signature.ret {
         dump.line(format!("ret: {}", type_ref(ret, module)));
     }
+}
+
+/// One line of the attributes of a declaration, if it carries any.
+///
+/// The line holds the attributes as the module writes them, since what a reader compares is
+/// the source and the HIR it becomes.
+fn attributes(dump: &mut Dump, attributes: Option<&Attributes>) {
+    let Some(attributes) = attributes else {
+        return;
+    };
+
+    if attributes.is_none() {
+        return;
+    }
+
+    let mut words = Vec::new();
+
+    if attributes.builtin {
+        words.push("@builtin");
+    }
+
+    if attributes.external {
+        words.push("@extern");
+    }
+
+    dump.line(format!("attributes: {}", words.join(" ")));
 }
 
 /// One line of the visibility of an entity.
@@ -426,8 +459,9 @@ mod tests {
         Name,
         body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData},
         id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc},
-        item_data::{ClassData, FunctionData, ImplData, ParamData},
+        item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
+        path::{PlainPath, PlainPathId},
     };
 
     fn module() -> ModuleId {
@@ -463,6 +497,7 @@ mod tests {
         builder.declare(
             Some(Name::new("Int")),
             EntityData::Class(ClassData {
+                attributes: Attributes::default(),
                 visibility: Visibility::Public,
             }),
             ItemSyntaxLoc::root().child(0),
@@ -470,6 +505,7 @@ mod tests {
         builder.declare(
             Some(Name::new("main")),
             EntityData::Function(FunctionData {
+                attributes: Attributes::default(),
                 visibility: Visibility::Private,
                 signature: Signature {
                     params: vec![ParamData {
@@ -503,6 +539,64 @@ ITEM TREE
     }
 
     #[test]
+    fn a_module_reads_as_the_path_it_declares_and_what_its_entities_carry() {
+        let mut builder = ItemTreeBuilder::new(module());
+        builder.set_path(PlainPathId::new(PlainPath::from_segments([
+            Name::new("my-proj"),
+            Name::new("main-module"),
+        ])));
+
+        builder.declare(
+            Some(Name::new("Unit")),
+            EntityData::Class(ClassData {
+                attributes: Attributes {
+                    builtin: true,
+                    external: false,
+                },
+                visibility: Visibility::Public,
+            }),
+            ItemSyntaxLoc::root().child(0),
+        );
+        builder.declare(
+            Some(Name::new("println-int")),
+            EntityData::Function(FunctionData {
+                attributes: Attributes {
+                    builtin: false,
+                    external: true,
+                },
+                visibility: Visibility::Private,
+                signature: Signature {
+                    params: vec![ParamData {
+                        name: Name::new("value"),
+                        ty: Some(type_path("Int", PathAnchor::Unresolved)),
+                    }],
+                    ret: Some(type_path("Unit", PathAnchor::Unresolved)),
+                },
+            }),
+            ItemSyntaxLoc::root().child(1),
+        );
+
+        let tree = builder.finish();
+
+        assert_eq!(
+            crate::dump::item_tree(&tree),
+            "\
+MODULE #0 my-proj.main-module
+
+ITEM TREE
+  type Unit  @0
+    attributes: @builtin
+    visibility: public
+  fun println-int  @1
+    attributes: @extern
+    visibility: private
+    param value: Int -> unresolved
+    ret: Unit -> type Unit
+"
+        );
+    }
+
+    #[test]
     fn a_name_that_is_not_there_is_read_as_a_word() {
         let mut builder = ItemTreeBuilder::new(module());
 
@@ -521,6 +615,7 @@ ITEM TREE
             builder.declare(
                 Some(Name::missing()),
                 EntityData::Function(FunctionData {
+                    attributes: Attributes::default(),
                     visibility: Visibility::Private,
                     signature: Signature::default(),
                 }),

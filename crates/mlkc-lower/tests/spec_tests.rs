@@ -50,6 +50,12 @@ spec_tests! {
     // a name is read in the one the place it is written in asks for.
     namespaces: "valid/namespaces.mlk",
 
+    // A module that declares the path it is known by in its project.
+    preamble: "valid/preamble.mlk",
+
+    // How far a declaration is visible, and the attributes it carries next to it.
+    visibility: "valid/visibility.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign.
     literals: "valid/literals.mlk",
@@ -79,6 +85,10 @@ spec_tests! {
     // A negative number: the language has no sign, so the expression is one the parser cannot
     // read, and the body of the function holds a missing expression.
     negative_literal: "invalid/negative_literal.mlk",
+
+    // An attribute the language does not have: the HIR holds the attributes the compiler knows
+    // what to do with, and this one is a mistake.
+    unknown_attribute: "invalid/unknown_attribute.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

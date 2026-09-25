@@ -1,15 +1,15 @@
 //! The surface of one module: the items it declares, and the bodies they own.
 
 use mlkc_hir_def::{
-    BodyEntityLoc, ClassData, EntityData, EntityLoc, FunctionData, ItemSyntaxLoc, ItemTreeBuilder,
-    ModuleId, Name, Visibility,
+    Attributes, BodyEntityLoc, ClassData, EntityData, EntityLoc, FunctionData, ItemSyntaxLoc,
+    ItemTreeBuilder, ModuleId, Name, PlainPathId,
 };
 use mlkc_rowan::AstNode;
-use mlkc_syntax::{FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl};
+use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl};
 use mlkc_vfs::FileId;
 
 use crate::{
-    BodyDecl, LoweredModule, LoweringDiag, decl,
+    BodyDecl, LoweredModule, LoweringDiag, decl, path,
     syntax::{self, item_position},
 };
 
@@ -23,6 +23,7 @@ pub(crate) fn lower(module: ModuleId, root: &ModuleRoot) -> LoweredModule {
         bodies: Vec::new(),
     };
 
+    lowering.preamble(root);
     lowering.items(root);
 
     let ItemLowering {
@@ -49,6 +50,24 @@ struct ItemLowering {
 }
 
 impl ItemLowering {
+    /// Records the path the module declares itself as, which is what its preamble writes.
+    ///
+    /// A module that has no preamble declares no path: what it is called is what the project
+    /// it belongs to says, and the path of the file is the canonical form of that.
+    fn preamble(&mut self, root: &ModuleRoot) {
+        let Some(preamble) = root.preamble() else {
+            return;
+        };
+
+        // A preamble whose path the parser could not read declares nothing:
+        // a path of no segments names nothing, and the parse is what reported the mistake.
+        let Ok(path) = preamble.name() else {
+            return;
+        };
+
+        self.builder.set_path(PlainPathId::new(path::plain(&path)));
+    }
+
     /// Declares every item of the module, in the order it is written.
     fn items(&mut self, root: &ModuleRoot) {
         let list = root.items().syntax().clone();
@@ -69,7 +88,8 @@ impl ItemLowering {
     /// Declares one function, and remembers the body it owns.
     fn function(&mut self, decl: &FunDecl, position: ItemSyntaxLoc) {
         let data = EntityData::Function(FunctionData {
-            visibility: Visibility::Private,
+            attributes: self.attributes(&decl.attributes()),
+            visibility: decl::visibility(decl.visibility_token()),
             signature: decl::signature(decl),
         });
 
@@ -95,7 +115,8 @@ impl ItemLowering {
     /// Declares one class.
     fn class(&mut self, decl: &TypeDecl, position: ItemSyntaxLoc) {
         let data = EntityData::Class(ClassData {
-            visibility: Visibility::Private,
+            attributes: self.attributes(&decl.attributes()),
+            visibility: decl::visibility(decl.visibility_token()),
         });
 
         self.entity(
@@ -104,6 +125,28 @@ impl ItemLowering {
             Some(syntax::name(decl.name())),
             data,
         );
+    }
+
+    /// Reads the attributes a declaration writes in front of itself.
+    ///
+    /// The attributes the language has are the ones the HIR has fields for; a name that
+    /// nothing knows is a mistake of the module, and the HIR has nowhere to put it.
+    fn attributes(&mut self, list: &AttributeList) -> Attributes {
+        let mut attributes = Attributes::default();
+
+        for attribute in decl::attributes(list) {
+            let name = syntax::name(attribute.name());
+
+            if !attributes.insert(&name) {
+                let message = format!("the language has no attribute `{name:?}`");
+                let diagnostic =
+                    LoweringDiag::new(message, syntax::span(self.file, attribute.syntax()));
+
+                self.diagnostics.push(diagnostic);
+            }
+        }
+
+        attributes
     }
 
     /// Declares one entity of the module.

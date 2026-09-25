@@ -33,21 +33,22 @@ fun calls(): Int =
 MODULE #0
 
 ITEM TREE
-  type Int  @1.0
+  type Int  @2.0
+    attributes: @builtin
     visibility: private
-  fun products  @1.1
-    visibility: private
-    ret: Int -> type Int
-  fun comparisons  @1.2
+  fun products  @2.1
     visibility: private
     ret: Int -> type Int
-  fun logic  @1.3
+  fun comparisons  @2.2
     visibility: private
     ret: Int -> type Int
-  fun parentheses  @1.4
+  fun logic  @2.3
     visibility: private
     ret: Int -> type Int
-  fun calls  @1.5
+  fun parentheses  @2.4
+    visibility: private
+    ret: Int -> type Int
+  fun calls  @2.5
     visibility: private
     ret: Int -> type Int
 ```

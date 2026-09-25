@@ -22,13 +22,13 @@ fun after(): Int = 3
 MODULE #0
 
 ITEM TREE
-  fun <missing>  @1.0
+  fun <missing>  @2.0
     visibility: private
     ret: Int -> unresolved
-  fun <missing>#1  @1.1
+  fun <missing>#1  @2.1
     visibility: private
     ret: Int -> unresolved
-  fun after  @1.2
+  fun after  @2.2
     visibility: private
     ret: Int -> unresolved
 ```

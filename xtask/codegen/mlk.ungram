@@ -63,6 +63,7 @@ TypeArgList = (Type (',' Type)* ','?)
 
 ModuleRoot =
     bom: 'UNICODE_BOM'?
+    preamble: ModulePreamble?
     items: ModuleItemList
     eof: 'EOF'
 
@@ -84,11 +85,13 @@ Attribute =
 
 TypeDecl =
     attributes: AttributeList
+    visibility: 'pub'?
     'type'
     name: Name
 
 FunDecl =
     attributes: AttributeList
+    visibility: 'pub'?
     'fun'
     name: Name
     parameters: Parameters

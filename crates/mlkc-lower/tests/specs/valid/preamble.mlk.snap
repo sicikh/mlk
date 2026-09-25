@@ -5,12 +5,9 @@ expression: snapshot
 ## Input
 
 ```mlk
-// A token where a declaration belongs: the parse keeps it in a bogus declaration, and the
-// declarations around it are read as if it were not there.
+// The path a module declares itself as, which is what its project knows it by.
 
-type Int
-
-+
+module my-proj.main-module
 
 fun main(): Int =
     1
@@ -20,14 +17,12 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 my-proj.main-module
 
 ITEM TREE
-  type Int  @2.0
+  fun main  @2.0
     visibility: private
-  fun main  @2.2
-    visibility: private
-    ret: Int -> type Int
+    ret: Int -> unresolved
 ```
 
 ## Bodies
@@ -46,4 +41,4 @@ No diagnostics.
 
 ## Parse Diagnostics
 
-162..163: Expected a declaration but instead found '+'.
+No diagnostics.

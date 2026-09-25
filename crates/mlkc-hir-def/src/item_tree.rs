@@ -15,6 +15,7 @@ use crate::{
     item_data::{ClassData, ConstData, EntityData, FunctionData, ImplData, UseData, ValueData},
     macros::{define_entity_accessors, for_each_item_kind},
     name::Name,
+    path::PlainPathId,
 };
 
 /// Where an entity is in the module's syntax.
@@ -126,6 +127,8 @@ impl Entity {
 #[derive(Debug, PartialEq, Eq)]
 pub struct ItemTree {
     module: ModuleId,
+    /// The path the module declares itself as, if its preamble writes one.
+    path: Option<PlainPathId>,
     /// The entities, in the order the module declares them.
     entities: Arena<Entity>,
     /// What each name denotes in this revision: a function of `entities`.
@@ -138,6 +141,15 @@ impl ItemTree {
     /// The module this tree describes.
     pub fn module(&self) -> ModuleId {
         self.module
+    }
+
+    /// The path the module declares itself as, if the module has a preamble.
+    ///
+    /// It is a claim about the file rather than an item of it: the module is named by its file
+    /// ([`ModuleId`]), the preamble is the path the project knows it by ---
+    /// `my-proj.main-module` --- and what checks that the two agree is the project.
+    pub fn path(&self) -> Option<PlainPathId> {
+        self.path.clone()
     }
 
     /// What each name of the module denotes before another module is read.
@@ -271,6 +283,7 @@ pub struct Declared {
 #[derive(Debug)]
 pub struct ItemTreeBuilder {
     module: ModuleId,
+    path: Option<PlainPathId>,
     entities: Arena<Entity>,
     names: FxHashMap<ItemLoc, ModuleDefId>,
     scope: LocalScope,
@@ -283,11 +296,19 @@ impl ItemTreeBuilder {
     pub fn new(module: ModuleId) -> Self {
         Self {
             module,
+            path: None,
             entities: Arena::new(),
             names: FxHashMap::default(),
             scope: LocalScope::default(),
             declared: FxHashMap::default(),
         }
+    }
+
+    /// Records the path the module declares itself as, which is what its preamble writes.
+    ///
+    /// A module declares one path: a caller that records a second one replaces the first.
+    pub fn set_path(&mut self, path: PlainPathId) {
+        self.path = Some(path);
     }
 
     /// Declares one entity of the module, and returns what declaring it produced.
@@ -356,6 +377,7 @@ impl ItemTreeBuilder {
 
         ItemTree {
             module: self.module,
+            path: self.path,
             entities: self.entities,
             names: self.names,
             scope: self.scope,
@@ -373,7 +395,7 @@ mod tests {
     use crate::{
         def_map::{LocalEntry, LocalTarget, Namespace},
         id::{FunctionLoc, UseLoc, WrongKind},
-        item_data::{ParamData, Signature, Visibility},
+        item_data::{Attributes, ParamData, Signature, Visibility},
         path::{PathAnchor, PathData, PlainPath, PlainPathId},
         type_ref::TypeRef,
     };
@@ -396,6 +418,7 @@ mod tests {
     /// not in its data, and the builder mints it from what `declare` is given.
     fn function(_name: &str) -> EntityData {
         EntityData::Function(FunctionData {
+            attributes: Attributes::default(),
             visibility: Visibility::Private,
             signature: Signature::default(),
         })
@@ -404,6 +427,7 @@ mod tests {
     /// The data of a class, named for the reader as [`function`] is.
     fn class(_name: &str) -> EntityData {
         EntityData::Class(ClassData {
+            attributes: Attributes::default(),
             visibility: Visibility::Private,
         })
     }
@@ -589,6 +613,7 @@ mod tests {
         builder.declare(
             Some(Name::new("f")),
             EntityData::Function(FunctionData {
+                attributes: Attributes::default(),
                 visibility: Visibility::Public,
                 signature: Signature {
                     params: vec![ParamData {
@@ -627,6 +652,7 @@ mod tests {
         builder.declare(
             Some(Name::new("f")),
             EntityData::Function(FunctionData {
+                attributes: Attributes::default(),
                 visibility: Visibility::Private,
                 signature: Signature {
                     params: Vec::new(),

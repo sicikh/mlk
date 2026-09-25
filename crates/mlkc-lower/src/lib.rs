@@ -10,13 +10,15 @@
 //!
 //! # What lowering does
 //!
+//! - it reads the preamble of a module: the path the module declares itself as;
 //! - it reads the items of a module and declares each of them with the data a dependent may
-//!   read: the signature of a function, the visibility of an entity, the path an import
-//!   names;
+//!   read: the attributes a declaration carries, its visibility, the signature of a function,
+//!   the path an import names;
 //! - it reads the body of a function into expressions, patterns, paths, and the names the
 //!   body binds, and anchors a path to the binding it names before anything else can know
 //!   the binding: only the body knows its own names;
-//! - it reports what the HIR cannot hold, and nothing else.
+//! - it reports what the HIR cannot hold, and nothing else: an attribute that the language
+//!   has no meaning for is the one thing a module can say that has nowhere to go.
 //!
 //! # What lowering does not do
 //!

@@ -226,6 +226,7 @@ impl FunDecl {
     pub fn as_fields(&self) -> FunDeclFields {
         FunDeclFields {
             attributes: self.attributes(),
+            visibility_token: self.visibility_token(),
             fun_token: self.fun_token(),
             name: self.name(),
             parameters: self.parameters(),
@@ -236,20 +237,23 @@ impl FunDecl {
     pub fn attributes(&self) -> AttributeList {
         support::list(&self.syntax, 0usize)
     }
+    pub fn visibility_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, 1usize)
+    }
     pub fn fun_token(&self) -> SyntaxResult<SyntaxToken> {
-        support::required_token(&self.syntax, 1usize)
+        support::required_token(&self.syntax, 2usize)
     }
     pub fn name(&self) -> SyntaxResult<Name> {
-        support::required_node(&self.syntax, 2usize)
-    }
-    pub fn parameters(&self) -> SyntaxResult<Parameters> {
         support::required_node(&self.syntax, 3usize)
     }
+    pub fn parameters(&self) -> SyntaxResult<Parameters> {
+        support::required_node(&self.syntax, 4usize)
+    }
     pub fn return_type_annotation(&self) -> Option<FunReturnTypeAnnotation> {
-        support::node(&self.syntax, 4usize)
+        support::node(&self.syntax, 5usize)
     }
     pub fn body(&self) -> Option<FunBody> {
-        support::node(&self.syntax, 5usize)
+        support::node(&self.syntax, 6usize)
     }
 }
 impl Serialize for FunDecl {
@@ -266,6 +270,7 @@ impl Serialize for FunDecl {
 #[derive(Serialize)]
 pub struct FunDeclFields {
     pub attributes: AttributeList,
+    pub visibility_token: Option<SyntaxToken>,
     pub fun_token: SyntaxResult<SyntaxToken>,
     pub name: SyntaxResult<Name>,
     pub parameters: SyntaxResult<Parameters>,
@@ -550,6 +555,7 @@ impl ModuleRoot {
     pub fn as_fields(&self) -> ModuleRootFields {
         ModuleRootFields {
             bom_token: self.bom_token(),
+            preamble: self.preamble(),
             items: self.items(),
             eof_token: self.eof_token(),
         }
@@ -557,11 +563,14 @@ impl ModuleRoot {
     pub fn bom_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, 0usize)
     }
+    pub fn preamble(&self) -> Option<ModulePreamble> {
+        support::node(&self.syntax, 1usize)
+    }
     pub fn items(&self) -> ModuleItemList {
-        support::list(&self.syntax, 1usize)
+        support::list(&self.syntax, 2usize)
     }
     pub fn eof_token(&self) -> SyntaxResult<SyntaxToken> {
-        support::required_token(&self.syntax, 2usize)
+        support::required_token(&self.syntax, 3usize)
     }
 }
 impl Serialize for ModuleRoot {
@@ -578,6 +587,7 @@ impl Serialize for ModuleRoot {
 #[derive(Serialize)]
 pub struct ModuleRootFields {
     pub bom_token: Option<SyntaxToken>,
+    pub preamble: Option<ModulePreamble>,
     pub items: ModuleItemList,
     pub eof_token: SyntaxResult<SyntaxToken>,
 }
@@ -1069,6 +1079,7 @@ impl TypeDecl {
     pub fn as_fields(&self) -> TypeDeclFields {
         TypeDeclFields {
             attributes: self.attributes(),
+            visibility_token: self.visibility_token(),
             type_token: self.type_token(),
             name: self.name(),
         }
@@ -1076,11 +1087,14 @@ impl TypeDecl {
     pub fn attributes(&self) -> AttributeList {
         support::list(&self.syntax, 0usize)
     }
+    pub fn visibility_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, 1usize)
+    }
     pub fn type_token(&self) -> SyntaxResult<SyntaxToken> {
-        support::required_token(&self.syntax, 1usize)
+        support::required_token(&self.syntax, 2usize)
     }
     pub fn name(&self) -> SyntaxResult<Name> {
-        support::required_node(&self.syntax, 2usize)
+        support::required_node(&self.syntax, 3usize)
     }
 }
 impl Serialize for TypeDecl {
@@ -1097,6 +1111,7 @@ impl Serialize for TypeDecl {
 #[derive(Serialize)]
 pub struct TypeDeclFields {
     pub attributes: AttributeList,
+    pub visibility_token: Option<SyntaxToken>,
     pub type_token: SyntaxResult<SyntaxToken>,
     pub name: SyntaxResult<Name>,
 }
@@ -1651,6 +1666,10 @@ impl std::fmt::Debug for FunDecl {
             DEPTH.set(current_depth + 1);
             f.debug_struct("FunDecl")
                 .field("attributes", &self.attributes())
+                .field(
+                    "visibility_token",
+                    &support::DebugOptionalElement(self.visibility_token()),
+                )
                 .field("fun_token", &support::DebugSyntaxResult(self.fun_token()))
                 .field("name", &support::DebugSyntaxResult(self.name()))
                 .field("parameters", &support::DebugSyntaxResult(self.parameters()))
@@ -2013,6 +2032,7 @@ impl std::fmt::Debug for ModuleRoot {
                     "bom_token",
                     &support::DebugOptionalElement(self.bom_token()),
                 )
+                .field("preamble", &support::DebugOptionalElement(self.preamble()))
                 .field("items", &self.items())
                 .field("eof_token", &support::DebugSyntaxResult(self.eof_token()))
                 .finish()
@@ -2624,6 +2644,10 @@ impl std::fmt::Debug for TypeDecl {
             DEPTH.set(current_depth + 1);
             f.debug_struct("TypeDecl")
                 .field("attributes", &self.attributes())
+                .field(
+                    "visibility_token",
+                    &support::DebugOptionalElement(self.visibility_token()),
+                )
                 .field("type_token", &support::DebugSyntaxResult(self.type_token()))
                 .field("name", &support::DebugSyntaxResult(self.name()))
                 .finish()

@@ -99,8 +99,8 @@ pub use crate::{
         ModuleDefWithBodyId, ModuleId, UseLoc, ValueLoc, WrongKind,
     },
     item_data::{
-        ClassData, ConstData, EntityData, FunctionData, ImplData, ParamData, Signature, UseData,
-        ValueData, Visibility,
+        Attributes, ClassData, ConstData, EntityData, FunctionData, ImplData, ParamData, Signature,
+        UseData, ValueData, Visibility,
     },
     item_tree::{Declared, Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
     name::Name,

@@ -1,0 +1,16 @@
+// How far a declaration is visible: `pub` in front of the keyword, after the attributes a
+// declaration carries, or nothing at all.
+
+pub type Int
+
+@builtin
+pub type Unit
+
+@extern
+fun println-int(value: Int): Unit
+
+pub fun size(value: Int): Int =
+    value
+
+fun private(value: Int): Int =
+    value

@@ -25,9 +25,11 @@ fun bound_to_a_call(): Int =
 ```
 ModuleRoot {
     bom_token: missing (optional),
+    preamble: missing (optional),
     items: ModuleItemList [
         FunDecl {
             attributes: AttributeList [],
+            visibility_token: missing (optional),
             fun_token: FUN_KW@0..4 "fun" [] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@4..10 "nested" [] [],
@@ -96,6 +98,7 @@ ModuleRoot {
         },
         FunDecl {
             attributes: AttributeList [],
+            visibility_token: missing (optional),
             fun_token: FUN_KW@63..69 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@69..76 "ignored" [] [],
@@ -139,6 +142,7 @@ ModuleRoot {
         },
         FunDecl {
             attributes: AttributeList [],
+            visibility_token: missing (optional),
             fun_token: FUN_KW@108..114 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@114..129 "bound_to_a_call" [] [],
@@ -222,17 +226,19 @@ ModuleRoot {
 ```
 0: MODULE_ROOT@0..171
   0: (empty)
-  1: MODULE_ITEM_LIST@0..170
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..170
     0: FUN_DECL@0..63
       0: ATTRIBUTE_LIST@0..0
-      1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
-      2: NAME@4..10
+      1: (empty)
+      2: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
+      3: NAME@4..10
         0: IDENT@4..10 "nested" [] []
-      3: PARAMETERS@10..12
+      4: PARAMETERS@10..12
         0: L_PAREN@10..11 "(" [] []
         1: PARAMETER_LIST@11..11
         2: R_PAREN@11..12 ")" [] []
-      4: FUN_RETURN_TYPE_ANNOTATION@12..18
+      5: FUN_RETURN_TYPE_ANNOTATION@12..18
         0: COLON@12..14 ":" [] [Whitespace(" ")]
         1: PATH_TYPE@14..18
           0: PATH@14..18
@@ -241,7 +247,7 @@ ModuleRoot {
               0: NAME@14..18
                 0: IDENT@14..18 "Int" [] [Whitespace(" ")]
               1: (empty)
-      5: FUN_BODY@18..63
+      6: FUN_BODY@18..63
         0: EQ@18..19 "=" [] []
         1: LET_EXPR@19..63
           0: LET_KW@19..28 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
@@ -271,14 +277,15 @@ ModuleRoot {
                   0: IDENT@62..63 "y" [] []
     1: FUN_DECL@63..108
       0: ATTRIBUTE_LIST@63..63
-      1: FUN_KW@63..69 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: NAME@69..76
+      1: (empty)
+      2: FUN_KW@63..69 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@69..76
         0: IDENT@69..76 "ignored" [] []
-      3: PARAMETERS@76..78
+      4: PARAMETERS@76..78
         0: L_PAREN@76..77 "(" [] []
         1: PARAMETER_LIST@77..77
         2: R_PAREN@77..78 ")" [] []
-      4: FUN_RETURN_TYPE_ANNOTATION@78..84
+      5: FUN_RETURN_TYPE_ANNOTATION@78..84
         0: COLON@78..80 ":" [] [Whitespace(" ")]
         1: PATH_TYPE@80..84
           0: PATH@80..84
@@ -287,7 +294,7 @@ ModuleRoot {
               0: NAME@80..84
                 0: IDENT@80..84 "Int" [] [Whitespace(" ")]
               1: (empty)
-      5: FUN_BODY@84..108
+      6: FUN_BODY@84..108
         0: EQ@84..85 "=" [] []
         1: LET_EXPR@85..108
           0: LET_KW@85..94 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
@@ -301,14 +308,15 @@ ModuleRoot {
             0: INT_LITERAL@102..108 "2" [Newline("\n"), Whitespace("    ")] []
     2: FUN_DECL@108..170
       0: ATTRIBUTE_LIST@108..108
-      1: FUN_KW@108..114 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: NAME@114..129
+      1: (empty)
+      2: FUN_KW@108..114 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@114..129
         0: IDENT@114..129 "bound_to_a_call" [] []
-      3: PARAMETERS@129..131
+      4: PARAMETERS@129..131
         0: L_PAREN@129..130 "(" [] []
         1: PARAMETER_LIST@130..130
         2: R_PAREN@130..131 ")" [] []
-      4: FUN_RETURN_TYPE_ANNOTATION@131..137
+      5: FUN_RETURN_TYPE_ANNOTATION@131..137
         0: COLON@131..133 ":" [] [Whitespace(" ")]
         1: PATH_TYPE@133..137
           0: PATH@133..137
@@ -317,7 +325,7 @@ ModuleRoot {
               0: NAME@133..137
                 0: IDENT@133..137 "Int" [] [Whitespace(" ")]
               1: (empty)
-      5: FUN_BODY@137..170
+      6: FUN_BODY@137..170
         0: EQ@137..138 "=" [] []
         1: LET_EXPR@138..170
           0: LET_KW@138..147 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
@@ -349,7 +357,7 @@ ModuleRoot {
                 0: NAME@168..169
                   0: IDENT@168..169 "x" [] []
             3: R_PAREN@169..170 ")" [] []
-  2: EOF@170..171 "" [Newline("\n")] []
+  3: EOF@170..171 "" [Newline("\n")] []
 
 ```
 

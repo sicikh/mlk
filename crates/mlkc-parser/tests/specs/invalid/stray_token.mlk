@@ -1,3 +1,6 @@
+// A token that stands where a declaration belongs: it is kept as a bogus declaration,
+// and the declaration after it is parsed as if it were not there --- `pub` included.
+
 +
 
-fun main(): Unit = 1
+pub fun main(): Unit = 1

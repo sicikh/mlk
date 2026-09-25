@@ -24,14 +24,16 @@ fun main() =
 MODULE #0
 
 ITEM TREE
-  type Int  @1.0
+  type Int  @2.0
+    attributes: @builtin
     visibility: private
-  fun add  @1.1
+  fun add  @2.1
+    attributes: @extern
     visibility: private
     param left: Int -> type Int
     param right: Int -> type Int
     ret: Int -> type Int
-  fun main  @1.2
+  fun main  @2.2
     visibility: private
 ```
 

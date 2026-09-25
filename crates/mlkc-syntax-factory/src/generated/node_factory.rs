@@ -46,6 +46,7 @@ pub fn fun_decl(
         fun_token,
         name,
         parameters,
+        visibility_token: None,
         return_type_annotation: None,
         body: None,
     }
@@ -55,10 +56,15 @@ pub struct FunDeclBuilder {
     fun_token: SyntaxToken,
     name: Name,
     parameters: Parameters,
+    visibility_token: Option<SyntaxToken>,
     return_type_annotation: Option<FunReturnTypeAnnotation>,
     body: Option<FunBody>,
 }
 impl FunDeclBuilder {
+    pub fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+        self.visibility_token = Some(visibility_token);
+        self
+    }
     pub fn with_return_type_annotation(
         mut self,
         return_type_annotation: FunReturnTypeAnnotation,
@@ -73,6 +79,8 @@ impl FunDeclBuilder {
     pub fn build(self) -> FunDecl {
         FunDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FUN_DECL, [
             Some(SyntaxElement::Node(self.attributes.into_syntax())),
+            self.visibility_token
+                .map(|token| SyntaxElement::Token(token)),
             Some(SyntaxElement::Token(self.fun_token)),
             Some(SyntaxElement::Node(self.name.into_syntax())),
             Some(SyntaxElement::Node(self.parameters.into_syntax())),
@@ -138,21 +146,29 @@ pub fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRootB
         items,
         eof_token,
         bom_token: None,
+        preamble: None,
     }
 }
 pub struct ModuleRootBuilder {
     items: ModuleItemList,
     eof_token: SyntaxToken,
     bom_token: Option<SyntaxToken>,
+    preamble: Option<ModulePreamble>,
 }
 impl ModuleRootBuilder {
     pub fn with_bom_token(mut self, bom_token: SyntaxToken) -> Self {
         self.bom_token = Some(bom_token);
         self
     }
+    pub fn with_preamble(mut self, preamble: ModulePreamble) -> Self {
+        self.preamble = Some(preamble);
+        self
+    }
     pub fn build(self) -> ModuleRoot {
         ModuleRoot::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_ROOT, [
             self.bom_token.map(|token| SyntaxElement::Token(token)),
+            self.preamble
+                .map(|token| SyntaxElement::Node(token.into_syntax())),
             Some(SyntaxElement::Node(self.items.into_syntax())),
             Some(SyntaxElement::Token(self.eof_token)),
         ]))
@@ -283,12 +299,38 @@ pub fn type_args(
         Some(SyntaxElement::Token(r_brack_token)),
     ]))
 }
-pub fn type_decl(attributes: AttributeList, type_token: SyntaxToken, name: Name) -> TypeDecl {
-    TypeDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_DECL, [
-        Some(SyntaxElement::Node(attributes.into_syntax())),
-        Some(SyntaxElement::Token(type_token)),
-        Some(SyntaxElement::Node(name.into_syntax())),
-    ]))
+pub fn type_decl(
+    attributes: AttributeList,
+    type_token: SyntaxToken,
+    name: Name,
+) -> TypeDeclBuilder {
+    TypeDeclBuilder {
+        attributes,
+        type_token,
+        name,
+        visibility_token: None,
+    }
+}
+pub struct TypeDeclBuilder {
+    attributes: AttributeList,
+    type_token: SyntaxToken,
+    name: Name,
+    visibility_token: Option<SyntaxToken>,
+}
+impl TypeDeclBuilder {
+    pub fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+        self.visibility_token = Some(visibility_token);
+        self
+    }
+    pub fn build(self) -> TypeDecl {
+        TypeDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_DECL, [
+            Some(SyntaxElement::Node(self.attributes.into_syntax())),
+            self.visibility_token
+                .map(|token| SyntaxElement::Token(token)),
+            Some(SyntaxElement::Token(self.type_token)),
+            Some(SyntaxElement::Node(self.name.into_syntax())),
+        ]))
+    }
 }
 pub fn var_expr(name: Name) -> VarExpr {
     VarExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::VAR_EXPR, [Some(

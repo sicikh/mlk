@@ -28,15 +28,18 @@ fun main(): Unit =
 MODULE #0
 
 ITEM TREE
-  type Unit  @1.0
+  type Unit  @2.0
+    attributes: @builtin
     visibility: private
-  type Int  @1.1
+  type Int  @2.1
+    attributes: @builtin
     visibility: private
-  fun println-int  @1.2
+  fun println-int  @2.2
+    attributes: @extern
     visibility: private
     param value: Int -> type Int
     ret: Unit -> type Unit
-  fun main  @1.3
+  fun main  @2.3
     visibility: private
     ret: Unit -> type Unit
 ```

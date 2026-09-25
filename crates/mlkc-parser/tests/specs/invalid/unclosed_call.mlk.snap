@@ -15,9 +15,11 @@ fun main(): Unit =
 ```
 ModuleRoot {
     bom_token: missing (optional),
+    preamble: missing (optional),
     items: ModuleItemList [
         FunDecl {
             attributes: AttributeList [],
+            visibility_token: missing (optional),
             fun_token: FUN_KW@0..4 "fun" [] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@4..8 "main" [] [],
@@ -73,17 +75,19 @@ ModuleRoot {
 ```
 0: MODULE_ROOT@0..30
   0: (empty)
-  1: MODULE_ITEM_LIST@0..29
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..29
     0: FUN_DECL@0..29
       0: ATTRIBUTE_LIST@0..0
-      1: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
-      2: NAME@4..8
+      1: (empty)
+      2: FUN_KW@0..4 "fun" [] [Whitespace(" ")]
+      3: NAME@4..8
         0: IDENT@4..8 "main" [] []
-      3: PARAMETERS@8..10
+      4: PARAMETERS@8..10
         0: L_PAREN@8..9 "(" [] []
         1: PARAMETER_LIST@9..9
         2: R_PAREN@9..10 ")" [] []
-      4: FUN_RETURN_TYPE_ANNOTATION@10..17
+      5: FUN_RETURN_TYPE_ANNOTATION@10..17
         0: COLON@10..12 ":" [] [Whitespace(" ")]
         1: PATH_TYPE@12..17
           0: PATH@12..17
@@ -92,7 +96,7 @@ ModuleRoot {
               0: NAME@12..17
                 0: IDENT@12..17 "Unit" [] [Whitespace(" ")]
               1: (empty)
-      5: FUN_BODY@17..29
+      6: FUN_BODY@17..29
         0: EQ@17..18 "=" [] []
         1: CALL_EXPR@18..29
           0: VAR_EXPR@18..24
@@ -106,7 +110,7 @@ ModuleRoot {
             2: INT_LITERAL@28..29
               0: INT_LITERAL@28..29 "2" [] []
           3: (empty)
-  2: EOF@29..30 "" [Newline("\n")] []
+  3: EOF@29..30 "" [Newline("\n")] []
 
 ```
 

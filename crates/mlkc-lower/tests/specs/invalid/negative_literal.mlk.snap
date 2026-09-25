@@ -23,9 +23,10 @@ fun negative(): Int =
 MODULE #0
 
 ITEM TREE
-  type Int  @1.0
+  type Int  @2.0
+    attributes: @builtin
     visibility: private
-  fun negative  @1.1
+  fun negative  @2.1
     visibility: private
     ret: Int -> type Int
 ```

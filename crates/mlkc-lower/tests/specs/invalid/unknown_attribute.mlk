@@ -1,0 +1,8 @@
+// An attribute the language does not have: the HIR holds the attributes the compiler knows
+// what to do with, and a name nothing knows is a mistake of the module.
+
+@biultin
+type Int
+
+fun main(): Int =
+    1

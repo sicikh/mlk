@@ -153,10 +153,17 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             FUN_DECL => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<6usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<7usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
                     && AttributeList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![pub]
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -364,10 +371,17 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             MODULE_ROOT => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
                     && element.kind() == T![UNICODE_BOM]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && ModulePreamble::can_cast(element.kind())
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -677,10 +691,17 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             TYPE_DECL => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
                     && AttributeList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![pub]
                 {
                     slots.mark_present();
                     current_element = elements.next();

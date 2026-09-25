@@ -1,10 +1,30 @@
 //! What a declaration says about a function: its parameters, and the type of its result.
 
-use mlkc_hir_def::{Name, ParamData, Signature, TypeRef};
+use mlkc_hir_def::{Name, ParamData, Signature, TypeRef, Visibility};
 use mlkc_rowan::AstNode;
-use mlkc_syntax::{AnyParameter, FunDecl, Parameter};
+use mlkc_syntax::{AnyParameter, Attribute, AttributeList, FunDecl, Parameter, SyntaxToken};
 
 use crate::{syntax, ty};
+
+/// The visibility a declaration is written with.
+///
+/// The language writes `pub` in front of a declaration and nothing else: a declaration
+/// without it is visible inside its module, which is what the default visibility is.
+pub(crate) fn visibility(token: Option<SyntaxToken>) -> Visibility {
+    if token.is_some() {
+        Visibility::Public
+    } else {
+        Visibility::default()
+    }
+}
+
+/// The attributes an attribute list carries, in the order they are written.
+pub(crate) fn attributes(list: &AttributeList) -> Vec<Attribute> {
+    list.syntax()
+        .children()
+        .filter_map(Attribute::cast)
+        .collect()
+}
 
 /// The signature a function declares: what a caller reads.
 ///

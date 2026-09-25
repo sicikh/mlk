@@ -14,32 +14,41 @@ use mlkc_syntax::{
 use crate::{
     parser::MlkParser,
     syntax::{
-        attribute::{is_at_declaration, parse_attribute_list},
+        attribute::{is_at_declaration, parse_attribute_list, parse_visibility},
         auxiliary::parse_name,
         expr::parse_expr,
         parse_error::{
             expected_declaration, expected_expr, expected_name, expected_parameter,
-            expected_parameters, expected_type,
+            expected_parameters, expected_path, expected_type,
         },
-        ty::parse_type,
+        ty::{parse_path, parse_type},
     },
 };
 
-/// The tokens a broken module item is recovered at: the start of the next declaration.
-const MODULE_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![@], T![fun], T![type]];
+/// The tokens a broken module item is recovered at: the start of the next declaration,
+/// which is `@`, `pub`, or the keyword of one of the declarations the language has.
+const MODULE_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
+    token_set![T![@], T![pub], T![fun], T![type]];
 
 /// The tokens a broken parameter is recovered at: the end of the parameter it was written
 /// in, or the end of the list it belongs to.
 const PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![,], T![')']];
 
-/// Parses the root of the tree: the byte order mark if the file has one, the items of the
-/// module, and the end of the file.
+/// Parses the root of the tree: the byte order mark if the file has one, the preamble of the
+/// module, the items of the module, and the end of the file.
+// test mlk a_module_declares_the_path_it_is_of
+// module my-proj.main-module
+//
+// fun main(): Int =
+//     1
 pub(crate) fn parse_module_root(p: &mut MlkParser) -> CompletedMarker {
     let m = p.start();
 
     // The mark is a token of the tree rather than trivia: it is the first thing in the
     // file, and a file that has it is written differently from one that does not.
     p.eat(T![UNICODE_BOM]);
+
+    parse_module_preamble(p).ok();
 
     ModuleItemListParse.parse_list(p);
 
@@ -48,6 +57,24 @@ pub(crate) fn parse_module_root(p: &mut MlkParser) -> CompletedMarker {
     p.expect(T![EOF]);
 
     m.complete(p, MODULE_ROOT)
+}
+
+/// Parses the preamble of a module: the path it declares itself as.
+///
+/// A module is written in a file, and the preamble is the path of that file in the project:
+/// `module my-proj.main-module`. A file that has no preamble declares no path, and the
+/// project it belongs to is what says what it is called.
+fn parse_module_preamble(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T![module]) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T![module]);
+    parse_path(p).or_add_diagnostic(p, expected_path);
+
+    Present(m.complete(p, MODULE_PREAMBLE))
 }
 
 /// The items of a module.
@@ -102,6 +129,10 @@ fn parse_module_item(p: &mut MlkParser) -> ParsedSyntax {
 // test mlk a_function_may_take_no_arguments_and_return_nothing
 // fun main() =
 //     42
+//
+// test mlk a_function_may_be_public
+// pub fun main(): Int =
+//     42
 fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
     if !is_at_declaration(p, FUN_KW) {
         return ParsedSyntax::Absent;
@@ -110,6 +141,7 @@ fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
     let m = p.start();
 
     parse_attribute_list(p);
+    parse_visibility(p);
     p.expect(T![fun]);
     parse_name(p).or_add_diagnostic(p, expected_name);
     parse_parameters(p).or_add_diagnostic(p, expected_parameters);
@@ -123,6 +155,9 @@ fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
 // test mlk a_type_declaration_names_a_type
 // @builtin
 // type Unit
+//
+// test mlk a_type_declaration_may_be_public
+// pub type Unit
 fn parse_type_decl(p: &mut MlkParser) -> ParsedSyntax {
     if !is_at_declaration(p, TYPE_KW) {
         return ParsedSyntax::Absent;
@@ -131,6 +166,7 @@ fn parse_type_decl(p: &mut MlkParser) -> ParsedSyntax {
     let m = p.start();
 
     parse_attribute_list(p);
+    parse_visibility(p);
     p.expect(T![type]);
     parse_name(p).or_add_diagnostic(p, expected_name);
 

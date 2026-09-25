@@ -5,21 +5,22 @@ expression: snapshot
 ## Input
 
 ```mlk
-// A module that declares one name twice: the first declaration is what the name means, and
-// the second is what the lowering reports. A name declared in another namespace is not a
-// duplicate of it, which is what `valid/namespaces.mlk` shows.
+// How far a declaration is visible: `pub` in front of the keyword, after the attributes a
+// declaration carries, or nothing at all.
 
-type Int
+pub type Int
 
-fun size(value: Int): Int =
+@builtin
+pub type Unit
+
+@extern
+fun println-int(value: Int): Unit
+
+pub fun size(value: Int): Int =
     value
 
-fun size(value: Int): Int =
+fun private(value: Int): Int =
     value
-
-type Point
-
-type Point
 
 ```
 
@@ -30,19 +31,23 @@ MODULE #0
 
 ITEM TREE
   type Int  @2.0
+    visibility: public
+  type Unit  @2.1
+    attributes: @builtin
+    visibility: public
+  fun println-int  @2.2
+    attributes: @extern
     visibility: private
-  fun size  @2.1
+    param value: Int -> type Int
+    ret: Unit -> type Unit
+  fun size  @2.3
+    visibility: public
+    param value: Int -> type Int
+    ret: Int -> type Int
+  fun private  @2.4
     visibility: private
     param value: Int -> type Int
     ret: Int -> type Int
-  fun size#1  @2.2
-    visibility: private
-    param value: Int -> type Int
-    ret: Int -> type Int
-  type Point  @2.3
-    visibility: private
-  type Point#1  @2.4
-    visibility: private
 ```
 
 ## Bodies
@@ -62,7 +67,7 @@ paths
 ```
 
 ```
-BODY fun size#1 in module #0
+BODY fun private in module #0
 
 root expr#0
 params
@@ -77,8 +82,7 @@ paths
 
 ## Lowering Diagnostics
 
-296..333: `fun size#1` is declared more than once in this module
-347..357: `type Point#1` is declared more than once in this module
+No diagnostics.
 
 ## Parse Diagnostics
 

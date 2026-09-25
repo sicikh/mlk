@@ -1,7 +1,10 @@
 //! Attributes: the `@name` list that stands in front of a declaration.
 
 use mlkc_parser_core::{parsed_syntax::ParsedSyntax::Present, prelude::*};
-use mlkc_syntax::SyntaxKind::{self, *};
+use mlkc_syntax::{
+    SyntaxKind::{self, *},
+    T,
+};
 
 use crate::{
     parser::MlkParser,
@@ -9,7 +12,7 @@ use crate::{
 };
 
 /// Whether the parser is at a declaration that starts with the keyword `keyword`,
-/// possibly preceded by an attribute list.
+/// possibly preceded by an attribute list and by `pub`.
 ///
 /// The keyword cannot simply be looked at when the declaration starts with `@`: both a
 /// `fun` and a `type` declaration carry attributes, so a rule has to look past the
@@ -26,7 +29,21 @@ pub(crate) fn is_at_declaration(p: &mut MlkParser, keyword: SyntaxKind) -> bool 
         index += 2;
     }
 
+    // `pub` is a word of its own in front of the keyword: a declaration is public when it is
+    // written there, and which declaration it is is still what follows it.
+    if p.nth_at(index, PUB_KW) {
+        index += 1;
+    }
+
     p.nth_at(index, keyword)
+}
+
+/// Eats the `pub` a declaration may be written with.
+///
+/// The token is a field of the declaration node, so a declaration the reader left private
+/// has an empty slot rather than no slot at all.
+pub(crate) fn parse_visibility(p: &mut MlkParser) {
+    p.eat(T![pub]);
 }
 
 /// Parses the attributes of a declaration.

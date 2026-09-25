@@ -249,6 +249,9 @@ The item tree of a module holds what the module's text alone determines:
 
 - the entities of the module and their observable data;
 - the import table, as the unresolved paths of its `use` items;
+- the path the module declares itself as, if its preamble writes one:
+  the name the project knows the module by,
+  of which the file the module is read from is the canonical form;
 - the bijection between names and arena ids, so that either direction of lookup is one step;
 - where each entity is in the module's syntax (see below).
 
@@ -263,6 +266,9 @@ a comment inside one function must not change what another function is called.
 impl ItemTree {
     /// The entities of the module, in source order.
     pub fn entities(&self) -> impl Iterator<Item = (ItemLoc, ModuleDefId)> + '_;
+
+    /// The path the module declares itself as, if it has a preamble.
+    pub fn path(&self) -> Option<PlainPathId>;
 
     /// The erased entry points: for code that means "an entity".
     pub fn entity_data(&self, item: ItemLoc) -> Option<&EntityData>;

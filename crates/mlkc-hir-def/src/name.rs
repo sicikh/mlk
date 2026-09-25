@@ -1,65 +1,128 @@
+//! A name, as declarations and references spell it.
+
+use std::{
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+};
+
 use mlkc_intern::{Symbol, sym};
 
-/// `Name` is a wrapper around string used in HIR for both references and declarations.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// A name in the HIR, used for both a declaration and a reference.
+///
+/// # Equality, hashing, and ordering
+///
+/// The name is interned, so `Eq` is pointer equality and is exact
+/// as long as the interner keeps one live allocation per text
+/// and a compared value stays alive -- which the driver guarantees
+/// by holding the value its key names.
+///
+/// `Hash` and `Ord` are by text, never by address:
+/// a map layout, a sorted list, or a list of use sites in a diagnostic
+/// must not depend on where an allocation happened to land.
+///
+/// A textual fallback in `Eq` is deliberately absent:
+/// it would make the cost of equality depend on the length of a name
+/// and would hide a violation of the retention rule instead of surfacing it.
+#[derive(Debug, Clone)]
 pub struct Name {
     symbol: Symbol,
 }
 
 impl Name {
-    pub fn as_str(&self) -> &str {
-        self.symbol.as_str()
-    }
-
-    pub const fn symbol(&self) -> &Symbol {
-        &self.symbol
-    }
-
-    pub fn new(text: &str) -> Name {
-        Name {
+    /// Interns a name.
+    pub fn new(text: &str) -> Self {
+        Self {
             symbol: Symbol::intern(text),
         }
     }
 
-    pub const fn missing() -> Name {
-        Name {
+    /// The name of a declaration or a reference that is missing.
+    pub const fn missing() -> Self {
+        Self {
             symbol: sym::missing_name,
         }
     }
 
+    /// Whether this is the name of something that is not there.
     pub fn is_missing(&self) -> bool {
-        self == &Name::missing()
+        self.symbol == sym::missing_name
     }
 
-    pub fn new_generated(idx: usize) -> Self {
-        Name::new(&format!("<wc@gennew>{idx}"))
-    }
-}
-
-impl PartialEq<Symbol> for Name {
-    fn eq(&self, symbol: &Symbol) -> bool {
-        self.symbol == *symbol
+    /// The text of the name.
+    pub fn as_str(&self) -> &str {
+        self.symbol.as_str()
     }
 }
 
-impl PartialEq<&Symbol> for Name {
-    fn eq(&self, symbol: &&Symbol) -> bool {
-        self.symbol == **symbol
+impl PartialEq for Name {
+    fn eq(&self, other: &Self) -> bool {
+        self.symbol == other.symbol
     }
 }
 
-impl PartialEq<Name> for Symbol {
-    fn eq(&self, name: &Name) -> bool {
-        *self == name.symbol
+impl Eq for Name {}
+
+impl Hash for Name {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
     }
 }
 
-impl PartialEq<Name> for &Symbol {
-    fn eq(&self, name: &Name) -> bool {
-        **self == name.symbol
+impl Ord for Name {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_str().cmp(other.as_str())
     }
 }
 
-pub trait AsName {
-    fn as_name(&self) -> &Name;
+impl PartialOrd for Name {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl fmt::Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::hash_map::DefaultHasher;
+
+    use super::*;
+
+    fn hash(name: &Name) -> u64 {
+        let mut state = DefaultHasher::new();
+        name.hash(&mut state);
+        state.finish()
+    }
+
+    #[test]
+    fn the_same_text_is_the_same_name() {
+        let first = Name::new("foo");
+        let second = Name::new("foo");
+
+        assert_eq!(first, second);
+        assert_eq!(hash(&first), hash(&second));
+    }
+
+    #[test]
+    fn a_name_hashes_and_orders_by_text() {
+        let mut names = [Name::new("b"), Name::new("c"), Name::new("a")];
+        names.sort();
+
+        assert_eq!(names.iter().map(Name::as_str).collect::<Vec<_>>(), [
+            "a", "b", "c"
+        ],);
+        // The hash is a function of the text alone, so it does not change with the allocation.
+        assert_eq!(hash(&Name::new("foo")), hash(&Name::new("foo")));
+    }
+
+    #[test]
+    fn a_missing_name_is_the_missing_name() {
+        assert!(Name::missing().is_missing());
+        assert!(!Name::new("foo").is_missing());
+    }
 }

@@ -200,7 +200,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd05482a95823ffe421e8a9ba24fa22a6a30d594e2c60455cbb43a41bf2d8fa"
 dependencies = [
  "divan-macros",
- "itertools 0.14.0",
+ "itertools",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
@@ -308,12 +308,6 @@ name = "drop_bomb"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9bda8e21c04aca2ae33ffc2fd8c23134f3cac46db123ba97bd9d3f3b8a4a85e1"
-
-[[package]]
-name = "ecow"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dca6141d10838e13f9b166c190254a3f9b5d8379521f9b7510810061cef17a4"
 
 [[package]]
 name = "either"
@@ -537,15 +531,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -677,9 +662,7 @@ dependencies = [
 name = "mlkc-hir-def"
 version = "0.1.0"
 dependencies = [
- "ecow",
  "indexmap",
- "itertools 0.15.0",
  "mlkc-intern",
  "mlkc-la-arena",
  "mlkc-vfs",

@@ -152,7 +152,7 @@ Provisional.
 - HIR: [mlkc-hir-def]
 
 [0004-module-system.md]: 0004-module-system.md
-[0003-ir-principles.md]: 0003-ir-principles.md
+[0003-ir-principles.md]: 0003-id-based-ir.md
 [0002-lossless-syntax-tree.md]: 0002-lossless-syntax-tree.md
 [mlkc-parser]: ../../crates/mlkc-parser
 [mlkc-hir-def]: ../../crates/mlkc-hir-def

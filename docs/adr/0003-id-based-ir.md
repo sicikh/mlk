@@ -1,6 +1,6 @@
 # Represent IRs as ID-based trees in per-owner arenas
 
-- Status: accepted
+- Status: superseded by [ADR-0010](0010-stable-entity-identity.md)
 - Date: 2026-09-20
 
 ## Context and Problem Statement

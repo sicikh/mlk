@@ -1,0 +1,14 @@
+// The declarations of a prelude, and a function that binds a name and calls another one.
+
+@builtin
+type Unit
+
+@builtin
+type Int
+
+@extern
+fun println-int(value: Int): Unit
+
+fun main(): Unit =
+    let x = 42 * 2 - 10 in
+    println-int(x + 20)

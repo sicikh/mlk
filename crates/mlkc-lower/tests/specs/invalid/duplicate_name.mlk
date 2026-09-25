@@ -1,0 +1,10 @@
+// A module that declares one name twice: the first declaration is what the name means, and
+// the second is what the lowering reports.
+
+type Int
+
+fun size(value: Int): Int =
+    value
+
+fun size(value: Int): Int =
+    value

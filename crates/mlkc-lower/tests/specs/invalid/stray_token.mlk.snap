@@ -1,0 +1,49 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A token where a declaration belongs: the parse keeps it in a bogus declaration, and the
+// declarations around it are read as if it were not there.
+
+type Int
+
++
+
+fun main(): Int =
+    1
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @1.0
+    visibility: private
+  fun main  @1.2
+    visibility: private
+    ret: Int -> type Int
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+162..163: Expected a declaration but instead found '+'.

@@ -1,0 +1,60 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A parameter the parser could not read: it is not a parameter of the signature, and the
+// declaration around it is still an item of the module.
+
+fun broken(1): Unit = 1
+
+fun after(): Unit = 2
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun broken  @1.0
+    visibility: private
+    param <missing>
+    ret: Unit -> unresolved
+  fun after  @1.1
+    visibility: private
+    ret: Unit -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun broken in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  literal 1
+pats
+  pat#0  bind <missing>
+```
+
+```
+BODY fun after in module #0
+
+root expr#0
+exprs
+  expr#0  literal 2
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+159..160: Expected a parameter but instead found '1'.

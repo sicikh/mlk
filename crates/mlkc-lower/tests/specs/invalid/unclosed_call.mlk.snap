@@ -1,0 +1,48 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A call that is never closed: the argument before the mistake is read, and the call is a
+// call of what the parser could read of it.
+
+fun main(): Int =
+    f(1, 2
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun main  @1.0
+    visibility: private
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#3
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  literal 2
+  expr#3  call expr#0 (expr#1, expr#2)
+paths
+  path#0  f -> unresolved
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+166..166: expected `)` but instead the file ends

@@ -10,17 +10,18 @@
 
 /// Declares the module-level kinds of entity the language has, once.
 ///
-/// An entry is `Variant(Data, Loc, ModuleId)`: the kind, the data behind it,
-/// the name of an entity of that kind, and its id inside an item tree.
+/// An entry is `Variant(Data, Loc, ModuleId, "keyword")`: the kind, the data behind it,
+/// the name of an entity of that kind, its id inside an item tree,
+/// and the word the language declares an entity of that kind with.
 macro_rules! for_each_item_kind {
     ($mac:ident) => {
         $mac! {
-            Function(FunctionData, FunctionLoc, ModuleFunctionId),
-            Class(ClassData, ClassLoc, ModuleClassId),
-            Value(ValueData, ValueLoc, ModuleValueId),
-            Const(ConstData, ConstLoc, ModuleConstId),
-            Impl(ImplData, ImplLoc, ModuleImplId),
-            Use(UseData, UseLoc, ModuleUseId),
+            Function(FunctionData, FunctionLoc, ModuleFunctionId, "fun"),
+            Class(ClassData, ClassLoc, ModuleClassId, "type"),
+            Value(ValueData, ValueLoc, ModuleValueId, "val"),
+            Const(ConstData, ConstLoc, ModuleConstId, "const"),
+            Impl(ImplData, ImplLoc, ModuleImplId, "impl"),
+            Use(UseData, UseLoc, ModuleUseId, "use"),
         }
     };
 }
@@ -33,7 +34,7 @@ pub(crate) use for_each_item_kind;
 macro_rules! define_identity_family {
     (
         $(
-            $variant:ident($data:ident, $loc:ident, $module_id:ident),
+            $variant:ident($data:ident, $loc:ident, $module_id:ident, $keyword:literal),
         )*
     ) => {
         /// The kind of a module-level entity.
@@ -47,10 +48,17 @@ macro_rules! define_identity_family {
         }
 
         impl ItemKind {
-            /// The name of the kind, as the language spells it.
+            /// The name of the kind, for a diagnostic that reads "expected a `Function`".
             pub const fn as_str(self) -> &'static str {
                 match self {
                     $( Self::$variant => stringify!($variant), )*
+                }
+            }
+
+            /// The word the language declares an entity of this kind with.
+            pub const fn keyword(self) -> &'static str {
+                match self {
+                    $( Self::$variant => $keyword, )*
                 }
             }
         }
@@ -66,8 +74,32 @@ macro_rules! define_identity_family {
             ///
             /// It is a value, not a position: it denotes the same entity
             /// in every revision in which the module declares an entity of that kind and name.
-            #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+            #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
             pub struct $loc(pub(crate) ItemLocData);
+
+            // Written by hand: a dump of a name is read by a person, and `ItemLocData`
+            // is not the text the name was declared with.
+            impl std::fmt::Debug for $loc {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let disambiguator = self.0.disambiguator();
+
+                    match self.0.name() {
+                        // An entity with no name of its own is known by its place among its
+                        // kind, which it always has.
+                        None => write!(f, "{} <anon>#{}", $keyword, disambiguator),
+                        Some(name) if name.is_missing() => match disambiguator {
+                            0 => write!(f, "{} <missing>", $keyword),
+                            disambiguator => {
+                                write!(f, "{} <missing>#{}", $keyword, disambiguator)
+                            },
+                        },
+                        Some(name) => match disambiguator {
+                            0 => write!(f, "{} {}", $keyword, name),
+                            disambiguator => write!(f, "{} {}#{}", $keyword, name, disambiguator),
+                        },
+                    }
+                }
+            }
 
             impl ItemLocLike for $loc {
                 fn data(&self) -> &ItemLocData {
@@ -154,7 +186,7 @@ macro_rules! define_identity_family {
         )*
 
         /// The name of a module-level entity of any kind.
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum ItemLoc {
             $( $variant($loc), )*
         }
@@ -186,6 +218,14 @@ macro_rules! define_identity_family {
             fn kind(&self) -> ItemKind {
                 match self {
                     $( Self::$variant(_) => ItemKind::$variant, )*
+                }
+            }
+        }
+
+        impl std::fmt::Debug for ItemLoc {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    $( Self::$variant(loc) => std::fmt::Debug::fmt(loc, f), )*
                 }
             }
         }
@@ -222,7 +262,7 @@ pub(crate) use define_identity_family;
 macro_rules! define_entity_data {
     (
         $(
-            $variant:ident($data:ident, $loc:ident, $module_id:ident),
+            $variant:ident($data:ident, $loc:ident, $module_id:ident, $keyword:literal),
         )*
     ) => {
         /// The observable data of a module-level entity, whatever its kind.
@@ -253,7 +293,7 @@ pub(crate) use define_entity_data;
 macro_rules! define_entity_accessors {
     (
         $(
-            $variant:ident($data:ident, $loc:ident, $module_id:ident),
+            $variant:ident($data:ident, $loc:ident, $module_id:ident, $keyword:literal),
         )*
     ) => {
         /// The id of the entity whose data is `data`, at `ix` in the arena of its tree.

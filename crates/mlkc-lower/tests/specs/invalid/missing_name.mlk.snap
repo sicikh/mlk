@@ -1,0 +1,69 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A declaration without a name: the parse reports it, and each one of the two is an item of
+// the module under the name that is not there.
+
+fun (): Int = 1
+
+fun (): Int = 2
+
+fun after(): Int = 3
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun <missing>  @1.0
+    visibility: private
+    ret: Int -> unresolved
+  fun <missing>#1  @1.1
+    visibility: private
+    ret: Int -> unresolved
+  fun after  @1.2
+    visibility: private
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun <missing> in module #0
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+```
+BODY fun <missing>#1 in module #0
+
+root expr#0
+exprs
+  expr#0  literal 2
+```
+
+```
+BODY fun after in module #0
+
+root expr#0
+exprs
+  expr#0  literal 3
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+146..147: Expected a name but instead found '('.
+163..164: Expected a name but instead found '('.

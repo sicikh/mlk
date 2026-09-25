@@ -1,0 +1,134 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// Paths of types, qualified and applied to type arguments, and the types a module leaves to
+// be inferred.
+
+fun qualified(value: std.core.Int): Unit =
+    value
+
+fun applied(value: Map[Int, String]): Unit =
+    value
+
+fun applied_and_qualified(value: std.Map[Int, String,]): Unit =
+    value
+
+fun applied_to_a_qualified_path(value: std.core.Map[Int, String]): Unit =
+    value
+
+fun inferred(value: _): _ =
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun qualified  @1.0
+    visibility: private
+    param value: std.core.Int -> unresolved
+    ret: Unit -> unresolved
+  fun applied  @1.1
+    visibility: private
+    param value: Map[Int -> unresolved, String -> unresolved] -> unresolved
+    ret: Unit -> unresolved
+  fun applied_and_qualified  @1.2
+    visibility: private
+    param value: std.Map[Int -> unresolved, String -> unresolved] -> unresolved
+    ret: Unit -> unresolved
+  fun applied_to_a_qualified_path  @1.3
+    visibility: private
+    param value: std.core.Map[Int -> unresolved, String -> unresolved] -> unresolved
+    ret: Unit -> unresolved
+  fun inferred  @1.4
+    visibility: private
+    param value: _
+    ret: _
+```
+
+## Bodies
+
+```
+BODY fun qualified in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun applied in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun applied_and_qualified in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun applied_to_a_qualified_path in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun inferred in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

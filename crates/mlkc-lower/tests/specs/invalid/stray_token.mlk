@@ -1,0 +1,9 @@
+// A token where a declaration belongs: the parse keeps it in a bogus declaration, and the
+// declarations around it are read as if it were not there.
+
+type Int
+
++
+
+fun main(): Int =
+    1

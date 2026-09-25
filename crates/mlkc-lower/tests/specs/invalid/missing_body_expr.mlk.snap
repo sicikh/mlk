@@ -1,0 +1,42 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A body that holds no expression: the parse reports it, and the body of the function holds
+// a missing expression instead.
+
+fun main(): Int =
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun main  @1.0
+    visibility: private
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#0
+exprs
+  expr#0  missing
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+145..145: Expected an expression but instead found the end of the file.

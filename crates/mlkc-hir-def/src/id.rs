@@ -112,6 +112,14 @@ impl<I> EntityLoc<I> {
     }
 }
 
+/// The number of a node in the arena it lives in, counted from zero.
+///
+/// This is the label a dump gives a node; it is not an identity of anything,
+/// and it changes when a node is allocated before it.
+pub(crate) fn arena_index<T>(id: Idx<T>) -> u32 {
+    id.into_raw().into_u32() - 1
+}
+
 /// The name of an entity that owns a body, in the project.
 pub type BodyEntityLoc = EntityLoc<BodyLoc>;
 
@@ -139,7 +147,7 @@ impl TryFrom<EntityLoc> for BodyEntityLoc {
 ///
 /// The language decides which kinds those are, and the variant order follows
 /// the order of [`ItemKind`], so that the two orders agree.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BodyLoc {
     /// A function.
     Function(FunctionLoc),
@@ -159,6 +167,15 @@ impl ItemLocLike for BodyLoc {
         match self {
             Self::Function(_) => ItemKind::Function,
             Self::Const(_) => ItemKind::Const,
+        }
+    }
+}
+
+impl std::fmt::Debug for BodyLoc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Function(loc) => std::fmt::Debug::fmt(loc, f),
+            Self::Const(loc) => std::fmt::Debug::fmt(loc, f),
         }
     }
 }
@@ -267,8 +284,14 @@ impl From<ModuleConstId> for ModuleDefWithBodyId {
 }
 
 /// The id of a function declared inside one body.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalFunctionId(pub(crate) Idx<LocalFunctionData>);
+
+impl std::fmt::Debug for LocalFunctionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "fun#{}", arena_index(self.0))
+    }
+}
 
 impl ArenaIndex for LocalFunctionId {
     fn into_raw(self) -> RawIdx {
@@ -283,8 +306,14 @@ impl ArenaIndex for LocalFunctionId {
 }
 
 /// The id of a constant declared inside one body.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalConstId(pub(crate) Idx<LocalConstData>);
+
+impl std::fmt::Debug for LocalConstId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "const#{}", arena_index(self.0))
+    }
+}
 
 impl ArenaIndex for LocalConstId {
     fn into_raw(self) -> RawIdx {
@@ -301,7 +330,7 @@ impl ArenaIndex for LocalConstId {
 /// A local entity has no name of its own:
 /// it is not observable outside its owner, and the identity of the enclosing body
 /// already pins every position inside it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LocalDefId {
     /// A function.
     Function(LocalFunctionId),
@@ -315,6 +344,15 @@ impl LocalDefId {
         match self {
             Self::Function(_) => ItemKind::Function,
             Self::Const(_) => ItemKind::Const,
+        }
+    }
+}
+
+impl std::fmt::Debug for LocalDefId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Function(id) => std::fmt::Debug::fmt(id, f),
+            Self::Const(id) => std::fmt::Debug::fmt(id, f),
         }
     }
 }

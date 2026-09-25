@@ -1,0 +1,10 @@
+// A module of declarations that declare no body: what they are is their signature.
+
+@builtin
+type Int
+
+@extern
+fun add(left: Int, right: Int): Int
+
+fun main() =
+    1

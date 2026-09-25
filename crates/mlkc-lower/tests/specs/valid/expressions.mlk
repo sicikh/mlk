@@ -1,0 +1,19 @@
+// Where every operator sits in the precedence table, and what calls and parentheses do to it.
+
+@builtin
+type Int
+
+fun products(): Int =
+    42 * 2 - 10
+
+fun comparisons(): Int =
+    1 + 2 * 3 <= 4 * 5 / 6
+
+fun logic(): Int =
+    1 == 2 || 3 < 4 && 5 >= 6
+
+fun parentheses(): Int =
+    (1 + 2) * (3 - 4)
+
+fun calls(): Int =
+    f(g(1), h(2, 3))

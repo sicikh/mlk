@@ -1,0 +1,8 @@
+// A declaration without a name: the parse reports it, and each one of the two is an item of
+// the module under the name that is not there.
+
+fun (): Int = 1
+
+fun (): Int = 2
+
+fun after(): Int = 3

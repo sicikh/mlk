@@ -1,0 +1,4 @@
+// A body that holds no expression: the parse reports it, and the body of the function holds
+// a missing expression instead.
+
+fun main(): Int =

@@ -75,11 +75,13 @@
 //! - [`body`] — the inside of one function.
 //! - [`def_map`] — what names denote, and the index of the whole project.
 //! - [`project_graph`] — the name of a project, and what it depends on.
+//! - [`dump`] — a reading of the tree and of a body, for a person and for a diff.
 
 mod macros;
 
 pub mod body;
 pub mod def_map;
+pub mod dump;
 pub mod id;
 pub mod item_data;
 pub mod item_tree;

@@ -16,6 +16,7 @@ mlkc-hir-def = { path = "crates/mlkc-hir-def", version = "0.1.0" }
 mlkc-intern = { path = "crates/mlkc-intern", version = "0.1.0" }
 mlkc-la-arena = { path = "crates/mlkc-la-arena", version = "0.1.0" }
 mlkc-line-index = { path = "crates/mlkc-line-index", version = "0.1.0" }
+mlkc-lower = { path = "crates/mlkc-lower", version = "0.1.0" }
 mlkc-parser = { path = "crates/mlkc-parser", version = "0.1.0" }
 mlkc-parser-core = { path = "crates/mlkc-parser-core", version = "0.1.0" }
 mlkc-paths = { path = "crates/mlkc-paths", version = "0.1.0" }

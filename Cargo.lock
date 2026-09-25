@@ -691,6 +691,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlkc-lower"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "mlkc-hir-def",
+ "mlkc-intern",
+ "mlkc-parser",
+ "mlkc-parser-core",
+ "mlkc-rowan",
+ "mlkc-span",
+ "mlkc-syntax",
+ "mlkc-vfs",
+]
+
+[[package]]
 name = "mlkc-parser"
 version = "0.1.0"
 dependencies = [

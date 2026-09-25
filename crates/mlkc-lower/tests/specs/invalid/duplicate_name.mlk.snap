@@ -1,0 +1,75 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A module that declares one name twice: the first declaration is what the name means, and
+// the second is what the lowering reports.
+
+type Int
+
+fun size(value: Int): Int =
+    value
+
+fun size(value: Int): Int =
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @1.0
+    visibility: private
+  fun size  @1.1
+    visibility: private
+    param value: Int -> type Int
+    ret: Int -> type Int
+  fun size#1  @1.2
+    visibility: private
+    param value: Int -> type Int
+    ret: Int -> type Int
+```
+
+## Bodies
+
+```
+BODY fun size in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun size#1 in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+186..223: `fun size#1` is declared more than once in this module
+
+## Parse Diagnostics
+
+No diagnostics.

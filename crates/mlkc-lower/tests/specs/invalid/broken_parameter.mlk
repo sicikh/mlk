@@ -1,0 +1,6 @@
+// A parameter the parser could not read: it is not a parameter of the signature, and the
+// declaration around it is still an item of the module.
+
+fun broken(1): Unit = 1
+
+fun after(): Unit = 2

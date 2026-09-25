@@ -1,0 +1,145 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// Where every operator sits in the precedence table, and what calls and parentheses do to it.
+
+@builtin
+type Int
+
+fun products(): Int =
+    42 * 2 - 10
+
+fun comparisons(): Int =
+    1 + 2 * 3 <= 4 * 5 / 6
+
+fun logic(): Int =
+    1 == 2 || 3 < 4 && 5 >= 6
+
+fun parentheses(): Int =
+    (1 + 2) * (3 - 4)
+
+fun calls(): Int =
+    f(g(1), h(2, 3))
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @1.0
+    visibility: private
+  fun products  @1.1
+    visibility: private
+    ret: Int -> type Int
+  fun comparisons  @1.2
+    visibility: private
+    ret: Int -> type Int
+  fun logic  @1.3
+    visibility: private
+    ret: Int -> type Int
+  fun parentheses  @1.4
+    visibility: private
+    ret: Int -> type Int
+  fun calls  @1.5
+    visibility: private
+    ret: Int -> type Int
+```
+
+## Bodies
+
+```
+BODY fun products in module #0
+
+root expr#4
+exprs
+  expr#0  literal 42
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  literal 10
+  expr#4  binary expr#2 - expr#3
+```
+
+```
+BODY fun comparisons in module #0
+
+root expr#10
+exprs
+  expr#0  literal 1
+  expr#1  literal 2
+  expr#2  literal 3
+  expr#3  binary expr#1 * expr#2
+  expr#4  binary expr#0 + expr#3
+  expr#5  literal 4
+  expr#6  literal 5
+  expr#7  binary expr#5 * expr#6
+  expr#8  literal 6
+  expr#9  binary expr#7 / expr#8
+  expr#10  binary expr#4 <= expr#9
+```
+
+```
+BODY fun logic in module #0
+
+root expr#10
+exprs
+  expr#0  literal 1
+  expr#1  literal 2
+  expr#2  binary expr#0 == expr#1
+  expr#3  literal 3
+  expr#4  literal 4
+  expr#5  binary expr#3 < expr#4
+  expr#6  literal 5
+  expr#7  literal 6
+  expr#8  binary expr#6 >= expr#7
+  expr#9  binary expr#5 && expr#8
+  expr#10  binary expr#2 || expr#9
+```
+
+```
+BODY fun parentheses in module #0
+
+root expr#6
+exprs
+  expr#0  literal 1
+  expr#1  literal 2
+  expr#2  binary expr#0 + expr#1
+  expr#3  literal 3
+  expr#4  literal 4
+  expr#5  binary expr#3 - expr#4
+  expr#6  binary expr#2 * expr#5
+```
+
+```
+BODY fun calls in module #0
+
+root expr#8
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  literal 1
+  expr#3  call expr#1 (expr#2)
+  expr#4  path path#2
+  expr#5  literal 2
+  expr#6  literal 3
+  expr#7  call expr#4 (expr#5, expr#6)
+  expr#8  call expr#0 (expr#3, expr#7)
+paths
+  path#0  f -> unresolved
+  path#1  g -> unresolved
+  path#2  h -> unresolved
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

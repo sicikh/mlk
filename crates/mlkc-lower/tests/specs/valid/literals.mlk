@@ -1,0 +1,14 @@
+// The shape of a literal: an integer, a string, and a subtraction, which is an operator
+// rather than the sign of a number.
+
+@builtin
+type Int
+
+fun positive(): Int =
+    42
+
+fun text(): String =
+    "hello"
+
+fun subtracted(): Int =
+    1 - 2

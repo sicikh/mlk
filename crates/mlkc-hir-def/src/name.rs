@@ -24,7 +24,7 @@ use mlkc_intern::{Symbol, sym};
 /// A textual fallback in `Eq` is deliberately absent:
 /// it would make the cost of equality depend on the length of a name
 /// and would hide a violation of the retention rule instead of surfacing it.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Name {
     symbol: Symbol,
 }
@@ -81,6 +81,20 @@ impl PartialOrd for Name {
     }
 }
 
+impl fmt::Debug for Name {
+    /// The text of the name, or a word for a name that is not there.
+    ///
+    /// A name that is not there is a name like any other inside the interner, and what it is
+    /// written as is a sentinel; a reader of the HIR is told what it means instead.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_missing() {
+            f.write_str("<missing>")
+        } else {
+            f.write_str(self.as_str())
+        }
+    }
+}
+
 impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
@@ -124,5 +138,9 @@ mod tests {
     fn a_missing_name_is_the_missing_name() {
         assert!(Name::missing().is_missing());
         assert!(!Name::new("foo").is_missing());
+
+        // The text of it is a sentinel of the interner, and what it is read as is a word.
+        assert_eq!(format!("{:?}", Name::missing()), "<missing>");
+        assert_eq!(format!("{:?}", Name::new("foo")), "foo");
     }
 }

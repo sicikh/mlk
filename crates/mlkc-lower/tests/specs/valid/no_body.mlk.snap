@@ -1,0 +1,54 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A module of declarations that declare no body: what they are is their signature.
+
+@builtin
+type Int
+
+@extern
+fun add(left: Int, right: Int): Int
+
+fun main() =
+    1
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @1.0
+    visibility: private
+  fun add  @1.1
+    visibility: private
+    param left: Int -> type Int
+    param right: Int -> type Int
+    ret: Int -> type Int
+  fun main  @1.2
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

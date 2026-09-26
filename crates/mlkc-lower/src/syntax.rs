@@ -19,9 +19,15 @@ use mlkc_vfs::FileId;
 /// carries it is still an item of the module, and a reader of the HIR asks a name whether it
 /// is there instead of holding an `Option` at every use.
 pub(crate) fn name(name: SyntaxResult<NameSyntax>) -> Name {
-    let Some(name) = name.ok() else {
-        return Name::missing();
-    };
+    name.ok().map_or_else(Name::missing, |name| name_of(&name))
+}
+
+/// The name a name node is written with.
+///
+/// A caller that holds a name node rather than the position it was read at reads it here;
+/// a name node always holds the token it was written as, and one that does not is a name
+/// that is not there.
+pub(crate) fn name_of(name: &NameSyntax) -> Name {
     let Some(token) = name.value_token().ok() else {
         return Name::missing();
     };

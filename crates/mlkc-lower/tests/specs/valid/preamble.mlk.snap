@@ -7,7 +7,7 @@ expression: snapshot
 ```mlk
 // The path a module declares itself as, which is what its project knows it by.
 
-module my-proj.main-module
+module project.main-module
 
 fun main(): Int =
     1
@@ -17,7 +17,7 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0 my-proj.main-module
+MODULE #0 project.main-module
 
 ITEM TREE
   fun main  @2.0

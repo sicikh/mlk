@@ -590,7 +590,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
-                    && Name::can_cast(element.kind())
+                    && PathRoot::can_cast(element.kind())
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -629,6 +629,22 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     );
                 }
                 slots.into_node(PATH_TYPE, children)
+            },
+            PROJECT => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<1usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![project]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(PROJECT.to_bogus(), children.into_iter().map(Some));
+                }
+                slots.into_node(PROJECT, children)
             },
             STRING_LITERAL => {
                 let mut elements = (&children).into_iter();

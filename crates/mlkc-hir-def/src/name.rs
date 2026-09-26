@@ -53,6 +53,20 @@ impl Name {
     pub fn as_str(&self) -> &str {
         self.symbol.as_str()
     }
+
+    /// The name as a reader reads it: its text, or a word for a name that is not there.
+    ///
+    /// A name that is not there is a name like any other inside the interner, and what it is
+    /// written as there is a sentinel; what a reader of the HIR is told is what it means. Both
+    /// `Debug` and `Display` write it this way, so that a name reads the same wherever it is
+    /// printed --- in a dump of a path, in a message about one, or on its own.
+    fn write(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_missing() {
+            f.write_str("<missing>")
+        } else {
+            f.write_str(self.as_str())
+        }
+    }
 }
 
 impl PartialEq for Name {
@@ -83,21 +97,15 @@ impl PartialOrd for Name {
 
 impl fmt::Debug for Name {
     /// The text of the name, or a word for a name that is not there.
-    ///
-    /// A name that is not there is a name like any other inside the interner, and what it is
-    /// written as is a sentinel; a reader of the HIR is told what it means instead.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_missing() {
-            f.write_str("<missing>")
-        } else {
-            f.write_str(self.as_str())
-        }
+        self.write(f)
     }
 }
 
 impl fmt::Display for Name {
+    /// The text of the name, or a word for a name that is not there.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+        self.write(f)
     }
 }
 
@@ -139,8 +147,12 @@ mod tests {
         assert!(Name::missing().is_missing());
         assert!(!Name::new("foo").is_missing());
 
-        // The text of it is a sentinel of the interner, and what it is read as is a word.
+        // The text of it is a sentinel of the interner, and what it is read as is a word:
+        // neither `Debug` nor `Display` writes the sentinel out, so a path that holds the name
+        // reads as the words it is made of.
         assert_eq!(format!("{:?}", Name::missing()), "<missing>");
+        assert_eq!(format!("{}", Name::missing()), "<missing>");
         assert_eq!(format!("{:?}", Name::new("foo")), "foo");
+        assert_eq!(format!("{}", Name::new("foo")), "foo");
     }
 }

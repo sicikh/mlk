@@ -21,7 +21,7 @@ use crate::{
             expected_declaration, expected_expr, expected_name, expected_parameter,
             expected_parameters, expected_path, expected_type,
         },
-        pat::parse_pat,
+        pat::parse_pat_or_recover,
         ty::{parse_path, parse_type},
     },
 };
@@ -38,7 +38,7 @@ const PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![,], T![')']];
 /// Parses the root of the tree: the byte order mark if the file has one, the preamble of the
 /// module, the items of the module, and the end of the file.
 // test mlk a_module_declares_the_path_it_is_of
-// module my-proj.main-module
+// module project.main-module
 //
 // fun main(): Int =
 //     1
@@ -63,7 +63,7 @@ pub(crate) fn parse_module_root(p: &mut MlkParser) -> CompletedMarker {
 /// Parses the preamble of a module: the path it declares itself as.
 ///
 /// A module is written in a file, and the preamble is the path of that file in the project:
-/// `module my-proj.main-module`. A file that has no preamble declares no path, and the
+/// `module project.main-module`. A file that has no preamble declares no path, and the
 /// project it belongs to is what says what it is called.
 fn parse_module_preamble(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T![module]) {
@@ -282,7 +282,7 @@ impl ParseSeparatedList for ParameterListParse {
 // fun ignored(_: Int, value: Int): Int =
 //     value
 fn parse_parameter(p: &mut MlkParser) -> ParsedSyntax {
-    let pat = parse_pat(p);
+    let pat = parse_pat_or_recover(p);
 
     if pat.is_absent() {
         return ParsedSyntax::Absent;

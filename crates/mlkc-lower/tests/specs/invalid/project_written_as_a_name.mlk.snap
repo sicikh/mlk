@@ -1,0 +1,75 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// The project keyword written where a name belongs, all over a module: in the preamble, in
+// the path of an expression, and in the path of a call. The item tree and the body around the
+// mistakes are read whole, and the names the keyword took the place of are missing.
+
+module project.project.project
+
+@extern
+fun println-int(x: Int): Unit
+
+fun main(): Unit =
+    let x = project.project.abs(42) * 2 - 10 in
+    println-int(x + 20)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project.<missing>.<missing>
+
+ITEM TREE
+  fun println-int  @2.0
+    attributes: @extern
+    visibility: private
+    param: Int -> unresolved
+    ret: Unit -> unresolved
+  fun main  @2.1
+    visibility: private
+    ret: Unit -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#12
+exprs
+  expr#0  path path#0
+  expr#1  literal 42
+  expr#2  call expr#0 (expr#1)
+  expr#3  literal 2
+  expr#4  binary expr#2 * expr#3
+  expr#5  literal 10
+  expr#6  binary expr#4 - expr#5
+  expr#7  path path#1
+  expr#8  path path#2
+  expr#9  literal 20
+  expr#10  binary expr#8 + expr#9
+  expr#11  call expr#7 (expr#10)
+  expr#12  let pat#0 = expr#6 in expr#11
+pats
+  pat#0  bind x
+paths
+  path#0  project.<missing>.abs -> the project
+  path#1  println-int -> fun println-int
+  path#2  x -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+288..295: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
+296..303: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
+383..390: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.

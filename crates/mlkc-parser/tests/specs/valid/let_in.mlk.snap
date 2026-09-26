@@ -45,7 +45,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@14..18 "Int" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -84,7 +84,7 @@ ModuleRoot {
                                 path: Path {
                                     qualifier: missing (optional),
                                     segment: PathSegment {
-                                        name: Name {
+                                        root: Name {
                                             value_token: IDENT@53..60 "x" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
                                         },
                                         type_args: missing (optional),
@@ -96,7 +96,7 @@ ModuleRoot {
                                 path: Path {
                                     qualifier: missing (optional),
                                     segment: PathSegment {
-                                        name: Name {
+                                        root: Name {
                                             value_token: IDENT@62..63 "y" [] [],
                                         },
                                         type_args: missing (optional),
@@ -126,7 +126,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@80..84 "Int" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -170,7 +170,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@133..137 "Int" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -193,7 +193,7 @@ ModuleRoot {
                             path: Path {
                                 qualifier: missing (optional),
                                 segment: PathSegment {
-                                    name: Name {
+                                    root: Name {
                                         value_token: IDENT@151..152 "f" [] [],
                                     },
                                     type_args: missing (optional),
@@ -214,7 +214,7 @@ ModuleRoot {
                             path: Path {
                                 qualifier: missing (optional),
                                 segment: PathSegment {
-                                    name: Name {
+                                    root: Name {
                                         value_token: IDENT@158..164 "g" [Newline("\n"), Whitespace("    ")] [],
                                     },
                                     type_args: missing (optional),
@@ -227,7 +227,7 @@ ModuleRoot {
                                 path: Path {
                                     qualifier: missing (optional),
                                     segment: PathSegment {
-                                        name: Name {
+                                        root: Name {
                                             value_token: IDENT@165..166 "x" [] [],
                                         },
                                         type_args: missing (optional),
@@ -239,7 +239,7 @@ ModuleRoot {
                                 path: Path {
                                     qualifier: missing (optional),
                                     segment: PathSegment {
-                                        name: Name {
+                                        root: Name {
                                             value_token: IDENT@168..169 "x" [] [],
                                         },
                                         type_args: missing (optional),

@@ -1,4 +1,4 @@
-// A parameter the parser could not read: it is not a parameter of the signature, and the
+// A parameter whose pattern the parser could not read: what it binds is not there, and the
 // declaration around it is still an item of the module.
 
 fun broken(1): Unit = 1

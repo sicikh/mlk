@@ -2,15 +2,15 @@
 // is brought in under, and the path of a module, which is what the names after a path of it
 // are resolved against.
 
-module my-proj.app
+module project.app
 
 use std.core.Int
 
 pub use std.core.io as IO
 
-use my-proj.data
+use project.data
 
-use my-proj.data.start-app
+use project.data.start-app
 
 fun main(): IO =
     start-app(1)

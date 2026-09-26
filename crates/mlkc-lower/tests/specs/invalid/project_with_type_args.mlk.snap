@@ -1,0 +1,56 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// The project keyword applied to type arguments: a project is not a type, and there is nothing
+// for an argument written at it to be applied to. In a path of names what the arguments make of
+// the path is what a reader is told about; a type and a body are told about what they wrote.
+
+fun handle(value: project[Int].Handle): project[String].Handle =
+    project[Bool].data.start-app(value)
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun handle  @2.0
+    visibility: private
+    param: project[Int -> unresolved].Handle -> the project
+    ret: project[String -> unresolved].Handle -> the project
+```
+
+## Bodies
+
+```
+BODY fun handle in module #0
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind value
+paths
+  path#0  project[Bool -> unresolved].data.start-app -> the project
+  path#1  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+313..318: `project.Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+335..343: `project.Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+364..370: `project.data.start-app` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+
+## Parse Diagnostics
+
+No diagnostics.

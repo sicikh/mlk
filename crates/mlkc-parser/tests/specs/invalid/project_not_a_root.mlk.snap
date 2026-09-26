@@ -1,0 +1,302 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// `project` written where a name belongs: the keyword is a root, and a root is what a path
+// starts at. The path keeps the segments around it, and the `let` it is written in is read
+// whole.
+
+fun broken(value: data.project.Handle): Int =
+    let x = project.project in
+    data.project.start-app(x)
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: missing (optional),
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@0..199 "fun" [Comments("// `project` written  ..."), Newline("\n"), Comments("// starts at. The pat ..."), Newline("\n"), Comments("// whole."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@199..205 "broken" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@205..206 "(" [] [],
+                items: ParameterList [
+                    Parameter {
+                        pat: IdentPat {
+                            name: Name {
+                                value_token: IDENT@206..211 "value" [] [],
+                            },
+                        },
+                        type_annotation: TypeAnnotation {
+                            colon_token: COLON@211..213 ":" [] [Whitespace(" ")],
+                            ty: PathType {
+                                path: Path {
+                                    qualifier: PathQualifier {
+                                        path: Path {
+                                            qualifier: PathQualifier {
+                                                path: Path {
+                                                    qualifier: missing (optional),
+                                                    segment: PathSegment {
+                                                        root: Name {
+                                                            value_token: IDENT@213..217 "data" [] [],
+                                                        },
+                                                        type_args: missing (optional),
+                                                    },
+                                                },
+                                                dot_token: DOT@217..218 "." [] [],
+                                            },
+                                            segment: PathSegment {
+                                                root: Project {
+                                                    project_token: PROJECT_KW@218..225 "project" [] [],
+                                                },
+                                                type_args: missing (optional),
+                                            },
+                                        },
+                                        dot_token: DOT@225..226 "." [] [],
+                                    },
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@226..232 "Handle" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                            },
+                        },
+                    },
+                ],
+                r_paren_token: R_PAREN@232..233 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@233..235 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@235..239 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@239..240 "=" [] [],
+                expr: LetExpr {
+                    let_token: LET_KW@240..249 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    pat: IdentPat {
+                        name: Name {
+                            value_token: IDENT@249..251 "x" [] [Whitespace(" ")],
+                        },
+                    },
+                    eq_token: EQ@251..253 "=" [] [Whitespace(" ")],
+                    expr: PathExpr {
+                        path: Path {
+                            qualifier: PathQualifier {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Project {
+                                            project_token: PROJECT_KW@253..260 "project" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                                dot_token: DOT@260..261 "." [] [],
+                            },
+                            segment: PathSegment {
+                                root: Project {
+                                    project_token: PROJECT_KW@261..269 "project" [] [Whitespace(" ")],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                    },
+                    in_token: IN_KW@269..271 "in" [] [],
+                    body: CallExpr {
+                        function: PathExpr {
+                            path: Path {
+                                qualifier: PathQualifier {
+                                    path: Path {
+                                        qualifier: PathQualifier {
+                                            path: Path {
+                                                qualifier: missing (optional),
+                                                segment: PathSegment {
+                                                    root: Name {
+                                                        value_token: IDENT@271..280 "data" [Newline("\n"), Whitespace("    ")] [],
+                                                    },
+                                                    type_args: missing (optional),
+                                                },
+                                            },
+                                            dot_token: DOT@280..281 "." [] [],
+                                        },
+                                        segment: PathSegment {
+                                            root: Project {
+                                                project_token: PROJECT_KW@281..288 "project" [] [],
+                                            },
+                                            type_args: missing (optional),
+                                        },
+                                    },
+                                    dot_token: DOT@288..289 "." [] [],
+                                },
+                                segment: PathSegment {
+                                    root: Name {
+                                        value_token: IDENT@289..298 "start-app" [] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
+                            },
+                        },
+                        l_paren_token: L_PAREN@298..299 "(" [] [],
+                        arguments: ArgumentList [
+                            PathExpr {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@299..300 "x" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                            },
+                        ],
+                        r_paren_token: R_PAREN@300..301 ")" [] [],
+                    },
+                },
+            },
+        },
+    ],
+    eof_token: EOF@301..302 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..302
+  0: (empty)
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..301
+    0: FUN_DECL@0..301
+      0: ATTRIBUTE_LIST@0..0
+      1: (empty)
+      2: FUN_KW@0..199 "fun" [Comments("// `project` written  ..."), Newline("\n"), Comments("// starts at. The pat ..."), Newline("\n"), Comments("// whole."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@199..205
+        0: IDENT@199..205 "broken" [] []
+      4: PARAMETERS@205..233
+        0: L_PAREN@205..206 "(" [] []
+        1: PARAMETER_LIST@206..232
+          0: PARAMETER@206..232
+            0: IDENT_PAT@206..211
+              0: NAME@206..211
+                0: IDENT@206..211 "value" [] []
+            1: TYPE_ANNOTATION@211..232
+              0: COLON@211..213 ":" [] [Whitespace(" ")]
+              1: PATH_TYPE@213..232
+                0: PATH@213..232
+                  0: PATH_QUALIFIER@213..226
+                    0: PATH@213..225
+                      0: PATH_QUALIFIER@213..218
+                        0: PATH@213..217
+                          0: (empty)
+                          1: PATH_SEGMENT@213..217
+                            0: NAME@213..217
+                              0: IDENT@213..217 "data" [] []
+                            1: (empty)
+                        1: DOT@217..218 "." [] []
+                      1: PATH_SEGMENT@218..225
+                        0: PROJECT@218..225
+                          0: PROJECT_KW@218..225 "project" [] []
+                        1: (empty)
+                    1: DOT@225..226 "." [] []
+                  1: PATH_SEGMENT@226..232
+                    0: NAME@226..232
+                      0: IDENT@226..232 "Handle" [] []
+                    1: (empty)
+        2: R_PAREN@232..233 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@233..239
+        0: COLON@233..235 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@235..239
+          0: PATH@235..239
+            0: (empty)
+            1: PATH_SEGMENT@235..239
+              0: NAME@235..239
+                0: IDENT@235..239 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@239..301
+        0: EQ@239..240 "=" [] []
+        1: LET_EXPR@240..301
+          0: LET_KW@240..249 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: IDENT_PAT@249..251
+            0: NAME@249..251
+              0: IDENT@249..251 "x" [] [Whitespace(" ")]
+          2: EQ@251..253 "=" [] [Whitespace(" ")]
+          3: PATH_EXPR@253..269
+            0: PATH@253..269
+              0: PATH_QUALIFIER@253..261
+                0: PATH@253..260
+                  0: (empty)
+                  1: PATH_SEGMENT@253..260
+                    0: PROJECT@253..260
+                      0: PROJECT_KW@253..260 "project" [] []
+                    1: (empty)
+                1: DOT@260..261 "." [] []
+              1: PATH_SEGMENT@261..269
+                0: PROJECT@261..269
+                  0: PROJECT_KW@261..269 "project" [] [Whitespace(" ")]
+                1: (empty)
+          4: IN_KW@269..271 "in" [] []
+          5: CALL_EXPR@271..301
+            0: PATH_EXPR@271..298
+              0: PATH@271..298
+                0: PATH_QUALIFIER@271..289
+                  0: PATH@271..288
+                    0: PATH_QUALIFIER@271..281
+                      0: PATH@271..280
+                        0: (empty)
+                        1: PATH_SEGMENT@271..280
+                          0: NAME@271..280
+                            0: IDENT@271..280 "data" [Newline("\n"), Whitespace("    ")] []
+                          1: (empty)
+                      1: DOT@280..281 "." [] []
+                    1: PATH_SEGMENT@281..288
+                      0: PROJECT@281..288
+                        0: PROJECT_KW@281..288 "project" [] []
+                      1: (empty)
+                  1: DOT@288..289 "." [] []
+                1: PATH_SEGMENT@289..298
+                  0: NAME@289..298
+                    0: IDENT@289..298 "start-app" [] []
+                  1: (empty)
+            1: L_PAREN@298..299 "(" [] []
+            2: ARGUMENT_LIST@299..300
+              0: PATH_EXPR@299..300
+                0: PATH@299..300
+                  0: (empty)
+                  1: PATH_SEGMENT@299..300
+                    0: NAME@299..300
+                      0: IDENT@299..300 "x" [] []
+                    1: (empty)
+            3: R_PAREN@300..301 ")" [] []
+  3: EOF@301..302 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+218..225: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
+261..268: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
+281..288: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.

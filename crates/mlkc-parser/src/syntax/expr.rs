@@ -25,11 +25,7 @@ use mlkc_syntax::{
 
 use crate::{
     parser::MlkParser,
-    syntax::{
-        parse_error::{expected_expr, expected_pattern},
-        pat::parse_pat,
-        ty::parse_path,
-    },
+    syntax::{parse_error::expected_expr, pat::parse_pat_or_recover, ty::parse_path},
 };
 
 /// The precedence the operators of the outermost expression start with.
@@ -153,7 +149,9 @@ fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
 fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
     match p.cur() {
         INT_LITERAL | STRING_LITERAL => parse_literal(p),
-        IDENT => parse_path_expr(p),
+        // A name and the project keyword are what a path expression starts with: the
+        // keyword is a root, and the path rule is what reads it where it belongs.
+        IDENT | PROJECT_KW => parse_path_expr(p),
         LET_KW => parse_let_expr(p),
         L_PAREN => parse_paren_expr(p),
         _ => ParsedSyntax::Absent,
@@ -213,7 +211,9 @@ fn parse_paren_expr(p: &mut MlkParser) -> ParsedSyntax {
 /// Parses the expression that binds a name to a value and uses it.
 ///
 /// The expression before `in` is parsed with [`parse_expr`]: `in` is not an operator and
-/// not the start of one, so the expression ends at it on its own.
+/// not the start of one, so the expression ends at it on its own. What a `let` binds is
+/// a pattern, and what is written where one belongs and is not one is read as a pattern that
+/// is not there, so that the `=` and the `in` around the mistake are read where they are.
 // test mlk let_in_binds_a_name_and_uses_it
 // fun main(): Int =
 //     let x = 42 in
@@ -232,7 +232,7 @@ fn parse_let_expr(p: &mut MlkParser) -> ParsedSyntax {
     let m = p.start();
 
     p.bump(T![let]);
-    parse_pat(p).or_add_diagnostic(p, expected_pattern);
+    parse_pat_or_recover(p).ok();
     p.expect(T![=]);
     parse_expr(p).or_add_diagnostic(p, expected_expr);
     p.expect(T![in]);

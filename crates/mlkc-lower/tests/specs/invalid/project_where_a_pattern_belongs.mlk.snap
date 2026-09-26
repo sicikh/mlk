@@ -1,0 +1,53 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A keyword written where a pattern belongs: the parameter is still one of the signature,
+// under the type the module wrote, and what the `let` binds is not there.
+
+fun broken(project: Int): Int =
+    let project = 1 in
+    2
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun broken  @2.0
+    visibility: private
+    param: Int -> unresolved
+    ret: Int -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun broken in module #0
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  literal 1
+  expr#1  literal 2
+  expr#2  let pat#1 = expr#0 in expr#1
+pats
+  pat#0  missing
+  pat#1  missing
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+178..185: Expected a pattern but instead found 'project'.
+207..214: Expected a pattern but instead found 'project'.

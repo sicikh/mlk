@@ -1,0 +1,14 @@
+// A path rooted at the project: the keyword a module names the project it is written in by,
+// which no manifest can rename out from under it.
+
+module project.app
+
+use project.data
+
+use project.core.Int
+
+fun start(): Int =
+    project.data.start-app(1)
+
+fun handle(value: project.data.Handle): Unit =
+    value

@@ -79,7 +79,12 @@ Type { Path | InferType }
 
 Path { PathSegment ("." PathSegment)* }
 
-PathSegment { Name TypeArgs? }
+// A segment of a path: a name, or the project the module is written in, which is what a path
+// is rooted at. Only the first segment of a path may be the keyword: the segments after it
+// are names inside what the root denotes.
+PathSegment { (Name | Project) TypeArgs? }
+
+Project { kw<"project"> }
 
 TypeArgs { "[" (Type ("," Type)* ","?)? "]" }
 

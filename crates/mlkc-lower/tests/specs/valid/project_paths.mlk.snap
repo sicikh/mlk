@@ -1,0 +1,81 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A path rooted at the project: the keyword a module names the project it is written in by,
+// which no manifest can rename out from under it. What follows the keyword is read inside
+// that project, whether it is a module an import names, a type, or a value.
+
+module project.app
+
+use project.data
+
+use project.core.Int
+
+fun start(): Int =
+    project.data.start-app(1)
+
+fun handle(value: project.data.Handle): Int =
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project.app
+
+ITEM TREE
+  use data  @2.0
+    path: project.data
+    visibility: private
+  use Int  @2.1
+    path: project.core.Int
+    visibility: private
+  fun start  @2.2
+    visibility: private
+    ret: Int -> use Int
+  fun handle  @2.3
+    visibility: private
+    param: project.data.Handle -> the project
+    ret: Int -> use Int
+```
+
+## Bodies
+
+```
+BODY fun start in module #0
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  project.data.start-app -> the project
+```
+
+```
+BODY fun handle in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

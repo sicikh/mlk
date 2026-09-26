@@ -1,0 +1,6 @@
+// The project keyword applied to type arguments: a project is not a type, and there is nothing
+// for an argument written at it to be applied to. In a path of names what the arguments make of
+// the path is what a reader is told about; a type and a body are told about what they wrote.
+
+fun handle(value: project[Int].Handle): project[String].Handle =
+    project[Bool].data.start-app(value)

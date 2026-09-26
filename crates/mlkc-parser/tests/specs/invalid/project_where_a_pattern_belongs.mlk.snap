@@ -1,0 +1,156 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A keyword written where a pattern belongs: a `let` and a parameter bind names, and what
+// follows the mistake --- the type, the `=`, the value and the `in` --- is read whole.
+
+fun broken(project: Int): Int =
+    let project = 1 in
+    2
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: missing (optional),
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@0..184 "fun" [Comments("// A keyword written  ..."), Newline("\n"), Comments("// follows the mistak ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@184..190 "broken" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@190..191 "(" [] [],
+                items: ParameterList [
+                    Parameter {
+                        pat: BogusPat {
+                            items: [
+                                PROJECT_KW@191..198 "project" [] [],
+                            ],
+                        },
+                        type_annotation: TypeAnnotation {
+                            colon_token: COLON@198..200 ":" [] [Whitespace(" ")],
+                            ty: PathType {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@200..203 "Int" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                            },
+                        },
+                    },
+                ],
+                r_paren_token: R_PAREN@203..204 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@204..206 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@206..210 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@210..211 "=" [] [],
+                expr: LetExpr {
+                    let_token: LET_KW@211..220 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    pat: BogusPat {
+                        items: [
+                            PROJECT_KW@220..228 "project" [] [Whitespace(" ")],
+                        ],
+                    },
+                    eq_token: EQ@228..230 "=" [] [Whitespace(" ")],
+                    expr: IntLiteral {
+                        value_token: INT_LITERAL@230..232 "1" [] [Whitespace(" ")],
+                    },
+                    in_token: IN_KW@232..234 "in" [] [],
+                    body: IntLiteral {
+                        value_token: INT_LITERAL@234..240 "2" [Newline("\n"), Whitespace("    ")] [],
+                    },
+                },
+            },
+        },
+    ],
+    eof_token: EOF@240..241 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..241
+  0: (empty)
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..240
+    0: FUN_DECL@0..240
+      0: ATTRIBUTE_LIST@0..0
+      1: (empty)
+      2: FUN_KW@0..184 "fun" [Comments("// A keyword written  ..."), Newline("\n"), Comments("// follows the mistak ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@184..190
+        0: IDENT@184..190 "broken" [] []
+      4: PARAMETERS@190..204
+        0: L_PAREN@190..191 "(" [] []
+        1: PARAMETER_LIST@191..203
+          0: PARAMETER@191..203
+            0: BOGUS_PAT@191..198
+              0: PROJECT_KW@191..198 "project" [] []
+            1: TYPE_ANNOTATION@198..203
+              0: COLON@198..200 ":" [] [Whitespace(" ")]
+              1: PATH_TYPE@200..203
+                0: PATH@200..203
+                  0: (empty)
+                  1: PATH_SEGMENT@200..203
+                    0: NAME@200..203
+                      0: IDENT@200..203 "Int" [] []
+                    1: (empty)
+        2: R_PAREN@203..204 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@204..210
+        0: COLON@204..206 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@206..210
+          0: PATH@206..210
+            0: (empty)
+            1: PATH_SEGMENT@206..210
+              0: NAME@206..210
+                0: IDENT@206..210 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@210..240
+        0: EQ@210..211 "=" [] []
+        1: LET_EXPR@211..240
+          0: LET_KW@211..220 "let" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: BOGUS_PAT@220..228
+            0: PROJECT_KW@220..228 "project" [] [Whitespace(" ")]
+          2: EQ@228..230 "=" [] [Whitespace(" ")]
+          3: INT_LITERAL@230..232
+            0: INT_LITERAL@230..232 "1" [] [Whitespace(" ")]
+          4: IN_KW@232..234 "in" [] []
+          5: INT_LITERAL@234..240
+            0: INT_LITERAL@234..240 "2" [Newline("\n"), Whitespace("    ")] []
+  3: EOF@240..241 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+191..198: Expected a pattern but instead found 'project'.
+    Detail Some(191..198): Expected a pattern here.
+220..227: Expected a pattern but instead found 'project'.
+    Detail Some(220..227): Expected a pattern here.

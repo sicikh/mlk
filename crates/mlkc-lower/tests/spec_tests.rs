@@ -39,8 +39,8 @@ spec_tests! {
     // Bindings: nested, ignored, and bound to the result of a call.
     let_in: "valid/let_in.mlk",
 
-    // Paths of types, qualified and applied to type arguments, and the types a module leaves
-    // to be inferred.
+    // Paths of types: qualified, applied to type arguments, and a name read inside the type an
+    // argument was applied to.
     types: "valid/types.mlk",
 
     // Declarations that declare no body: what they are is their signature.
@@ -63,6 +63,10 @@ spec_tests! {
     // the name of a module of the project.
     imports: "valid/imports.mlk",
 
+    // A path rooted at the project: the keyword a module names its own project by, in the
+    // preamble, in an import, in a type and in an expression.
+    project_paths: "valid/project_paths.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",
@@ -75,7 +79,7 @@ spec_tests! {
     // are read as if it were not there.
     stray_token: "invalid/stray_token.mlk",
 
-    // A parameter the parser could not read: it is not a parameter of the signature, and the
+    // A parameter whose pattern the parser could not read: what it binds is not there, and the
     // declaration around it is still an item of the module.
     broken_parameter: "invalid/broken_parameter.mlk",
 
@@ -96,8 +100,21 @@ spec_tests! {
     // A module that imports one name twice: the first import is what the name denotes.
     duplicate_import: "invalid/duplicate_import.mlk",
 
-    // A path of the project carrying a type argument, in a preamble and in an import.
+    // A path of names carrying a type argument, written at the root of the path and at a
+    // segment after it.
     path_with_type_args: "invalid/path_with_type_args.mlk",
+
+    // The `project` keyword applied to type arguments, in a signature and in a body: a project
+    // is not a type, and nothing is applied to it.
+    project_with_type_args: "invalid/project_with_type_args.mlk",
+
+    // The keyword written where a name belongs all over a module: the items and the body are
+    // read whole, and the names the keyword stands in for are missing.
+    project_written_as_a_name: "invalid/project_written_as_a_name.mlk",
+
+    // The keyword written where a pattern belongs: the parameter keeps the type the module
+    // wrote, the `let` keeps its value, and what binds a name is missing.
+    project_where_a_pattern_belongs: "invalid/project_where_a_pattern_belongs.mlk",
 
     // `@extern` on a function with a body, and on a type: neither is a thing the language has.
     extern_misuse: "invalid/extern_misuse.mlk",

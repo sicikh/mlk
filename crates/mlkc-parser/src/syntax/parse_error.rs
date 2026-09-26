@@ -4,7 +4,7 @@
 //! that the same mistake is described the same way everywhere, and so that the message can
 //! depend on what the parser found (the token, or the end of the file).
 
-use mlkc_parser_core::diagnostic::ParseDiagnostic;
+use mlkc_parser_core::{Parser, diagnostic::ParseDiagnostic};
 use mlkc_rowan::TextRange;
 
 use crate::parser::MlkParser;
@@ -18,6 +18,22 @@ pub(crate) fn expected_declaration(p: &MlkParser, range: TextRange) -> ParseDiag
 /// The parser expected a name, which is what `fun`, `type`, `@` and a path segment need.
 pub(crate) fn expected_name(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("name", range, p)
+}
+
+/// The parser found the project keyword where a name of a path belongs.
+///
+/// A path is rooted at the project --- `project.data` --- and the segment it starts at is the
+/// only one that is written that way: after a dot, a name belongs. The keyword is read as the
+/// segment it is written as all the same, so that a path a mistake is written in stays whole.
+pub(crate) fn project_where_a_name_belongs(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        format!(
+            "Expected a name but instead found '{}': the keyword `project` roots a path, and a \
+         name belongs after a dot.",
+            p.text(range)
+        ),
+        range,
+    )
 }
 
 /// The parser expected the parameter list of a function declaration.

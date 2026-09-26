@@ -51,7 +51,26 @@ Path =
 
 PathQualifier = Path '.'
 
-PathSegment = Name TypeArgs?
+// What one segment of a path is written as: the root the path starts at, or a name.
+//
+// The first segment of a path is its root, and only it: `project.data` is a path of the name
+// `data` inside the project the module is written in, while a keyword written after a dot is
+// not a root. The grammar holds one shape for every segment; the parser is what reads a
+// keyword where the root belongs, and what reports one written elsewhere while keeping it the
+// segment of the path it is, so that the path around the mistake is read whole.
+PathSegment =
+    root: PathRoot
+    TypeArgs?
+
+PathRoot =
+    Name
+    | Project
+
+// The project the module that wrote the path is written in.
+//
+// A module is of a project without naming it: what a manifest calls the project is a name no
+// source depends on, which is what makes this keyword steadier than the name itself.
+Project = 'project'
 
 TypeArgs = '[' TypeArgList ']'
 

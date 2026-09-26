@@ -20,7 +20,7 @@ use crate::{
     parser::MlkParser,
     syntax::{
         auxiliary::parse_name,
-        parse_error::{expected_name, expected_type},
+        parse_error::{expected_name, expected_type, project_where_a_name_belongs},
     },
 };
 
@@ -57,14 +57,22 @@ fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
 /// A qualified path is a path whose qualifier is a path of its own, and the qualifier is
 /// what holds the dot: `a.b` is a path of the segment `b` qualified by `a.`. Every dot
 /// therefore closes the path parsed so far into a qualifier, and starts a path around it.
+///
+/// The first segment of a path is its root, and it is the only one that may be written as the
+/// project the module is in: `project.data` is a path of the name `data` inside this project,
+/// and a keyword after a dot is not a root.
 //
 // A path is what a type is written as and what an expression names a value by, so the rule
 // is read from both sides of the grammar and lives apart from either.
 // test mlk a_path_qualifies_its_segments
 // fun qualified(value: std.core.Int): Unit =
 //     value
+//
+// test mlk a_path_may_be_rooted_at_the_project
+// fun rooted(): Int =
+//     project.data.start-app(1)
 pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
-    let segment = parse_path_segment(p);
+    let segment = parse_path_segment(p, true);
 
     if segment.is_absent() {
         return ParsedSyntax::Absent;
@@ -82,26 +90,54 @@ pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
         // The segment that follows the dot is the segment of the new path, not a child of
         // the qualifier: the qualifier is closed before it is parsed.
         let m = qualifier.precede(p);
-        parse_path_segment(p).or_add_diagnostic(p, expected_name);
+        parse_path_segment(p, false).or_add_diagnostic(p, expected_name);
         path = Present(m.complete(p, PATH));
     }
 
     path
 }
 
-/// Parses a segment of a path: a name, and the type arguments applied to it.
-fn parse_path_segment(p: &mut MlkParser) -> ParsedSyntax {
-    let name = parse_name(p);
+/// Parses a segment of a path: where it starts, and the type arguments applied to it.
+///
+/// A segment that a path is rooted at may be the project keyword, which is what `root` says:
+/// only the first segment of a path is read that way, and the segments after it are names. A
+/// keyword written after a dot is a mistake a reader is told about, and it is read as the
+/// segment it is written as all the same: what a mistake in a path costs is the segment, and
+/// not the path it is written in.
+fn parse_path_segment(p: &mut MlkParser, root: bool) -> ParsedSyntax {
+    let segment = if p.at(T![project]) {
+        if !root {
+            let diagnostic = project_where_a_name_belongs(p, p.cur_range());
+            p.error(diagnostic);
+        }
 
-    if name.is_absent() {
+        parse_project(p)
+    } else {
+        parse_name(p)
+    };
+
+    if segment.is_absent() {
         return ParsedSyntax::Absent;
     }
 
-    let m = name.precede(p);
+    let m = segment.precede(p);
 
     parse_type_args(p).ok();
 
     Present(m.complete(p, PATH_SEGMENT))
+}
+
+/// Parses the project the module is written in: the keyword a path is rooted at.
+fn parse_project(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T![project]) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T![project]);
+
+    Present(m.complete(p, PROJECT))
 }
 
 /// Parses the type arguments of a path segment.

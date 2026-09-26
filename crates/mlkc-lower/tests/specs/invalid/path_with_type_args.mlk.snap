@@ -6,11 +6,14 @@ expression: snapshot
 
 ```mlk
 // A path of the project carrying a type argument: what a module is named by and what an
-// import names is a path of names, and an argument written at a segment is a type.
+// import names is a path of names, and an argument written at a segment --- the root of the
+// path included --- is what a type is applied to.
 
-module my-proj.main[Int]
+module project.main[Int]
 
-use std.core.Map[Int, String]
+use std[Int].core
+
+use project.data.Map[Int, String]
 
 fun main(): Int =
     1
@@ -20,13 +23,16 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0 my-proj.main
+MODULE #0 project.main
 
 ITEM TREE
-  use Map  @2.0
-    path: std.core.Map
+  use core  @2.0
+    path: std.core
     visibility: private
-  fun main  @2.1
+  use Map  @2.1
+    path: project.data.Map
+    visibility: private
+  fun main  @2.2
     visibility: private
     ret: Int -> unresolved
 ```
@@ -43,8 +49,9 @@ exprs
 
 ## Lowering Diagnostics
 
-193..198: `my-proj.main` is not a path of names: the type argument at one of its segments belongs to a type, and not to a path of the project
-216..229: `std.core.Map` is not a path of names: the type argument at one of its segments belongs to a type, and not to a path of the project
+253..258: `project.main` is not a path of names: the type argument at one of its segments belongs to a type, and not to a path of the project
+267..272: `std.core` is not a path of names: the type argument at one of its segments belongs to a type, and not to a path of the project
+299..312: `project.data.Map` is not a path of names: the type argument at one of its segments belongs to a type, and not to a path of the project
 
 ## Parse Diagnostics
 

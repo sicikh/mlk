@@ -1,0 +1,12 @@
+// The project keyword written where a name belongs, all over a module: in the preamble, in
+// the path of an expression, and in the path of a call. The items, the expression and the
+// `in` around the mistakes are read whole.
+
+module project.project.project
+
+@extern
+fun println-int(x: Int): Unit
+
+fun main(): Unit =
+    let x = project.project.abs(42) * 2 - 10 in
+    println-int(x + 20)

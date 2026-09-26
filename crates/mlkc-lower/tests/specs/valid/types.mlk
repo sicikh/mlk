@@ -13,5 +13,10 @@ fun applied_and_qualified(value: std.Map[Int, String,]): Unit =
 fun applied_to_a_qualified_path(value: std.core.Map[Int, String]): Unit =
     value
 
+// A name read inside the type a path applies an argument to: the argument is written at the
+// root of the path, and what follows it is read inside the type it makes.
+fun applied_and_read_inside(value: Map[Int].Entry): Unit =
+    value
+
 fun inferred(value: _): _ =
     value

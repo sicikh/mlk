@@ -35,7 +35,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@12..17 "Unit" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),

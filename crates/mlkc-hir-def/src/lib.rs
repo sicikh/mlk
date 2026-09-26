@@ -104,7 +104,7 @@ pub use crate::{
     },
     item_tree::{Declared, Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
     name::Name,
-    path::{PathAnchor, PathData, PathId, PlainPath, PlainPathId},
+    path::{PathAnchor, PathData, PathId, PathRoot, PlainPath, PlainPathId},
     project_graph::{ModuleLocator, ProjectData, ProjectGraph, ProjectId},
     type_ref::{TypeRef, TypeVarId},
 };

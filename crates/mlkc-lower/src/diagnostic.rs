@@ -71,6 +71,16 @@ pub enum LoweringError {
         /// The path as far as it is a path of names.
         path: PlainPath,
     },
+    /// A path rooted at the project is applied to type arguments.
+    ///
+    /// The keyword names the project the module is written in, and a project is not a type:
+    /// there is nothing for an argument written at it to be applied to. What a root written as
+    /// a name denotes is not a module's to decide, and whether an argument belongs to it is
+    /// what the stage that holds the scopes reads.
+    ProjectWithTypeArguments {
+        /// The path as far as it is a path of the project.
+        path: PlainPath,
+    },
     /// `@extern` is on a function that declares a body.
     ExternFunctionHasBody {
         /// The function.
@@ -169,6 +179,12 @@ impl LoweringError {
                  belongs to a type, and not to a path of the project",
                 )
             },
+            Self::ProjectWithTypeArguments { path } => {
+                format!(
+                    "`{path}` is rooted at the project, which is not a type: the type arguments \
+                 written at it are applied to nothing",
+                )
+            },
             Self::ExternFunctionHasBody { function } => {
                 format!(
                     "`{function:?}` is declared `@extern`, and an external function is implemented \
@@ -249,6 +265,7 @@ impl DiagKind for LoweringError {
             Self::RepeatedAttribute { .. } => "11",
             Self::DuplicateParameterName { .. } => "12",
             Self::UnknownEscape { .. } => "13",
+            Self::ProjectWithTypeArguments { .. } => "14",
         }
     }
 }

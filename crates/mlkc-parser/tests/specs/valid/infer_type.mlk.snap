@@ -58,7 +58,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@27..37 "value" [Newline("\n"), Whitespace("    ")] [],
                             },
                             type_args: missing (optional),
@@ -89,7 +89,7 @@ ModuleRoot {
                                 path: Path {
                                     qualifier: missing (optional),
                                     segment: PathSegment {
-                                        name: Name {
+                                        root: Name {
                                             value_token: IDENT@58..61 "Map" [] [],
                                         },
                                         type_args: TypeArgs {
@@ -103,7 +103,7 @@ ModuleRoot {
                                                     path: Path {
                                                         qualifier: missing (optional),
                                                         segment: PathSegment {
-                                                            name: Name {
+                                                            root: Name {
                                                                 value_token: IDENT@65..68 "Int" [] [],
                                                             },
                                                             type_args: missing (optional),
@@ -127,7 +127,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@72..77 "Unit" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -141,7 +141,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@78..88 "value" [Newline("\n"), Whitespace("    ")] [],
                             },
                             type_args: missing (optional),

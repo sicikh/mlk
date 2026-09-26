@@ -152,11 +152,12 @@ impl ItemLowering<'_> {
     fn function(&mut self, decl: &FunDecl, position: ItemSyntaxLoc) {
         let attributes = self.attributes(&decl.attributes());
         let visibility = decl::visibility(decl.visibility_token());
+        let signature = decl::signature(decl, self.file, &mut self.diagnostics);
 
         let data = EntityData::Function(FunctionData {
             attributes,
             visibility,
-            signature: decl::signature(decl),
+            signature,
         });
 
         let loc = self.entity(

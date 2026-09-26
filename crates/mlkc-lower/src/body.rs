@@ -129,20 +129,28 @@ impl BodyLowering<'_> {
 
     /// The path of an expression, anchored to what the body can tell of it.
     ///
-    /// A path of one segment is a name of the body if the body binds one --- a parameter or
+    /// A path of one name is a name of the body if the body binds one --- a parameter or
     /// a `let` is what a bare name denotes --- and otherwise a name of the module, read where
-    /// a value belongs. A path of several segments starts at a name of the module rather than
-    /// of the body: what follows it are names inside what the first one denotes, and nothing
-    /// a body binds has names inside it.
+    /// a value belongs. A path of several names is a path of the module: what its root denotes
+    /// is what the names after it are names inside, and nothing a body binds has names inside
+    /// it. A path rooted at the project is none of a body's business either: what it names is
+    /// read inside the project.
     fn path_data(&mut self, path: &PathSyntax) -> PathData {
-        let mut data = path::data(path);
+        let mut data = path::data(path, self.file(), &mut self.diagnostics);
+
+        // What the root of the path denotes is already decided when it is the project, and a
+        // root that is not a name is what a broken path is read with.
+        if matches!(data.anchor, PathAnchor::Project) {
+            return data;
+        }
+
+        let Some(name) = data.root.name() else {
+            return data;
+        };
 
         let anchor = match data.segments.as_slice() {
-            [segment] => self.anchor(&segment.name),
-            // A path the parser could not read has no segments to anchor: what it names is
-            // what the stage that holds the scopes of the project says, and it says nothing.
-            [] => PathAnchor::Unresolved,
-            [first, ..] => self.tree.scope().anchor(&first.name, Namespace::Module),
+            [] => self.anchor(name),
+            _ => self.tree.scope().anchor(name, Namespace::Module),
         };
         data.anchor = anchor;
 

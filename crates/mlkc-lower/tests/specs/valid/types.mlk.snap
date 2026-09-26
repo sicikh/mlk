@@ -20,6 +20,11 @@ fun applied_and_qualified(value: std.Map[Int, String,]): Unit =
 fun applied_to_a_qualified_path(value: std.core.Map[Int, String]): Unit =
     value
 
+// A name read inside the type a path applies an argument to: the argument is written at the
+// root of the path, and what follows it is read inside the type it makes.
+fun applied_and_read_inside(value: Map[Int].Entry): Unit =
+    value
+
 fun inferred(value: _): _ =
     value
 
@@ -47,7 +52,11 @@ ITEM TREE
     visibility: private
     param: std.core.Map[Int -> unresolved, String -> unresolved] -> unresolved
     ret: Unit -> unresolved
-  fun inferred  @2.4
+  fun applied_and_read_inside  @2.4
+    visibility: private
+    param: Map[Int -> unresolved].Entry -> unresolved
+    ret: Unit -> unresolved
+  fun inferred  @2.5
     visibility: private
     param: _
     ret: _
@@ -99,6 +108,20 @@ paths
 
 ```
 BODY fun applied_to_a_qualified_path in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun applied_and_read_inside in module #0
 
 root expr#0
 params

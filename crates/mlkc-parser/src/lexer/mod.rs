@@ -78,6 +78,8 @@ enum Tok {
     LetKw,
     #[token("module")]
     ModuleKw,
+    #[token("project")]
+    ProjectKw,
     #[token("pub")]
     PubKw,
     #[token("type")]
@@ -169,6 +171,7 @@ impl Tok {
             Self::InKw => IN_KW,
             Self::LetKw => LET_KW,
             Self::ModuleKw => MODULE_KW,
+            Self::ProjectKw => PROJECT_KW,
             Self::PubKw => PUB_KW,
             Self::TypeKw => TYPE_KW,
             Self::UseKw => USE_KW,

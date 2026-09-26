@@ -36,7 +36,9 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         ("&&", "AND2"),
         ("||", "OR2"),
     ],
-    keywords: &["as", "fun", "in", "let", "module", "pub", "type", "use"],
+    keywords: &[
+        "as", "fun", "in", "let", "module", "project", "pub", "type", "use",
+    ],
     literals: &["INT_LITERAL", "STRING_LITERAL"],
     tokens: &[
         "ERROR_TOKEN",
@@ -51,6 +53,8 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "PATH",
         "PATH_QUALIFIER",
         "PATH_SEGMENT",
+        "PATH_ROOT",
+        "PROJECT",
         "TYPE_ARGS",
         "TYPE_ARG_LIST",
         "MODULE_ROOT",

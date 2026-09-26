@@ -147,7 +147,7 @@ impl ItemTree {
     ///
     /// It is a claim about the file rather than an item of it: the module is named by its file
     /// ([`ModuleId`]), the preamble is the path the project knows it by ---
-    /// `my-proj.main-module` --- and what checks that the two agree is the project.
+    /// `project.main-module` --- and what checks that the two agree is the project.
     pub fn path(&self) -> Option<PlainPathId> {
         self.path.clone()
     }

@@ -5,7 +5,7 @@ expression: snapshot
 ## Input
 
 ```mlk
-// A parameter the parser could not read: it is not a parameter of the signature, and the
+// A parameter whose pattern the parser could not read: what it binds is not there, and the
 // declaration around it is still an item of the module.
 
 fun broken(1): Unit = 1
@@ -57,4 +57,4 @@ No diagnostics.
 
 ## Parse Diagnostics
 
-159..160: Expected a parameter but instead found '1'.
+161..162: Expected a pattern but instead found '1'.

@@ -55,6 +55,10 @@ spec_tests! {
     // quote that is not escaped.
     strings: "valid/strings.mlk",
 
+    // A path rooted at the project, in the preamble, in an import, in a type and in an
+    // expression.
+    project_paths: "valid/project_paths.mlk",
+
     // A `let` without its `in`: the binding expression is parsed and the diagnostic points
     // at the place where the body was supposed to start.
     missing_in: "invalid/missing_in.mlk",
@@ -72,6 +76,19 @@ spec_tests! {
 
     // A call that is never closed.
     unclosed_call: "invalid/unclosed_call.mlk",
+
+    // `project` written where a name belongs: the keyword is a root, and a root is what a path
+    // starts at. The path keeps the segments around it, and the `let` around the mistake is
+    // read whole.
+    project_not_a_root: "invalid/project_not_a_root.mlk",
+
+    // The keyword written where a name belongs all over a module: the preamble, the items and
+    // the `in` of a `let` are read whole around it.
+    project_written_as_a_name: "invalid/project_written_as_a_name.mlk",
+
+    // The keyword written where a pattern belongs: the type of the parameter and the value and
+    // the `in` of the `let` are read whole around it.
+    project_where_a_pattern_belongs: "invalid/project_where_a_pattern_belongs.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

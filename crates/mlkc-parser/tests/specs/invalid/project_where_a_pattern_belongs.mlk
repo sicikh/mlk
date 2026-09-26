@@ -1,0 +1,6 @@
+// A keyword written where a pattern belongs: a `let` and a parameter bind names, and what
+// follows the mistake --- the type, the `=`, the value and the `in` --- is read whole.
+
+fun broken(project: Int): Int =
+    let project = 1 in
+    2

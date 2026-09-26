@@ -90,7 +90,7 @@ ModuleRoot {
                                 path: Path {
                                     qualifier: missing (optional),
                                     segment: PathSegment {
-                                        name: Name {
+                                        root: Name {
                                             value_token: IDENT@111..114 "Int" [] [],
                                         },
                                         type_args: missing (optional),
@@ -108,7 +108,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@117..121 "Unit" [] [],
                             },
                             type_args: missing (optional),
@@ -136,7 +136,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@135..140 "Unit" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -175,7 +175,7 @@ ModuleRoot {
                             path: Path {
                                 qualifier: missing (optional),
                                 segment: PathSegment {
-                                    name: Name {
+                                    root: Name {
                                         value_token: IDENT@168..184 "println-int" [Newline("\n"), Whitespace("    ")] [],
                                     },
                                     type_args: missing (optional),
@@ -189,7 +189,7 @@ ModuleRoot {
                                     path: Path {
                                         qualifier: missing (optional),
                                         segment: PathSegment {
-                                            name: Name {
+                                            root: Name {
                                                 value_token: IDENT@185..187 "x" [] [Whitespace(" ")],
                                             },
                                             type_args: missing (optional),

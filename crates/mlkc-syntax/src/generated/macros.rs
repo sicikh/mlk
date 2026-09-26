@@ -102,6 +102,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::PathType::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::PROJECT => {
+                        let $pattern = unsafe { $crate::Project::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::STRING_LITERAL => {
                         let $pattern = unsafe { $crate::StringLiteral::new_unchecked(node) };
                         $body

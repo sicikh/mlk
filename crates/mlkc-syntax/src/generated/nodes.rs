@@ -906,11 +906,11 @@ impl PathSegment {
     }
     pub fn as_fields(&self) -> PathSegmentFields {
         PathSegmentFields {
-            name: self.name(),
+            root: self.root(),
             type_args: self.type_args(),
         }
     }
-    pub fn name(&self) -> SyntaxResult<Name> {
+    pub fn root(&self) -> SyntaxResult<PathRoot> {
         support::required_node(&self.syntax, 0usize)
     }
     pub fn type_args(&self) -> Option<TypeArgs> {
@@ -930,7 +930,7 @@ impl Serialize for PathSegment {
 }
 #[derive(Serialize)]
 pub struct PathSegmentFields {
-    pub name: SyntaxResult<Name>,
+    pub root: SyntaxResult<PathRoot>,
     pub type_args: Option<TypeArgs>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -968,6 +968,44 @@ impl Serialize for PathType {
 #[derive(Serialize)]
 pub struct PathTypeFields {
     pub path: SyntaxResult<Path>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct Project {
+    pub(crate) syntax: SyntaxNode,
+}
+impl Project {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> ProjectFields {
+        ProjectFields {
+            project_token: self.project_token(),
+        }
+    }
+    pub fn project_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+}
+impl Serialize for Project {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "Project")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct ProjectFields {
+    pub project_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct StringLiteral {
@@ -1546,6 +1584,36 @@ impl Pat {
     pub fn as_wildcard_pat(&self) -> Option<&WildcardPat> {
         match &self {
             Self::WildcardPat(item) => Some(item),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum PathRoot {
+    Name(Name),
+    Project(Project),
+}
+impl Serialize for PathRoot {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Name(it) => it.serialize(serializer),
+            Self::Project(it) => it.serialize(serializer),
+        }
+    }
+}
+impl PathRoot {
+    pub fn as_name(&self) -> Option<&Name> {
+        match &self {
+            Self::Name(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_project(&self) -> Option<&Project> {
+        match &self {
+            Self::Project(item) => Some(item),
             _ => None,
         }
     }
@@ -2591,7 +2659,7 @@ impl std::fmt::Debug for PathSegment {
         let result = if current_depth < 16 {
             DEPTH.set(current_depth + 1);
             f.debug_struct("PathSegment")
-                .field("name", &support::DebugSyntaxResult(self.name()))
+                .field("root", &support::DebugSyntaxResult(self.root()))
                 .field(
                     "type_args",
                     &support::DebugOptionalElement(self.type_args()),
@@ -2658,6 +2726,56 @@ impl From<PathType> for SyntaxNode {
 }
 impl From<PathType> for SyntaxElement {
     fn from(n: PathType) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for Project {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(PROJECT as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PROJECT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for Project {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("Project")
+                .field(
+                    "project_token",
+                    &support::DebugSyntaxResult(self.project_token()),
+                )
+                .finish()
+        } else {
+            f.debug_struct("Project").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<Project> for SyntaxNode {
+    fn from(n: Project) -> Self {
+        n.syntax
+    }
+}
+impl From<Project> for SyntaxElement {
+    fn from(n: Project) -> Self {
         n.syntax.into()
     }
 }
@@ -3474,6 +3592,65 @@ impl From<Pat> for SyntaxElement {
         node.into()
     }
 }
+impl From<Name> for PathRoot {
+    fn from(node: Name) -> Self {
+        Self::Name(node)
+    }
+}
+impl From<Project> for PathRoot {
+    fn from(node: Project) -> Self {
+        Self::Project(node)
+    }
+}
+impl AstNode for PathRoot {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> = Name::KIND_SET.union(Project::KIND_SET);
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(kind, NAME | PROJECT)
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        let res = match syntax.kind() {
+            NAME => Self::Name(Name { syntax }),
+            PROJECT => Self::Project(Project { syntax }),
+            _ => return None,
+        };
+        Some(res)
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::Name(it) => it.syntax(),
+            Self::Project(it) => it.syntax(),
+        }
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        match self {
+            Self::Name(it) => it.into_syntax(),
+            Self::Project(it) => it.into_syntax(),
+        }
+    }
+}
+impl std::fmt::Debug for PathRoot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(it) => std::fmt::Debug::fmt(it, f),
+            Self::Project(it) => std::fmt::Debug::fmt(it, f),
+        }
+    }
+}
+impl From<PathRoot> for SyntaxNode {
+    fn from(n: PathRoot) -> Self {
+        match n {
+            PathRoot::Name(it) => it.into_syntax(),
+            PathRoot::Project(it) => it.into_syntax(),
+        }
+    }
+}
+impl From<PathRoot> for SyntaxElement {
+    fn from(n: PathRoot) -> Self {
+        let node: SyntaxNode = n.into();
+        node.into()
+    }
+}
 impl From<BogusType> for Type {
     fn from(node: BogusType) -> Self {
         Self::BogusType(node)
@@ -3566,6 +3743,11 @@ impl std::fmt::Display for ModuleItem {
     }
 }
 impl std::fmt::Display for Pat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for PathRoot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }
@@ -3676,6 +3858,11 @@ impl std::fmt::Display for PathSegment {
     }
 }
 impl std::fmt::Display for PathType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }

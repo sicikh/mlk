@@ -1,0 +1,6 @@
+// A keyword written where a pattern belongs: the parameter is still one of the signature,
+// under the type the module wrote, and what the `let` binds is not there.
+
+fun broken(project: Int): Int =
+    let project = 1 in
+    2

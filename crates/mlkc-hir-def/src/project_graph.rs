@@ -55,8 +55,8 @@ impl fmt::Display for ProjectId {
 /// A `use` that names a module of a project binds that module:
 ///
 /// ```text
-/// // module.mlk:  module my-proj.main-module
-/// // main.mlk:    use my-proj.main-module
+/// // module.mlk:  module project.main-module
+/// // main.mlk:    use project.main-module
 /// ```
 ///
 /// and the entry of the scope is [`ModuleLocator::Module`],
@@ -66,8 +66,8 @@ impl fmt::Display for ProjectId {
 /// which is not a module and has no file of its own:
 ///
 /// ```text
-/// // module.mlk:  module my-proj.data.main-module
-/// // main.mlk:    use my-proj.data
+/// // module.mlk:  module project.data.main-module
+/// // main.mlk:    use project.data
 /// //
 /// //              fun main() =
 /// //                  data.main-module.start-app()
@@ -78,6 +78,13 @@ impl fmt::Display for ProjectId {
 /// the module paths a project declares: the path of the `use` and the segments of the
 /// expression are walked against those declared paths until they reach a module,
 /// and then an entity of that module.
+///
+/// The root of a path says which project the names after it are read in. The keyword `project`
+/// is the project the module is written in --- what a module knows of itself without a manifest,
+/// which is what makes it steadier than the name the project is declared under --- and the name
+/// of another project is one the module depends on, as in `std.core`, the prefix `core` of the
+/// project `std`. A module may name its own project the way the manifest does all the same, and
+/// the two spellings of one prefix are for the stage that builds the entries to merge.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleLocator {
     /// A module that is a file of a project.
@@ -86,8 +93,8 @@ pub enum ModuleLocator {
     Prefix {
         /// The project whose module paths the prefix belongs to.
         project: ProjectId,
-        /// The prefix as it is written, with the name of the project first,
-        /// so that it can be interned and compared like any other path.
+        /// The prefix as it is written, rooted at the keyword `project` or at the name of
+        /// the project, so that it can be interned and compared like any other path.
         path: PlainPathId,
     },
 }

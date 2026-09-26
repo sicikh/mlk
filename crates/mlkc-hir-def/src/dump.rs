@@ -239,7 +239,7 @@ fn type_ref(ty: &TypeRef, module: ModuleId) -> String {
     }
 }
 
-/// A path as it was written, and what its base denotes.
+/// A path as it was written, and what its root denotes.
 fn path_resolved(path: &PathData, module: ModuleId) -> String {
     format!(
         "{} -> {}",
@@ -248,15 +248,15 @@ fn path_resolved(path: &PathData, module: ModuleId) -> String {
     )
 }
 
-/// A path as it was written, with the arguments written at its segments.
+/// A path as it was written, with the arguments written at it.
 fn path_text(path: &PathData, module: ModuleId) -> String {
     let mut text = String::new();
 
-    for segment in &path.segments {
-        if !text.is_empty() {
-            text.push('.');
-        }
+    write!(text, "{}", path.root).expect("writing to a string to never fail");
+    arguments_text(&mut text, &path.root_args, module);
 
+    for segment in &path.segments {
+        text.push('.');
         segment_text(&mut text, segment, module);
     }
 
@@ -266,14 +266,18 @@ fn path_text(path: &PathData, module: ModuleId) -> String {
 /// One segment of a path, with the arguments written at it.
 fn segment_text(text: &mut String, segment: &PathSegmentData, module: ModuleId) {
     write!(text, "{:?}", segment.name).expect("writing to a string to never fail");
+    arguments_text(text, &segment.args, module);
+}
 
-    if segment.args.is_empty() {
+/// The type arguments written at one name of a path.
+fn arguments_text(text: &mut String, args: &[TypeRef], module: ModuleId) {
+    if args.is_empty() {
         return;
     }
 
     text.push('[');
 
-    for (index, arg) in segment.args.iter().enumerate() {
+    for (index, arg) in args.iter().enumerate() {
         if index > 0 {
             text.push_str(", ");
         }
@@ -298,6 +302,8 @@ fn anchor_text(anchor: &PathAnchor, module: ModuleId) -> String {
             format!("typevar {}[{}]", item_text(&var.owner, module), var.index)
         },
         PathAnchor::Binding(pat) => format!("binding {}", pat_ref(*pat)),
+        // A meaning rather than a name: what the keyword names is this very project.
+        PathAnchor::Project => "the project".to_owned(),
         PathAnchor::Unresolved => "unresolved".to_owned(),
     }
 }
@@ -466,7 +472,7 @@ mod tests {
         id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc},
         item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
-        path::{PlainPath, PlainPathId},
+        path::{PathRoot, PlainPath, PlainPathId},
     };
 
     fn module() -> ModuleId {
@@ -545,8 +551,7 @@ ITEM TREE
     #[test]
     fn a_module_reads_as_the_path_it_declares_and_what_its_entities_carry() {
         let mut builder = ItemTreeBuilder::new(module());
-        builder.set_path(PlainPathId::new(PlainPath::from_segments([
-            Name::new("my-proj"),
+        builder.set_path(PlainPathId::new(PlainPath::from_root(PathRoot::Project, [
             Name::new("main-module"),
         ])));
 
@@ -584,7 +589,7 @@ ITEM TREE
         assert_eq!(
             crate::dump::item_tree(&tree),
             "\
-MODULE #0 my-proj.main-module
+MODULE #0 project.main-module
 
 ITEM TREE
   type Unit  @0

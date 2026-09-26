@@ -1,6 +1,6 @@
 // The path a module declares itself as, which is what its project knows it by.
 
-module my-proj.main-module
+module project.main-module
 
 fun main(): Int =
     1

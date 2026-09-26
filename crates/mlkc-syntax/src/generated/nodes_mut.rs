@@ -338,7 +338,7 @@ impl PathQualifier {
     }
 }
 impl PathSegment {
-    pub fn with_name(self, element: Name) -> Self {
+    pub fn with_root(self, element: PathRoot) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
@@ -356,6 +356,14 @@ impl PathType {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
+        )
+    }
+}
+impl Project {
+    pub fn with_project_token(self, element: SyntaxToken) -> Self {
+        Self::unwrap_cast(
+            self.syntax
+                .splice_slots(0usize..=0usize, once(Some(element.into()))),
         )
     }
 }

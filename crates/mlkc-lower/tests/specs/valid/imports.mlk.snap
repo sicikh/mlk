@@ -9,15 +9,15 @@ expression: snapshot
 // is brought in under, and the path of a module, which is what the names after a path of it
 // are resolved against.
 
-module my-proj.app
+module project.app
 
 use std.core.Int
 
 pub use std.core.io as IO
 
-use my-proj.data
+use project.data
 
-use my-proj.data.start-app
+use project.data.start-app
 
 fun main(): IO =
     start-app(1)
@@ -36,7 +36,7 @@ fun start(): Int =
 ## Item Tree
 
 ```
-MODULE #0 my-proj.app
+MODULE #0 project.app
 
 ITEM TREE
   use Int  @2.0
@@ -47,10 +47,10 @@ ITEM TREE
     alias: IO
     visibility: public
   use data  @2.2
-    path: my-proj.data
+    path: project.data
     visibility: private
   use start-app  @2.3
-    path: my-proj.data.start-app
+    path: project.data.start-app
     visibility: private
   fun main  @2.4
     visibility: private

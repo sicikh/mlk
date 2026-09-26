@@ -189,7 +189,9 @@ fn underscore_is_not_an_identifier() {
 
 #[test]
 fn keywords() {
-    let keywords = ["as", "fun", "in", "let", "module", "pub", "type", "use"];
+    let keywords = [
+        "as", "fun", "in", "let", "module", "project", "pub", "type", "use",
+    ];
 
     for keyword in keywords {
         let kind = SyntaxKind::from_keyword(keyword)
@@ -224,6 +226,14 @@ fn keywords_are_not_identifiers() {
         IDENT:7,
         WHITESPACE:1,
         IDENT:5
+    }
+
+    // The keyword is a word, and a name that holds it is a name.
+    assert_lex! {
+        "projects project-x",
+        IDENT:8,
+        WHITESPACE:1,
+        IDENT:9
     }
 }
 

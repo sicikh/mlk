@@ -254,14 +254,14 @@ pub fn path_qualifier(path: Path, dot_token: SyntaxToken) -> PathQualifier {
         Some(SyntaxElement::Token(dot_token)),
     ]))
 }
-pub fn path_segment(name: Name) -> PathSegmentBuilder {
+pub fn path_segment(root: PathRoot) -> PathSegmentBuilder {
     PathSegmentBuilder {
-        name,
+        root,
         type_args: None,
     }
 }
 pub struct PathSegmentBuilder {
-    name: Name,
+    root: PathRoot,
     type_args: Option<TypeArgs>,
 }
 impl PathSegmentBuilder {
@@ -271,7 +271,7 @@ impl PathSegmentBuilder {
     }
     pub fn build(self) -> PathSegment {
         PathSegment::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_SEGMENT, [
-            Some(SyntaxElement::Node(self.name.into_syntax())),
+            Some(SyntaxElement::Node(self.root.into_syntax())),
             self.type_args
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
         ]))
@@ -280,6 +280,11 @@ impl PathSegmentBuilder {
 pub fn path_type(path: Path) -> PathType {
     PathType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_TYPE, [Some(
         SyntaxElement::Node(path.into_syntax()),
+    )]))
+}
+pub fn project(project_token: SyntaxToken) -> Project {
+    Project::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PROJECT, [Some(
+        SyntaxElement::Token(project_token),
     )]))
 }
 pub fn string_literal(value_token: SyntaxToken) -> StringLiteral {

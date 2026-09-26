@@ -1,0 +1,7 @@
+// `project` written where a name belongs: the keyword is a root, and a root is what a path
+// starts at. The path keeps the segments around it, and the `let` it is written in is read
+// whole.
+
+fun broken(value: data.project.Handle): Int =
+    let x = project.project in
+    data.project.start-app(x)

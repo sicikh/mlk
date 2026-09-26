@@ -35,7 +35,7 @@ import { parser } from "./grammar/mlk";
  */
 const syntax = styleTags({
     // The keywords, which the grammar reads out of names: see `kw<...>` in the grammar.
-    "fun in let module type _": tags.keyword,
+    "fun in let module project type _": tags.keyword,
     Comment: tags.comment,
     IntLiteral: tags.number,
     StringLiteral: tags.string,

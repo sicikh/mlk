@@ -47,7 +47,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@194..201 "String" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -80,7 +80,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@282..289 "String" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -113,7 +113,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@333..340 "String" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
@@ -146,7 +146,7 @@ ModuleRoot {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
-                            name: Name {
+                            root: Name {
                                 value_token: IDENT@372..379 "String" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),

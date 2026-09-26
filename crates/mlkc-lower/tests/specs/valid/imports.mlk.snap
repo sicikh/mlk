@@ -57,7 +57,7 @@ ITEM TREE
     ret: IO -> use IO
   fun handle  @2.5
     visibility: private
-    param value: data.Handle -> use data
+    param: data.Handle -> use data
     ret: Int -> use Int
   fun start  @2.6
     visibility: private

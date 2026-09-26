@@ -30,8 +30,8 @@ ITEM TREE
   fun add  @2.1
     attributes: @extern
     visibility: private
-    param left: Int -> type Int
-    param right: Int -> type Int
+    param: Int -> type Int
+    param: Int -> type Int
     ret: Int -> type Int
   fun main  @2.2
     visibility: private

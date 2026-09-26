@@ -33,11 +33,11 @@ ITEM TREE
     visibility: private
   fun size  @2.1
     visibility: private
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Int -> type Int
   fun size#1  @2.2
     visibility: private
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Int -> type Int
   type Point  @2.3
     visibility: private

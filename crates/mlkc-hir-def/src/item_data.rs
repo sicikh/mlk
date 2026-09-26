@@ -8,7 +8,6 @@
 //! [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
 
 use crate::{
-    body::Pat,
     def_map::LocalScope,
     id::ItemKind,
     macros::{define_entity_data, for_each_item_kind},
@@ -114,13 +113,19 @@ impl Signature {
     }
 }
 
-/// One parameter of a function.
+/// One parameter of a function, as the function's signature says it: the type.
+///
+/// What a caller reads of a parameter is its type, and nothing else. What the parameter binds
+/// is the pattern of the body, and the body is where the pattern lives: a pattern is a thing
+/// a body declares entities in, and a complex one holds them as ids of the arena of that body,
+/// which nothing of an item tree may hold ([ADR-0010]).
+///
+/// A signature and a body line up by position: the parameter at a position is the pattern the
+/// body binds the argument with at that position.
+///
+/// [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamData {
-    /// The pattern the parameter is written as: the name it binds, or the wildcard where it
-    /// binds none. What a caller reads is [`ParamData::ty`]; the pattern is what the body of
-    /// the function receives the argument as.
-    pub pat: Pat,
     /// The type as written, if it was written.
     pub ty: Option<TypeRef>,
 }
@@ -249,7 +254,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        body::Pat,
         id::{ClassLoc, EntityLoc, ItemLoc, ItemLocData, ModuleId},
         path::{PathAnchor, PathData},
         type_ref::TypeRef,
@@ -282,7 +286,6 @@ mod tests {
             visibility: Visibility::Public,
             signature: Signature {
                 params: vec![ParamData {
-                    pat: Pat::Bind(Name::new("x")),
                     ty: Some(TypeRef::Path(PathData::ident(
                         Name::new("T"),
                         PathAnchor::Unresolved,

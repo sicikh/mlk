@@ -33,23 +33,23 @@ MODULE #0
 ITEM TREE
   fun qualified  @2.0
     visibility: private
-    param value: std.core.Int -> unresolved
+    param: std.core.Int -> unresolved
     ret: Unit -> unresolved
   fun applied  @2.1
     visibility: private
-    param value: Map[Int -> unresolved, String -> unresolved] -> unresolved
+    param: Map[Int -> unresolved, String -> unresolved] -> unresolved
     ret: Unit -> unresolved
   fun applied_and_qualified  @2.2
     visibility: private
-    param value: std.Map[Int -> unresolved, String -> unresolved] -> unresolved
+    param: std.Map[Int -> unresolved, String -> unresolved] -> unresolved
     ret: Unit -> unresolved
   fun applied_to_a_qualified_path  @2.3
     visibility: private
-    param value: std.core.Map[Int -> unresolved, String -> unresolved] -> unresolved
+    param: std.core.Map[Int -> unresolved, String -> unresolved] -> unresolved
     ret: Unit -> unresolved
   fun inferred  @2.4
     visibility: private
-    param value: _
+    param: _
     ret: _
 ```
 

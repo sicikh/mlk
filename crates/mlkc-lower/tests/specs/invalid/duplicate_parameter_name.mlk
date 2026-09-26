@@ -1,0 +1,11 @@
+// A function that declares one parameter name twice: the parameters of a function are what
+// its body binds, and a name a body reads is one name, so the two cannot be told apart.
+
+@builtin
+type Int
+
+fun same(left: Int, left: Int): Int =
+    left
+
+fun different(left: Int, right: Int): Int =
+    left

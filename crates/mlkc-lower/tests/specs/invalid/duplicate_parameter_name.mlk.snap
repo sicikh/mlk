@@ -1,0 +1,83 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A function that declares one parameter name twice: the parameters of a function are what
+// its body binds, and a name a body reads is one name, so the two cannot be told apart.
+
+@builtin
+type Int
+
+fun same(left: Int, left: Int): Int =
+    left
+
+fun different(left: Int, right: Int): Int =
+    left
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @2.0
+    attributes: @builtin
+    visibility: private
+  fun same  @2.1
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun different  @2.2
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+## Bodies
+
+```
+BODY fun same in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind left
+  pat#1  bind left
+paths
+  path#0  left -> binding pat#1
+```
+
+```
+BODY fun different in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+221..230: `fun same` declares the parameter `left` more than once, and a body cannot tell the two apart
+
+## Parse Diagnostics
+
+No diagnostics.

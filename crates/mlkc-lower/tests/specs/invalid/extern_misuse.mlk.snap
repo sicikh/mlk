@@ -30,7 +30,7 @@ ITEM TREE
   fun open  @2.1
     attributes: @extern
     visibility: private
-    param handle: Handle -> type Handle
+    param: Handle -> type Handle
     ret: Int -> unresolved
 ```
 

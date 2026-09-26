@@ -22,7 +22,7 @@ MODULE #0
 ITEM TREE
   fun broken  @2.0
     visibility: private
-    param <missing>
+    param
     ret: Unit -> unresolved
   fun after  @2.1
     visibility: private

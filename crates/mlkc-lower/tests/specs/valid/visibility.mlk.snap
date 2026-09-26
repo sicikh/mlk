@@ -38,15 +38,15 @@ ITEM TREE
   fun println-int  @2.2
     attributes: @extern
     visibility: private
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Unit -> type Unit
   fun size  @2.3
     visibility: public
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Int -> type Int
   fun private  @2.4
     visibility: private
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Int -> type Int
 ```
 

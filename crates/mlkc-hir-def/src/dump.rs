@@ -176,31 +176,20 @@ fn entity_data(dump: &mut Dump, data: &EntityData, module: ModuleId) {
 }
 
 /// The lines of a signature, parameters first.
+///
+/// A parameter is read as what its signature says of it, which is its type: what the
+/// parameter binds is the pattern of the body, and the body of the function is where a dump
+/// reads it.
 fn signature(dump: &mut Dump, signature: &Signature, module: ModuleId) {
     for param in &signature.params {
-        let pat = parameter_text(&param.pat);
-
         match &param.ty {
-            Some(ty) => dump.line(format!("param {pat}: {}", type_ref(ty, module))),
-            None => dump.line(format!("param {pat}")),
+            Some(ty) => dump.line(format!("param: {}", type_ref(ty, module))),
+            None => dump.line("param".to_owned()),
         }
     }
 
     if let Some(ret) = &signature.ret {
         dump.line(format!("ret: {}", type_ref(ret, module)));
-    }
-}
-
-/// The shape of one parameter, read as a reader of the module reads it.
-///
-/// A parameter is a pattern, but a signature reads as the source does: the name it binds is
-/// printed under its name rather than under the word `bind` a body's patterns are printed
-/// with, and a wildcard is the wildcard.
-fn parameter_text(pat: &Pat) -> String {
-    match pat {
-        Pat::Missing => MISSING.to_owned(),
-        Pat::Wildcard => "_".to_owned(),
-        Pat::Bind(name) => format!("{name:?}"),
     }
 }
 
@@ -525,7 +514,6 @@ mod tests {
                 visibility: Visibility::Private,
                 signature: Signature {
                     params: vec![ParamData {
-                        pat: Pat::Bind(Name::new("value")),
                         ty: Some(type_path("Int", PathAnchor::Unresolved)),
                     }],
                     ret: Some(type_path("Unit", PathAnchor::Unresolved)),
@@ -548,7 +536,7 @@ ITEM TREE
     visibility: public
   fun main  @1
     visibility: private
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Unit -> unresolved
 "
         );
@@ -583,7 +571,6 @@ ITEM TREE
                 visibility: Visibility::Private,
                 signature: Signature {
                     params: vec![ParamData {
-                        pat: Pat::Bind(Name::new("value")),
                         ty: Some(type_path("Int", PathAnchor::Unresolved)),
                     }],
                     ret: Some(type_path("Unit", PathAnchor::Unresolved)),
@@ -606,7 +593,7 @@ ITEM TREE
   fun println-int  @1
     attributes: @extern
     visibility: private
-    param value: Int -> unresolved
+    param: Int -> unresolved
     ret: Unit -> type Unit
 "
         );
@@ -692,7 +679,6 @@ ITEM TREE
             name: Name::new("helper"),
             signature: Signature {
                 params: vec![ParamData {
-                    pat: Pat::Bind(Name::new("y")),
                     ty: Some(type_path(
                         "Int",
                         PathAnchor::Item(entity("Int", ItemKind::Class)),
@@ -729,7 +715,7 @@ paths
   path#1  unknown -> unresolved
 functions
   fun#0  helper  root expr#5
-    param y: Int -> type Int
+    param: Int -> type Int
     ret: _
 "
         );

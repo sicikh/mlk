@@ -6,3 +6,6 @@ pub fun size(value: Int) =
 
 pub fun weight(value): Int =
     value
+
+pub fun ignored(_) =
+    1

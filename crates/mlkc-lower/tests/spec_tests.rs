@@ -110,6 +110,10 @@ spec_tests! {
     // writing says.
     repeated_attribute: "invalid/repeated_attribute.mlk",
 
+    // One parameter name declared twice: the parameters of a function are what its body
+    // binds, and a name a body reads is one name.
+    duplicate_parameter_name: "invalid/duplicate_parameter_name.mlk",
+
     // A name an import brings in is a name the module declares: the declaration is what the
     // name means, and the import is told about wherever either of them is written.
     import_of_declared_name: "invalid/import_of_declared_name.mlk",

@@ -1,6 +1,6 @@
 //! What a declaration says about a function: its parameters, and the type of its result.
 
-use mlkc_hir_def::{ParamData, Pat, Signature, TypeRef, Visibility};
+use mlkc_hir_def::{Name, ParamData, Pat, Signature, TypeRef, Visibility};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{AnyParameter, Attribute, AttributeList, FunDecl, Parameter, SyntaxToken};
 
@@ -70,7 +70,10 @@ pub(crate) fn parameters(decl: &FunDecl) -> Vec<Option<Parameter>> {
         .collect()
 }
 
-/// One parameter of a signature.
+/// One parameter of a signature: what a caller reads of it, which is its type.
+///
+/// What the parameter binds is not part of a signature: the pattern is the body's, and the
+/// body of the function is where it is lowered.
 fn parameter(parameter: &Option<Parameter>) -> ParamData {
     let ty = parameter.as_ref().and_then(|parameter| {
         parameter
@@ -78,10 +81,7 @@ fn parameter(parameter: &Option<Parameter>) -> ParamData {
             .map(|annotation| ty::type_ref(annotation.ty().ok()))
     });
 
-    ParamData {
-        pat: pattern(parameter),
-        ty,
-    }
+    ParamData { ty }
 }
 
 /// The pattern a parameter is written as, or a pattern that is not there.
@@ -94,4 +94,9 @@ pub(crate) fn pattern(parameter: &Option<Parameter>) -> Pat {
         Some(parameter) => pat::at(parameter.pat().ok()),
         None => Pat::Missing,
     }
+}
+
+/// The name a parameter binds, if it binds one.
+pub(crate) fn parameter_name(parameter: &Parameter) -> Option<Name> {
+    parameter.pat().ok().and_then(|pattern| pat::name(&pattern))
 }

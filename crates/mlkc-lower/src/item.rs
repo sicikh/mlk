@@ -10,7 +10,7 @@ use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, Ty
 use mlkc_vfs::FileId;
 
 use crate::{
-    BodyDecl, LoweredModule, LoweringDiag, LoweringError, decl, pat, path,
+    BodyDecl, LoweredModule, LoweringDiag, LoweringError, decl, path,
     syntax::{self, item_position, syntax_at},
 };
 
@@ -181,8 +181,8 @@ impl ItemLowering<'_> {
         }
     }
 
-    /// Reports what the language asks of the function itself: what its attributes say of it,
-    /// and what a caller of it needs.
+    /// Reports what the language asks of the function itself: what its parameters say of it,
+    /// what its attributes say of it, and what a caller of it needs.
     ///
     /// What the module says is checked as the module says it rather than by a pass that
     /// follows: a mistake that the surface alone decides is one a reader is told about before
@@ -194,6 +194,8 @@ impl ItemLowering<'_> {
         attributes: Attributes,
         visibility: Visibility,
     ) {
+        self.repeated_parameters(decl, function);
+
         // An external function is implemented outside the project, so a body of it here is a
         // body that nothing would call, and the module says two things at once.
         if attributes.external
@@ -257,7 +259,43 @@ impl ItemLowering<'_> {
 
             let error = LoweringError::PublicParameterWithoutType {
                 function: function.clone(),
-                parameter: pat::at(parameter.pat().ok()),
+                parameter: decl::parameter_name(&parameter),
+            };
+            let diagnostic = LoweringDiag::new(error, syntax::span(self.file, parameter.syntax()));
+
+            self.diagnostics.push(diagnostic);
+        }
+    }
+
+    /// Reports a parameter that binds a name another parameter of the function binds.
+    ///
+    /// A name a body reads is one name, and the parameters of a function are what the body
+    /// binds it to: two parameters written under one name are two arguments a reader cannot
+    /// tell apart, and the diagnostic is about the second of them, wherever in the list it is
+    /// written. A parameter that binds no name is in the way of nothing.
+    fn repeated_parameters(&mut self, decl: &FunDecl, function: &FunctionLoc) {
+        let mut bound: Vec<Name> = Vec::new();
+
+        for parameter in decl::parameters(decl) {
+            // A parameter the parser could not read is what the parse reported.
+            let Some(parameter) = parameter else {
+                continue;
+            };
+
+            // A parameter that binds no name is in the way of nothing: a wildcard binds
+            // nothing for a name to repeat.
+            let Some(name) = decl::parameter_name(&parameter) else {
+                continue;
+            };
+
+            if !bound.contains(&name) {
+                bound.push(name);
+                continue;
+            }
+
+            let error = LoweringError::DuplicateParameterName {
+                function: function.clone(),
+                name,
             };
             let diagnostic = LoweringDiag::new(error, syntax::span(self.file, parameter.syntax()));
 
@@ -399,7 +437,7 @@ impl ItemLowering<'_> {
 mod tests {
     use mlkc_diagnostics::{Category, DiagKind, Level};
     use mlkc_hir_def::{
-        ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, Pat, PathAnchor,
+        ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, PathAnchor,
     };
     use mlkc_vfs::FileId;
 
@@ -430,6 +468,9 @@ type Point
 
 pub fun size(value) =
     value
+
+fun same(left: Int, left: Int): Int =
+    left
 ";
 
     fn module() -> ModuleId {
@@ -506,10 +547,14 @@ pub fun size(value) =
             },
             &LoweringError::PublicParameterWithoutType {
                 function: function(tree, "size"),
-                parameter: Pat::Bind(Name::new("value")),
+                parameter: Some(Name::new("value")),
             },
             &LoweringError::PublicFunctionWithoutResult {
                 function: function(tree, "size"),
+            },
+            &LoweringError::DuplicateParameterName {
+                function: function(tree, "same"),
+                name: Name::new("left"),
             },
         ]);
     }
@@ -523,7 +568,9 @@ pub fun size(value) =
             .iter()
             .map(|diagnostic| diagnostic.error().code())
             .collect();
-        assert_eq!(codes, ["06", "05", "10", "01", "09", "11", "08", "07"]);
+        assert_eq!(codes, [
+            "06", "05", "10", "01", "09", "11", "08", "07", "12"
+        ]);
 
         // The error a host renders is the error, its kind, and where it is: nothing of it is
         // text that a caller has to parse back.

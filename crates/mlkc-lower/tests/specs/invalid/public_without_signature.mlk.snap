@@ -14,6 +14,9 @@ pub fun size(value: Int) =
 pub fun weight(value): Int =
     value
 
+pub fun ignored(_) =
+    1
+
 ```
 
 ## Item Tree
@@ -24,11 +27,14 @@ MODULE #0
 ITEM TREE
   fun size  @2.0
     visibility: public
-    param value: Int -> unresolved
+    param: Int -> unresolved
   fun weight  @2.1
     visibility: public
-    param value
+    param
     ret: Int -> unresolved
+  fun ignored  @2.2
+    visibility: public
+    param
 ```
 
 ## Bodies
@@ -61,10 +67,24 @@ paths
   path#0  value -> binding pat#0
 ```
 
+```
+BODY fun ignored in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  literal 1
+pats
+  pat#0  _
+```
+
 ## Lowering Diagnostics
 
 212..212: `fun size` is public and does not declare the type of its result, which a caller of it depends on
-241..246: the parameter `value` of the public function `fun weight` does not declare its type, which a caller of it depends on
+241..246: the public function `fun weight` does not declare the type of its parameter `value`, which a caller of it depends on
+282..283: the public function `fun ignored` does not declare the type of a parameter that binds no name, which a caller of it depends on
+284..284: `fun ignored` is public and does not declare the type of its result, which a caller of it depends on
 
 ## Parse Diagnostics
 

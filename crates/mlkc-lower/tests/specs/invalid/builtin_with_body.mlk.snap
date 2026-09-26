@@ -24,8 +24,8 @@ ITEM TREE
   fun max  @2.0
     attributes: @builtin
     visibility: private
-    param left: Int -> unresolved
-    param right: Int -> unresolved
+    param: Int -> unresolved
+    param: Int -> unresolved
     ret: Int -> unresolved
 ```
 

@@ -49,7 +49,7 @@ ITEM TREE
     ret: Int -> type Int
   fun shadows_a_parameter  @2.4
     visibility: private
-    param x: Int -> type Int
+    param: Int -> type Int
     ret: Int -> type Int
 ```
 

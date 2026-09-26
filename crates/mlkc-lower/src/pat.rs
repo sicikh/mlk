@@ -24,6 +24,17 @@ pub(crate) fn at(pattern: Option<PatSyntax>) -> Pat {
     }
 }
 
+/// The name a pattern binds, if it binds one.
+///
+/// A pattern that binds no name --- the wildcard, or one the parser could not read --- binds
+/// nothing, and a name that is not there is not one a reader is told about either.
+pub(crate) fn name(pattern: &PatSyntax) -> Option<Name> {
+    match pat(pattern) {
+        Pat::Bind(name) if !name.is_missing() => Some(name),
+        Pat::Bind(_) | Pat::Wildcard | Pat::Missing => None,
+    }
+}
+
 /// The names a pattern binds, in the order they are written.
 ///
 /// A pattern that binds no name --- the wildcard, or one the parser could not read --- binds

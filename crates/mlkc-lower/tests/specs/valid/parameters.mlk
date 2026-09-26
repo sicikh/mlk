@@ -1,6 +1,7 @@
-// A parameter is a pattern: a name the body binds and reads, and a wildcard it ignores. The
-// type is what a caller reads either way, and a parameter may leave it to be inferred where
-// the function is not public.
+// A parameter is a pattern: a name the body binds and reads, and a wildcard it ignores. What
+// a signature says of a parameter is its type --- the pattern is the body's, and the two line
+// up by position --- and a parameter may leave its type to be inferred where the function is
+// not public.
 
 @builtin
 type Int

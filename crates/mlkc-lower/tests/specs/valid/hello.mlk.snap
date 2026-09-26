@@ -37,7 +37,7 @@ ITEM TREE
   fun println-int  @2.2
     attributes: @extern
     visibility: private
-    param value: Int -> type Int
+    param: Int -> type Int
     ret: Unit -> type Unit
   fun main  @2.3
     visibility: private

@@ -9,7 +9,7 @@
 use std::fmt;
 
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Level};
-use mlkc_hir_def::{ClassLoc, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, Name, Pat, PlainPath};
+use mlkc_hir_def::{ClassLoc, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, Name, PlainPath};
 use mlkc_span::Span;
 
 /// What a module says that the HIR cannot hold, and what the language does not allow.
@@ -36,6 +36,17 @@ pub enum LoweringError {
     /// reader is told about.
     RepeatedAttribute {
         /// The name written after the `@`.
+        name: Name,
+    },
+    /// A function declares one parameter name twice.
+    ///
+    /// The parameters of a function are what its body binds, and a name a body reads is one
+    /// name: two parameters written under one name are two arguments a reader cannot tell
+    /// apart, and which of the two a use of the name means is not something the module says.
+    DuplicateParameterName {
+        /// The function.
+        function: FunctionLoc,
+        /// The name the parameters share.
         name: Name,
     },
     /// An integer literal does not fit the value the HIR holds it in.
@@ -83,9 +94,9 @@ pub enum LoweringError {
     PublicParameterWithoutType {
         /// The function.
         function: FunctionLoc,
-        /// The parameter, as the pattern it is written as: a name it binds, or the wildcard
-        /// it is where it binds none.
-        parameter: Pat,
+        /// The name the parameter binds, if it binds one: a parameter that binds none is one
+        /// a reader is told about by where it stands, which is the span of the error.
+        parameter: Option<Name>,
     },
     /// A name an import brings in is also a name the module declares.
     ///
@@ -129,6 +140,12 @@ impl LoweringError {
             Self::RepeatedAttribute { name } => {
                 format!("the attribute `@{name:?}` is written more than once on one declaration")
             },
+            Self::DuplicateParameterName { function, name } => {
+                format!(
+                    "`{function:?}` declares the parameter `{name:?}` more than once, and a \
+                 body cannot tell the two apart",
+                )
+            },
             Self::IntegerLiteralTooLarge { literal } => {
                 format!(
                     "the integer literal `{literal}` does not fit the value the HIR holds it in"
@@ -167,10 +184,16 @@ impl LoweringError {
                 function,
                 parameter,
             } => {
+                let parameter = match parameter {
+                    Some(name) => format!("its parameter `{name:?}`"),
+                    // A parameter that binds no name --- the wildcard --- is not one a
+                    // message can call by a name, and the span is where a reader looks.
+                    None => "a parameter that binds no name".to_owned(),
+                };
+
                 format!(
-                    "the parameter {} of the public function `{function:?}` does not declare its \
-                 type, which a caller of it depends on",
-                    parameter_text(parameter),
+                    "the public function `{function:?}` does not declare the type of \
+                 {parameter}, which a caller of it depends on",
                 )
             },
             Self::ImportOfDeclaredName { name, declaration } => {
@@ -212,18 +235,8 @@ impl DiagKind for LoweringError {
             Self::BuiltinFunctionHasBody { .. } => "09",
             Self::ImportOfDeclaredName { .. } => "10",
             Self::RepeatedAttribute { .. } => "11",
+            Self::DuplicateParameterName { .. } => "12",
         }
-    }
-}
-/// What a parameter is called in a message: the name it binds, or the wildcard where it binds
-/// none.
-fn parameter_text(parameter: &Pat) -> String {
-    match parameter {
-        Pat::Bind(name) => format!("`{name:?}`"),
-        Pat::Wildcard => "`_`".to_owned(),
-        // A parameter the parser could not read is not one of a signature, so a message is
-        // never about it; a reader is told the parameter is not there all the same.
-        Pat::Missing => "that is not there".to_owned(),
     }
 }
 

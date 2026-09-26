@@ -48,6 +48,13 @@
          */
         hovered?: [number, number] | null;
 
+        /**
+         * The part of the source what the pointer is on names, counted the same way: a path
+         * of the HIR is marked as the code it was written as, and here as where the name it
+         * resolved to comes from.
+         */
+        resolved?: [number, number] | null;
+
         /** Called with the whole text of a buffer after every change. */
         onInput: (path: string, text: string) => void;
 
@@ -64,6 +71,7 @@
         text,
         diagnostics = [],
         hovered = null,
+        resolved = null,
         onInput,
         onSelect,
         onClose,
@@ -126,6 +134,13 @@
                 borderRadius: "2px",
             },
 
+            /* And the code a row names: what a name of the HIR comes from, marked as the place
+               the name is written at rather than as the name itself. */
+            ".cm-named": {
+                backgroundColor: "var(--raised)",
+                borderBottom: "1px dashed var(--accent)",
+            },
+
             /* And what the compiler has to say about the text, marked the way an editor
                marks mistakes. The colours of the code itself are the language's:
                see `$lib/highlight`. */
@@ -141,17 +156,41 @@
         { dark: true },
     );
 
+    /** Where a pointer is on in a tree of the inspector, as the editor counts it. */
+    interface Hover {
+        /** The code a row stands for. */
+        at: { from: number; to: number } | null;
+
+        /** The code the row names, if it names something. */
+        names: { from: number; to: number } | null;
+    }
+
     /** The place in the text a pointer is on in a tree of the inspector. */
-    const setHover = StateEffect.define<{ from: number; to: number } | null>();
+    const setHover = StateEffect.define<Hover | null>();
 
     /** One mark, reused: the code a row of a tree stands for, painted in the editor. */
     const hoveredCode = Decoration.mark({ class: "cm-hovered" });
 
+    /** And one for the code a row names: where the name comes from. */
+    const namedCode = Decoration.mark({ class: "cm-named" });
+
+    /** What the editor paints for a pointer: the code a row stands for, and what it names. */
+    function painted(at: Hover | null): DecorationSet {
+        if (!at) return Decoration.none;
+
+        const marks = [];
+
+        if (at.at) marks.push(hoveredCode.range(at.at.from, at.at.to));
+        if (at.names) marks.push(namedCode.range(at.names.from, at.names.to));
+
+        return Decoration.set(marks, true);
+    }
+
     /**
      * What a tree of the inspector points at, marked in the text it stands for.
      *
-     * The mark is kept as the text changes, so that typing under the pointer does not move
-     * it to somewhere the row never pointed at; the next move of the pointer sets it again.
+     * The marks are kept as the text changes, so that typing under the pointer does not move
+     * them to somewhere the row never pointed at; the next move of the pointer sets them again.
      */
     const hover = StateField.define<DecorationSet>({
         create: () => Decoration.none,
@@ -159,11 +198,7 @@
             for (const effect of change.effects) {
                 if (!effect.is(setHover)) continue;
 
-                const at = effect.value;
-
-                return at
-                    ? Decoration.set([hoveredCode.range(at.from, at.to)])
-                    : Decoration.none;
+                return painted(effect.value);
             }
 
             return marked.map(change.changes);
@@ -172,16 +207,19 @@
     });
 
     /**
-     * A range of the text, or nothing where the range has no width.
+     * A range of the source as the editor counts it, or nothing where the range has no width.
      *
-     * A token the parser expected and did not find sits at a place without code, and a
-     * mark of no width is not a mark.
+     * The compiler counts the source in bytes, and the editor counts the way a string does.
+     * A token the parser expected and did not find sits at a place without code, and a mark
+     * of no width is not a mark.
      */
-    function rangeIn(from: number, to: number): { from: number; to: number } | null {
-        const start = Math.min(from, to);
-        const end = Math.max(from, to);
+    function rangeIn(text: string, at: [number, number] | null) {
+        if (!at) return null;
 
-        return start < end ? { from: start, to: end } : null;
+        const from = utf16At(text, at[0]);
+        const to = Math.max(from, utf16At(text, at[1]));
+
+        return from < to ? { from, to } : null;
     }
 
     /** The state of a buffer: what it holds, and how to get back to it. */
@@ -269,7 +307,7 @@
     });
 
     /**
-     * A pointer on a row of a tree marks the code the row stands for.
+     * A pointer on a row of a tree marks the code the row stands for, and what it names.
      *
      * A tree of the inspector and the editor hold the same buffer, so a range of one is a
      * range of the other: the compiler counts the source in bytes, which is what a tree
@@ -279,11 +317,13 @@
         if (!view) return;
 
         const text = view.state.doc.toString();
-        const at = hovered
-            ? rangeIn(utf16At(text, hovered[0]), utf16At(text, hovered[1]))
-            : null;
 
-        view.dispatch({ effects: setHover.of(at) });
+        view.dispatch({
+            effects: setHover.of({
+                at: rangeIn(text, hovered),
+                names: rangeIn(text, resolved),
+            }),
+        });
     });
 
     /**

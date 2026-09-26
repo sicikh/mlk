@@ -14,9 +14,10 @@
 //! A host walks that as deeply as it likes — folds it, prints it, jumps from it to the text —
 //! and no conversion here decides what a tree is.
 
-use mlkc_driver::Driver;
+use mlkc_driver::{Driver, Lowered};
+use mlkc_hir_def::dump;
 use mlkc_line_index::LineIndex;
-use mlkc_syntax::{ModuleRoot, SyntaxNode};
+use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::VfsPath;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -51,7 +52,7 @@ impl WasmDriver {
     }
 
     /// Everything a host reads from the parse of one file:
-    /// the concrete syntax tree, the typed view over it, and the diagnostics of the parse.
+    /// the concrete syntax tree, the typed view over it, the HIR, and the diagnostics.
     ///
     /// The trees are values a host navigates, not text it re-parses:
     /// a node is its kind, its range and its children, a token is its kind, its range and its text.
@@ -71,6 +72,7 @@ impl WasmDriver {
             .driver
             .parse(file)
             .ok_or_else(|| failure(&format!("{path} is not text the driver can parse")))?;
+        let lowered = self.driver.lower(file);
         let diagnostics = self
             .driver
             .diagnostics(file)
@@ -83,6 +85,7 @@ impl WasmDriver {
         Ok(Analysis {
             cst: parse.syntax(),
             ast: parse.module_root(),
+            hir: lowered.map(|lowered| Hir::of(&lowered)),
             diagnostics: diagnostics
                 .iter()
                 .map(|it| Diagnostic::of(it, &index))
@@ -118,8 +121,124 @@ struct Analysis {
     /// or `null` when the parse did not find a module root.
     ast: Option<ModuleRoot>,
 
-    /// What the parser reported, in the shape an editor marks the buffer with.
+    /// The HIR of the module, or `null` when there is nothing to lower.
+    hir: Option<Hir>,
+
+    /// What the parser and the lowering reported, in the shape an editor marks the buffer with.
     diagnostics: Vec<Diagnostic>,
+}
+
+/// The HIR of one module, as a host reads it.
+#[derive(Serialize)]
+struct Hir {
+    /// The lines of the HIR, in the order a reader reads them: the module and its items,
+    /// and then a body per entity that owns one.
+    nodes: Vec<HirNode>,
+}
+
+impl Hir {
+    /// Reads the HIR of a lowered module the way a host reads it.
+    ///
+    /// A line of the reading is about a node of the HIR ([`dump::Target`]), and what a host
+    /// marks a buffer by is a range of it: the line of the item tree is read against the
+    /// syntax of the module, and the line of a body against the places the lowering of that
+    /// body recorded.
+    fn of(lowered: &Lowered) -> Self {
+        let mut nodes = Vec::new();
+
+        for node in dump::item_tree_nodes(lowered.item_tree()) {
+            nodes.push(HirNode::of(&node, &|target| item_range(lowered, target)));
+        }
+
+        for body in lowered.bodies() {
+            let reading = dump::body_nodes(body.owner(), &body.body().body);
+            let places = &body.body().source_map;
+
+            nodes.push(HirNode::of(&reading, &|target| {
+                match target {
+                    dump::Target::Item(item) => lowered.item_range(item),
+                    dump::Target::Expr(expr) => places.expr(*expr),
+                    dump::Target::Pat(pat) => places.pat(*pat),
+                    dump::Target::Path(path) => places.path(*path),
+                }
+            }));
+        }
+
+        Self { nodes }
+    }
+}
+
+/// One line of the HIR, and the lines under it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HirNode {
+    /// The text of the line: `fun main  @0`, `expr#2  call expr#0 (expr#1)`.
+    text: String,
+
+    /// What the line is, which is what a host paints it by.
+    kind: &'static str,
+
+    /// The part of the buffer the line is about, in bytes, or nothing where the line is about
+    /// something a module did not write: a section header, a field of a declaration.
+    range: Option<[u32; 2]>,
+
+    /// The part of the buffer what the line resolves to is written at, when the line is about
+    /// a path that named something: the declaration a name comes from, the binding it stands
+    /// for. Nothing for a line that names nothing, and for a name of another module, which is
+    /// written in a file this one is not marked against.
+    resolves: Option<[u32; 2]>,
+
+    /// The lines under it, which a host folds.
+    children: Vec<HirNode>,
+}
+
+impl HirNode {
+    /// Reads one line of a reading, and everything under it.
+    ///
+    /// `range` is where the module says a node of the HIR is written, and it is the one thing
+    /// the reading of the HIR does not know: a line says what a node is, and the driver is
+    /// what says where it was read from.
+    fn of(node: &dump::Node, range: &impl Fn(&dump::Target) -> Option<TextRange>) -> Self {
+        Self {
+            text: node.text.clone(),
+            kind: kind_of(node.kind),
+            range: node.target.as_ref().and_then(range).map(covered),
+            resolves: node.resolves.as_ref().and_then(range).map(covered),
+            children: node
+                .children
+                .iter()
+                .map(|child| Self::of(child, range))
+                .collect(),
+        }
+    }
+}
+
+/// Where an entity of the item tree is written, which is the only thing a line of the item
+/// tree stands for.
+fn item_range(lowered: &Lowered, target: &dump::Target) -> Option<TextRange> {
+    match target {
+        dump::Target::Item(item) => lowered.item_range(item),
+        _ => None,
+    }
+}
+
+/// What a line of a reading is, as a host reads it.
+fn kind_of(kind: dump::NodeKind) -> &'static str {
+    match kind {
+        dump::NodeKind::Module => "module",
+        dump::NodeKind::Body => "body",
+        dump::NodeKind::Section => "section",
+        dump::NodeKind::Item => "item",
+        dump::NodeKind::Field => "field",
+        dump::NodeKind::Expr => "expr",
+        dump::NodeKind::Pat => "pat",
+        dump::NodeKind::Path => "path",
+    }
+}
+
+/// The part of a buffer a range covers, in the bytes a host counts.
+fn covered(range: TextRange) -> [u32; 2] {
+    [u32::from(range.start()), u32::from(range.end())]
 }
 
 /// A diagnostic as an editor reads it: what to say, and where to point.
@@ -290,6 +409,132 @@ mod tests {
             "an optional field that is missing is null"
         );
         assert!(analysis.diagnostics.is_empty(), "the module parses cleanly");
+    }
+
+    #[test]
+    fn the_hir_reads_as_a_tree_a_host_folds_and_marks_the_buffer_by() {
+        /// The part of the source a serialized range covers.
+        fn covered<'a>(source: &'a str, range: &serde_json::Value) -> &'a str {
+            let at = range.as_array().expect("a range to be a pair");
+            let from = at[0].as_u64().expect("a start") as usize;
+            let to = at[1].as_u64().expect("an end") as usize;
+
+            &source[from..to]
+        }
+
+        let source = "fun main(): Unit =\n    let x = 1 in\n    x\n";
+        let mut driver = WasmDriver::new();
+
+        driver.set_text("/main.mlk", Some(source.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let nodes = json["hir"]["nodes"]
+            .as_array()
+            .expect("the HIR to hold lines");
+
+        // The module is read first, and it is a line about nothing a host can mark.
+        assert_eq!(nodes[0]["text"], "MODULE #0");
+        assert_eq!(nodes[0]["kind"], "module");
+        assert!(nodes[0]["range"].is_null());
+
+        // The surface of the module follows, one line per entity and one per thing it is.
+        let item = &nodes[1]["children"][0];
+
+        assert_eq!(nodes[1]["text"], "ITEM TREE");
+        assert_eq!(nodes[1]["kind"], "section");
+        assert_eq!(item["text"], "fun main  @2.0");
+        assert_eq!(item["kind"], "item");
+        assert_eq!(covered(source, &item["range"]), source.trim_end());
+        assert_eq!(item["children"][0]["text"], "visibility: private");
+        assert_eq!(item["children"][1]["text"], "ret: Unit -> unresolved");
+        assert!(
+            item["children"][0]["range"].is_null(),
+            "a field of a declaration is about nothing a host marks"
+        );
+
+        // And then the body of the function, as the tree of what it holds.
+        let body = &nodes[2];
+
+        assert_eq!(body["text"], "BODY fun main in module #0");
+        assert_eq!(body["kind"], "body");
+        assert_eq!(covered(source, &body["range"]), source.trim_end());
+
+        let root = &body["children"][0];
+        let declaration = &root["children"][0];
+
+        assert_eq!(root["text"], "root");
+        assert_eq!(declaration["text"], "expr#2  let pat#0 = expr#0 in expr#1");
+        assert_eq!(
+            covered(source, &declaration["range"]),
+            "let x = 1 in\n    x"
+        );
+
+        let pat = &declaration["children"][0];
+        let literal = &declaration["children"][1];
+
+        assert_eq!(pat["text"], "pat#0  bind x");
+        assert_eq!(covered(source, &pat["range"]), "x");
+        assert_eq!(literal["text"], "expr#0  literal 1");
+        assert_eq!(covered(source, &literal["range"]), "1");
+
+        // A path says what it names as well as what it is: the `x` of the body is the binding
+        // the `let` introduced, and a host marks both ends of that walk.
+        let path = &declaration["children"][2]["children"][0];
+
+        assert_eq!(path["text"], "path#0  x -> binding pat#0");
+        assert_eq!(covered(source, &path["range"]), "x");
+        assert_eq!(covered(source, &path["resolves"]), "x");
+        assert_ne!(
+            path["range"], path["resolves"],
+            "the path and the binding it names are two places in the source"
+        );
+    }
+
+    #[test]
+    fn a_path_that_names_an_import_points_at_the_import() {
+        /// The part of the source a serialized range covers.
+        fn covered<'a>(source: &'a str, range: &serde_json::Value) -> &'a str {
+            let at = range.as_array().expect("a range to be a pair");
+            let from = at[0].as_u64().expect("a start") as usize;
+            let to = at[1].as_u64().expect("an end") as usize;
+
+            &source[from..to]
+        }
+
+        let source = "use std.core.Int\n\nfun main(): Int =\n    Int\n";
+        let mut driver = WasmDriver::new();
+
+        driver.set_text("/main.mlk", Some(source.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let body = &json["hir"]["nodes"][2];
+        let path = &body["children"][0]["children"][0]["children"][0];
+
+        assert_eq!(path["text"], "path#0  Int -> use Int");
+        assert_eq!(covered(source, &path["range"]), "Int");
+        assert_eq!(
+            covered(source, &path["resolves"]),
+            "use std.core.Int",
+            "a name an import brought in leads to the import"
+        );
+    }
+
+    #[test]
+    fn a_lowering_mistake_crosses_the_boundary_as_a_diagnostic() {
+        let mut driver = WasmDriver::new();
+
+        driver.set_text(
+            "/main.mlk",
+            Some("fun f(): Unit =\n    1\n\nfun f(): Unit =\n    2\n".to_string()),
+        );
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
+
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0]["category"], "lowering");
+        assert_eq!(diagnostics[0]["code"], "01");
+        assert_eq!(diagnostics[0]["level"], "error");
     }
 
     /// The text of the first token of a kind, wherever in a serialized tree it sits.

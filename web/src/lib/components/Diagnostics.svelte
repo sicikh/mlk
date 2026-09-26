@@ -4,7 +4,7 @@
     import { byteLength, utf16At } from "$lib/offsets";
 
     interface Props {
-        /** What the parser reported, in the order it reported it. */
+        /** What the parser and the lowering reported, in the order they reported it. */
         diagnostics: Diagnostic[];
 
         /** The text they are about: a diagnostic points at a place in it, and a snippet is cut out of it. */

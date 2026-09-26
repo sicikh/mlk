@@ -9,7 +9,9 @@ publish.workspace = true
 
 [dependencies]
 mlkc-diagnostics.workspace = true
+mlkc-hir-def.workspace = true
 mlkc-line-index.workspace = true
+mlkc-lower.workspace = true
 mlkc-parser.workspace = true
 mlkc-parser-core.workspace = true
 mlkc-rowan.workspace = true

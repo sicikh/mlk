@@ -13,15 +13,21 @@
 //! A dump is a reading of one revision and nothing more: the ids it prints are the positions
 //! of the arenas of that revision, and a name is the only thing in it that denotes the same
 //! entity in the next one.
+//!
+//! The words are read twice: as text, which is what a snapshot of a dump holds, and as a tree
+//! of lines ([`Node`]), which is what a host that folds what it is not reading and marks
+//! a buffer by a line reads. A line of either reading says the same thing, and a line of
+//! a tree that stands for a node of the HIR carries it ([`Target`]) so that a host can find
+//! the syntax the node was read from.
 
 use std::fmt::{self, Write as _};
 
 use crate::{
-    body::{Body, Expr, Literal, Pat},
-    id::{BodyEntityLoc, EntityLoc, LocalConstId, LocalFunctionId, ModuleId, arena_index},
+    body::{Body, Expr, ExprId, Literal, Pat, PatId},
+    id::{BodyEntityLoc, EntityLoc, ItemLoc, LocalConstId, LocalFunctionId, ModuleId, arena_index},
     item_data::{Attributes, EntityData, Signature, Visibility},
-    item_tree::ItemTree,
-    path::{PathAnchor, PathData, PathSegmentData},
+    item_tree::{Entity, ItemTree},
+    path::{PathAnchor, PathData, PathId, PathSegmentData},
     type_ref::TypeRef,
 };
 
@@ -30,6 +36,68 @@ const INDENT: &str = "  ";
 
 /// What a name that is not there is printed as.
 const MISSING: &str = "<missing>";
+
+/// What a line of a reading is about, since a line is what a host marks a buffer with.
+///
+/// A line that stands for no node of the HIR --- a section header, a field of a declaration ---
+/// is about nothing, and a host marks nothing for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Target {
+    /// An entity of the module: a function, a class, an import.
+    Item(ItemLoc),
+    /// An expression of a body.
+    Expr(ExprId),
+    /// A pattern of a body.
+    Pat(PatId),
+    /// A path of a body.
+    Path(PathId),
+}
+
+/// What a line of a reading is, which is what a host paints it by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeKind {
+    /// The module itself, headed by the path it declares.
+    Module,
+    /// A body, headed by the entity that owns it.
+    Body,
+    /// A named part of a reading: `ITEM TREE`, `root`.
+    Section,
+    /// An entity of the module, or one declared inside a body.
+    Item,
+    /// One of the things an entity is: its visibility, its signature, the path of an import.
+    Field,
+    /// An expression of a body.
+    Expr,
+    /// A pattern of a body.
+    Pat,
+    /// A path of a body.
+    Path,
+}
+
+/// A line of a reading, and the lines under it.
+///
+/// The text of a reading is these lines in order, each of them indented by the level it is at.
+/// A host that shows a reading as a tree folds what it is not reading, and marks the source
+/// a line stands for: [`Node::target`] is a node of the HIR, and the syntax it was read from
+/// is what a file is marked by.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Node {
+    /// What the line says.
+    pub text: String,
+    /// What the line is, which is what a host paints it by.
+    pub kind: NodeKind,
+    /// The node of the HIR the line is about, if it is about one.
+    pub target: Option<Target>,
+    /// The node the line's own node resolves to, when it is a name that resolved to something:
+    /// the entity or the import a path names, the binding a name of a body stands for.
+    ///
+    /// A line says what a node is, and a node that names another is what a reader follows when
+    /// they ask where a name comes from: a host marks both ends of that walk, and the syntax
+    /// of the target is a place in the same file it reads the line of.
+    pub resolves: Option<Target>,
+    /// The lines under it, in the order they are read.
+    pub children: Vec<Node>,
+}
 
 /// A reading of the item tree of a module.
 ///
@@ -41,25 +109,37 @@ pub fn item_tree(tree: &ItemTree) -> String {
     let module = tree.module();
     let mut dump = Dump::new();
 
-    match tree.path() {
-        Some(path) => dump.line(format!("MODULE #{} {path}", module_index(module))),
-        None => dump.line(format!("MODULE #{}", module_index(module))),
-    }
-
+    dump.line(module_line(tree, module));
     dump.blank();
 
     dump.section("ITEM TREE", |dump| {
         for (loc, id) in tree.entities() {
             let entity = tree.entity(id);
-            dump.line(format!("{loc:?}  @{}", entity.syntax()));
+            dump.line(entity_line(&loc, entity));
 
             dump.depth += 1;
-            entity_data(dump, entity.data(), module);
+            dump.lines(&entity_data_lines(entity.data(), module));
             dump.depth -= 1;
         }
     });
 
     dump.render()
+}
+
+/// The line a reading of a module is headed by: the module, and the path it declares itself as.
+fn module_line(tree: &ItemTree, module: ModuleId) -> String {
+    match tree.path() {
+        Some(path) => format!("MODULE #{} {path}", module_index(module)),
+        None => format!("MODULE #{}", module_index(module)),
+    }
+}
+
+/// The line one entity of a module is headed by: what it is, and where it is written.
+///
+/// The position is what a reader compares between two revisions, since the entities of a
+/// module are held in the order it declares them.
+fn entity_line(loc: &ItemLoc, entity: &Entity) -> String {
+    format!("{loc:?}  @{}", entity.syntax())
 }
 
 /// A reading of one body, headed by the name of the entity that owns it.
@@ -114,7 +194,7 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
             ));
 
             dump.depth += 1;
-            signature(dump, &data.signature, module);
+            dump.lines(&signature_lines(&data.signature, module));
             dump.depth -= 1;
         }
     });
@@ -140,39 +220,280 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
     dump.render()
 }
 
+/// The lines of the item tree of a module, as a tree a host reads.
+///
+/// This is the reading [`item_tree`] prints, with what an entity is made of under the entity
+/// rather than after it, and without the blank line a text holds: a host folds a line and the
+/// lines under it, and a line that says nothing is not one of them.
+pub fn item_tree_nodes(tree: &ItemTree) -> Vec<Node> {
+    let module = tree.module();
+    let mut nodes = vec![module_node(tree, module)];
+
+    let items: Vec<Node> = tree
+        .entities()
+        .map(|(loc, id)| {
+            let entity = tree.entity(id);
+
+            Node {
+                text: entity_line(&loc, entity),
+                kind: NodeKind::Item,
+                target: Some(Target::Item(loc)),
+                resolves: None,
+                children: field_nodes(entity_data_lines(entity.data(), module)),
+            }
+        })
+        .collect();
+
+    if !items.is_empty() {
+        nodes.push(Node {
+            text: "ITEM TREE".to_owned(),
+            kind: NodeKind::Section,
+            target: None,
+            resolves: None,
+            children: items,
+        });
+    }
+
+    nodes
+}
+
+/// The line a reading of a module is headed by.
+fn module_node(tree: &ItemTree, module: ModuleId) -> Node {
+    Node {
+        text: module_line(tree, module),
+        kind: NodeKind::Module,
+        target: None,
+        resolves: None,
+        children: Vec::new(),
+    }
+}
+
+/// The lines of one body, as a tree a host reads.
+///
+/// The reading [`body`] prints is a line per node of the body, in the order the arenas hold
+/// them, which is what a diff of two revisions is read for. A host that folds what it is not
+/// reading wants the other shape, and a body is a graph of ids: an expression under the
+/// expression that is made of it, and a pattern or a path under the expression it is written
+/// at, so that what a person folds is a part of the body rather than a list of its nodes.
+pub fn body_nodes(owner: &BodyEntityLoc, body: &Body) -> Node {
+    let module = owner.module();
+    let mut children = Vec::new();
+
+    if !body.params().is_empty() {
+        children.push(Node {
+            text: "params".to_owned(),
+            kind: NodeKind::Section,
+            target: None,
+            resolves: None,
+            children: body.params().iter().map(|id| pat_node(body, *id)).collect(),
+        });
+    }
+
+    children.push(Node {
+        text: "root".to_owned(),
+        kind: NodeKind::Section,
+        target: None,
+        resolves: None,
+        children: vec![expr_node(body, module, body.root())],
+    });
+
+    for (id, data) in body.local_functions().iter() {
+        let mut inner = field_nodes(signature_lines(&data.signature, module));
+        inner.push(root_node(
+            body,
+            module,
+            body.local_function_root(LocalFunctionId(id)),
+        ));
+
+        children.push(Node {
+            text: format!("{}  {:?}", local_function_ref(id), data.name),
+            kind: NodeKind::Item,
+            target: None,
+            resolves: None,
+            children: inner,
+        });
+    }
+
+    for (id, data) in body.local_consts().iter() {
+        let mut inner = Vec::new();
+
+        if let Some(ty) = &data.ty {
+            inner.push(field_node(format!("ty: {}", type_ref(ty, module))));
+        }
+
+        inner.push(root_node(
+            body,
+            module,
+            body.local_const_root(LocalConstId(id)),
+        ));
+
+        children.push(Node {
+            text: format!("{}  {:?}", local_const_ref(id), data.name),
+            kind: NodeKind::Item,
+            target: None,
+            resolves: None,
+            children: inner,
+        });
+    }
+
+    Node {
+        text: format!(
+            "BODY {:?} in module #{}",
+            owner.item(),
+            module_index(module)
+        ),
+        kind: NodeKind::Body,
+        target: Some(Target::Item(owner.item().clone().into())),
+        resolves: None,
+        children,
+    }
+}
+
+/// The root of an entity declared inside a body, and the expressions it is made of.
+fn root_node(body: &Body, module: ModuleId, root: Option<ExprId>) -> Node {
+    Node {
+        text: format!("root {}", root_text(root)),
+        kind: NodeKind::Section,
+        target: root.map(Target::Expr),
+        resolves: None,
+        children: root
+            .map(|id| vec![expr_node(body, module, id)])
+            .unwrap_or_default(),
+    }
+}
+
+/// One expression of a body, with what it is made of under it.
+fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
+    let mut children = Vec::new();
+
+    match &body[id] {
+        Expr::Missing | Expr::Literal(_) => {},
+        Expr::Path(path) => children.push(path_node(body, module, *path)),
+        Expr::Call { callee, args } => {
+            children.push(expr_node(body, module, *callee));
+            children.extend(args.iter().map(|arg| expr_node(body, module, *arg)));
+        },
+        Expr::Binary { lhs, rhs, .. } => {
+            children.push(expr_node(body, module, *lhs));
+            children.push(expr_node(body, module, *rhs));
+        },
+        Expr::Unary { operand, .. } => children.push(expr_node(body, module, *operand)),
+        Expr::Seq { first, then } => {
+            children.push(expr_node(body, module, *first));
+            children.push(expr_node(body, module, *then));
+        },
+        Expr::Let {
+            pat,
+            expr,
+            body: inner,
+        } => {
+            children.push(pat_node(body, *pat));
+            children.push(expr_node(body, module, *expr));
+            children.push(expr_node(body, module, *inner));
+        },
+    }
+
+    Node {
+        text: format!("{}  {}", expr_ref(id), expr_text(&body[id])),
+        kind: NodeKind::Expr,
+        target: Some(Target::Expr(id)),
+        resolves: None,
+        children,
+    }
+}
+
+/// One pattern of a body.
+fn pat_node(body: &Body, id: PatId) -> Node {
+    Node {
+        text: format!("{}  {}", pat_ref(id), pat_text(&body[id])),
+        kind: NodeKind::Pat,
+        target: Some(Target::Pat(id)),
+        resolves: None,
+        children: Vec::new(),
+    }
+}
+
+/// One path of a body: the path, what its root denotes, and what the path names.
+fn path_node(body: &Body, module: ModuleId, id: PathId) -> Node {
+    Node {
+        text: format!("{}  {}", path_ref(id), path_resolved(&body[id], module)),
+        kind: NodeKind::Path,
+        target: Some(Target::Path(id)),
+        resolves: path_target(body, id),
+        children: Vec::new(),
+    }
+}
+
+/// What a path names, when it names something the HIR points at.
+///
+/// A path resolved to an entity of the module, to an entry of its import table, or to
+/// a binding of the body: what a reader is told about besides the path itself is where the
+/// name comes from. A path rooted at the project, one that resolved to an entity of another
+/// module, and one that resolved to nothing point at no place in this file.
+fn path_target(body: &Body, id: PathId) -> Option<Target> {
+    match &body[id].anchor {
+        PathAnchor::Item(entity) => Some(Target::Item(entity.item.clone())),
+        PathAnchor::Use(import) => Some(Target::Item(ItemLoc::Use(import.clone()))),
+        PathAnchor::Binding(pat) => Some(Target::Pat(*pat)),
+        PathAnchor::Local(_)
+        | PathAnchor::TypeVar(_)
+        | PathAnchor::Project
+        | PathAnchor::Unresolved => None,
+    }
+}
+
+/// The lines of what an entity is, as the lines of a reading.
+fn field_nodes(lines: Vec<String>) -> Vec<Node> {
+    lines.into_iter().map(field_node).collect()
+}
+
+/// One line of what an entity is.
+fn field_node(text: impl fmt::Display) -> Node {
+    Node {
+        text: text.to_string(),
+        kind: NodeKind::Field,
+        target: None,
+        resolves: None,
+        children: Vec::new(),
+    }
+}
+
 /// The lines of the data of one entity.
-fn entity_data(dump: &mut Dump, data: &EntityData, module: ModuleId) {
-    attributes(dump, data.attributes());
+fn entity_data_lines(data: &EntityData, module: ModuleId) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.extend(attributes_line(data.attributes()));
 
     match data {
         EntityData::Function(data) => {
-            visibility(dump, data.visibility);
-            signature(dump, &data.signature, module);
+            lines.push(visibility_line(data.visibility));
+            lines.extend(signature_lines(&data.signature, module));
         },
-        EntityData::Class(data) => visibility(dump, data.visibility),
-        EntityData::Value(data) => visibility(dump, data.visibility),
+        EntityData::Class(data) => lines.push(visibility_line(data.visibility)),
+        EntityData::Value(data) => lines.push(visibility_line(data.visibility)),
         EntityData::Const(data) => {
-            visibility(dump, data.visibility);
+            lines.push(visibility_line(data.visibility));
             if let Some(ty) = &data.ty {
-                dump.line(format!("ty: {}", type_ref(ty, module)));
+                lines.push(format!("ty: {}", type_ref(ty, module)));
             }
         },
         EntityData::Impl(data) => {
             if let Some(class) = &data.class {
-                dump.line(format!("class: {}", type_ref(class, module)));
+                lines.push(format!("class: {}", type_ref(class, module)));
             }
             if let Some(ty) = &data.ty {
-                dump.line(format!("ty: {}", type_ref(ty, module)));
+                lines.push(format!("ty: {}", type_ref(ty, module)));
             }
         },
         EntityData::Use(data) => {
-            dump.line(format!("path: {}", *data.path));
+            lines.push(format!("path: {}", *data.path));
             if let Some(alias) = &data.alias {
-                dump.line(format!("alias: {alias:?}"));
+                lines.push(format!("alias: {alias:?}"));
             }
-            visibility(dump, data.visibility);
+            lines.push(visibility_line(data.visibility));
         },
     }
+
+    lines
 }
 
 /// The lines of a signature, parameters first.
@@ -180,30 +501,32 @@ fn entity_data(dump: &mut Dump, data: &EntityData, module: ModuleId) {
 /// A parameter is read as what its signature says of it, which is its type: what the
 /// parameter binds is the pattern of the body, and the body of the function is where a dump
 /// reads it.
-fn signature(dump: &mut Dump, signature: &Signature, module: ModuleId) {
+fn signature_lines(signature: &Signature, module: ModuleId) -> Vec<String> {
+    let mut lines = Vec::new();
+
     for param in &signature.params {
         match &param.ty {
-            Some(ty) => dump.line(format!("param: {}", type_ref(ty, module))),
-            None => dump.line("param".to_owned()),
+            Some(ty) => lines.push(format!("param: {}", type_ref(ty, module))),
+            None => lines.push("param".to_owned()),
         }
     }
 
     if let Some(ret) = &signature.ret {
-        dump.line(format!("ret: {}", type_ref(ret, module)));
+        lines.push(format!("ret: {}", type_ref(ret, module)));
     }
+
+    lines
 }
 
 /// One line of the attributes of a declaration, if it carries any.
 ///
 /// The line holds the attributes as the module writes them, since what a reader compares is
 /// the source and the HIR it becomes.
-fn attributes(dump: &mut Dump, attributes: Option<&Attributes>) {
-    let Some(attributes) = attributes else {
-        return;
-    };
+fn attributes_line(attributes: Option<&Attributes>) -> Option<String> {
+    let attributes = attributes?;
 
     if attributes.is_none() {
-        return;
+        return None;
     }
 
     let mut words = Vec::new();
@@ -216,18 +539,18 @@ fn attributes(dump: &mut Dump, attributes: Option<&Attributes>) {
         words.push("@extern");
     }
 
-    dump.line(format!("attributes: {}", words.join(" ")));
+    Some(format!("attributes: {}", words.join(" ")))
 }
 
 /// One line of the visibility of an entity.
-fn visibility(dump: &mut Dump, visibility: Visibility) {
+fn visibility_line(visibility: Visibility) -> String {
     let word = if visibility.is_public() {
         "public"
     } else {
         "private"
     };
 
-    dump.line(format!("visibility: {word}"));
+    format!("visibility: {word}")
 }
 
 /// A type reference as it was written, and what its paths denote.
@@ -412,6 +735,13 @@ impl Dump {
         let line = self.indented(&text);
 
         self.lines.push(line);
+    }
+
+    /// Lines of a reading that was made apart from this one.
+    fn lines(&mut self, lines: &[String]) {
+        for line in lines {
+            self.line(line);
+        }
     }
 
     /// An empty line, which separates the parts of a dump.
@@ -787,5 +1117,152 @@ consts
     ty: Float -> unresolved
 "
         );
+    }
+
+    #[test]
+    fn the_tree_of_an_item_tree_holds_what_an_entity_is() {
+        let mut builder = ItemTreeBuilder::new(module());
+        builder.set_path(PlainPathId::new(PlainPath::from_root(PathRoot::Project, [
+            Name::new("main-module"),
+        ])));
+        builder.declare(
+            Some(Name::new("Unit")),
+            EntityData::Class(ClassData {
+                attributes: Attributes::default(),
+                visibility: Visibility::Public,
+            }),
+            ItemSyntaxLoc::root().child(0),
+        );
+
+        let tree = builder.finish();
+        let nodes = crate::dump::item_tree_nodes(&tree);
+
+        assert_eq!(nodes[0].text, "MODULE #0 project.main-module");
+        assert_eq!(nodes[0].kind, NodeKind::Module);
+        assert_eq!(nodes[0].target, None);
+
+        let items = &nodes[1];
+
+        assert_eq!(items.text, "ITEM TREE");
+        assert_eq!(items.kind, NodeKind::Section);
+
+        let unit = &items.children[0];
+
+        assert_eq!(unit.text, "type Unit  @0");
+        assert_eq!(unit.kind, NodeKind::Item);
+        assert_eq!(
+            unit.target,
+            Some(Target::Item(ItemLoc::new(
+                ItemKind::Class,
+                Some(Name::new("Unit")),
+                0,
+            ))),
+            "a line about an entity stands for the entity"
+        );
+        assert_eq!(unit.children.len(), 1);
+        assert_eq!(unit.children[0].text, "visibility: public");
+        assert_eq!(unit.children[0].kind, NodeKind::Field);
+        assert_eq!(unit.children[0].target, None, "a field is about nothing");
+    }
+
+    #[test]
+    fn the_tree_of_a_body_holds_what_an_expression_is_made_of() {
+        let mut builder = BodyBuilder::new();
+
+        let one = builder.alloc_expr(Expr::Literal(Literal::Int(1)));
+        let two = builder.alloc_expr(Expr::Literal(Literal::Int(2)));
+        let sum = builder.alloc_expr(Expr::Binary {
+            lhs: one,
+            op: BinaryOp::Add,
+            rhs: two,
+        });
+        builder.set_root(sum);
+
+        let owner = owner("f");
+        let node = crate::dump::body_nodes(&owner, &builder.finish());
+
+        assert_eq!(node.text, "BODY fun f in module #0");
+        assert_eq!(node.kind, NodeKind::Body);
+        assert_eq!(
+            node.target,
+            Some(Target::Item(owner.item().clone().into())),
+            "a body stands for the declaration it is written in"
+        );
+        assert_eq!(
+            tree_text(&node),
+            "\
+BODY fun f in module #0
+  root
+    expr#2  binary expr#0 + expr#1
+      expr#0  literal 1
+      expr#1  literal 2
+"
+        );
+    }
+
+    #[test]
+    fn a_path_of_a_body_says_what_it_resolved_to() {
+        let mut builder = BodyBuilder::new();
+
+        let entity = EntityLoc {
+            module: module(),
+            item: ItemLoc::new(ItemKind::Function, Some(Name::new("f")), 0),
+        };
+        let pat = builder.alloc_pat(Pat::Bind(Name::new("x")));
+        let bound = builder.alloc_path(PathData::ident(Name::new("x"), PathAnchor::Binding(pat)));
+        let named = builder.alloc_path(PathData::ident(
+            Name::new("f"),
+            PathAnchor::Item(entity.clone()),
+        ));
+
+        let callee = builder.alloc_expr(Expr::Path(named));
+        let argument = builder.alloc_expr(Expr::Path(bound));
+        let call = builder.alloc_expr(Expr::Call {
+            callee,
+            args: vec![argument],
+        });
+        builder.set_root(call);
+
+        let node = crate::dump::body_nodes(&owner("f"), &builder.finish());
+        let call = &node.children[0].children[0];
+        // An expression reads one level above the path it is written as: the line of the
+        // expression says which expression it is, and the line of the path below it says
+        // what the path names.
+        let callee = &call.children[0].children[0];
+        let argument = &call.children[1].children[0];
+
+        assert_eq!(callee.target, Some(Target::Path(named)));
+        assert_eq!(
+            callee.resolves,
+            Some(Target::Item(entity.item)),
+            "a path that names an entity of the module points at the entity"
+        );
+        assert_eq!(argument.target, Some(Target::Path(bound)));
+        assert_eq!(
+            argument.resolves,
+            Some(Target::Pat(pat)),
+            "a path that names a binding points at the binding"
+        );
+    }
+
+    /// The lines of a tree of a reading, indented by what they are under.
+    fn tree_text(node: &Node) -> String {
+        let mut text = String::new();
+
+        write_tree(&mut text, node, 0);
+
+        text
+    }
+
+    fn write_tree(text: &mut String, node: &Node, depth: usize) {
+        for _ in 0..depth {
+            text.push_str("  ");
+        }
+
+        writeln!(text, "{}", node.text).expect("writing to a string to never fail");
+
+        for child in &node.children {
+            write_tree(text, child, depth + 1);
+        }
     }
 }

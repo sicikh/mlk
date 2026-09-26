@@ -11,6 +11,7 @@ publish.workspace = true
 mlkc-diagnostics.workspace = true
 mlkc-hir-def.workspace = true
 mlkc-intern.workspace = true
+mlkc-la-arena.workspace = true
 mlkc-rowan.workspace = true
 mlkc-span.workspace = true
 mlkc-syntax.workspace = true

@@ -648,7 +648,9 @@ name = "mlkc-driver"
 version = "0.1.0"
 dependencies = [
  "mlkc-diagnostics",
+ "mlkc-hir-def",
  "mlkc-line-index",
+ "mlkc-lower",
  "mlkc-parser",
  "mlkc-parser-core",
  "mlkc-rowan",
@@ -698,6 +700,7 @@ dependencies = [
  "mlkc-diagnostics",
  "mlkc-hir-def",
  "mlkc-intern",
+ "mlkc-la-arena",
  "mlkc-parser",
  "mlkc-parser-core",
  "mlkc-rowan",
@@ -830,6 +833,7 @@ version = "0.1.0"
 dependencies = [
  "mlkc-diagnostics",
  "mlkc-driver",
+ "mlkc-hir-def",
  "mlkc-line-index",
  "mlkc-syntax",
  "mlkc-vfs",

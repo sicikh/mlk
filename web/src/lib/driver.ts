@@ -7,7 +7,7 @@
  *
  * Nothing here decides anything about the compiler: the editor pushes the text of a buffer
  * and reads back what the pipeline made of it. The same driver answers the CLI,
- * which is the point of keeping the boundary this thin.
+ * which is the point of keeping this boundary this thin.
  */
 import init, { WasmDriver } from "@mlk/wasm";
 
@@ -84,6 +84,47 @@ export function isToken(node: SyntaxNode): boolean {
     return node.children === undefined;
 }
 
+/**
+ * One line of the HIR of a module, and the lines under it.
+ *
+ * The compiler reads the HIR the way a fixture shows it --- the module and its items, and
+ * then a body per entity that owns one --- and hands the reading over as a tree: a line is
+ * what a person folds, and a range is what the editor marks in the buffer while a pointer is
+ * on it. A line that is about nothing a module wrote --- a section header, a field of
+ * a declaration --- carries no range.
+ */
+export interface HirNode {
+    /** What the line says: `fun main  @2.0`, `expr#2  let pat#0 = expr#0 in expr#1`. */
+    text: string;
+
+    /**
+     * What the line is: `module`, `body`, `section`, `item`, `field`, `expr`, `pat`, or
+     * `path`, which is what the view paints it by.
+     */
+    kind: string;
+
+    /** The part of the buffer the line is about, in bytes, or nothing. */
+    range: [number, number] | null;
+
+    /**
+     * The part of the buffer what the line resolves to is written at, or nothing.
+     *
+     * A path of the HIR names something — an entity of the module, an entry of its import
+     * table, a binding of the body — and where that name comes from is another place in the
+     * same buffer: the view marks both while a pointer is on the line.
+     */
+    resolves: [number, number] | null;
+
+    /** The lines under it, which the view folds. */
+    children: HirNode[];
+}
+
+/** The HIR of the module in the buffer, as the compiler reads it. */
+export interface Hir {
+    /** The lines of the reading: the module and its items first, the bodies after them. */
+    nodes: HirNode[];
+}
+
 /** Everything the editor shows about one buffer. */
 export interface Analysis {
     /** The concrete syntax tree: lossless, tokens and trivia included. */
@@ -98,7 +139,10 @@ export interface Analysis {
      */
     ast: unknown;
 
-    /** What the parser reported. */
+    /** The HIR of the module, or `null` when there is nothing to lower. */
+    hir: Hir | null;
+
+    /** What the parser and the lowering reported, in the shape an editor marks the buffer with. */
     diagnostics: Diagnostic[];
 }
 

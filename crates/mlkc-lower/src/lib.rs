@@ -17,6 +17,8 @@
 //! - it reads the body of a function into expressions, patterns, paths, and the names the
 //!   body binds, and anchors a path to the binding it names before anything else can know
 //!   the binding: only the body knows its own names;
+//! - it says where every node of a body is written ([`BodySourceMap`]), since it is the only
+//!   stage that knows which syntax a node was read from;
 //! - it reports what the HIR cannot hold, and nothing else: an attribute that the language
 //!   has no meaning for is the one thing a module can say that has nowhere to go.
 //!
@@ -76,6 +78,7 @@ pub mod diagnostic;
 mod item;
 mod pat;
 mod path;
+mod source_map;
 mod syntax;
 mod ty;
 
@@ -87,6 +90,7 @@ use mlkc_syntax::{FunDecl, ModuleRoot};
 
 pub use crate::{
     diagnostic::{LoweringDiag, LoweringError},
+    source_map::BodySourceMap,
     syntax::syntax_at,
 };
 
@@ -132,6 +136,8 @@ pub struct LoweredBody {
     pub body: Body,
     /// What lowering found, in the order of the source.
     pub diagnostics: Vec<LoweringDiag>,
+    /// Where the nodes of the body are written, which is what a host marks a buffer by.
+    pub source_map: BodySourceMap,
 }
 
 /// Lowers the items of a module into the surface of that module.

@@ -19,7 +19,10 @@ use mlkc_syntax::{
 };
 use mlkc_vfs::FileId;
 
-use crate::{LoweredBody, LoweringDiag, LoweringError, decl, pat, path, syntax::span};
+use crate::{
+    LoweredBody, LoweringDiag, LoweringError, decl, pat, path, source_map::BodySourceMap,
+    syntax::span,
+};
 
 /// Lowers the body of `decl`, a function of the module `tree` describes, or nothing if the
 /// declaration declares no body.
@@ -34,6 +37,7 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
         builder: BodyBuilder::new(),
         bindings: Vec::new(),
         diagnostics: Vec::new(),
+        source_map: BodySourceMap::default(),
     };
 
     lowering.parameters(decl);
@@ -46,12 +50,14 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
     let BodyLowering {
         builder,
         diagnostics,
+        source_map,
         ..
     } = lowering;
 
     Some(LoweredBody {
         body: builder.finish(),
         diagnostics,
+        source_map,
     })
 }
 
@@ -63,6 +69,8 @@ struct BodyLowering<'a> {
     /// The names the body binds, the innermost last, with the pattern that binds each of them.
     bindings: Vec<(Name, PatId)>,
     diagnostics: Vec<LoweringDiag>,
+    /// Where each node of the body is written, read as the node is made.
+    source_map: BodySourceMap,
 }
 
 impl BodyLowering<'_> {
@@ -78,6 +86,11 @@ impl BodyLowering<'_> {
             let names = pat::bindings(&lowered);
             let pat = self.builder.alloc_pat(lowered);
 
+            if let Some(pattern) = parameter.as_ref().and_then(|it| it.pat().ok()) {
+                self.source_map
+                    .set_pat(pat, pattern.syntax().text_trimmed_range());
+            }
+
             self.builder.push_param(pat);
             self.bindings
                 .extend(names.into_iter().map(|name| (name, pat)));
@@ -85,8 +98,11 @@ impl BodyLowering<'_> {
     }
 
     /// Lowers one expression.
+    ///
+    /// The range of the syntax is read as the node is made: this is the one place that knows
+    /// which expression a node of the syntax became, which is what a host marks a buffer by.
     fn expr(&mut self, expr: &ExprSyntax) -> ExprId {
-        match expr {
+        let id = match expr {
             ExprSyntax::Literal(literal) => self.literal(literal),
             ExprSyntax::PathExpr(path) => self.path_expr(path),
             ExprSyntax::CallExpr(call) => self.call(call),
@@ -97,7 +113,12 @@ impl BodyLowering<'_> {
             // grouped is the parser's business, and what it hands over is a tree already.
             ExprSyntax::ParenExpr(paren) => self.optional(paren.expr().ok()),
             ExprSyntax::BogusExpr(_) => self.missing(),
-        }
+        };
+
+        self.source_map
+            .set_expr(id, expr.syntax().text_trimmed_range());
+
+        id
     }
 
     /// Lowers an expression the syntax may not hold.
@@ -121,10 +142,13 @@ impl BodyLowering<'_> {
             return self.missing();
         };
 
+        let written = path.syntax().text_trimmed_range();
         let data = self.path_data(&path);
-        let path = self.builder.alloc_path(data);
+        let id = self.builder.alloc_path(data);
 
-        self.builder.alloc_expr(Expr::Path(path))
+        self.source_map.set_path(id, written);
+
+        self.builder.alloc_expr(Expr::Path(id))
     }
 
     /// The path of an expression, anchored to what the body can tell of it.
@@ -288,6 +312,9 @@ impl BodyLowering<'_> {
         let lowered = pat::pat(&pat);
         let names = pat::bindings(&lowered);
         let id = self.builder.alloc_pat(lowered);
+
+        self.source_map
+            .set_pat(id, pat.syntax().text_trimmed_range());
 
         (id, names)
     }

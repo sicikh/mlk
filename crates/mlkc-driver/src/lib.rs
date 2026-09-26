@@ -3,10 +3,10 @@
 //! The driver is the component that owns the inputs and the memoized passes,
 //! and the only one that decides what has to be recomputed.
 //! The pipeline it drives is the compiler pipeline;
-//! today that pipeline is the parser,
+//! today that pipeline is the parser and the lowering of a module into the HIR,
 //! so the table holds the values that are derived from the text of a file:
-//! the parse, the diagnostics a host renders, and the line index positions are read with.
-//! The units that follow — the item tree, the interface, the checked bodies —
+//! the parse, the HIR, the diagnostics a host renders, and the line index positions are read
+//! with. The units that follow — the interface, the checked bodies —
 //! are more slots in the same table rather than a different design.
 //!
 //! Three rules are visible in the code.
@@ -54,10 +54,12 @@
 use std::sync::Arc;
 
 use mlkc_diagnostics::Diagnostic;
+use mlkc_hir_def::{BodyEntityLoc, ItemLoc, ItemTree, ModuleId};
 use mlkc_line_index::LineIndex;
+use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at};
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
 use mlkc_rowan::{AstNode, NodeCache};
-use mlkc_syntax::{ModuleRoot, SyntaxNode};
+use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
 
@@ -68,6 +70,8 @@ pub struct Driver {
     vfs: Vfs,
     /// The parse of every file that has been parsed, with the green nodes it was built through.
     parses: FxHashMap<FileId, ParseSlot>,
+    /// The HIR of every file that has been lowered.
+    lowered: FxHashMap<FileId, TextSlot<Lowered>>,
     /// The diagnostics of every file that has been asked for them.
     diagnostics: FxHashMap<FileId, TextSlot<[Diagnostic]>>,
     /// The line index of every file whose positions have been read.
@@ -153,6 +157,116 @@ impl std::fmt::Debug for Parse {
         f.debug_struct("Parse")
             .field("diagnostics", &self.parse.diagnostics())
             .finish_non_exhaustive()
+    }
+}
+
+/// The HIR of one file, and where what it holds is written.
+///
+/// The HIR is the surface of a module, the bodies of the entities that own one, and the names
+/// of the module; what it does not hold is a place in the file, and a host that marks a buffer
+/// with a range needs one. The driver holds the HIR and the syntax it was lowered from, so it
+/// is the one that says where a node of the HIR is written.
+pub struct Lowered {
+    /// The surface of the module: its entities, their names, and their data.
+    item_tree: ItemTree,
+    /// Where each entity of the surface is written, in the bytes of the file.
+    items: FxHashMap<ItemLoc, TextRange>,
+    /// The bodies of the module, in the order it declares them.
+    bodies: Vec<ModuleBody>,
+    /// What lowering reported, as a host renders it.
+    diagnostics: Arc<[Diagnostic]>,
+}
+
+impl Lowered {
+    /// Runs the passes that follow the parse.
+    ///
+    /// The HIR of a module is lowered in two steps, and this is both of them: the surface of
+    /// the module, and then each body, from the declaration it is written in.
+    fn of(module: ModuleId, root: &ModuleRoot) -> Self {
+        let lowered = lower_module(module, root);
+
+        let items = lowered
+            .item_tree
+            .entities()
+            .filter_map(|(loc, id)| {
+                let entity = lowered.item_tree.entity(id);
+
+                Some((loc, syntax_at(root, entity.syntax())?.text_trimmed_range()))
+            })
+            .collect();
+
+        let bodies: Vec<ModuleBody> = lowered
+            .bodies
+            .iter()
+            .filter_map(|decl| {
+                let body = lower_body(&lowered.item_tree, &decl.decl)?;
+
+                Some(ModuleBody {
+                    owner: decl.owner.clone(),
+                    body,
+                })
+            })
+            .collect();
+
+        // What the module says of its surface is reported before what its bodies say,
+        // which is the order the module is read in.
+        let diagnostics = lowered
+            .diagnostics
+            .iter()
+            .chain(bodies.iter().flat_map(|it| it.body.diagnostics.iter()))
+            .map(LoweringDiag::to_diagnostic)
+            .collect::<Vec<_>>();
+
+        Self {
+            item_tree: lowered.item_tree,
+            items,
+            bodies,
+            diagnostics: Arc::from(diagnostics),
+        }
+    }
+
+    /// The surface of the module: its entities, their names, and their data.
+    pub fn item_tree(&self) -> &ItemTree {
+        &self.item_tree
+    }
+
+    /// Where the entity this name denotes is written, if the driver found where it is.
+    ///
+    /// A name is what crosses a revision, and a range is where it was written in this one:
+    /// the two are the driver's to join, since the HIR holds the name and the syntax holds
+    /// the place.
+    pub fn item_range(&self, item: &ItemLoc) -> Option<TextRange> {
+        self.items.get(item).copied()
+    }
+
+    /// The bodies of the module, in the order it declares them.
+    pub fn bodies(&self) -> &[ModuleBody] {
+        &self.bodies
+    }
+
+    /// What lowering reported, as a host renders it.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+}
+
+/// One body of a module, and the entity that owns it.
+pub struct ModuleBody {
+    /// The entity that owns the body.
+    owner: BodyEntityLoc,
+    /// The body itself, with where its nodes are written.
+    body: LoweredBody,
+}
+
+impl ModuleBody {
+    /// The entity that owns the body.
+    pub fn owner(&self) -> &BodyEntityLoc {
+        &self.owner
+    }
+
+    /// The body: its expressions, its patterns, its paths, and where they are written.
+    pub fn body(&self) -> &LoweredBody {
+        &self.body
     }
 }
 
@@ -249,7 +363,27 @@ impl Driver {
         Some(value)
     }
 
-    /// The diagnostics of the parse of `file`, in the shape a host renders.
+    /// The HIR of `file`, computed when the slot is missing or stale.
+    ///
+    /// `None` means there is nothing to lower: the file has no text, it was never parsed,
+    /// or the parse did not find a module in it.
+    pub fn lower(&mut self, file: FileId) -> Option<Arc<Lowered>> {
+        let Some(parse) = self.parse(file) else {
+            self.lowered.remove(&file);
+            return None;
+        };
+
+        let version = self.file_version(file);
+
+        Self::text_derived(&mut self.lowered, file, version, || {
+            let root = parse.module_root()?;
+
+            Some(Arc::new(Lowered::of(ModuleId(file), &root)))
+        })
+    }
+
+    /// The diagnostics of `file`, in the shape a host renders: what the parser reported,
+    /// and then what lowering reported about the HIR the parse became.
     ///
     /// The conversion is a value of its own, not work done per call:
     /// it is computed once per version of the file and shared as an `Arc`.
@@ -261,14 +395,19 @@ impl Driver {
             return None;
         };
 
+        let lowered = self.lower(file);
         let version = self.file_version(file);
 
         Self::text_derived(&mut self.diagnostics, file, version, || {
-            let rendered = parse
+            let mut rendered = parse
                 .diagnostics()
                 .iter()
                 .map(|diagnostic| diagnostic.to_diagnostic(file))
                 .collect::<Vec<_>>();
+
+            if let Some(lowered) = &lowered {
+                rendered.extend(lowered.diagnostics().iter().cloned());
+            }
 
             Some(Arc::from(rendered))
         })
@@ -349,6 +488,7 @@ const _: fn() = || {
 #[cfg(test)]
 mod tests {
     use mlkc_diagnostics::{Category, Level};
+    use mlkc_hir_def::{ItemLocLike, Name};
     use mlkc_line_index::LineCol;
     use mlkc_rowan::{AstNodeList, Direction};
     use mlkc_syntax::{FUN_KW, SyntaxKind, SyntaxToken};
@@ -425,6 +565,76 @@ mod tests {
             &first,
             &driver.parse(file).expect("the file to be parsed")
         ));
+    }
+
+    #[test]
+    fn the_hir_of_a_module_is_lowered_from_the_same_parse() {
+        let (mut driver, file) = driver_with("main.mlk", MODULE);
+
+        let lowered = driver.lower(file).expect("the file to be lowered");
+
+        assert_eq!(lowered.item_tree().scope().len(), 1, "one name is declared");
+        assert_eq!(lowered.bodies().len(), 1, "one entity owns a body");
+
+        // The HIR holds the name of an entity rather than a place in the file, and a host
+        // that marks a buffer needs the place: the driver joins the two.
+        let main = lowered
+            .item_tree()
+            .entities()
+            .map(|(loc, _)| loc)
+            .find(|loc| loc.name() == Some(&Name::new("main")))
+            .expect("the module to declare a function called `main`");
+        let range = lowered
+            .item_range(&main)
+            .expect("the function to be written");
+
+        assert_eq!(
+            &MODULE[usize::from(range.start())..usize::from(range.end())],
+            "fun main(): Unit =\n    let x = 42 * 2 - 10 in\n    println-int(x + 20)"
+        );
+    }
+
+    #[test]
+    fn a_lowering_mistake_travels_with_the_diagnostics_of_the_file() {
+        // One name declared twice is a mistake the parser has nothing to say about:
+        // a module says it, and the HIR cannot hold it.
+        let (mut driver, file) = driver_with(
+            "main.mlk",
+            "fun f(): Unit =\n    1\n\nfun f(): Unit =\n    2\n",
+        );
+
+        let diagnostics = driver.diagnostics(file).expect("the file to be diagnosed");
+
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].category, Category::Lowering);
+        assert_eq!(diagnostics[0].level, Level::Error);
+        assert_eq!(diagnostics[0].code, "01");
+    }
+
+    #[test]
+    fn a_lowered_module_is_the_value_the_slot_holds() {
+        let (mut driver, file) = driver_with("main.mlk", MODULE);
+        let first = driver.lower(file).expect("the file to be lowered");
+        let second = driver.lower(file).expect("the file to be lowered");
+
+        assert!(Arc::ptr_eq(&first, &second), "the slot was built twice");
+    }
+
+    #[test]
+    fn the_hir_follows_the_text_and_the_old_one_keeps_its_own() {
+        let (mut driver, file) = driver_with("main.mlk", MODULE);
+        let before = driver.lower(file).expect("the file to be lowered");
+
+        driver.set_file_text(path("main.mlk"), Some(BROKEN.to_string()));
+        let after = driver.lower(file).expect("the file to be lowered");
+
+        assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
+        assert_eq!(before.item_tree().scope().len(), 1, "the old value stands");
+        assert_eq!(
+            after.item_tree().scope().len(),
+            1,
+            "a function without an `in` is still a function"
+        );
     }
 
     /// The first token of a kind in a parse, which is what shows what the parses shared.

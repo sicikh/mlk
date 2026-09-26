@@ -6,6 +6,7 @@
     import Diagnostics from "$lib/components/Diagnostics.svelte";
     import Editor from "$lib/components/Editor.svelte";
     import FileList from "$lib/components/FileList.svelte";
+    import HirView from "$lib/components/HirView.svelte";
     import Splitter from "$lib/components/Splitter.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
     import { loadDriver, type Analysis, type Driver } from "$lib/driver";
@@ -44,7 +45,7 @@ fun main(): Unit =
     const FIRST = STARTER[0].path;
 
     /** The views of what the compiler makes of the buffer on the right. */
-    type Tab = "diagnostics" | "cst" | "ast";
+    type Tab = "diagnostics" | "cst" | "ast" | "hir";
 
     let buffers = $state<Buffer[]>(STARTER);
     let active = $state(FIRST);
@@ -58,13 +59,27 @@ fun main(): Unit =
     /**
      * What a pointer is on in a tree of the inspector, as the compiler counts it.
      *
-     * The trees and the editor show the same buffer, so a range of one is a range of the
-     * other: the editor marks it while the pointer is on the row.
+     * A tree and the editor show the same buffer, so a range of one is a range of the other:
+     * the editor marks the part of the source the pointer stands for, and — when what it is on
+     * names something — the part of the source the name comes from.
      */
     let hovered = $state<[number, number] | null>(null);
+    let resolved = $state<[number, number] | null>(null);
     let log = $state<Line[]>([
         { level: "note", text: "loading the wasm driver…" },
     ]);
+
+    /**
+     * What a view of the inspector tells the page about the pointer: the part of the source
+     * a line stands for, and what that line names.
+     */
+    function pointed(
+        at: [number, number] | null,
+        names: [number, number] | null = null,
+    ) {
+        hovered = at;
+        resolved = names;
+    }
 
     /**
      * How much room each panel takes, which a person drags the handles between them for.
@@ -124,6 +139,7 @@ fun main(): Unit =
 
         // Whatever a pointer was on belongs to the parse this one replaces.
         hovered = null;
+        resolved = null;
 
         try {
             analysis = driver.analyze(active);
@@ -295,6 +311,7 @@ fun main(): Unit =
                 text={(it) => find(it)?.text ?? ""}
                 {diagnostics}
                 {hovered}
+                {resolved}
                 onInput={onText}
                 onSelect={select}
                 onClose={closeTab}
@@ -343,6 +360,11 @@ fun main(): Unit =
                 class:active={tab === "ast"}
                 onclick={() => (tab = "ast")}>AST</button
             >
+            <button
+                data-tab="hir"
+                class:active={tab === "hir"}
+                onclick={() => (tab = "hir")}>HIR</button
+            >
         </nav>
 
         <div class="view">
@@ -351,11 +373,19 @@ fun main(): Unit =
             {:else if !analysis}
                 <p class="empty">Waiting for a parse.</p>
             {:else if tab === "cst"}
-                <TreeView node={analysis.cst} onHover={(range) => (hovered = range)} />
-            {:else if analysis.ast === null}
-                <p class="empty">The root of the tree is not a module.</p>
+                <TreeView node={analysis.cst} onHover={pointed} />
+            {:else if tab === "ast"}
+                {#if analysis.ast === null}
+                    <p class="empty">The root of the tree is not a module.</p>
+                {:else}
+                    <AstView value={analysis.ast} onHover={pointed} />
+                {/if}
+            {:else if analysis.hir === null}
+                <p class="empty">There is nothing to lower.</p>
             {:else}
-                <AstView value={analysis.ast} onHover={(range) => (hovered = range)} />
+                {#each analysis.hir.nodes as node, index (index)}
+                    <HirView {node} onHover={pointed} />
+                {/each}
             {/if}
         </div>
     </aside>

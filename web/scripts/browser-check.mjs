@@ -86,6 +86,42 @@ const STEPS = {
 
     showAst: `show('ast'); return true`,
 
+    hir: `const lines = [...inspector().querySelectorAll('[data-kind]')];
+		return JSON.stringify({
+			// A line holds what it says and the marks around it: what a person reads is the words.
+			module: text(lines.find((it) => it.dataset.kind === 'module')).trim(),
+			item: lines.some((it) => it.dataset.kind === 'item' && text(it).includes('fun main')),
+			body: inspector().textContent.includes('BODY fun main in module #0'),
+			pat: lines.some((it) => it.dataset.kind === 'pat' && text(it).includes('bind x')),
+			path: lines.some((it) => it.dataset.kind === 'path' && text(it).includes('println-int'))
+		})`,
+
+    // A line of the hir says which expression it is, and a pointer on it asks the editor to
+    // mark the code that expression was written as. An expression is not a token: what it
+    // covers is what the lowering recorded for it.
+    hoverHir: `const row = [...document.querySelectorAll('[data-panel=inspector] [data-kind=expr] .row')]
+			.find((it) => text(it.querySelector('.text')).includes('literal 42'));
+		row.dispatchEvent(new MouseEvent('mouseenter'));
+		return JSON.stringify({ says: text(row.querySelector('.text')) })`,
+
+    hirHovered: `const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
+		return JSON.stringify({ count: parts.length, marked: parts.map((it) => it.textContent).join('') })`,
+
+    // A path says what it names as well as what it is written as, and what it names is a place
+    // in the same buffer: a pointer on the line asks the editor to mark both.
+    hoverPath: `const row = [...document.querySelectorAll('[data-panel=inspector] [data-kind=path] .row')]
+			.find((it) => text(it.querySelector('.text')).includes('-> fun println-int'));
+		row.dispatchEvent(new MouseEvent('mouseenter'));
+		return JSON.stringify({ says: text(row.querySelector('.text')).trim() })`,
+
+    pathHovered: `const parts = (which) => [...document.querySelectorAll('.cm-content ' + which)];
+		return JSON.stringify({
+			at: parts('.cm-hovered').map((it) => it.textContent).join(''),
+			names: parts('.cm-named').map((it) => it.textContent).join('')
+		})`,
+
+    showHir: `show('hir'); return true`,
+
     ast: `return JSON.stringify({
     		root: inspector().textContent.includes('ModuleRoot'),
     		decl: inspector().textContent.includes('FunDecl')
@@ -389,6 +425,24 @@ async function main() {
     await ask(STEPS.hoverAst);
     const astHover = JSON.parse(await ask(STEPS.astHovered));
 
+    await ask(STEPS.showHir);
+    const hir = JSON.parse(await ask(STEPS.hir));
+
+    // A line of the hir stands for a node of the HIR, and the lowering is what says where that
+    // node was written: a pointer on the line asks the editor to mark it.
+    const hirSays = JSON.parse(await ask(STEPS.hoverHir));
+    const hirHover = {
+        ...hirSays,
+        ...JSON.parse(await ask(STEPS.hirHovered)),
+    };
+
+    // And a path marks what it names besides itself: the declaration the name comes from.
+    const pathSays = JSON.parse(await ask(STEPS.hoverPath));
+    const pathHover = {
+        ...pathSays,
+        ...JSON.parse(await ask(STEPS.pathHovered)),
+    };
+
     await ask(STEPS.open);
     await ask(STEPS.typePath);
     await ask(STEPS.submitPath);
@@ -425,6 +479,9 @@ async function main() {
             hydrated,
             clean: { root: cst.root, diagnostics: clean.diagnostics },
             ast,
+            hir,
+            hirHover,
+            pathHover,
             program,
             width,
             made,
@@ -516,6 +573,36 @@ function report(page, problems, warnings, asked) {
                 page.astHover.marked.trim().length >
                     page.hover.marked.trim().length,
         ],
+        ["the hir is headed by the module", page.hir.module === "MODULE #0"],
+        ["the hir names the items of the module", page.hir.item],
+        ["the hir reads a body", page.hir.body],
+        [
+            "the hir reads the patterns and the paths of the body",
+            page.hir.pat && page.hir.path,
+        ],
+        [
+            "a line of the hir marks code in the editor",
+            page.hirHover.count === 1,
+        ],
+        [
+            "a line of the hir marks code in the editor",
+            page.hirHover.count === 1,
+        ],
+        [
+            "the mark is the code the line says it stands for",
+            page.hirHover.says.includes("literal 42") &&
+                page.hirHover.marked.trim() === "42",
+        ],
+        [
+            "a path of the hir marks the code it is written as",
+            page.pathHover.at === "println-int",
+        ],
+        [
+            "and marks what the path resolved to",
+            // The declaration of a function is written with the attributes it carries:
+            // what a path leads to is the declaration, `@extern` and all.
+            page.pathHover.names.endsWith("fun println-int(x: Int): Unit"),
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 3],
@@ -531,10 +618,7 @@ function report(page, problems, warnings, asked) {
             "a node the grammar has no room for is shown as a node",
             page.bogus.shown,
         ],
-        [
-            "nothing the ast shows reads as an object",
-            !page.bogus.object,
-        ],
+        ["nothing the ast shows reads as an object", !page.bogus.object],
         [
             "a node the grammar has no room for marks what it holds",
             page.bogusMark.count > 0 && page.bogusMark.marked.includes("abc"),
@@ -568,6 +652,12 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a row of the ast marks ${JSON.stringify(page.astHover.marked.slice(0, 40))}`,
+    );
+    console.log(
+        `the hir reads ${page.hir.module}, and ${page.hirHover.says} marks ${JSON.stringify(page.hirHover.marked)}`,
+    );
+    console.log(
+        `the path ${page.pathHover.says} marks ${JSON.stringify(page.pathHover.at)} and ${JSON.stringify(page.pathHover.names)}`,
     );
     console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,

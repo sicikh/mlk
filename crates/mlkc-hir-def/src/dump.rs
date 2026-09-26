@@ -45,12 +45,34 @@ const MISSING: &str = "<missing>";
 pub enum Target {
     /// An entity of the module: a function, a class, an import.
     Item(ItemLoc),
+    /// A type a declaration writes: the type of a parameter, or the type of a result.
+    ///
+    /// A type is a value of the HIR rather than a node of it, and where it is written is where
+    /// the declaration writes it: the entity it is written in, and which of its types it is.
+    Type {
+        /// The entity the type is written in.
+        item: ItemLoc,
+        /// Which type of that declaration it is.
+        place: TypePlace,
+    },
     /// An expression of a body.
     Expr(ExprId),
     /// A pattern of a body.
     Pat(PatId),
     /// A path of a body.
     Path(PathId),
+}
+
+/// A type a declaration writes, named by where the declaration writes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TypePlace {
+    /// The type of a parameter, at the index the declaration writes it at.
+    ///
+    /// A signature holds a parameter for every parameter the declaration wrote, the ones that
+    /// broke included, so the index of a signature is the index of the declaration.
+    Parameter(usize),
+    /// The type the declaration writes for its result.
+    Result,
 }
 
 /// What a line of a reading is, which is what a host paints it by.
@@ -118,7 +140,7 @@ pub fn item_tree(tree: &ItemTree) -> String {
             dump.line(entity_line(&loc, entity));
 
             dump.depth += 1;
-            dump.lines(&entity_data_lines(entity.data(), module));
+            dump.lines(&entity_data_lines(entity.data(), module, &loc));
             dump.depth -= 1;
         }
     });
@@ -194,7 +216,7 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
             ));
 
             dump.depth += 1;
-            dump.lines(&signature_lines(&data.signature, module));
+            dump.lines(&signature_lines(&data.signature, module, None));
             dump.depth -= 1;
         }
     });
@@ -237,9 +259,9 @@ pub fn item_tree_nodes(tree: &ItemTree) -> Vec<Node> {
             Node {
                 text: entity_line(&loc, entity),
                 kind: NodeKind::Item,
-                target: Some(Target::Item(loc)),
+                target: Some(Target::Item(loc.clone())),
                 resolves: None,
-                children: field_nodes(entity_data_lines(entity.data(), module)),
+                children: entity_data_lines(entity.data(), module, &loc),
             }
         })
         .collect();
@@ -298,7 +320,7 @@ pub fn body_nodes(owner: &BodyEntityLoc, body: &Body) -> Node {
     });
 
     for (id, data) in body.local_functions().iter() {
-        let mut inner = field_nodes(signature_lines(&data.signature, module));
+        let mut inner = signature_lines(&data.signature, module, None);
         inner.push(root_node(
             body,
             module,
@@ -425,13 +447,26 @@ fn path_node(body: &Body, module: ModuleId, id: PathId) -> Node {
 }
 
 /// What a path names, when it names something the HIR points at.
+fn path_target(body: &Body, id: PathId) -> Option<Target> {
+    anchor_target(&body[id].anchor)
+}
+
+/// What a type names, when it is a path that resolved to something.
+fn type_target(ty: &TypeRef) -> Option<Target> {
+    match ty {
+        TypeRef::Path(path) => anchor_target(&path.anchor),
+        TypeRef::Missing | TypeRef::Infer => None,
+    }
+}
+
+/// What a path that resolved to something points at.
 ///
 /// A path resolved to an entity of the module, to an entry of its import table, or to
 /// a binding of the body: what a reader is told about besides the path itself is where the
 /// name comes from. A path rooted at the project, one that resolved to an entity of another
 /// module, and one that resolved to nothing point at no place in this file.
-fn path_target(body: &Body, id: PathId) -> Option<Target> {
-    match &body[id].anchor {
+fn anchor_target(anchor: &PathAnchor) -> Option<Target> {
+    match anchor {
         PathAnchor::Item(entity) => Some(Target::Item(entity.item.clone())),
         PathAnchor::Use(import) => Some(Target::Item(ItemLoc::Use(import.clone()))),
         PathAnchor::Binding(pat) => Some(Target::Pat(*pat)),
@@ -440,11 +475,6 @@ fn path_target(body: &Body, id: PathId) -> Option<Target> {
         | PathAnchor::Project
         | PathAnchor::Unresolved => None,
     }
-}
-
-/// The lines of what an entity is, as the lines of a reading.
-fn field_nodes(lines: Vec<String>) -> Vec<Node> {
-    lines.into_iter().map(field_node).collect()
 }
 
 /// One line of what an entity is.
@@ -459,35 +489,35 @@ fn field_node(text: impl fmt::Display) -> Node {
 }
 
 /// The lines of the data of one entity.
-fn entity_data_lines(data: &EntityData, module: ModuleId) -> Vec<String> {
+fn entity_data_lines(data: &EntityData, module: ModuleId, item: &ItemLoc) -> Vec<Node> {
     let mut lines = Vec::new();
     lines.extend(attributes_line(data.attributes()));
 
     match data {
         EntityData::Function(data) => {
             lines.push(visibility_line(data.visibility));
-            lines.extend(signature_lines(&data.signature, module));
+            lines.extend(signature_lines(&data.signature, module, Some(item)));
         },
         EntityData::Class(data) => lines.push(visibility_line(data.visibility)),
         EntityData::Value(data) => lines.push(visibility_line(data.visibility)),
         EntityData::Const(data) => {
             lines.push(visibility_line(data.visibility));
             if let Some(ty) = &data.ty {
-                lines.push(format!("ty: {}", type_ref(ty, module)));
+                lines.push(field_node(format!("ty: {}", type_ref(ty, module))));
             }
         },
         EntityData::Impl(data) => {
             if let Some(class) = &data.class {
-                lines.push(format!("class: {}", type_ref(class, module)));
+                lines.push(field_node(format!("class: {}", type_ref(class, module))));
             }
             if let Some(ty) = &data.ty {
-                lines.push(format!("ty: {}", type_ref(ty, module)));
+                lines.push(field_node(format!("ty: {}", type_ref(ty, module))));
             }
         },
         EntityData::Use(data) => {
-            lines.push(format!("path: {}", *data.path));
+            lines.push(field_node(format!("path: {}", *data.path)));
             if let Some(alias) = &data.alias {
-                lines.push(format!("alias: {alias:?}"));
+                lines.push(field_node(format!("alias: {alias:?}")));
             }
             lines.push(visibility_line(data.visibility));
         },
@@ -501,28 +531,63 @@ fn entity_data_lines(data: &EntityData, module: ModuleId) -> Vec<String> {
 /// A parameter is read as what its signature says of it, which is its type: what the
 /// parameter binds is the pattern of the body, and the body of the function is where a dump
 /// reads it.
-fn signature_lines(signature: &Signature, module: ModuleId) -> Vec<String> {
+///
+/// A line of a signature is about a type the declaration wrote, and a type is a place of that
+/// declaration: `item` is the entity the signature is of, and a signature a reader holds
+/// without one --- the one of an entity declared inside a body --- points at nothing.
+fn signature_lines(signature: &Signature, module: ModuleId, item: Option<&ItemLoc>) -> Vec<Node> {
     let mut lines = Vec::new();
 
-    for param in &signature.params {
-        match &param.ty {
-            Some(ty) => lines.push(format!("param: {}", type_ref(ty, module))),
-            None => lines.push("param".to_owned()),
-        }
+    for (index, param) in signature.params.iter().enumerate() {
+        let text = match &param.ty {
+            Some(ty) => format!("param: {}", type_ref(ty, module)),
+            None => "param".to_owned(),
+        };
+
+        lines.push(type_line(
+            text,
+            item,
+            TypePlace::Parameter(index),
+            param.ty.as_ref(),
+        ));
     }
 
     if let Some(ret) = &signature.ret {
-        lines.push(format!("ret: {}", type_ref(ret, module)));
+        lines.push(type_line(
+            format!("ret: {}", type_ref(ret, module)),
+            item,
+            TypePlace::Result,
+            Some(ret),
+        ));
     }
 
     lines
+}
+
+/// One line of a signature: a type the declaration wrote, and what the type names.
+fn type_line(text: String, item: Option<&ItemLoc>, place: TypePlace, ty: Option<&TypeRef>) -> Node {
+    Node {
+        text,
+        kind: NodeKind::Field,
+        target: match (item, ty) {
+            (Some(item), Some(_)) => {
+                Some(Target::Type {
+                    item: item.clone(),
+                    place,
+                })
+            },
+            _ => None,
+        },
+        resolves: ty.and_then(type_target),
+        children: Vec::new(),
+    }
 }
 
 /// One line of the attributes of a declaration, if it carries any.
 ///
 /// The line holds the attributes as the module writes them, since what a reader compares is
 /// the source and the HIR it becomes.
-fn attributes_line(attributes: Option<&Attributes>) -> Option<String> {
+fn attributes_line(attributes: Option<&Attributes>) -> Option<Node> {
     let attributes = attributes?;
 
     if attributes.is_none() {
@@ -539,18 +604,18 @@ fn attributes_line(attributes: Option<&Attributes>) -> Option<String> {
         words.push("@extern");
     }
 
-    Some(format!("attributes: {}", words.join(" ")))
+    Some(field_node(format!("attributes: {}", words.join(" "))))
 }
 
 /// One line of the visibility of an entity.
-fn visibility_line(visibility: Visibility) -> String {
+fn visibility_line(visibility: Visibility) -> Node {
     let word = if visibility.is_public() {
         "public"
     } else {
         "private"
     };
 
-    format!("visibility: {word}")
+    field_node(format!("visibility: {word}"))
 }
 
 /// A type reference as it was written, and what its paths denote.
@@ -738,9 +803,9 @@ impl Dump {
     }
 
     /// Lines of a reading that was made apart from this one.
-    fn lines(&mut self, lines: &[String]) {
+    fn lines(&mut self, lines: &[Node]) {
         for line in lines {
-            self.line(line);
+            self.line(&line.text);
         }
     }
 
@@ -799,7 +864,7 @@ mod tests {
     use crate::{
         Name,
         body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData, Pat},
-        id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc},
+        id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc, UseLoc},
         item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
         path::{PathRoot, PlainPath, PlainPathId},
@@ -1197,6 +1262,53 @@ BODY fun f in module #0
       expr#0  literal 1
       expr#1  literal 2
 "
+        );
+    }
+
+    #[test]
+    fn a_line_of_a_signature_is_about_a_type_of_the_declaration() {
+        let function =
+            FunctionLoc::try_from(ItemLoc::new(ItemKind::Function, Some(Name::new("f")), 0))
+                .expect("a function");
+        let imported = UseLoc::try_from(ItemLoc::new(ItemKind::Use, Some(Name::new("Int")), 0))
+            .expect("a use");
+
+        let data = EntityData::Function(FunctionData {
+            attributes: Attributes::default(),
+            visibility: Visibility::Private,
+            signature: Signature {
+                params: vec![ParamData {
+                    ty: Some(type_path("Int", PathAnchor::Use(imported.clone()))),
+                }],
+                ret: Some(TypeRef::Infer),
+            },
+        });
+
+        let lines = entity_data_lines(&data, module(), &ItemLoc::Function(function.clone()));
+
+        let param = &lines[1];
+
+        assert_eq!(param.text, "param: Int -> use Int");
+        assert_eq!(
+            param.target,
+            Some(Target::Type {
+                item: ItemLoc::Function(function),
+                place: TypePlace::Parameter(0),
+            }),
+            "a line of a signature is about the type the declaration wrote"
+        );
+        assert_eq!(
+            param.resolves,
+            Some(Target::Item(ItemLoc::Use(imported))),
+            "and the type names what the import brought in"
+        );
+
+        let ret = &lines[2];
+
+        assert_eq!(ret.text, "ret: _");
+        assert_eq!(
+            ret.resolves, None,
+            "a type that names nothing resolves to nothing"
         );
     }
 

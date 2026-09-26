@@ -54,12 +54,12 @@
 use std::sync::Arc;
 
 use mlkc_diagnostics::Diagnostic;
-use mlkc_hir_def::{BodyEntityLoc, ItemLoc, ItemTree, ModuleId};
+use mlkc_hir_def::{BodyEntityLoc, ItemLoc, ItemTree, ModuleId, dump::TypePlace};
 use mlkc_line_index::LineIndex;
 use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at};
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
 use mlkc_rowan::{AstNode, NodeCache};
-use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
+use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
 
@@ -171,6 +171,9 @@ pub struct Lowered {
     item_tree: ItemTree,
     /// Where each entity of the surface is written, in the bytes of the file.
     items: FxHashMap<ItemLoc, TextRange>,
+    /// Where the types the declarations of the module write are written, by the entity that
+    /// writes them.
+    types: FxHashMap<ItemLoc, TypePlaces>,
     /// The bodies of the module, in the order it declares them.
     bodies: Vec<ModuleBody>,
     /// What lowering reported, as a host renders it.
@@ -192,6 +195,17 @@ impl Lowered {
                 let entity = lowered.item_tree.entity(id);
 
                 Some((loc, syntax_at(root, entity.syntax())?.text_trimmed_range()))
+            })
+            .collect();
+
+        let types = lowered
+            .item_tree
+            .entities()
+            .filter_map(|(loc, id)| {
+                let entity = lowered.item_tree.entity(id);
+                let declaration = FunDecl::cast(syntax_at(root, entity.syntax())?)?;
+
+                Some((loc, TypePlaces::of(&declaration)))
             })
             .collect();
 
@@ -220,6 +234,7 @@ impl Lowered {
         Self {
             item_tree: lowered.item_tree,
             items,
+            types,
             bodies,
             diagnostics: Arc::from(diagnostics),
         }
@@ -237,6 +252,20 @@ impl Lowered {
     /// the place.
     pub fn item_range(&self, item: &ItemLoc) -> Option<TextRange> {
         self.items.get(item).copied()
+    }
+
+    /// Where the type a declaration writes at this place is written, if it writes one there.
+    ///
+    /// A type is a value of the HIR rather than a node of it, and the declaration a host reads
+    /// it in is what says where it is written: the type of the parameter at an index, or the
+    /// type the declaration writes for its result.
+    pub fn type_range(&self, item: &ItemLoc, place: TypePlace) -> Option<TextRange> {
+        let places = self.types.get(item)?;
+
+        match place {
+            TypePlace::Parameter(index) => places.params.get(index).copied().flatten(),
+            TypePlace::Result => places.result,
+        }
     }
 
     /// The bodies of the module, in the order it declares them.
@@ -267,6 +296,54 @@ impl ModuleBody {
     /// The body: its expressions, its patterns, its paths, and where they are written.
     pub fn body(&self) -> &LoweredBody {
         &self.body
+    }
+}
+
+/// Where the types of one declaration are written.
+///
+/// A signature is a value of the HIR, and where it was written is the declaration it was read
+/// from: the type of a parameter is the annotation the parameter carries, and the result is
+/// the type the declaration writes for it. A place the declaration writes no type at has none.
+#[derive(Default)]
+struct TypePlaces {
+    /// The type of each parameter, by the index the declaration writes it at.
+    params: Vec<Option<TextRange>>,
+    /// The type the declaration writes for its result.
+    result: Option<TextRange>,
+}
+
+impl TypePlaces {
+    /// The places one declaration writes the types of its signature at.
+    ///
+    /// The i-th parameter of a signature is the i-th parameter of the declaration: a signature
+    /// holds a parameter for every parameter the declaration wrote, the ones that broke
+    /// included, which is what the lowering keeps the arity of a declaration for.
+    fn of(declaration: &FunDecl) -> Self {
+        let mut places = Self::default();
+
+        if let Ok(parameters) = declaration.parameters() {
+            places.params = parameters
+                .items()
+                .syntax()
+                .children()
+                .map(|node| {
+                    let Some(AnyParameter::Parameter(parameter)) = AnyParameter::cast(node) else {
+                        return None;
+                    };
+
+                    let ty = parameter.type_annotation()?.ty().ok()?;
+
+                    Some(ty.syntax().text_trimmed_range())
+                })
+                .collect();
+        }
+
+        places.result = declaration
+            .return_type_annotation()
+            .and_then(|annotation| annotation.return_type().ok())
+            .map(|ty| ty.syntax().text_trimmed_range());
+
+        places
     }
 }
 
@@ -567,6 +644,21 @@ mod tests {
         ));
     }
 
+    /// The name of the entity `name` in the surface of a lowered module.
+    fn item(lowered: &Lowered, name: &str) -> ItemLoc {
+        lowered
+            .item_tree()
+            .entities()
+            .map(|(loc, _)| loc)
+            .find(|loc| loc.name() == Some(&Name::new(name)))
+            .unwrap_or_else(|| panic!("the module to declare the name `{name}`"))
+    }
+
+    /// The text of the source a range covers, if there is a range.
+    fn covered(source: &str, range: Option<TextRange>) -> Option<&str> {
+        range.map(|it| &source[usize::from(it.start())..usize::from(it.end())])
+    }
+
     #[test]
     fn the_hir_of_a_module_is_lowered_from_the_same_parse() {
         let (mut driver, file) = driver_with("main.mlk", MODULE);
@@ -578,19 +670,56 @@ mod tests {
 
         // The HIR holds the name of an entity rather than a place in the file, and a host
         // that marks a buffer needs the place: the driver joins the two.
-        let main = lowered
-            .item_tree()
-            .entities()
-            .map(|(loc, _)| loc)
-            .find(|loc| loc.name() == Some(&Name::new("main")))
-            .expect("the module to declare a function called `main`");
         let range = lowered
-            .item_range(&main)
+            .item_range(&item(&lowered, "main"))
             .expect("the function to be written");
 
         assert_eq!(
             &MODULE[usize::from(range.start())..usize::from(range.end())],
             "fun main(): Unit =\n    let x = 42 * 2 - 10 in\n    println-int(x + 20)"
+        );
+    }
+
+    #[test]
+    fn a_type_of_a_signature_is_written_where_the_declaration_writes_it() {
+        let source = "fun f(value: Map[Int]): Int =\n    1\n";
+        let (mut driver, file) = driver_with("main.mlk", source);
+        let lowered = driver.lower(file).expect("the file to be lowered");
+        let f = item(&lowered, "f");
+
+        assert_eq!(
+            covered(source, lowered.type_range(&f, TypePlace::Parameter(0))),
+            Some("Map[Int]"),
+            "a parameter is read as the type the declaration annotated it with"
+        );
+        assert_eq!(
+            covered(source, lowered.type_range(&f, TypePlace::Result)),
+            Some("Int")
+        );
+        assert_eq!(
+            lowered.type_range(&f, TypePlace::Parameter(1)),
+            None,
+            "a function that writes one parameter has no type for a second"
+        );
+    }
+
+    #[test]
+    fn the_parameters_of_a_signature_are_counted_the_way_the_declaration_writes_them() {
+        // A parameter the parser could not read is a place without a type in the signature,
+        // so the parameter written after it keeps its own.
+        let source = "fun f(1, value: Int): Unit = 1\n";
+        let (mut driver, file) = driver_with("main.mlk", source);
+        let lowered = driver.lower(file).expect("the file to be lowered");
+        let f = item(&lowered, "f");
+
+        assert_eq!(
+            lowered.type_range(&f, TypePlace::Parameter(0)),
+            None,
+            "the parameter that broke has no type to point at"
+        );
+        assert_eq!(
+            covered(source, lowered.type_range(&f, TypePlace::Parameter(1))),
+            Some("Int")
         );
     }
 

@@ -147,7 +147,7 @@ impl Hir {
         let mut nodes = Vec::new();
 
         for node in dump::item_tree_nodes(lowered.item_tree()) {
-            nodes.push(HirNode::of(&node, &|target| item_range(lowered, target)));
+            nodes.push(HirNode::of(&node, &|target| surface_range(lowered, target)));
         }
 
         for body in lowered.bodies() {
@@ -156,10 +156,14 @@ impl Hir {
 
             nodes.push(HirNode::of(&reading, &|target| {
                 match target {
-                    dump::Target::Item(item) => lowered.item_range(item),
                     dump::Target::Expr(expr) => places.expr(*expr),
                     dump::Target::Pat(pat) => places.pat(*pat),
                     dump::Target::Path(path) => places.path(*path),
+                    // What a body names can be a place outside it: the entity of the module.
+                    dump::Target::Item(item) => lowered.item_range(item),
+                    // A body writes no type: its annotations are the ones of the signature it is
+                    // a body of, which the surface of the module is read for.
+                    dump::Target::Type { .. } => None,
                 }
             }));
         }
@@ -213,11 +217,12 @@ impl HirNode {
     }
 }
 
-/// Where an entity of the item tree is written, which is the only thing a line of the item
-/// tree stands for.
-fn item_range(lowered: &Lowered, target: &dump::Target) -> Option<TextRange> {
+/// Where what a line of the surface of a module is about is written: an entity of the module,
+/// or a type written in the declaration of one.
+fn surface_range(lowered: &Lowered, target: &dump::Target) -> Option<TextRange> {
     match target {
         dump::Target::Item(item) => lowered.item_range(item),
+        dump::Target::Type { item, place } => lowered.type_range(item, *place),
         _ => None,
     }
 }
@@ -488,6 +493,52 @@ mod tests {
             path["range"], path["resolves"],
             "the path and the binding it names are two places in the source"
         );
+    }
+
+    #[test]
+    fn a_path_of_a_signature_marks_the_type_and_what_it_names() {
+        /// The part of the source a serialized range covers.
+        fn covered<'a>(source: &'a str, range: &serde_json::Value) -> &'a str {
+            let at = range.as_array().expect("a range to be a pair");
+            let from = at[0].as_u64().expect("a start") as usize;
+            let to = at[1].as_u64().expect("an end") as usize;
+
+            &source[from..to]
+        }
+
+        let source = "use std.core.Int\n\nfun main(value: Int): Int =\n    value\n";
+        let mut driver = WasmDriver::new();
+
+        driver.set_text("/main.mlk", Some(source.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let items = json["hir"]["nodes"][1]["children"]
+            .as_array()
+            .expect("the items of the module");
+        let item = items
+            .iter()
+            .find(|it| {
+                it["text"]
+                    .as_str()
+                    .is_some_and(|text| text.starts_with("fun main"))
+            })
+            .expect("the module to declare a function called `main`");
+        let param = &item["children"][1];
+        let result = &item["children"][2];
+
+        assert_eq!(param["text"], "param: Int -> use Int");
+        assert_eq!(covered(source, &param["range"]), "Int");
+        assert_eq!(
+            covered(source, &param["resolves"]),
+            "use std.core.Int",
+            "a type a signature writes marks what its name comes from"
+        );
+
+        // The two types are written at two places of the same declaration, and each line
+        // points at its own.
+        assert_eq!(result["text"], "ret: Int -> use Int");
+        assert_eq!(covered(source, &result["range"]), "Int");
+        assert_ne!(param["range"], result["range"]);
     }
 
     #[test]

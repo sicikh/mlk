@@ -120,6 +120,19 @@ const STEPS = {
 			names: parts('.cm-named').map((it) => it.textContent).join('')
 		})`,
 
+    // A type a signature writes is a place of the declaration as well: a pointer on the line
+    // of a parameter asks the editor to mark the type it was annotated with.
+    hoverType: `const row = [...document.querySelectorAll('[data-panel=inspector] [data-kind=field] .row')]
+			.find((it) => text(it.querySelector('.text')).includes('param: Int ->'));
+		row.dispatchEvent(new MouseEvent('mouseenter'));
+		return JSON.stringify({ says: text(row.querySelector('.text')).trim() })`,
+
+    typeHovered: `const parts = (which) => [...document.querySelectorAll('.cm-content ' + which)];
+		return JSON.stringify({
+			at: parts('.cm-hovered').map((it) => it.textContent).join(''),
+			names: parts('.cm-named').map((it) => it.textContent).join('')
+		})`,
+
     showHir: `show('hir'); return true`,
 
     ast: `return JSON.stringify({
@@ -443,6 +456,13 @@ async function main() {
         ...JSON.parse(await ask(STEPS.pathHovered)),
     };
 
+    // A type of a signature is a place of its declaration: the annotation it was written as.
+    const typeSays = JSON.parse(await ask(STEPS.hoverType));
+    const typeHover = {
+        ...typeSays,
+        ...JSON.parse(await ask(STEPS.typeHovered)),
+    };
+
     await ask(STEPS.open);
     await ask(STEPS.typePath);
     await ask(STEPS.submitPath);
@@ -482,6 +502,7 @@ async function main() {
             hir,
             hirHover,
             pathHover,
+            typeHover,
             program,
             width,
             made,
@@ -603,6 +624,10 @@ function report(page, problems, warnings, asked) {
             // what a path leads to is the declaration, `@extern` and all.
             page.pathHover.names.endsWith("fun println-int(x: Int): Unit"),
         ],
+        [
+            "a type of a signature marks the type the declaration wrote",
+            page.typeHover.at === "Int" && page.typeHover.names === "",
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 3],
@@ -658,6 +683,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `the path ${page.pathHover.says} marks ${JSON.stringify(page.pathHover.at)} and ${JSON.stringify(page.pathHover.names)}`,
+    );
+    console.log(
+        `the type line ${page.typeHover.says} marks ${JSON.stringify(page.typeHover.at)}`,
     );
     console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,

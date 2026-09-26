@@ -23,8 +23,10 @@
     const STARTER: Buffer[] = [
         {
             path: "/main.mlk",
-            text: `@extern
-fun println-int(x: Int): Unit
+            text: `use std.prelude.Unit
+
+@extern
+pub fun println-int(x: Int): Unit
 
 fun main(): Unit =
     let x = 42 * 2 - 10 in

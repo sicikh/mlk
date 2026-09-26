@@ -55,6 +55,15 @@ const BROKEN = "fun main(): Unit =\n    let x = 1\n";
  */
 const STRAY = "fun main(): Unit =\n    x\nabc\n";
 
+/**
+ * What is typed to check the rest of the keywords the language reads out of names:
+ * an import renamed at the place it is written, under a declaration the module is known by.
+ * A word the grammar knows is painted the colour of every other keyword, so `pub`, `use`
+ * and `as` are asked to be the colour of `fun` (see `src/lib/highlight.ts`).
+ */
+const VISIBLE =
+    "use project.data.core as data\n\npub fun main(): Unit =\n    data.start()\n";
+
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
@@ -210,10 +219,30 @@ const STEPS = {
     // The same, with a mistake the parser cannot place anywhere: it keeps what it found as a
     // node of the tree, which the ast has to show the way it shows any other node.
     typeStray: `const content = document.querySelector('.cm-content');
-	content.focus();
-	content.textContent = ${JSON.stringify(STRAY)};
-	content.dispatchEvent(new Event('input', { bubbles: true }));
-	return true`,
+		content.focus();
+		content.textContent = ${JSON.stringify(STRAY)};
+		content.dispatchEvent(new Event('input', { bubbles: true }));
+		return true`,
+
+    typeKeywords: `const content = document.querySelector('.cm-content');
+		content.focus();
+		content.textContent = ${JSON.stringify(VISIBLE)};
+		content.dispatchEvent(new Event('input', { bubbles: true }));
+		return true`,
+
+    // Every keyword is painted the same, because a keyword is one tag in the grammar:
+    // what the check has to catch is a word the grammar reads out of names going unpainted.
+    keywordColours: `const spans = [...document.querySelectorAll('.cm-content .cm-line span')];
+		const colour = (text) => {
+			const span = spans.find((it) => it.textContent === text);
+			return span ? getComputedStyle(span).color : '';
+		};
+		return JSON.stringify({
+			keyword: colour('fun'),
+			pub: colour('pub'),
+			use: colour('use'),
+			as: colour('as')
+		})`,
 
     bogus: `return JSON.stringify({
 		object: inspector().textContent.includes('[object Object]'),
@@ -489,6 +518,12 @@ async function main() {
 
     const marks = JSON.parse(await ask(STEPS.painted));
 
+    // The words the language reads out of names are painted whatever they are written as,
+    // and the buffer in front is asked about the ones a module is written with.
+    await ask(STEPS.typeKeywords);
+    await sleep(300);
+    const words = JSON.parse(await ask(STEPS.keywordColours));
+
     // A mistake the parser cannot place is a node of the tree, and the ast shows it as one.
     await ask(STEPS.typeStray);
     await sleep(300);
@@ -523,6 +558,7 @@ async function main() {
             dropped,
             tree: cst.nodes,
             painted,
+            words,
             hover,
             astHover,
             marks,
@@ -592,6 +628,13 @@ function report(page, problems, warnings, asked) {
         [
             "the editor leaves a name the colour of text",
             page.painted.name === "",
+        ],
+        [
+            "the editor paints pub, use and as the way it paints fun",
+            page.words.keyword !== "" &&
+                [page.words.pub, page.words.use, page.words.as].every(
+                    (it) => it === page.words.keyword,
+                ),
         ],
         ["a row of a tree marks code in the editor", page.hover.count === 1],
         [
@@ -689,6 +732,9 @@ function report(page, problems, warnings, asked) {
     console.log(`the cst holds ${page.tree} elements`);
     console.log(
         `the editor paints a keyword ${page.painted.keyword}, a number ${page.painted.number}, a type ${page.painted.type}`,
+    );
+    console.log(
+        `it paints pub ${page.words.pub}, use ${page.words.use} and as ${page.words.as}, against fun ${page.words.keyword}`,
     );
     console.log(
         `the row that says ${page.hover.says} marks ${page.hover.marked || "nothing"} in the editor`,

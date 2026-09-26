@@ -35,7 +35,10 @@ import { parser } from "./grammar/mlk";
  */
 const syntax = styleTags({
     // The keywords, which the grammar reads out of names: see `kw<...>` in the grammar.
-    "fun in let module project type _": tags.keyword,
+    // The list is the one the lexer of the compiler knows the language by, and `_` with them,
+    // which is what a pattern that binds nothing and a type that is inferred are written as:
+    // a word the language does not have is not painted at all.
+    "as fun in let module project pub type use _": tags.keyword,
     Comment: tags.comment,
     IntLiteral: tags.number,
     StringLiteral: tags.string,

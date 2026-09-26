@@ -94,8 +94,17 @@ export function isToken(node: SyntaxNode): boolean {
  * a declaration --- carries no range.
  */
 export interface HirNode {
-    /** What the line says: `fun main  @2.0`, `expr#2  let pat#0 = expr#0 in expr#1`. */
+    /** What the line says: `fun main  @2.0`, `param: Int -> use Int`. */
     text: string;
+
+    /**
+     * The same words, as the parts a host paints.
+     *
+     * A line is one part unless a part of it says something that reads differently from the
+     * rest: the type a signature writes is a path, and a path is painted the way a path is
+     * painted wherever it is written.
+     */
+    parts: HirPart[];
 
     /**
      * What the line is: `module`, `body`, `section`, `item`, `field`, `expr`, `pat`, or
@@ -117,6 +126,18 @@ export interface HirNode {
 
     /** The lines under it, which the view folds. */
     children: HirNode[];
+}
+
+/** One part of the text of a line of the HIR. */
+export interface HirPart {
+    /** What this part of the line says. */
+    text: string;
+
+    /**
+     * What it is, when it is not what the line is — a type written as a path is a `path` —
+     * and `null` for the part of a line that says what the line says.
+     */
+    kind: string | null;
 }
 
 /** The HIR of the module in the buffer, as the compiler reads it. */

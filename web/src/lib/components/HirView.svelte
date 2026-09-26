@@ -44,6 +44,15 @@
     });
 </script>
 
+{#snippet saying(node: HirNode)}
+    <span class="text"
+        >{#each node.parts as part}<span
+                class="part"
+                data-part={part.kind ?? "plain"}>{part.text}</span
+            >{/each}</span
+    >
+{/snippet}
+
 <div class="line" data-kind={node.kind}>
     {#if children.length > 0}
         <button
@@ -53,7 +62,7 @@
             aria-expanded={open}
         >
             <span class="caret">{open ? "▾" : "▸"}</span>
-            <span class="text">{node.text}</span>
+            {@render saying(node)}
             <span class="count">{children.length}</span>
         </button>
 
@@ -67,7 +76,7 @@
     {:else}
         <div class="row" {...pointing(node.range, node.resolves)}>
             <span class="spacer"></span>
-            <span class="text">{node.text}</span>
+            {@render saying(node)}
         </div>
     {/if}
 </div>
@@ -134,6 +143,12 @@
     }
 
     .line[data-kind="path"] .text {
+        color: var(--ok);
+    }
+
+    /* A part of a line says what it is by itself: the type a signature writes is a path, and
+       it is painted the way a path is painted wherever it is written. */
+    .part[data-part="path"] {
         color: var(--ok);
     }
 </style>

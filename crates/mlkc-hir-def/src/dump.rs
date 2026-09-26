@@ -96,6 +96,37 @@ pub enum NodeKind {
     Path,
 }
 
+/// One part of the text of a line.
+///
+/// A line says one thing unless a part of it says something a host paints differently from the
+/// rest: the type a signature writes is a path, and a path reads the way a path reads wherever
+/// it is written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Part {
+    /// The words of this part.
+    pub text: String,
+    /// What the words are, when they are not what the line is.
+    pub kind: Option<NodeKind>,
+}
+
+impl Part {
+    /// A part that says what its line says.
+    fn plain(text: impl fmt::Display) -> Self {
+        Self {
+            text: text.to_string(),
+            kind: None,
+        }
+    }
+
+    /// A part that says something of its own kind.
+    fn of(text: impl fmt::Display, kind: NodeKind) -> Self {
+        Self {
+            text: text.to_string(),
+            kind: Some(kind),
+        }
+    }
+}
+
 /// A line of a reading, and the lines under it.
 ///
 /// The text of a reading is these lines in order, each of them indented by the level it is at.
@@ -104,8 +135,8 @@ pub enum NodeKind {
 /// is what a file is marked by.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Node {
-    /// What the line says.
-    pub text: String,
+    /// What the line says, as the parts a host paints.
+    pub parts: Vec<Part>,
     /// What the line is, which is what a host paints it by.
     pub kind: NodeKind,
     /// The node of the HIR the line is about, if it is about one.
@@ -119,6 +150,32 @@ pub struct Node {
     pub resolves: Option<Target>,
     /// The lines under it, in the order they are read.
     pub children: Vec<Node>,
+}
+
+impl Node {
+    /// A line that says one thing.
+    fn line(text: impl fmt::Display, kind: NodeKind) -> Self {
+        Self {
+            parts: vec![Part::plain(text)],
+            kind,
+            target: None,
+            resolves: None,
+            children: Vec::new(),
+        }
+    }
+
+    /// A line that says one thing, and stands for a node of the HIR.
+    fn marked(text: impl fmt::Display, kind: NodeKind, target: Target) -> Self {
+        let mut line = Self::line(text, kind);
+        line.target = Some(target);
+
+        line
+    }
+
+    /// The text of the line, which is what a reading writes out.
+    pub fn text(&self) -> String {
+        self.parts.iter().map(|part| part.text.as_str()).collect()
+    }
 }
 
 /// A reading of the item tree of a module.
@@ -255,25 +312,22 @@ pub fn item_tree_nodes(tree: &ItemTree) -> Vec<Node> {
         .entities()
         .map(|(loc, id)| {
             let entity = tree.entity(id);
+            let mut item = Node::marked(
+                entity_line(&loc, entity),
+                NodeKind::Item,
+                Target::Item(loc.clone()),
+            );
+            item.children = entity_data_lines(entity.data(), module, &loc);
 
-            Node {
-                text: entity_line(&loc, entity),
-                kind: NodeKind::Item,
-                target: Some(Target::Item(loc.clone())),
-                resolves: None,
-                children: entity_data_lines(entity.data(), module, &loc),
-            }
+            item
         })
         .collect();
 
     if !items.is_empty() {
-        nodes.push(Node {
-            text: "ITEM TREE".to_owned(),
-            kind: NodeKind::Section,
-            target: None,
-            resolves: None,
-            children: items,
-        });
+        let mut section = Node::line("ITEM TREE", NodeKind::Section);
+        section.children = items;
+
+        nodes.push(section);
     }
 
     nodes
@@ -281,13 +335,7 @@ pub fn item_tree_nodes(tree: &ItemTree) -> Vec<Node> {
 
 /// The line a reading of a module is headed by.
 fn module_node(tree: &ItemTree, module: ModuleId) -> Node {
-    Node {
-        text: module_line(tree, module),
-        kind: NodeKind::Module,
-        target: None,
-        resolves: None,
-        children: Vec::new(),
-    }
+    Node::line(module_line(tree, module), NodeKind::Module)
 }
 
 /// The lines of one body, as a tree a host reads.
@@ -302,22 +350,16 @@ pub fn body_nodes(owner: &BodyEntityLoc, body: &Body) -> Node {
     let mut children = Vec::new();
 
     if !body.params().is_empty() {
-        children.push(Node {
-            text: "params".to_owned(),
-            kind: NodeKind::Section,
-            target: None,
-            resolves: None,
-            children: body.params().iter().map(|id| pat_node(body, *id)).collect(),
-        });
+        let mut params = Node::line("params", NodeKind::Section);
+        params.children = body.params().iter().map(|id| pat_node(body, *id)).collect();
+
+        children.push(params);
     }
 
-    children.push(Node {
-        text: "root".to_owned(),
-        kind: NodeKind::Section,
-        target: None,
-        resolves: None,
-        children: vec![expr_node(body, module, body.root())],
-    });
+    let mut root = Node::line("root", NodeKind::Section);
+    root.children = vec![expr_node(body, module, body.root())];
+
+    children.push(root);
 
     for (id, data) in body.local_functions().iter() {
         let mut inner = signature_lines(&data.signature, module, None);
@@ -327,20 +369,20 @@ pub fn body_nodes(owner: &BodyEntityLoc, body: &Body) -> Node {
             body.local_function_root(LocalFunctionId(id)),
         ));
 
-        children.push(Node {
-            text: format!("{}  {:?}", local_function_ref(id), data.name),
-            kind: NodeKind::Item,
-            target: None,
-            resolves: None,
-            children: inner,
-        });
+        let mut node = Node::line(
+            format!("{}  {:?}", local_function_ref(id), data.name),
+            NodeKind::Item,
+        );
+        node.children = inner;
+
+        children.push(node);
     }
 
     for (id, data) in body.local_consts().iter() {
         let mut inner = Vec::new();
 
         if let Some(ty) = &data.ty {
-            inner.push(field_node(format!("ty: {}", type_ref(ty, module))));
+            inner.push(type_line("ty", Some(ty), None, module));
         }
 
         inner.push(root_node(
@@ -349,39 +391,38 @@ pub fn body_nodes(owner: &BodyEntityLoc, body: &Body) -> Node {
             body.local_const_root(LocalConstId(id)),
         ));
 
-        children.push(Node {
-            text: format!("{}  {:?}", local_const_ref(id), data.name),
-            kind: NodeKind::Item,
-            target: None,
-            resolves: None,
-            children: inner,
-        });
+        let mut node = Node::line(
+            format!("{}  {:?}", local_const_ref(id), data.name),
+            NodeKind::Item,
+        );
+        node.children = inner;
+
+        children.push(node);
     }
 
-    Node {
-        text: format!(
+    let mut node = Node::marked(
+        format!(
             "BODY {:?} in module #{}",
             owner.item(),
             module_index(module)
         ),
-        kind: NodeKind::Body,
-        target: Some(Target::Item(owner.item().clone().into())),
-        resolves: None,
-        children,
-    }
+        NodeKind::Body,
+        Target::Item(owner.item().clone().into()),
+    );
+    node.children = children;
+
+    node
 }
 
 /// The root of an entity declared inside a body, and the expressions it is made of.
 fn root_node(body: &Body, module: ModuleId, root: Option<ExprId>) -> Node {
-    Node {
-        text: format!("root {}", root_text(root)),
-        kind: NodeKind::Section,
-        target: root.map(Target::Expr),
-        resolves: None,
-        children: root
-            .map(|id| vec![expr_node(body, module, id)])
-            .unwrap_or_default(),
-    }
+    let mut node = Node::line(format!("root {}", root_text(root)), NodeKind::Section);
+    node.target = root.map(Target::Expr);
+    node.children = root
+        .map(|id| vec![expr_node(body, module, id)])
+        .unwrap_or_default();
+
+    node
 }
 
 /// One expression of a body, with what it is made of under it.
@@ -415,35 +456,35 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
         },
     }
 
-    Node {
-        text: format!("{}  {}", expr_ref(id), expr_text(&body[id])),
-        kind: NodeKind::Expr,
-        target: Some(Target::Expr(id)),
-        resolves: None,
-        children,
-    }
+    let mut node = Node::marked(
+        format!("{}  {}", expr_ref(id), expr_text(&body[id])),
+        NodeKind::Expr,
+        Target::Expr(id),
+    );
+    node.children = children;
+
+    node
 }
 
 /// One pattern of a body.
 fn pat_node(body: &Body, id: PatId) -> Node {
-    Node {
-        text: format!("{}  {}", pat_ref(id), pat_text(&body[id])),
-        kind: NodeKind::Pat,
-        target: Some(Target::Pat(id)),
-        resolves: None,
-        children: Vec::new(),
-    }
+    Node::marked(
+        format!("{}  {}", pat_ref(id), pat_text(&body[id])),
+        NodeKind::Pat,
+        Target::Pat(id),
+    )
 }
 
 /// One path of a body: the path, what its root denotes, and what the path names.
 fn path_node(body: &Body, module: ModuleId, id: PathId) -> Node {
-    Node {
-        text: format!("{}  {}", path_ref(id), path_resolved(&body[id], module)),
-        kind: NodeKind::Path,
-        target: Some(Target::Path(id)),
-        resolves: path_target(body, id),
-        children: Vec::new(),
-    }
+    let mut node = Node::marked(
+        format!("{}  {}", path_ref(id), path_resolved(&body[id], module)),
+        NodeKind::Path,
+        Target::Path(id),
+    );
+    node.resolves = path_target(body, id);
+
+    node
 }
 
 /// What a path names, when it names something the HIR points at.
@@ -479,13 +520,7 @@ fn anchor_target(anchor: &PathAnchor) -> Option<Target> {
 
 /// One line of what an entity is.
 fn field_node(text: impl fmt::Display) -> Node {
-    Node {
-        text: text.to_string(),
-        kind: NodeKind::Field,
-        target: None,
-        resolves: None,
-        children: Vec::new(),
-    }
+    Node::line(text, NodeKind::Field)
 }
 
 /// The lines of the data of one entity.
@@ -503,15 +538,15 @@ fn entity_data_lines(data: &EntityData, module: ModuleId, item: &ItemLoc) -> Vec
         EntityData::Const(data) => {
             lines.push(visibility_line(data.visibility));
             if let Some(ty) = &data.ty {
-                lines.push(field_node(format!("ty: {}", type_ref(ty, module))));
+                lines.push(type_line("ty", Some(ty), None, module));
             }
         },
         EntityData::Impl(data) => {
             if let Some(class) = &data.class {
-                lines.push(field_node(format!("class: {}", type_ref(class, module))));
+                lines.push(type_line("class", Some(class), None, module));
             }
             if let Some(ty) = &data.ty {
-                lines.push(field_node(format!("ty: {}", type_ref(ty, module))));
+                lines.push(type_line("ty", Some(ty), None, module));
             }
         },
         EntityData::Use(data) => {
@@ -539,38 +574,48 @@ fn signature_lines(signature: &Signature, module: ModuleId, item: Option<&ItemLo
     let mut lines = Vec::new();
 
     for (index, param) in signature.params.iter().enumerate() {
-        let text = match &param.ty {
-            Some(ty) => format!("param: {}", type_ref(ty, module)),
-            None => "param".to_owned(),
-        };
+        let written = item.map(|item| (item, TypePlace::Parameter(index)));
 
-        lines.push(type_line(
-            text,
-            item,
-            TypePlace::Parameter(index),
-            param.ty.as_ref(),
-        ));
+        lines.push(type_line("param", param.ty.as_ref(), written, module));
     }
 
     if let Some(ret) = &signature.ret {
-        lines.push(type_line(
-            format!("ret: {}", type_ref(ret, module)),
-            item,
-            TypePlace::Result,
-            Some(ret),
-        ));
+        let written = item.map(|item| (item, TypePlace::Result));
+
+        lines.push(type_line("ret", Some(ret), written, module));
     }
 
     lines
 }
 
-/// One line of a signature: a type the declaration wrote, and what the type names.
-fn type_line(text: String, item: Option<&ItemLoc>, place: TypePlace, ty: Option<&TypeRef>) -> Node {
+/// One line that reads a type: the type as it was written, and what its paths name.
+///
+/// A type written as a path is read the way a path is read wherever it is written, and a type
+/// that names nothing --- the `_` of an inferred type, a type that is not there --- is read as
+/// what it is.
+///
+/// `written` says which type of a declaration the line reads, when the line is about one a
+/// declaration writes: a signature a reader holds without a declaration --- the one of an
+/// entity declared inside a body --- and a type the language has no declaration for yet have
+/// no place to point at.
+fn type_line(
+    label: &str,
+    ty: Option<&TypeRef>,
+    written: Option<(&ItemLoc, TypePlace)>,
+    module: ModuleId,
+) -> Node {
+    let mut parts = vec![Part::plain(label)];
+
+    if let Some(ty) = ty {
+        parts.push(Part::plain(": "));
+        parts.push(type_part(ty, module));
+    }
+
     Node {
-        text,
+        parts,
         kind: NodeKind::Field,
-        target: match (item, ty) {
-            (Some(item), Some(_)) => {
+        target: match (written, ty) {
+            (Some((item, place)), Some(_)) => {
                 Some(Target::Type {
                     item: item.clone(),
                     place,
@@ -580,6 +625,14 @@ fn type_line(text: String, item: Option<&ItemLoc>, place: TypePlace, ty: Option<
         },
         resolves: ty.and_then(type_target),
         children: Vec::new(),
+    }
+}
+
+/// A type as it is read: as a path, when it is one, and as what it is otherwise.
+fn type_part(ty: &TypeRef, module: ModuleId) -> Part {
+    match ty {
+        TypeRef::Path(path) => Part::of(path_resolved(path, module), NodeKind::Path),
+        TypeRef::Missing | TypeRef::Infer => Part::plain(type_ref(ty, module)),
     }
 }
 
@@ -805,7 +858,7 @@ impl Dump {
     /// Lines of a reading that was made apart from this one.
     fn lines(&mut self, lines: &[Node]) {
         for line in lines {
-            self.line(&line.text);
+            self.line(line.text());
         }
     }
 
@@ -1202,18 +1255,18 @@ consts
         let tree = builder.finish();
         let nodes = crate::dump::item_tree_nodes(&tree);
 
-        assert_eq!(nodes[0].text, "MODULE #0 project.main-module");
+        assert_eq!(nodes[0].text(), "MODULE #0 project.main-module");
         assert_eq!(nodes[0].kind, NodeKind::Module);
         assert_eq!(nodes[0].target, None);
 
         let items = &nodes[1];
 
-        assert_eq!(items.text, "ITEM TREE");
+        assert_eq!(items.text(), "ITEM TREE");
         assert_eq!(items.kind, NodeKind::Section);
 
         let unit = &items.children[0];
 
-        assert_eq!(unit.text, "type Unit  @0");
+        assert_eq!(unit.text(), "type Unit  @0");
         assert_eq!(unit.kind, NodeKind::Item);
         assert_eq!(
             unit.target,
@@ -1225,7 +1278,7 @@ consts
             "a line about an entity stands for the entity"
         );
         assert_eq!(unit.children.len(), 1);
-        assert_eq!(unit.children[0].text, "visibility: public");
+        assert_eq!(unit.children[0].text(), "visibility: public");
         assert_eq!(unit.children[0].kind, NodeKind::Field);
         assert_eq!(unit.children[0].target, None, "a field is about nothing");
     }
@@ -1246,7 +1299,7 @@ consts
         let owner = owner("f");
         let node = crate::dump::body_nodes(&owner, &builder.finish());
 
-        assert_eq!(node.text, "BODY fun f in module #0");
+        assert_eq!(node.text(), "BODY fun f in module #0");
         assert_eq!(node.kind, NodeKind::Body);
         assert_eq!(
             node.target,
@@ -1288,7 +1341,16 @@ BODY fun f in module #0
 
         let param = &lines[1];
 
-        assert_eq!(param.text, "param: Int -> use Int");
+        assert_eq!(param.text(), "param: Int -> use Int");
+        assert_eq!(
+            param.parts,
+            vec![
+                Part::plain("param"),
+                Part::plain(": "),
+                Part::of("Int -> use Int", NodeKind::Path),
+            ],
+            "the type of a parameter reads as a path, and the label of the line does not"
+        );
         assert_eq!(
             param.target,
             Some(Target::Type {
@@ -1305,7 +1367,7 @@ BODY fun f in module #0
 
         let ret = &lines[2];
 
-        assert_eq!(ret.text, "ret: _");
+        assert_eq!(ret.text(), "ret: _");
         assert_eq!(
             ret.resolves, None,
             "a type that names nothing resolves to nothing"
@@ -1371,7 +1433,7 @@ BODY fun f in module #0
             text.push_str("  ");
         }
 
-        writeln!(text, "{}", node.text).expect("writing to a string to never fail");
+        writeln!(text, "{}", node.text()).expect("writing to a string to never fail");
 
         for child in &node.children {
             write_tree(text, child, depth + 1);

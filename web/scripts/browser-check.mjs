@@ -133,6 +133,17 @@ const STEPS = {
 			names: parts('.cm-named').map((it) => it.textContent).join('')
 		})`,
 
+    // The type a signature writes is a path, and it reads as one: the colour a part of a line
+    // is painted is the colour the paths of the bodies are painted.
+    typeColour: `const colour = (selector) => {
+			const it = inspector().querySelector(selector);
+			return it ? getComputedStyle(it).color : '';
+		};
+		return JSON.stringify({
+			part: colour('[data-part=path]'),
+			path: colour('[data-kind=path] .text')
+		})`,
+
     showHir: `show('hir'); return true`,
 
     ast: `return JSON.stringify({
@@ -462,6 +473,7 @@ async function main() {
         ...typeSays,
         ...JSON.parse(await ask(STEPS.typeHovered)),
     };
+    const typeColour = JSON.parse(await ask(STEPS.typeColour));
 
     await ask(STEPS.open);
     await ask(STEPS.typePath);
@@ -503,6 +515,7 @@ async function main() {
             hirHover,
             pathHover,
             typeHover,
+            typeColour,
             program,
             width,
             made,
@@ -628,6 +641,11 @@ function report(page, problems, warnings, asked) {
             "a type of a signature marks the type the declaration wrote",
             page.typeHover.at === "Int" && page.typeHover.names === "",
         ],
+        [
+            "a type of a signature is painted the way a path of a body is",
+            page.typeColour.part !== "" &&
+                page.typeColour.part === page.typeColour.path,
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 3],
@@ -685,7 +703,7 @@ function report(page, problems, warnings, asked) {
         `the path ${page.pathHover.says} marks ${JSON.stringify(page.pathHover.at)} and ${JSON.stringify(page.pathHover.names)}`,
     );
     console.log(
-        `the type line ${page.typeHover.says} marks ${JSON.stringify(page.typeHover.at)}`,
+        `the type line ${page.typeHover.says} marks ${JSON.stringify(page.typeHover.at)} and is painted ${page.typeColour.part}`,
     );
     console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,

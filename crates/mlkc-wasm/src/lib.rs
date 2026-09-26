@@ -176,8 +176,13 @@ impl Hir {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HirNode {
-    /// The text of the line: `fun main  @0`, `expr#2  call expr#0 (expr#1)`.
+    /// The text of the line: `fun main  @2.0`, `param: Int -> use Int`.
     text: String,
+
+    /// What the line says, as the parts a host paints: a line is one part unless a part of it
+    /// says something the host paints differently from the rest, which is what the type
+    /// a signature writes does --- a type written as a path reads the way a path reads.
+    parts: Vec<HirPart>,
 
     /// What the line is, which is what a host paints it by.
     kind: &'static str,
@@ -196,6 +201,17 @@ struct HirNode {
     children: Vec<HirNode>,
 }
 
+/// One part of the text of a line.
+#[derive(Serialize)]
+struct HirPart {
+    /// What this part of the line says.
+    text: String,
+
+    /// What it is, when it is not what the line is; `null` for the part of a line that says
+    /// what the line says.
+    kind: Option<&'static str>,
+}
+
 impl HirNode {
     /// Reads one line of a reading, and everything under it.
     ///
@@ -204,7 +220,17 @@ impl HirNode {
     /// what says where it was read from.
     fn of(node: &dump::Node, range: &impl Fn(&dump::Target) -> Option<TextRange>) -> Self {
         Self {
-            text: node.text.clone(),
+            text: node.text(),
+            parts: node
+                .parts
+                .iter()
+                .map(|part| {
+                    HirPart {
+                        text: part.text.clone(),
+                        kind: part.kind.map(kind_of),
+                    }
+                })
+                .collect(),
             kind: kind_of(node.kind),
             range: node.target.as_ref().and_then(range).map(covered),
             resolves: node.resolves.as_ref().and_then(range).map(covered),
@@ -527,6 +553,15 @@ mod tests {
         let result = &item["children"][2];
 
         assert_eq!(param["text"], "param: Int -> use Int");
+        assert_eq!(
+            param["parts"],
+            serde_json::json!([
+                { "text": "param", "kind": null },
+                { "text": ": ", "kind": null },
+                { "text": "Int -> use Int", "kind": "path" },
+            ]),
+            "the type of a parameter is a part of its own, and it reads as a path"
+        );
         assert_eq!(covered(source, &param["range"]), "Int");
         assert_eq!(
             covered(source, &param["resolves"]),

@@ -81,8 +81,10 @@ const STEPS = {
 
     // What a pointer on a row of a tree does in the editor. A row says what it stands for in
     // its own words — a name of the module is a token, and a row that says so — and the
-    // editor is asked to have marked exactly that.
-    hoverTree: `const row = document.querySelector('[data-panel=inspector] [data-kind=IDENT] .row');
+    // editor is asked to have marked exactly that. The row taken is a name inside a declaration
+    // and not the first name of the module: a module may open with an import, and what an
+    // import names is not written inside the declaration the ast is asked about below.
+    hoverTree: `const row = document.querySelector('[data-panel=inspector] [data-kind=FUN_DECL] [data-kind=IDENT] .row');
     	row.dispatchEvent(new MouseEvent('mouseenter'));
     	return JSON.stringify({ says: row.querySelector('.text').textContent })`,
 
@@ -293,11 +295,20 @@ const STEPS = {
     		const span = spans.find((it) => it.textContent === text);
     		return span ? getComputedStyle(span).color : '';
     	};
+    	// What the theme calls green, read off the page the way every colour here is:
+    	// a span wearing the variable, seen by a browser.
+    	const probe = document.createElement('span');
+    	probe.style.color = 'var(--ok)';
+    	document.body.appendChild(probe);
+    	const green = getComputedStyle(probe).color;
+    	probe.remove();
     	return JSON.stringify({
     		keyword: colour('fun'),
     		number: colour('42'),
     		type: colour('Unit'),
     		name: colour('main'),
+    		attribute: colour('@extern'),
+    		green,
     		marks: document.querySelectorAll('.cm-content [class*=cm-lintRange], .cm-content [class*=cm-lintPoint]').length
     	})`,
 };
@@ -630,6 +641,11 @@ function report(page, problems, warnings, asked) {
             page.painted.name === "",
         ],
         [
+            "the editor paints an attribute the green of the theme",
+            page.painted.attribute !== "" &&
+                page.painted.attribute === page.painted.green,
+        ],
+        [
             "the editor paints pub, use and as the way it paints fun",
             page.words.keyword !== "" &&
                 [page.words.pub, page.words.use, page.words.as].every(
@@ -735,6 +751,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `it paints pub ${page.words.pub}, use ${page.words.use} and as ${page.words.as}, against fun ${page.words.keyword}`,
+    );
+    console.log(
+        `it paints an attribute ${page.painted.attribute}, which is the green of the theme ${page.painted.green}`,
     );
     console.log(
         `the row that says ${page.hover.says} marks ${page.hover.marked || "nothing"} in the editor`,

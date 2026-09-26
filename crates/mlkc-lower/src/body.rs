@@ -447,7 +447,7 @@ fn operator(kind: SyntaxKind) -> Option<BinaryOp> {
 
 #[cfg(test)]
 mod tests {
-    use mlkc_hir_def::{ItemLocLike, ModuleId, Name, Namespace, PathAnchor};
+    use mlkc_hir_def::{ItemLocLike, ModuleId, Name, Namespace, PathAnchor, Prelude};
     use mlkc_rowan::AstNode;
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::FileId;
@@ -485,7 +485,7 @@ fun main(): Int = 1
     fn a_declaration_that_declares_no_body_has_no_body() {
         let parsed = mlkc_parser::parse(SOURCE);
         let root = parsed.tree::<ModuleRoot>();
-        let lowered = crate::lower_module(ModuleId(FileId::from_raw(0)), &root);
+        let lowered = crate::lower_module(ModuleId(FileId::from_raw(0)), &root, &Prelude::none());
 
         // The work list holds the declaration of a body.
         assert_eq!(lowered.bodies.len(), 1);

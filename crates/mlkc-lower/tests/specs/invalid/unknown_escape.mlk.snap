@@ -22,6 +22,12 @@ ITEM TREE
   fun unknown  @2.0
     visibility: private
     ret: String -> unresolved
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

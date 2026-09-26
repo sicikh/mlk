@@ -65,17 +65,49 @@ pub(crate) fn parse_module_root(p: &mut MlkParser) -> CompletedMarker {
 /// A module is written in a file, and the preamble is the path of that file in the project:
 /// `module project.main-module`. A file that has no preamble declares no path, and the
 /// project it belongs to is what says what it is called.
+///
+/// The attributes a module carries are written in front of the keyword, and an attribute list
+/// belongs to the preamble only when the keyword follows it: the same `@name` in front of a
+/// declaration is the declaration's own ([`is_at_declaration`]).
+// test mlk a_module_may_carry_an_attribute
+// @no-prelude
+// module project.main-module
+//
+// fun main(): Int =
+//     1
+//
+// test mlk an_attribute_belongs_to_the_declaration_it_stands_in_front_of
+// @builtin
+// type Unit
 fn parse_module_preamble(p: &mut MlkParser) -> ParsedSyntax {
-    if !p.at(T![module]) {
+    if !at_module_preamble(p) {
         return ParsedSyntax::Absent;
     }
 
     let m = p.start();
 
+    parse_attribute_list(p);
     p.bump(T![module]);
     parse_path(p).or_add_diagnostic(p, expected_path);
 
     Present(m.complete(p, MODULE_PREAMBLE))
+}
+
+/// Whether the parser is at the preamble of a module: the keyword, or the attributes written
+/// in front of it.
+///
+/// The keyword cannot simply be looked at when the preamble starts with `@`, because the same
+/// attribute list could belong to the declaration that follows it. Walking the attributes is
+/// possible because an attribute is always `@` followed by a name, and an attribute list that
+/// is not followed by the keyword is the next item's, which is what the caller reads it as.
+fn at_module_preamble(p: &mut MlkParser) -> bool {
+    let mut index = 0;
+
+    while p.nth_at(index, AT) && p.nth_at(index + 1, IDENT) {
+        index += 2;
+    }
+
+    p.nth_at(index, MODULE_KW)
 }
 
 /// The items of a module.

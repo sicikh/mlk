@@ -1,0 +1,78 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// What a module is given without writing it: the names of the prelude, which a module uses as
+// it uses an import of them, and a name the module declares itself, which is what it denotes.
+
+type Unit
+
+fun size(value: Int): Int =
+    value
+
+fun unit(): Unit =
+    size(1)
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Unit  @2.0
+    visibility: private
+  fun size  @2.1
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun unit  @2.2
+    visibility: private
+    ret: Unit -> type Unit
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun size in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+```
+BODY fun unit in module #0
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  size -> fun size
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

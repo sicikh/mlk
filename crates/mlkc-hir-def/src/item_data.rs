@@ -87,6 +87,56 @@ impl Attributes {
     }
 }
 
+/// What a module says about itself as a whole: the attributes its preamble carries.
+///
+/// A module's attributes are not the attributes of an entity of it. A declaration says what
+/// the declaration is --- a builtin, an external one --- and a module says what the module is,
+/// which today is only whether it takes the prelude of its project ([ADR-0011]).
+///
+/// The attributes a module has are the ones the language has for a module; a name that is not
+/// one of them is a mistake of the module, and the HIR has nowhere to put it, which is what the
+/// lowering of a preamble reports.
+///
+/// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ModuleAttributes {
+    /// `@no-prelude`: the module is read without the prelude of its project, and the names of
+    /// the prelude are not names of this module.
+    pub no_prelude: bool,
+}
+
+impl ModuleAttributes {
+    /// Reads the attribute of a name into what it means.
+    ///
+    /// Returns whether the language has an attribute of that name: a caller that is given
+    /// `false` is holding a name that the module wrote and nothing knows.
+    pub fn insert(&mut self, name: &Name) -> bool {
+        match name.as_str() {
+            "no-prelude" => self.no_prelude = true,
+            _ => return false,
+        }
+
+        true
+    }
+
+    /// Whether the module already carries the attribute of that name.
+    ///
+    /// A caller that reads the attributes of a preamble asks this before
+    /// [`insert`](Self::insert): an attribute written twice means what it means written once,
+    /// so the second writing is what a reader is told about rather than a thing to record.
+    pub fn contains(&self, name: &Name) -> bool {
+        match name.as_str() {
+            "no-prelude" => self.no_prelude,
+            _ => false,
+        }
+    }
+
+    /// Whether the module carries no attribute at all.
+    pub fn is_none(&self) -> bool {
+        !self.no_prelude
+    }
+}
+
 /// The signature of a function: what a caller has to know about it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Signature {
@@ -345,5 +395,20 @@ mod tests {
         assert!(attributes.contains(&Name::new("extern")));
         assert!(!attributes.contains(&Name::new("biultin")));
         assert!(!Attributes::default().contains(&Name::new("builtin")));
+    }
+
+    #[test]
+    fn the_attributes_a_module_has_are_the_ones_the_language_reads_for_a_module() {
+        let mut attributes = ModuleAttributes::default();
+        assert!(attributes.is_none());
+
+        // A declaration's attribute is not a module's: a module does not become a builtin by
+        // being written with `@builtin`, and the name is what a caller is told about.
+        assert!(!attributes.insert(&Name::new("builtin")));
+        assert!(attributes.insert(&Name::new("no-prelude")));
+
+        assert!(attributes.no_prelude);
+        assert!(!attributes.is_none());
+        assert!(attributes.contains(&Name::new("no-prelude")));
     }
 }

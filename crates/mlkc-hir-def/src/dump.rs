@@ -25,7 +25,7 @@ use std::fmt::{self, Write as _};
 use crate::{
     body::{Body, Expr, ExprId, Literal, Pat, PatId},
     id::{BodyEntityLoc, EntityLoc, ItemLoc, LocalConstId, LocalFunctionId, ModuleId, arena_index},
-    item_data::{Attributes, EntityData, Signature, Visibility},
+    item_data::{Attributes, EntityData, ModuleAttributes, Signature, Visibility},
     item_tree::{Entity, ItemTree},
     path::{PathAnchor, PathData, PathId, PathSegmentData},
     type_ref::TypeRef,
@@ -205,20 +205,45 @@ pub fn item_tree(tree: &ItemTree) -> String {
     dump.render()
 }
 
-/// The line a reading of a module is headed by: the module, and the path it declares itself as.
+/// The line a reading of a module is headed by: the module, the path it declares itself as,
+/// and what it says about itself as a whole.
 fn module_line(tree: &ItemTree, module: ModuleId) -> String {
-    match tree.path() {
+    let head = match tree.path() {
         Some(path) => format!("MODULE #{} {path}", module_index(module)),
         None => format!("MODULE #{}", module_index(module)),
+    };
+
+    match module_attributes_text(tree.attributes()) {
+        Some(attributes) => format!("{head}  {attributes}"),
+        None => head,
     }
+}
+
+/// What a module says about itself as a whole, as the module writes it, if it says anything.
+fn module_attributes_text(attributes: ModuleAttributes) -> Option<String> {
+    if attributes.is_none() {
+        return None;
+    }
+
+    let mut words = Vec::new();
+
+    if attributes.no_prelude {
+        words.push("@no-prelude");
+    }
+
+    Some(words.join(" "))
 }
 
 /// The line one entity of a module is headed by: what it is, and where it is written.
 ///
 /// The position is what a reader compares between two revisions, since the entities of a
-/// module are held in the order it declares them.
+/// module are held in the order it declares them. An entity the module did not write --- a
+/// prelude import --- has no place in the file, and the line says where it came from instead.
 fn entity_line(loc: &ItemLoc, entity: &Entity) -> String {
-    format!("{loc:?}  @{}", entity.syntax())
+    match entity.syntax() {
+        Some(syntax) => format!("{loc:?}  @{syntax}"),
+        None => format!("{loc:?}  prelude"),
+    }
 }
 
 /// A reading of one body, headed by the name of the entity that owns it.

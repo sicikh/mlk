@@ -5,8 +5,10 @@ expression: snapshot
 ## Input
 
 ```mlk
-// The path a module declares itself as, which is what its project knows it by.
+// A module that refuses the prelude of its project: what it does not declare itself is a name
+// nothing knows, and no import of the prelude is brought in.
 
+@no-prelude
 module project.main-module
 
 fun main(): Int =
@@ -17,18 +19,12 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0 project.main-module
+MODULE #0 project.main-module  @no-prelude
 
 ITEM TREE
   fun main  @2.0
     visibility: private
-    ret: Int -> use Int
-  use Int  prelude
-    path: std.prelude.Int
-    visibility: private
-  use Unit  prelude
-    path: std.prelude.Unit
-    visibility: private
+    ret: Int -> unresolved
 ```
 
 ## Bodies

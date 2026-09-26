@@ -23,9 +23,9 @@
     const STARTER: Buffer[] = [
         {
             path: "/main.mlk",
-            text: `use std.prelude.Unit
-
-@extern
+            // The names of the prelude are the module's without it writing them: `Int` and
+            // `Unit` are imports the compiler makes (`@no-prelude` refuses them).
+            text: `@extern
 pub fun println-int(x: Int): Unit
 
 fun main(): Unit =

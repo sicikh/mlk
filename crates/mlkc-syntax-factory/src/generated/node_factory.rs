@@ -135,8 +135,13 @@ pub fn let_expr(
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
-pub fn module_preamble(module_token: SyntaxToken, name: Path) -> ModulePreamble {
+pub fn module_preamble(
+    attributes: AttributeList,
+    module_token: SyntaxToken,
+    name: Path,
+) -> ModulePreamble {
     ModulePreamble::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_PREAMBLE, [
+        Some(SyntaxElement::Node(attributes.into_syntax())),
         Some(SyntaxElement::Token(module_token)),
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))

@@ -61,7 +61,7 @@ impl BodySourceMap {
 
 #[cfg(test)]
 mod tests {
-    use mlkc_hir_def::{Expr, ModuleId, Pat};
+    use mlkc_hir_def::{Expr, ModuleId, Pat, Prelude};
     use mlkc_syntax::{ModuleRoot, TextRange, TextSize};
     use mlkc_vfs::FileId;
 
@@ -83,7 +83,7 @@ mod tests {
     fn body_of(source: &str) -> LoweredBody {
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
-        let module = lower_module(ModuleId(FILE), &root);
+        let module = lower_module(ModuleId(FILE), &root, &Prelude::none());
         let decl = module.bodies.first().expect("a function with a body");
 
         lower_body(&module.item_tree, &decl.decl).expect("a body to be lowered")

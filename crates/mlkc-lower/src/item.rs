@@ -2,8 +2,8 @@
 
 use mlkc_hir_def::{
     Attributes, BodyEntityLoc, ClassData, ClassLoc, EntityData, EntityLoc, FunctionData,
-    FunctionLoc, ItemLoc, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, LocalTarget, ModuleId, Name,
-    PlainPathId, UseData, UseLoc, Visibility,
+    FunctionLoc, ItemLoc, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, LocalTarget, ModuleAttributes,
+    ModuleId, Name, PlainPathId, Prelude, UseData, UseLoc, Visibility,
 };
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl, UseDecl};
@@ -15,7 +15,13 @@ use crate::{
 };
 
 /// Lowers the items of `root` into the item tree of `module`.
-pub(crate) fn lower(module: ModuleId, root: &ModuleRoot) -> LoweredModule {
+///
+/// `prelude` is what the module is given without writing it: the imports of the prelude are
+/// declared after the items of the module, so that what the module says of itself is what its
+/// names denote ([ADR-0011][adr-0011]).
+///
+/// [adr-0011]: ../../docs/adr/0011-module-prelude.md
+pub(crate) fn lower(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> LoweredModule {
     let file = module.0;
     let mut lowering = ItemLowering {
         root,
@@ -25,8 +31,9 @@ pub(crate) fn lower(module: ModuleId, root: &ModuleRoot) -> LoweredModule {
         bodies: Vec::new(),
     };
 
-    lowering.preamble();
+    let attributes = lowering.preamble();
     lowering.items();
+    lowering.prelude(prelude, attributes);
 
     let item_tree = lowering.builder.finish();
 
@@ -101,6 +108,39 @@ fn declared_import(tree: &ItemTree, root: &ModuleRoot, import: &UseLoc) -> Optio
     syntax_at(root, position)
 }
 
+/// What a list of attributes is read into.
+///
+/// A declaration and a module both carry attributes, and the rule about them is the same for
+/// both: one the language has no meaning for is a mistake, and one written twice says no more
+/// than one written once. What differs is where they are read into, which is this.
+trait FromAttributes: Default {
+    /// Reads one attribute into what it means, and returns whether the language has it.
+    fn insert(&mut self, name: &Name) -> bool;
+
+    /// Whether the attributes already hold the one of that name.
+    fn contains(&self, name: &Name) -> bool;
+}
+
+impl FromAttributes for Attributes {
+    fn insert(&mut self, name: &Name) -> bool {
+        Attributes::insert(self, name)
+    }
+
+    fn contains(&self, name: &Name) -> bool {
+        Attributes::contains(self, name)
+    }
+}
+
+impl FromAttributes for ModuleAttributes {
+    fn insert(&mut self, name: &Name) -> bool {
+        ModuleAttributes::insert(self, name)
+    }
+
+    fn contains(&self, name: &Name) -> bool {
+        ModuleAttributes::contains(self, name)
+    }
+}
+
 /// The lowering of the items of one module.
 struct ItemLowering<'a> {
     root: &'a ModuleRoot,
@@ -111,23 +151,45 @@ struct ItemLowering<'a> {
 }
 
 impl ItemLowering<'_> {
-    /// Records the path the module declares itself as, which is what its preamble writes.
+    /// Records what the preamble of the module says: its path, and what it says about itself
+    /// as a whole, which is what the caller gets back.
     ///
     /// A module that has no preamble declares no path: what it is called is what the project
     /// it belongs to says, and the path of the file is the canonical form of that.
-    fn preamble(&mut self) {
+    fn preamble(&mut self) -> ModuleAttributes {
         let Some(preamble) = self.root.preamble() else {
-            return;
+            return ModuleAttributes::default();
         };
 
-        // A preamble whose path the parser could not read declares nothing:
-        // a path of no segments names nothing, and the parse is what reported the mistake.
-        let Ok(path) = preamble.name() else {
-            return;
-        };
+        // What the module says about itself is read whether or not the path is there: a
+        // preamble whose path could not be read still says what it says of the module.
+        let attributes = self.attributes(&preamble.attributes());
+        self.builder.set_attributes(attributes);
 
-        self.plain_path(&path);
-        self.builder.set_path(PlainPathId::new(path::plain(&path)));
+        // A preamble whose path the parser could not read declares nothing: a path of no
+        // segments names nothing, and the parse is what reported the mistake.
+        if let Ok(path) = preamble.name() {
+            self.plain_path(&path);
+            self.builder.set_path(PlainPathId::new(path::plain(&path)));
+        }
+
+        attributes
+    }
+
+    /// Declares the imports the prelude brings into the module.
+    ///
+    /// The prelude is declared after the items of the module, and that order is the whole of
+    /// the shadowing rule: what the module declares or imports first is what its names denote,
+    /// so a prelude import that finds a name taken is quietly not what the name denotes. A
+    /// module that says `@no-prelude` is given nothing at all.
+    fn prelude(&mut self, prelude: &Prelude, attributes: ModuleAttributes) {
+        if attributes.no_prelude {
+            return;
+        }
+
+        for import in prelude.imports() {
+            self.builder.declare_prelude(import);
+        }
     }
 
     /// Declares every item of the module, in the order it is written.
@@ -367,8 +429,8 @@ impl ItemLowering<'_> {
     /// nothing knows is a mistake of the module, and the HIR has nowhere to put it. An
     /// attribute written twice is a mistake as well: what it says is what the first writing
     /// says, and the second one is not needed.
-    fn attributes(&mut self, list: &AttributeList) -> Attributes {
-        let mut attributes = Attributes::default();
+    fn attributes<A: FromAttributes>(&mut self, list: &AttributeList) -> A {
+        let mut attributes = A::default();
 
         for attribute in decl::attributes(list) {
             let name = syntax::name(attribute.name());
@@ -439,6 +501,7 @@ mod tests {
     use mlkc_diagnostics::{Category, DiagKind, Level};
     use mlkc_hir_def::{
         ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, PathAnchor,
+        PlainPath, TypeRef,
     };
     use mlkc_vfs::FileId;
 
@@ -479,10 +542,15 @@ fun same(left: Int, left: Int): Int =
     }
 
     fn lower(source: &str) -> LoweredModule {
+        lower_with(source, &Prelude::none())
+    }
+
+    /// The lowering of a module that is given `prelude`.
+    fn lower_with(source: &str, prelude: &Prelude) -> LoweredModule {
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
 
-        crate::lower_module(module(), &root)
+        crate::lower_module(module(), &root, prelude)
     }
 
     /// The name of the entity a name of the module denotes in `namespace`.
@@ -589,5 +657,120 @@ fun same(left: Int, left: Int): Int =
             "{}",
             diagnostic.message,
         );
+    }
+
+    /// The path a name of the module denotes, which is what an import brings in.
+    fn import_path(tree: &ItemTree, name: &str, namespace: Namespace) -> String {
+        let anchor = tree.scope().anchor(&Name::new(name), namespace);
+        let PathAnchor::Use(import) = anchor else {
+            panic!("`{name}` to be an import: {anchor:?}");
+        };
+
+        match tree.entity_data(ItemLoc::Use(import)) {
+            Some(EntityData::Use(data)) => data.path.to_string(),
+            other => panic!("the import of `{name}` to be a use: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_prelude_brings_its_names_into_the_module() {
+        let lowered = lower_with(
+            "fun main(): Int = 1\n\nfun unit(): Unit = main()\n",
+            Prelude::standard(),
+        );
+        let tree = &lowered.item_tree;
+
+        assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
+        // The names the module did not write are imports, and they name what the prelude says.
+        assert_eq!(import_path(tree, "Int", Namespace::Ty), "std.prelude.Int");
+        assert_eq!(import_path(tree, "Unit", Namespace::Ty), "std.prelude.Unit");
+
+        // What a signature writes is anchored to them: the type of a function is a path no
+        // different from a path of a body.
+        let Some(EntityData::Function(main)) =
+            tree.entity_data(item(tree, Namespace::Value, "main"))
+        else {
+            panic!("`main` to be a function");
+        };
+        let Some(TypeRef::Path(path)) = &main.signature.ret else {
+            panic!("`main` to declare the type it returns");
+        };
+        assert!(matches!(path.anchor, PathAnchor::Use(_)));
+    }
+
+    #[test]
+    fn a_name_the_module_declares_is_what_it_denotes() {
+        let lowered = lower_with("type Int\n\nfun main(): Int = 1\n", Prelude::standard());
+        let tree = &lowered.item_tree;
+
+        // The module declares `Int` itself, so the prelude's `Int` is not what the name means.
+        assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
+        assert_eq!(class(tree, "Int").name(), Some(&Name::new("Int")));
+    }
+
+    #[test]
+    fn a_module_that_says_no_prelude_is_given_none() {
+        let lowered = lower_with(
+            "@no-prelude\nmodule project.prelude\n\nfun main(): Int = 1\n",
+            Prelude::standard(),
+        );
+        let tree = &lowered.item_tree;
+
+        assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
+        assert!(tree.attributes().no_prelude);
+        // A name the module did not declare is a name nothing knows: the prelude is not there
+        // to answer for it.
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Int"), Namespace::Ty),
+            PathAnchor::Unresolved,
+        );
+        assert_eq!(tree.scope().len(), 1, "`main`, and nothing else");
+    }
+
+    #[test]
+    fn the_prelude_of_a_project_replaces_the_one_of_the_language() {
+        let prelude = Prelude::from_paths([PlainPath::from_segments([
+            Name::new("project"),
+            Name::new("core"),
+            Name::new("Int"),
+        ])]);
+        let lowered = lower_with("fun main(): Int = 1\n", &prelude);
+        let tree = &lowered.item_tree;
+
+        assert_eq!(import_path(tree, "Int", Namespace::Ty), "project.core.Int");
+        // The prelude replaced the standard one rather than adding to it.
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Unit"), Namespace::Ty),
+            PathAnchor::Unresolved,
+        );
+    }
+
+    #[test]
+    fn a_module_attribute_the_language_has_not_is_a_mistake() {
+        let lowered = lower(concat!(
+            "@unknown\n",
+            "@no-prelude\n",
+            "@no-prelude\n",
+            "module project.main-module\n",
+            "\n",
+            "fun main(): Int = 1\n",
+        ));
+
+        let errors: Vec<&LoweringError> = lowered
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.error())
+            .collect();
+
+        assert_eq!(errors, [
+            &LoweringError::UnknownAttribute {
+                name: Name::new("unknown"),
+            },
+            &LoweringError::RepeatedAttribute {
+                name: Name::new("no-prelude"),
+            },
+        ]);
+        // What the module said stands: a mistake about one attribute does not undo the other.
+        assert!(lowered.item_tree.attributes().no_prelude);
     }
 }

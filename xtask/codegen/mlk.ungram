@@ -86,7 +86,11 @@ ModuleRoot =
     items: ModuleItemList
     eof: 'EOF'
 
+// The preamble of a module: what the module says about itself as a whole, and the path it
+// declares itself as. The attributes are the ones the language has for a module rather than
+// for a declaration of one, and `@no-prelude` is the one there is today.
 ModulePreamble =
+    attributes: AttributeList
     'module' name: Path
 
 ModuleItemList = ModuleItem*

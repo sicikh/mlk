@@ -31,6 +31,12 @@ ITEM TREE
     attributes: @extern
     visibility: private
     ret: Int -> type Int
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

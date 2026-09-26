@@ -1,0 +1,8 @@
+// A module that refuses the prelude of its project: what it does not declare itself is a name
+// nothing knows, and no import of the prelude is brought in.
+
+@no-prelude
+module project.main-module
+
+fun main(): Int =
+    1

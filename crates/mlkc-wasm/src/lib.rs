@@ -477,11 +477,23 @@ mod tests {
         assert_eq!(item["kind"], "item");
         assert_eq!(covered(source, &item["range"]), source.trim_end());
         assert_eq!(item["children"][0]["text"], "visibility: private");
-        assert_eq!(item["children"][1]["text"], "ret: Unit -> unresolved");
+        assert_eq!(
+            item["children"][1]["text"], "ret: Unit -> use Unit",
+            "the type of the result is a name the prelude brings in"
+        );
         assert!(
             item["children"][0]["range"].is_null(),
             "a field of a declaration is about nothing a host marks"
         );
+
+        // And then the names the module is given without writing them: a prelude import is
+        // read like any other entity, and being written nowhere, it is a line with no range.
+        let prelude = &nodes[1]["children"][2];
+
+        assert_eq!(prelude["text"], "use Unit  prelude");
+        assert_eq!(prelude["kind"], "item");
+        assert!(prelude["range"].is_null());
+        assert_eq!(prelude["children"][0]["text"], "path: std.prelude.Unit");
 
         // And then the body of the function, as the tree of what it holds.
         let body = &nodes[2];

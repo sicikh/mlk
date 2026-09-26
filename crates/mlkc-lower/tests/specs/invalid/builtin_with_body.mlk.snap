@@ -24,9 +24,15 @@ ITEM TREE
   fun max  @2.0
     attributes: @builtin
     visibility: private
-    param: Int -> unresolved
-    param: Int -> unresolved
-    ret: Int -> unresolved
+    param: Int -> use Int
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

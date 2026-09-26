@@ -22,8 +22,14 @@ MODULE #0
 ITEM TREE
   fun handle  @2.0
     visibility: private
-    param: project[Int -> unresolved].Handle -> the project
+    param: project[Int -> use Int].Handle -> the project
     ret: project[String -> unresolved].Handle -> the project
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

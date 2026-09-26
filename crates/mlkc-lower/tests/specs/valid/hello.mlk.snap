@@ -42,6 +42,12 @@ ITEM TREE
   fun main  @2.3
     visibility: private
     ret: Unit -> type Unit
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

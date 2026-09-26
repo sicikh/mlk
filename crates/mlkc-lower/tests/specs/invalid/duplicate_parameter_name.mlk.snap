@@ -38,6 +38,12 @@ ITEM TREE
     param: Int -> type Int
     param: Int -> type Int
     ret: Int -> type Int
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

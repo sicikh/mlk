@@ -10,10 +10,13 @@
 //!
 //! # What lowering does
 //!
-//! - it reads the preamble of a module: the path the module declares itself as;
+//! - it reads the preamble of a module: the path the module declares itself as, and what the
+//!   module says about itself as a whole;
 //! - it reads the items of a module and declares each of them with the data a dependent may
 //!   read: the attributes a declaration carries, its visibility, the signature of a function,
 //!   the path an import names;
+//! - it declares the imports of the prelude the module is given ([ADR-0011]), after the items
+//!   of the module, so that everything the module writes shadows them;
 //! - it reads the body of a function into expressions, patterns, paths, and the names the
 //!   body binds, and anchors a path to the binding it names before anything else can know
 //!   the binding: only the body knows its own names;
@@ -21,6 +24,8 @@
 //!   stage that knows which syntax a node was read from;
 //! - it reports what the HIR cannot hold, and nothing else: an attribute that the language
 //!   has no meaning for is the one thing a module can say that has nowhere to go.
+//!
+//! [ADR-0011]: ../../docs/adr/0011-module-prelude.md
 //!
 //! # What lowering does not do
 //!
@@ -40,6 +45,7 @@
 //! # Lowering one module
 //!
 //! ```
+//! use mlkc_hir_def::{Namespace, PathAnchor, Prelude};
 //! use mlkc_lower::{ModuleId, lower_body, lower_module};
 //! use mlkc_vfs::FileId;
 //!
@@ -47,12 +53,23 @@
 //! let parse = mlkc_parser::parse(source);
 //! let root = parse.tree::<mlkc_syntax::ModuleRoot>();
 //!
-//! let lowered = lower_module(ModuleId(FileId::from_raw(0)), &root);
+//! let lowered = lower_module(ModuleId(FileId::from_raw(0)), &root, Prelude::standard());
 //! assert!(lowered.diagnostics.is_empty());
 //!
 //! // The surface of the module: its entities, their names, and their data.
 //! let tree = &lowered.item_tree;
-//! assert_eq!(tree.scope().len(), 1);
+//! assert_eq!(
+//!     tree.scope().len(),
+//!     3,
+//!     "`main`, and the two names of the prelude"
+//! );
+//!
+//! // The names of the prelude are names of the module like any other: `Int` is what the
+//! // module's own text does not declare and the prelude brings in.
+//! let int = tree
+//!     .scope()
+//!     .anchor(&mlkc_hir_def::Name::new("Int"), Namespace::Ty);
+//! assert!(matches!(int, PathAnchor::Use(_)));
 //!
 //! // The bodies, lowered one at a time, from the declarations they are written in.
 //! for decl in &lowered.bodies {
@@ -84,7 +101,7 @@ mod ty;
 
 use std::fmt;
 
-pub use mlkc_hir_def::{Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId};
+pub use mlkc_hir_def::{Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId, Prelude};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{FunDecl, ModuleRoot};
 
@@ -145,8 +162,14 @@ pub struct LoweredBody {
 /// `root` is the syntax of the module, and `module` is the file it was read from: the names
 /// the item tree mints are names inside that module, and a path that names an entity of it
 /// resolves to that entity.
-pub fn lower_module(module: ModuleId, root: &ModuleRoot) -> LoweredModule {
-    item::lower(module, root)
+///
+/// `prelude` is what the module is given without writing it: unless the module says
+/// `@no-prelude`, the imports of the prelude are declared after the items of the module, so
+/// that what the module writes is what its names denote ([ADR-0011]).
+///
+/// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+pub fn lower_module(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> LoweredModule {
+    item::lower(module, root, prelude)
 }
 
 /// Lowers the body of a function, or nothing if the declaration declares no body.

@@ -9,7 +9,9 @@
 //!
 //! [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 
-use mlkc_hir_def::{Body, BodyLoc, ItemLocLike, ItemTree, ModuleId, Name, Namespace, PathAnchor};
+use mlkc_hir_def::{
+    Body, BodyLoc, ItemLocLike, ItemTree, ModuleId, Name, Namespace, PathAnchor, Prelude,
+};
 use mlkc_lower::{LoweredModule, lower_body, lower_module};
 use mlkc_parser_core::AnyParse;
 use mlkc_syntax::ModuleRoot;
@@ -62,7 +64,8 @@ fn lower(source: &str) -> LoweredModule {
     let parsed = parse(source);
     let root = parsed.tree::<ModuleRoot>();
 
-    lower_module(ModuleId(FileId::from_raw(0)), &root)
+    // A prelude is not what this is about: the modules here are lowered without one.
+    lower_module(ModuleId(FileId::from_raw(0)), &root, &Prelude::none())
 }
 
 /// The anchor of a name the module declares where a value belongs, which is what a dependent

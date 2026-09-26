@@ -22,8 +22,14 @@ MODULE #0
 ITEM TREE
   fun broken  @2.0
     visibility: private
-    param: Int -> unresolved
-    ret: Int -> unresolved
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

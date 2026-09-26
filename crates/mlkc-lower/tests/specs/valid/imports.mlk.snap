@@ -62,6 +62,12 @@ ITEM TREE
   fun start  @2.6
     visibility: private
     ret: Int -> use Int
+  use Int#1  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

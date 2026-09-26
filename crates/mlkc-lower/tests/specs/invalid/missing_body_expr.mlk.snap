@@ -20,7 +20,13 @@ MODULE #0
 ITEM TREE
   fun main  @2.0
     visibility: private
-    ret: Int -> unresolved
+    ret: Int -> use Int
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

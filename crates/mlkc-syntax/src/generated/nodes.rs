@@ -511,15 +511,19 @@ impl ModulePreamble {
     }
     pub fn as_fields(&self) -> ModulePreambleFields {
         ModulePreambleFields {
+            attributes: self.attributes(),
             module_token: self.module_token(),
             name: self.name(),
         }
     }
+    pub fn attributes(&self) -> AttributeList {
+        support::list(&self.syntax, 0usize)
+    }
     pub fn module_token(&self) -> SyntaxResult<SyntaxToken> {
-        support::required_token(&self.syntax, 0usize)
+        support::required_token(&self.syntax, 1usize)
     }
     pub fn name(&self) -> SyntaxResult<Path> {
-        support::required_node(&self.syntax, 1usize)
+        support::required_node(&self.syntax, 2usize)
     }
 }
 impl Serialize for ModulePreamble {
@@ -535,6 +539,7 @@ impl Serialize for ModulePreamble {
 }
 #[derive(Serialize)]
 pub struct ModulePreambleFields {
+    pub attributes: AttributeList,
     pub module_token: SyntaxResult<SyntaxToken>,
     pub name: SyntaxResult<Path>,
 }
@@ -2200,6 +2205,7 @@ impl std::fmt::Debug for ModulePreamble {
         let result = if current_depth < 16 {
             DEPTH.set(current_depth + 1);
             f.debug_struct("ModulePreamble")
+                .field("attributes", &self.attributes())
                 .field(
                     "module_token",
                     &support::DebugSyntaxResult(self.module_token()),

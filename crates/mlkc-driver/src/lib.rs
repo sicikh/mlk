@@ -15,12 +15,28 @@
 //!   The driver never opens a file, never reads a clock, never writes anywhere:
 //!   a host hands it bytes, and asks it for values.
 //! - **The key of a slot is the identity of what the pass read**.
-//!   Everything here is a function of the text of one file,
-//!   so the identity of that text — its [`FileVersion`] — is the whole key,
-//!   while the text itself is handed to the pass by reference.
+//!   Everything here is a function of the text of one file --- and, for the HIR, of the
+//!   prelude the file is compiled with --- so the identity of that text, its [`FileVersion`],
+//!   is almost the whole key, while the text itself is handed to the pass by reference.
 //! - **A pass is a function of its input**.
 //!   [`Parse`] is what [`mlkc_parser::parse`] returned, and nothing more:
 //!   the value and the diagnostics of the pass, stored as they came.
+//!
+//! # The prelude, and the projects it belongs to
+//!
+//! Every module is compiled with the prelude of its project: the imports the module is given
+//! without writing them, which lowering declares into the module's item tree
+//! ([ADR-0011](../../docs/adr/0011-module-prelude.md)). A prelude belongs to a project ---
+//! `std` and a project of a host each have their own --- and the driver holds the module
+//! graph ([`ProjectGraph`]): which projects exist, what each of them starts from and depends
+//! on, and which project a module belongs to.
+//!
+//! A host records them with [`Driver::set_project`], [`Driver::set_module_project`], and
+//! [`Driver::remove_project`], and a module that belongs to no project --- a file a host
+//! pushed on its own, which no manifest claimed --- is compiled with the prelude of the
+//! language. What a project says decides what its modules' text means, so the HIR of a module
+//! is dropped when the module changes project or the project's prelude changes; a parse is
+//! not, because a parse does not read the prelude.
 //!
 //! # The green nodes of a parse
 //!
@@ -54,7 +70,10 @@
 use std::sync::Arc;
 
 use mlkc_diagnostics::Diagnostic;
-use mlkc_hir_def::{BodyEntityLoc, ItemLoc, ItemTree, ModuleId, dump::TypePlace};
+use mlkc_hir_def::{
+    BodyEntityLoc, ItemLoc, ItemTree, ModuleId, Prelude, ProjectData, ProjectGraph, ProjectId,
+    dump::TypePlace,
+};
 use mlkc_line_index::LineIndex;
 use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at};
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
@@ -68,6 +87,11 @@ use rustc_hash::FxHashMap;
 pub struct Driver {
     /// The state of every file a host has pushed.
     vfs: Vfs,
+    /// The projects the compiler knows, and the project each module belongs to.
+    ///
+    /// The graph is configuration rather than an input of a file: it is not pushed, it is set,
+    /// and what a project says of its modules decides how their text is read.
+    projects: ProjectGraph,
     /// The parse of every file that has been parsed, with the green nodes it was built through.
     parses: FxHashMap<FileId, ParseSlot>,
     /// The HIR of every file that has been lowered.
@@ -185,16 +209,18 @@ impl Lowered {
     ///
     /// The HIR of a module is lowered in two steps, and this is both of them: the surface of
     /// the module, and then each body, from the declaration it is written in.
-    fn of(module: ModuleId, root: &ModuleRoot) -> Self {
-        let lowered = lower_module(module, root);
+    fn of(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> Self {
+        let lowered = lower_module(module, root, prelude);
 
+        // An entity the module did not write --- a prelude import --- is written nowhere, and
+        // a host is given no range for it.
         let items = lowered
             .item_tree
             .entities()
             .filter_map(|(loc, id)| {
                 let entity = lowered.item_tree.entity(id);
 
-                Some((loc, syntax_at(root, entity.syntax())?.text_trimmed_range()))
+                Some((loc, syntax_at(root, entity.syntax()?)?.text_trimmed_range()))
             })
             .collect();
 
@@ -203,7 +229,7 @@ impl Lowered {
             .entities()
             .filter_map(|(loc, id)| {
                 let entity = lowered.item_tree.entity(id);
-                let declaration = FunDecl::cast(syntax_at(root, entity.syntax())?)?;
+                let declaration = FunDecl::cast(syntax_at(root, entity.syntax()?)?)?;
 
                 Some((loc, TypePlaces::of(&declaration)))
             })
@@ -369,6 +395,56 @@ impl Driver {
         self.vfs.set_file_text(path, text)
     }
 
+    /// Records a project: the module it starts from, what it depends on, and the prelude its
+    /// modules are given without writing them.
+    ///
+    /// Returns whether the graph changed. A project says what its modules are read under, so
+    /// a change to one drops the HIR of the modules that belong to it ([ADR-0008]) --- today
+    /// the prelude is the part of a project that lowering reads; the parses are kept, since a
+    /// parse is a function of the text and of nothing else.
+    ///
+    /// Recording a project records the module it starts from as a module of it; the rest of
+    /// its modules are recorded with [`Driver::set_module_project`].
+    ///
+    /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+    pub fn set_project(&mut self, project: ProjectId, data: ProjectData) -> bool {
+        if self.projects.project(&project) == Some(&data) {
+            return false;
+        }
+
+        self.projects.insert(project.clone(), data);
+        self.invalidate_project(&project);
+
+        true
+    }
+
+    /// Drops a project, returning what it was.
+    ///
+    /// The modules of the project belong to no project afterwards, so they are read with the
+    /// prelude of the language again, and the HIR of them goes.
+    pub fn remove_project(&mut self, project: &ProjectId) -> Option<ProjectData> {
+        self.projects.project(project)?;
+        self.invalidate_project(project);
+
+        self.projects.remove(project)
+    }
+
+    /// Records which project a module belongs to, and returns whether the graph changed.
+    ///
+    /// A module is lowered with the prelude of its project, so a module that changes project
+    /// drops the HIR that was read under the other one. A module may be recorded before the
+    /// graph holds the project: it is read with the prelude of the language until it does.
+    pub fn set_module_project(&mut self, module: ModuleId, project: ProjectId) -> bool {
+        if self.projects.project_of(module) == Some(&project) {
+            return false;
+        }
+
+        self.projects.set_module_project(module, project);
+        self.invalidate_module(module);
+
+        true
+    }
+
     // Reads: no computation, and none of them takes `&mut self`.
 
     /// The id of a path the driver knows, if the file is there.
@@ -394,6 +470,11 @@ impl Driver {
     /// The path a file was interned under.
     pub fn file_path(&self, file: FileId) -> &VfsPath {
         self.vfs.file_path(file)
+    }
+
+    /// The projects the compiler knows, and the project each module belongs to.
+    pub fn project_graph(&self) -> &ProjectGraph {
+        &self.projects
     }
 
     // Pulls: they may compute, and they never answer from an invalid slot.
@@ -454,8 +535,13 @@ impl Driver {
 
         Self::text_derived(&mut self.lowered, file, version, || {
             let root = parse.module_root()?;
+            let module = ModuleId(file);
 
-            Some(Arc::new(Lowered::of(ModuleId(file), &root)))
+            // What the module is read with is the prelude of its project, which is the
+            // prelude of the language for a module no project claims.
+            let prelude = self.projects.prelude_of(module);
+
+            Some(Arc::new(Lowered::of(module, &root, prelude)))
         })
     }
 
@@ -547,6 +633,25 @@ impl Driver {
 
         Some(value)
     }
+
+    /// Drops the HIR of every module that belongs to `project`.
+    ///
+    /// What a project says is what its modules are read under, and the prelude is the part of
+    /// it that lowering reads: a module of another project, or one of no project, is not
+    /// affected by a change to this one. The parses stay, since a parse reads no project.
+    fn invalidate_project(&mut self, project: &ProjectId) {
+        let projects = &self.projects;
+        let belongs = |file: &FileId| projects.project_of(ModuleId(*file)) == Some(project);
+
+        self.lowered.retain(|file, _| !belongs(file));
+        self.diagnostics.retain(|file, _| !belongs(file));
+    }
+
+    /// Drops the HIR of one module, and the diagnostics derived from it.
+    fn invalidate_module(&mut self, module: ModuleId) {
+        self.lowered.remove(&module.0);
+        self.diagnostics.remove(&module.0);
+    }
 }
 
 /// The driver, and the trees it hands out, cross threads.
@@ -565,7 +670,7 @@ const _: fn() = || {
 #[cfg(test)]
 mod tests {
     use mlkc_diagnostics::{Category, Level};
-    use mlkc_hir_def::{ItemLocLike, Name};
+    use mlkc_hir_def::{EntityData, ItemLoc, ItemLocLike, Name, Namespace, PathAnchor, PlainPath};
     use mlkc_line_index::LineCol;
     use mlkc_rowan::{AstNodeList, Direction};
     use mlkc_syntax::{FUN_KW, SyntaxKind, SyntaxToken};
@@ -665,7 +770,12 @@ mod tests {
 
         let lowered = driver.lower(file).expect("the file to be lowered");
 
-        assert_eq!(lowered.item_tree().scope().len(), 1, "one name is declared");
+        // The module declares `main`, and the prelude of the language brings in two more names.
+        assert_eq!(
+            lowered.item_tree().scope().len(),
+            3,
+            "three names are declared"
+        );
         assert_eq!(lowered.bodies().len(), 1, "one entity owns a body");
 
         // The HIR holds the name of an entity rather than a place in the file, and a host
@@ -758,12 +868,221 @@ mod tests {
         let after = driver.lower(file).expect("the file to be lowered");
 
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
-        assert_eq!(before.item_tree().scope().len(), 1, "the old value stands");
+        assert_eq!(before.item_tree().scope().len(), 3, "the old value stands");
         assert_eq!(
             after.item_tree().scope().len(),
-            1,
+            3,
             "a function without an `in` is still a function"
         );
+    }
+
+    /// The path a name of the module denotes, which is what an import brings in.
+    fn import_path(lowered: &Lowered, name: &str) -> String {
+        let tree = lowered.item_tree();
+        let anchor = tree.scope().anchor(&Name::new(name), Namespace::Ty);
+        let PathAnchor::Use(import) = anchor else {
+            panic!("`{name}` to be an import: {anchor:?}");
+        };
+
+        match tree.entity_data(ItemLoc::Use(import)) {
+            Some(EntityData::Use(data)) => data.path.to_string(),
+            other => panic!("the import of `{name}` to be a use: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_prelude_brings_the_names_of_the_language_into_a_module() {
+        let (mut driver, file) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        let lowered = driver.lower(file).expect("the file to be lowered");
+
+        assert_eq!(import_path(&lowered, "Int"), "std.prelude.Int");
+        assert_eq!(import_path(&lowered, "Unit"), "std.prelude.Unit");
+
+        // The import is written nowhere in the buffer, so a host is given no place to mark.
+        let int = item(&lowered, "Int");
+        assert_eq!(lowered.item_range(&int), None);
+    }
+
+    #[test]
+    fn a_module_that_says_no_prelude_is_given_none() {
+        let (mut driver, file) = driver_with(
+            "main.mlk",
+            "@no-prelude\nmodule project.main-module\n\nfun main(): Int =\n    1\n",
+        );
+        let lowered = driver.lower(file).expect("the file to be lowered");
+
+        assert!(lowered.item_tree().attributes().no_prelude);
+        assert_eq!(
+            lowered.item_tree().scope().len(),
+            1,
+            "`main`, and nothing else"
+        );
+        assert_eq!(
+            lowered
+                .item_tree()
+                .scope()
+                .anchor(&Name::new("Int"), Namespace::Ty),
+            PathAnchor::Unresolved,
+        );
+    }
+
+    #[test]
+    fn setting_the_prelude_of_a_project_changes_what_its_modules_are_lowered_to() {
+        let (mut driver, file) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        let before = driver.lower(file).expect("the file to be lowered");
+        let parse = driver.parse(file).expect("the file to be parsed");
+
+        assert_eq!(import_path(&before, "Int"), "std.prelude.Int");
+
+        // A prelude of the project replaces the one of the language.
+        let data = ProjectData {
+            prelude: prelude_of(&["project", "core", "Int"]),
+            ..ProjectData::new(ModuleId(file))
+        };
+
+        assert!(driver.set_project(project(), data.clone()));
+        assert!(
+            !driver.set_project(project(), data),
+            "the project did not change",
+        );
+
+        let after = driver.lower(file).expect("the file to be lowered");
+
+        assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
+        assert_eq!(import_path(&after, "Int"), "project.core.Int");
+        assert_eq!(
+            after
+                .item_tree()
+                .scope()
+                .anchor(&Name::new("Unit"), Namespace::Ty),
+            PathAnchor::Unresolved,
+            "the prelude of the project replaced the one of the language",
+        );
+
+        // The root module of a project is a module of it, and a parse is not what a project
+        // changes: the one the driver already holds stands.
+        assert_eq!(
+            driver.project_graph().project_of(ModuleId(file)),
+            Some(&project()),
+        );
+        let parsed_again = driver.parse(file).expect("the file to be parsed");
+        assert!(Arc::ptr_eq(&parse, &parsed_again), "the parse was not kept");
+    }
+
+    #[test]
+    fn a_project_changes_only_what_belongs_to_it() {
+        let (mut driver, main) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        driver.set_file_text(
+            path("lib.mlk"),
+            Some("fun size(): Int =\n    1\n".to_string()),
+        );
+        let lib = driver
+            .file_id(&path("lib.mlk"))
+            .expect("the file to have an id");
+
+        let first = ProjectId::new("first");
+        let second = ProjectId::new("second");
+
+        assert!(driver.set_project(first.clone(), ProjectData {
+            prelude: prelude_of(&["project", "core", "Int"]),
+            ..ProjectData::new(ModuleId(main))
+        }));
+        assert!(driver.set_project(second.clone(), ProjectData::new(ModuleId(lib))));
+
+        let before_main = driver.lower(main).expect("the file to be lowered");
+        let before_lib = driver.lower(lib).expect("the file to be lowered");
+
+        assert_eq!(import_path(&before_main, "Int"), "project.core.Int");
+        assert_eq!(import_path(&before_lib, "Int"), "std.prelude.Int");
+
+        // The prelude of one project changes, and the module of the other is left alone.
+        assert!(driver.set_project(first, ProjectData {
+            prelude: prelude_of(&["project", "other", "Int"]),
+            ..ProjectData::new(ModuleId(main))
+        }));
+
+        let after_main = driver.lower(main).expect("the file to be lowered");
+        let after_lib = driver.lower(lib).expect("the file to be lowered");
+
+        assert!(
+            !Arc::ptr_eq(&before_main, &after_main),
+            "the slot was not dropped"
+        );
+        assert!(Arc::ptr_eq(&before_lib, &after_lib), "the slot was dropped");
+        assert_eq!(import_path(&after_main, "Int"), "project.other.Int");
+    }
+
+    #[test]
+    fn a_module_that_changes_project_is_read_with_the_other_project() {
+        let (mut driver, file) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        let project = ProjectId::new("the-project");
+
+        assert!(driver.set_project(project.clone(), ProjectData {
+            prelude: prelude_of(&["project", "core", "Int"]),
+            ..ProjectData::new(ModuleId(file))
+        }));
+
+        // The root module of the project is recorded as one of it, so a module that changes
+        // project has to be one the graph does not know yet.
+        driver.set_file_text(
+            path("lib.mlk"),
+            Some("fun size(): Int =\n    1\n".to_string()),
+        );
+        let lib = driver
+            .file_id(&path("lib.mlk"))
+            .expect("the file to have an id");
+        let before = driver.lower(lib).expect("the file to be lowered");
+
+        assert_eq!(import_path(&before, "Int"), "std.prelude.Int");
+
+        assert!(driver.set_module_project(ModuleId(lib), project.clone()));
+        assert!(!driver.set_module_project(ModuleId(lib), project));
+
+        let after = driver.lower(lib).expect("the file to be lowered");
+
+        assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
+        assert_eq!(import_path(&after, "Int"), "project.core.Int");
+    }
+
+    #[test]
+    fn dropping_a_project_returns_its_modules_to_the_prelude_of_the_language() {
+        let (mut driver, file) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        let project = ProjectId::new("the-project");
+
+        driver.set_project(project.clone(), ProjectData {
+            prelude: Prelude::none(),
+            ..ProjectData::new(ModuleId(file))
+        });
+
+        let before = driver.lower(file).expect("the file to be lowered");
+        assert_eq!(
+            before
+                .item_tree()
+                .scope()
+                .anchor(&Name::new("Int"), Namespace::Ty),
+            PathAnchor::Unresolved,
+        );
+
+        assert!(driver.remove_project(&project).is_some());
+        assert!(driver.remove_project(&project).is_none());
+
+        let after = driver.lower(file).expect("the file to be lowered");
+
+        assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
+        assert_eq!(import_path(&after, "Int"), "std.prelude.Int");
+        assert_eq!(driver.project_graph().project_of(ModuleId(file)), None);
+    }
+
+    /// A path in a prelude, as the paths of a project are written.
+    fn prelude_of(path: &[&str]) -> Prelude {
+        Prelude::from_paths([PlainPath::from_segments(
+            path.iter().map(|segment| Name::new(segment)),
+        )])
+    }
+
+    /// A project a test records.
+    fn project() -> ProjectId {
+        ProjectId::new("the-project")
     }
 
     /// The first token of a kind in a parse, which is what shows what the parses shared.

@@ -74,6 +74,7 @@
 //! - [`item_tree`] — the surface of one module.
 //! - [`body`] — the inside of one function.
 //! - [`def_map`] — what names denote, and the index of the whole project.
+//! - [`prelude`] — the imports a project gives every module.
 //! - [`project_graph`] — the name of a project, and what it depends on.
 //! - [`dump`] — a reading of the tree and of a body, for a person and for a diff.
 
@@ -87,6 +88,7 @@ pub mod item_data;
 pub mod item_tree;
 pub mod name;
 pub mod path;
+pub mod prelude;
 pub mod project_graph;
 pub mod type_ref;
 
@@ -99,12 +101,13 @@ pub use crate::{
         ModuleDefWithBodyId, ModuleId, UseLoc, ValueLoc, WrongKind,
     },
     item_data::{
-        Attributes, ClassData, ConstData, EntityData, FunctionData, ImplData, ParamData, Signature,
-        UseData, ValueData, Visibility,
+        Attributes, ClassData, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes,
+        ParamData, Signature, UseData, ValueData, Visibility,
     },
     item_tree::{Declared, Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
     name::Name,
     path::{PathAnchor, PathData, PathId, PathRoot, PlainPath, PlainPathId},
+    prelude::{Prelude, PreludeImport},
     project_graph::{ModuleLocator, ProjectData, ProjectGraph, ProjectId},
     type_ref::{TypeRef, TypeVarId},
 };

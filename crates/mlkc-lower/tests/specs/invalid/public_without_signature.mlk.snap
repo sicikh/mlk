@@ -27,14 +27,20 @@ MODULE #0
 ITEM TREE
   fun size  @2.0
     visibility: public
-    param: Int -> unresolved
+    param: Int -> use Int
   fun weight  @2.1
     visibility: public
     param
-    ret: Int -> unresolved
+    ret: Int -> use Int
   fun ignored  @2.2
     visibility: public
     param
+  use Int  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

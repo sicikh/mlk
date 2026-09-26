@@ -12,10 +12,14 @@ use crate::{
         ItemLocLike, ModuleClassId, ModuleConstId, ModuleDefId, ModuleDefWithBodyId,
         ModuleFunctionId, ModuleId, ModuleImplId, ModuleUseId, ModuleValueId, UseLoc, ValueLoc,
     },
-    item_data::{ClassData, ConstData, EntityData, FunctionData, ImplData, UseData, ValueData},
+    item_data::{
+        ClassData, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes, UseData,
+        ValueData, Visibility,
+    },
     macros::{define_entity_accessors, for_each_item_kind},
     name::Name,
     path::PlainPathId,
+    prelude::PreludeImport,
 };
 
 /// Where an entity is in the module's syntax.
@@ -82,7 +86,11 @@ impl fmt::Display for ItemSyntaxLoc {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entity {
     loc: ItemLoc,
-    syntax: ItemSyntaxLoc,
+    /// Where the entity is written, or `None` for an entity the module did not write.
+    ///
+    /// The entities a module writes are found in its syntax; a prelude import is declared by
+    /// lowering rather than by the module, and the module has no place to point at for it.
+    syntax: Option<ItemSyntaxLoc>,
     data: EntityData,
 }
 
@@ -92,9 +100,9 @@ impl Entity {
         &self.loc
     }
 
-    /// Where the entity is in the module's syntax.
-    pub fn syntax(&self) -> &ItemSyntaxLoc {
-        &self.syntax
+    /// Where the entity is in the module's syntax, if the module wrote it.
+    pub fn syntax(&self) -> Option<&ItemSyntaxLoc> {
+        self.syntax.as_ref()
     }
 
     /// The data of the entity.
@@ -129,6 +137,8 @@ pub struct ItemTree {
     module: ModuleId,
     /// The path the module declares itself as, if its preamble writes one.
     path: Option<PlainPathId>,
+    /// What the module says about itself as a whole, which its preamble writes.
+    attributes: ModuleAttributes,
     /// The entities, in the order the module declares them.
     entities: Arena<Entity>,
     /// What each name denotes in this revision: a function of `entities`.
@@ -141,6 +151,13 @@ impl ItemTree {
     /// The module this tree describes.
     pub fn module(&self) -> ModuleId {
         self.module
+    }
+
+    /// What the module says about itself as a whole, which is what its preamble writes.
+    ///
+    /// A module without a preamble says nothing, and takes the prelude of its project.
+    pub fn attributes(&self) -> ModuleAttributes {
+        self.attributes
     }
 
     /// The path the module declares itself as, if the module has a preamble.
@@ -195,8 +212,12 @@ impl ItemTree {
     }
 
     /// Where the entity this name denotes is in the module's syntax.
+    ///
+    /// `None` for an entity that is not in this revision, and for one the module did not
+    /// write, such as a prelude import: an entity without a place is an entity a host has
+    /// nothing to mark.
     pub fn syntax_loc(&self, item: ItemLoc) -> Option<&ItemSyntaxLoc> {
-        self.id_of(item).map(|id| self.entity(id).syntax())
+        self.id_of(item).and_then(|id| self.entity(id).syntax())
     }
 
     /// The id of the entity that carries this name, narrowed to the kind of the name.
@@ -284,6 +305,7 @@ pub struct Declared {
 pub struct ItemTreeBuilder {
     module: ModuleId,
     path: Option<PlainPathId>,
+    attributes: ModuleAttributes,
     entities: Arena<Entity>,
     names: FxHashMap<ItemLoc, ModuleDefId>,
     scope: LocalScope,
@@ -297,6 +319,7 @@ impl ItemTreeBuilder {
         Self {
             module,
             path: None,
+            attributes: ModuleAttributes::default(),
             entities: Arena::new(),
             names: FxHashMap::default(),
             scope: LocalScope::default(),
@@ -311,6 +334,14 @@ impl ItemTreeBuilder {
         self.path = Some(path);
     }
 
+    /// Records what the module says about itself as a whole, which its preamble writes.
+    ///
+    /// A module says one thing about itself: a caller that records a second list of attributes
+    /// replaces the first.
+    pub fn set_attributes(&mut self, attributes: ModuleAttributes) {
+        self.attributes = attributes;
+    }
+
     /// Declares one entity of the module, and returns what declaring it produced.
     ///
     /// `name` is `None` for an entity that has no name of its own, such as an `impl`;
@@ -320,6 +351,40 @@ impl ItemTreeBuilder {
         name: Option<Name>,
         data: EntityData,
         syntax: ItemSyntaxLoc,
+    ) -> Declared {
+        self.declare_entity(name, data, Some(syntax))
+    }
+
+    /// Declares one import the prelude brings into the module, and returns its name.
+    ///
+    /// The import is an entity like any other, and the one thing that tells it apart is that
+    /// the module did not write it: it has no syntax to be found at. A caller declares the
+    /// prelude after the items of the module, so that what the module wrote is what its names
+    /// denote and a prelude import that finds a name taken is quietly not what it denotes.
+    ///
+    /// `None` for an import that brings in no name --- a path that names nothing --- since a
+    /// name that is not there is not a name a module has.
+    pub fn declare_prelude(&mut self, import: &PreludeImport) -> Option<EntityLoc> {
+        if import.name().is_missing() {
+            return None;
+        }
+
+        let data = EntityData::Use(UseData {
+            path: import.path().clone(),
+            alias: None,
+            visibility: Visibility::Private,
+        });
+        let declared = self.declare_entity(Some(import.name().clone()), data, None);
+
+        Some(declared.loc)
+    }
+
+    /// Declares one entity, with the syntax it is written at if the module wrote it.
+    fn declare_entity(
+        &mut self,
+        name: Option<Name>,
+        data: EntityData,
+        syntax: Option<ItemSyntaxLoc>,
     ) -> Declared {
         let kind = data.kind();
         let disambiguator = {
@@ -378,6 +443,7 @@ impl ItemTreeBuilder {
         ItemTree {
             module: self.module,
             path: self.path,
+            attributes: self.attributes,
             entities: self.entities,
             names: self.names,
             scope: self.scope,
@@ -395,7 +461,7 @@ mod tests {
     use crate::{
         def_map::{LocalEntry, LocalTarget, Namespace},
         id::{FunctionLoc, UseLoc, WrongKind},
-        item_data::{Attributes, ParamData, Signature, Visibility},
+        item_data::{Attributes, ModuleAttributes, ParamData, Signature, Visibility},
         path::{PathAnchor, PathData, PlainPath, PlainPathId},
         type_ref::TypeRef,
     };
@@ -604,6 +670,114 @@ mod tests {
                 ..LocalEntry::default()
             }),
         );
+    }
+
+    /// One import of a prelude, as a path brings it in.
+    fn prelude_import(path: &[&str]) -> PreludeImport {
+        PreludeImport::of(PlainPath::from_segments(
+            path.iter().map(|segment| Name::new(segment)),
+        ))
+    }
+
+    /// The data an import of `path` has, as the builder gives it to a prelude import.
+    fn prelude_data(path: &[&str]) -> EntityData {
+        EntityData::Use(UseData {
+            path: PlainPathId::new(PlainPath::from_segments(
+                path.iter().map(|segment| Name::new(segment)),
+            )),
+            alias: None,
+            visibility: Visibility::Private,
+        })
+    }
+
+    #[test]
+    fn a_prelude_import_is_an_entity_the_module_did_not_write() {
+        let mut builder = ItemTreeBuilder::new(module());
+        builder.declare(Some(Name::new("f")), function("f"), syntax(0));
+        let import = builder
+            .declare_prelude(&prelude_import(&["std", "prelude", "Int"]))
+            .expect("an import to have a name");
+        let tree = builder.finish();
+
+        // The name is a name of the module, and what it denotes is the import.
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Int"), Namespace::Ty),
+            PathAnchor::Use(UseLoc::try_from(import.item.clone()).expect("a use")),
+        );
+        // The import is an entity of the module, with the path it names.
+        assert_eq!(
+            tree.entity_data(import.item.clone()),
+            Some(&prelude_data(&["std", "prelude", "Int"])),
+        );
+        // And it has no place in the module's syntax: the module did not write it.
+        assert_eq!(tree.syntax_loc(import.item.clone()), None);
+
+        // It is declared after the items of the module, which is what makes the items win.
+        let names: Vec<_> = tree
+            .entities()
+            .map(|(loc, _)| loc.name().cloned())
+            .collect();
+        assert_eq!(names, [Some(Name::new("f")), Some(Name::new("Int"))]);
+    }
+
+    #[test]
+    fn a_name_the_module_declares_is_what_it_denotes() {
+        let mut builder = ItemTreeBuilder::new(module());
+        let declaration = builder.declare(Some(Name::new("Int")), class("Int"), syntax(0));
+        builder.declare_prelude(&prelude_import(&["std", "prelude", "Int"]));
+        let tree = builder.finish();
+
+        // The declaration is what the name denotes where a type belongs, and the prelude is
+        // not recorded in a namespace the module declares itself.
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Int"), Namespace::Ty),
+            PathAnchor::Item(declaration.loc),
+        );
+    }
+
+    #[test]
+    fn a_name_the_module_imports_itself_shadows_the_prelude() {
+        let mut builder = ItemTreeBuilder::new(module());
+        let written = builder.declare(Some(Name::new("Int")), import("std.core.Int"), syntax(0));
+        builder.declare_prelude(&prelude_import(&["std", "prelude", "Int"]));
+        let tree = builder.finish();
+
+        assert_eq!(
+            tree.scope().anchor(&Name::new("Int"), Namespace::Ty),
+            PathAnchor::Use(UseLoc::try_from(written.loc.item).expect("a use")),
+        );
+    }
+
+    #[test]
+    fn a_prelude_import_that_brings_in_no_name_is_not_declared() {
+        let mut builder = ItemTreeBuilder::new(module());
+        // A path of one name is a root and nothing else: there is no name for the import to
+        // bring in, and nothing is declared.
+        let import = builder.declare_prelude(&prelude_import(&["Int"]));
+        let tree = builder.finish();
+
+        assert_eq!(import, None);
+        assert!(tree.scope().is_empty());
+        assert_eq!(tree.entities().count(), 0);
+    }
+
+    #[test]
+    fn a_module_remembers_what_it_says_about_itself() {
+        assert!(
+            ItemTreeBuilder::new(module())
+                .finish()
+                .attributes()
+                .is_none()
+        );
+
+        let mut builder = ItemTreeBuilder::new(module());
+        let mut attributes = ModuleAttributes::default();
+        attributes.insert(&Name::new("no-prelude"));
+        builder.set_attributes(attributes);
+        let tree = builder.finish();
+
+        assert!(tree.attributes().no_prelude);
+        assert!(!tree.attributes().is_none());
     }
 
     #[test]

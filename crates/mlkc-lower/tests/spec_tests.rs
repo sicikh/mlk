@@ -56,6 +56,14 @@ spec_tests! {
     // A module that declares the path it is known by in its project.
     preamble: "valid/preamble.mlk",
 
+    // What a module is given without writing it: the names of the prelude it does not declare
+    // itself, and the name of it that the module does declare, which is what it denotes.
+    prelude: "valid/prelude.mlk",
+
+    // A module that refuses the prelude of its project: the names it does not declare are names
+    // nothing knows.
+    no_prelude: "valid/no_prelude.mlk",
+
     // How far a declaration is visible, and the attributes it carries next to it.
     visibility: "valid/visibility.mlk",
 

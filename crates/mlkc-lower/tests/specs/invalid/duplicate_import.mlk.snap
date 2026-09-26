@@ -26,6 +26,12 @@ ITEM TREE
   use Int#1  @2.1
     path: std.core.Int
     visibility: private
+  use Int#2  prelude
+    path: std.prelude.Int
+    visibility: private
+  use Unit  prelude
+    path: std.prelude.Unit
+    visibility: private
 ```
 
 ## Bodies

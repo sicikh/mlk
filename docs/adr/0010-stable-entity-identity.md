@@ -589,6 +589,7 @@ and gives a new entity the identity of the old entity it matches.
 ## Links
 
 - Superseded record: [0003-id-based-ir.md]
+- Refined by: [0011-module-prelude.md] (an entity the module did not write has no syntax)
 - The driver this identity serves: [0008-compiler-driver.md]
 - The contract of a pass: [0009-pass-contract.md]
 - Incrementality and the language rules it relies on: [0004-module-system.md]
@@ -606,6 +607,7 @@ and gives a new entity the identity of the old entity it matches.
 [0007-vfs-file-state.md]: 0007-vfs-file-state.md
 [0008-compiler-driver.md]: 0008-compiler-driver.md
 [0009-pass-contract.md]: 0009-pass-contract.md
+[0011-module-prelude.md]: 0011-module-prelude.md
 [mlkc-hir-def]: ../../crates/mlkc-hir-def
 [mlkc-intern]: ../../crates/mlkc-intern
 [mlkc-la-arena]: ../../crates/mlkc-la-arena

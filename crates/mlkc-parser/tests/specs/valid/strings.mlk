@@ -1,0 +1,14 @@
+// Strings hold escapes: a backslash escapes whatever follows it, so the literal ends at the
+// quote that is not escaped, and what the backslash stands for is part of the text.
+
+fun strings(): String =
+    "a \"quote\", a \\ backslash, and a line break \n"
+
+fun a_tab_and_a_nul(): String =
+    "a tab \t and a nul \0"
+
+fun empty(): String =
+    ""
+
+fun escaped_quotes(): String =
+    "\"\""

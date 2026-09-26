@@ -87,6 +87,11 @@ impl TryFrom<SyntaxKind> for TriviaPieceKind {
     }
 }
 
+/// The text a string literal holds: what is written between its quotes, and nothing of the
+/// quotes themselves.
+///
+/// The escapes of the literal are the text's own: what they mean is read where the value of
+/// the literal is, which is a thing of the language rather than of its syntax.
 pub fn inner_string_text(token: &SyntaxToken) -> TokenText {
     let mut text = token.token_text_trimmed();
 

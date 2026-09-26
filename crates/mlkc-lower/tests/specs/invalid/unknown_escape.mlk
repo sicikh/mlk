@@ -1,0 +1,5 @@
+// An escape the language has no meaning for: what the module wrote stands for the value
+// there, and the sequence is what the lowering reports.
+
+fun unknown(): String =
+    "a \q escape, a \z one, and a \n line break"

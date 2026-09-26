@@ -87,11 +87,15 @@ enum Tok {
 
     #[regex(r"[0-9]+")]
     IntLiteral,
-    // Strings have neither escapes nor interpolation yet: they end at the first
-    // quote, so an unterminated string is not a string at all.
-    #[regex(r#""[^"\n\r]*""#)]
+    // A string ends at the first quote that is not escaped: a backslash escapes whatever
+    // follows it, so `\"` is a quote the literal holds. What an escape means is not read
+    // here: the value of a literal is decoded where it is read, and the lexer is what decides
+    // where the literal ends.
+    #[regex(r#""(\\.|[^"\\\n\r])*""#)]
     StringLiteral,
-    #[regex(r#""[^"\n\r]*"#)]
+    // A string that is never closed. The run is one broken token rather than one for every
+    // character of it, and a backslash at the end of it is part of the run.
+    #[regex(r#""(\\.|[^"\\\n\r])*\\?"#)]
     UnterminatedString,
 
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*")]

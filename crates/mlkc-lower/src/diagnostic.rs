@@ -49,6 +49,15 @@ pub enum LoweringError {
         /// The name the parameters share.
         name: Name,
     },
+    /// A string literal holds an escape the language has no meaning for.
+    ///
+    /// What an escape the language does know is a character it stands for, and one it does
+    /// not know is the two characters it is written with: a literal that holds one is read as
+    /// far as it can be read, and what a reader is told about is the sequence.
+    UnknownEscape {
+        /// The escape as it is written: the backslash, and the character it escapes.
+        escape: String,
+    },
     /// An integer literal does not fit the value the HIR holds it in.
     IntegerLiteralTooLarge {
         /// The literal as the module wrote it.
@@ -146,6 +155,9 @@ impl LoweringError {
                  body cannot tell the two apart",
                 )
             },
+            Self::UnknownEscape { escape } => {
+                format!("the language has no escape `{escape}`")
+            },
             Self::IntegerLiteralTooLarge { literal } => {
                 format!(
                     "the integer literal `{literal}` does not fit the value the HIR holds it in"
@@ -236,6 +248,7 @@ impl DiagKind for LoweringError {
             Self::ImportOfDeclaredName { .. } => "10",
             Self::RepeatedAttribute { .. } => "11",
             Self::DuplicateParameterName { .. } => "12",
+            Self::UnknownEscape { .. } => "13",
         }
     }
 }

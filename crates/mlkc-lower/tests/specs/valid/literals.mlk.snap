@@ -6,7 +6,7 @@ expression: snapshot
 
 ```mlk
 // The shape of a literal: an integer, a string, and a subtraction, which is an operator
-// rather than the sign of a number.
+// rather than the sign of a number. What a string holds is what its escapes decode to.
 
 @builtin
 type Int
@@ -16,6 +16,9 @@ fun positive(): Int =
 
 fun text(): String =
     "hello"
+
+fun escaped(): String =
+    "a \"quote\", a \\ backslash, a line break \n, and a tab \t"
 
 fun subtracted(): Int =
     1 - 2
@@ -37,7 +40,10 @@ ITEM TREE
   fun text  @2.2
     visibility: private
     ret: String -> unresolved
-  fun subtracted  @2.3
+  fun escaped  @2.3
+    visibility: private
+    ret: String -> unresolved
+  fun subtracted  @2.4
     visibility: private
     ret: Int -> type Int
 ```
@@ -58,6 +64,14 @@ BODY fun text in module #0
 root expr#0
 exprs
   expr#0  literal "hello"
+```
+
+```
+BODY fun escaped in module #0
+
+root expr#0
+exprs
+  expr#0  literal "a \"quote\", a \\ backslash, a line break \n, and a tab \t"
 ```
 
 ```

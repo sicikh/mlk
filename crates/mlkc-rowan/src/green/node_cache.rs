@@ -148,6 +148,16 @@ impl IntoRawPointer for GreenNode {
 }
 
 /// Interner for GreenTokens and GreenNodes
+///
+/// A cache owns the values it holds: an entry is a pointer to a green value, taken by value
+/// and given back when the entry is dropped, so a reference count of the value is the
+/// cache's. The generation of an entry is a bit of that pointer, which is the entry's own
+/// word rather than a field of the value, so no cache ever writes into memory another one
+/// holds.
+///
+/// A cache is therefore moved between threads with the values it holds, and nothing of it
+/// needs to be read by more than one thread at a time: `Send`, and the assertion below is
+/// what keeps it that way.
 // XXX: the impl is a bit tricky. As usual when writing interners, we want to
 // store all values in one HashSet.
 //
@@ -173,6 +183,17 @@ pub struct NodeCache {
     trivia: TriviaCache,
     generation: Generation,
 }
+
+/// The cache is handed to another thread and given back: a host may make a driver on a worker,
+/// and a driver may hand the table of a file to the worker that parses it.
+///
+/// The check is here rather than in a test so that a change to the shape of the cache --- a
+/// raw pointer where a value is owned --- is a change the build refuses.
+const _: fn() = || {
+    fn assert_send<T: Send>() {}
+
+    assert_send::<NodeCache>();
+};
 
 /// Represents a "generation" in the garbage collection scheme of the node
 /// cache. For our purpose we only need to track two generations at most (the
@@ -524,12 +545,49 @@ mod tests {
     use mlkc_text_size::TextSize;
 
     use crate::{
-        GreenToken, RawSyntaxKind,
+        GreenToken, RawSyntaxKind, SyntaxNode, TreeBuilder,
         green::{
-            node_cache::{CachedNode, CachedToken, CachedTrivia, token_hash},
+            node_cache::{CachedNode, CachedToken, CachedTrivia, NodeCache, token_hash},
             trivia::GreenTrivia,
         },
+        raw_language::{RawLanguage, RawLanguageKind, RawLanguageSyntaxFactory},
     };
+
+    /// A tree of one token, built through `cache`.
+    fn tree(cache: &mut NodeCache) -> SyntaxNode<RawLanguage> {
+        let mut builder = TreeBuilder::<RawLanguage, RawLanguageSyntaxFactory>::with_cache(cache);
+
+        builder.start_node(RawLanguageKind::ROOT);
+        builder.token(RawLanguageKind::STRING_TOKEN, "a");
+        builder.finish_node();
+
+        builder.finish()
+    }
+
+    #[test]
+    fn a_cache_moves_between_threads() {
+        // A cache owns the green values it points at, and its generation is a bit of the
+        // pointer it keeps rather than something of the value, so the table moves with its
+        // values and nothing of it is written by another thread.
+        let mut cache = NodeCache::default();
+        let before = tree(&mut cache);
+
+        let (mut cache, text) = std::thread::spawn(move || {
+            let tree = tree(&mut cache);
+
+            (cache, tree.to_string())
+        })
+        .join()
+        .expect("the thread not to panic");
+
+        assert_eq!(text, "a");
+
+        // The tree the other thread built is the tree this one builds again: one green node,
+        // which is what a table handed to a worker and back is for.
+        let after = tree(&mut cache);
+
+        assert!(before.key() == after.key());
+    }
 
     #[test]
     fn green_token_hash() {

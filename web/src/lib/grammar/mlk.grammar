@@ -151,7 +151,7 @@ PathExpr { Path }
 
 	int_literal { $[0-9]+ }
 
-	// Strings have neither escapes nor interpolation yet: they end at the first quote,
-	// so an unterminated string is not a string at all (the same rule as the lexer's).
-	string_literal { '"' !["\n\r]* '"' }
+	// Strings hold escapes: what a backslash escapes is part of the literal, so the literal
+	// ends at the quote that is not escaped. There is no interpolation: a string is its text.
+	string_literal { '"' ("\\" ![\n\r] | !["\\\n\r])* '"' }
 }

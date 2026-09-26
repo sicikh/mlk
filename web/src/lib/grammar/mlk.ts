@@ -10,7 +10,7 @@ export const parser = LRParser.deserialize({
   maxTerm: 78,
   skippedNodes: [0,1],
   repeatNodeCount: 6,
-  tokenData: ")f~RkXY!vYZ!v]^!vpq!vqr#Xrs#dvw$Xxy$dyz$iz{$n{|$s|}$x}!O$}!O!P%S!P!Q%X!Q!['P![!]'X!^!_'^!_!`'k!`!a'x!b!c(V!c!}([!}#O)P#P#Q)U#R#S([#T#o([#p#q)Z~!{S!V~XY!vYZ!v]^!vpq!v~#[P!_!`#_~#dO!l~~#gVOY#dZ]#d^r#drs#|s;'S#d;'S;=`$R<%lO#d~$RO!p~~$UP;=`<%l#d~$[Pvw$_~$dO!m~~$iO!_~~$nO!a~~$sO!c~~$xO!e~~$}O![~~%SO!f~~%XO!^~~%^Q!d~z{%d!P!Q&e~%gTOz%dz{%v{;'S%d;'S;=`&_<%lO%d~%yTO!P%d!P!Q&Y!Q;'S%d;'S;=`&_<%lO%d~&_OP~~&bP;=`<%l%d~&jTP~OY&eZ]&e^;'S&e;'S;=`&y<%lO&e~&|P;=`<%l&e~'UP!o~!Q!['P~'^O!`~~'cP!i~!_!`'f~'kO!g~R'pP!bP!_!`'sQ'xO!kQ~'}P!j~!_!`(Q~(VO!h~~([O!X~~(aT!Y~}!O(p!Q![([!c!}([#R#S([#T#o([~(sS!Q![([!c!}([#R#S([#T#o([~)UO!Z~~)ZO!]~~)^P#p#q)a~)fO!n~",
+  tokenData: "*O~RkXY!vYZ!v]^!vpq!vqr#Xrs#dvw$qxy$|yz%Rz{%W{|%]|}%b}!O%g!O!P%l!P!Q%q!Q!['i![!]'q!^!_'v!_!`(T!`!a(b!b!c(o!c!}(t!}#O)i#P#Q)n#R#S(t#T#o(t#p#q)s~!{S!V~XY!vYZ!v]^!vpq!v~#[P!_!`#_~#dO!l~~#gXOY#dZ]#d^r#drs$Ss#O#d#O#P$X#P;'S#d;'S;=`$k<%lO#d~$XO!p~~$[TOY#dZ]#d^;'S#d;'S;=`$k<%lO#d~$nP;=`<%l#d~$tPvw$w~$|O!m~~%RO!_~~%WO!a~~%]O!c~~%bO!e~~%gO![~~%lO!f~~%qO!^~~%vQ!d~z{%|!P!Q&}~&PTOz%|z{&`{;'S%|;'S;=`&w<%lO%|~&cTO!P%|!P!Q&r!Q;'S%|;'S;=`&w<%lO%|~&wOP~~&zP;=`<%l%|~'STP~OY&}Z]&}^;'S&};'S;=`'c<%lO&}~'fP;=`<%l&}~'nP!o~!Q!['i~'vO!`~~'{P!i~!_!`(O~(TO!g~R(YP!bP!_!`(]Q(bO!kQ~(gP!j~!_!`(j~(oO!h~~(tO!X~~(yT!Y~}!O)Y!Q![(t!c!}(t#R#S(t#T#o(t~)]S!Q![(t!c!}(t#R#S(t#T#o(t~)nO!Z~~)sO!]~~)vP#p#q)y~*OO!n~",
   tokenizers: [0, 1],
   topRules: {"ModuleRoot":[0,2]},
   specialized: [{term: 56, get: (value: keyof typeof spec_identifier) => spec_identifier[value] || -1}],

@@ -11,9 +11,11 @@ use mlkc_hir_def::{
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
+use mlkc_span::Span;
 use mlkc_syntax::{
     BinExpr, CallExpr, Expr as ExprSyntax, FunDecl, LetExpr, Literal as LiteralSyntax,
-    Pat as PatSyntax, Path as PathSyntax, PathExpr, SyntaxKind, SyntaxToken, UnaryExpr,
+    Pat as PatSyntax, Path as PathSyntax, PathExpr, SyntaxKind, SyntaxToken, TextRange, TextSize,
+    UnaryExpr, inner_string_text,
 };
 use mlkc_vfs::FileId;
 
@@ -147,6 +149,57 @@ impl BodyLowering<'_> {
         data
     }
 
+    /// The value a string literal holds, with the escapes of the language decoded.
+    ///
+    /// An escape the language has no meaning for is what a reader is told about, and what the
+    /// module wrote stands for the value there: a literal that holds one is read as far as it
+    /// can be read, and the rest of it is its value.
+    fn string_value(&mut self, token: &SyntaxToken) -> String {
+        // What a literal holds is the text between its quotes, which the syntax of the
+        // language reads; the range of that text is where the escapes are in the file.
+        let body = inner_string_text(token);
+        let range = body.source_range(token.text_trimmed_range());
+
+        let mut value = String::with_capacity(body.len().into());
+        let mut characters = body.char_indices();
+
+        while let Some((at, character)) = characters.next() {
+            if character != '\\' {
+                value.push(character);
+                continue;
+            }
+
+            // A literal the lexer could not close ends at a backslash: it is not an escape
+            // of anything, and it is kept as the text it is.
+            let Some((_, escaped)) = characters.next() else {
+                value.push(character);
+                break;
+            };
+
+            match escape(escaped) {
+                Some(character) => value.push(character),
+                None => {
+                    // What the module wrote stands for the value where the language has no
+                    // escape: the text keeps the sequence, and a reader is told about it.
+                    let sequence = format!("\\{escaped}");
+                    let start = range.start() + offset(at);
+                    let error = LoweringError::UnknownEscape {
+                        escape: sequence.clone(),
+                    };
+                    let diagnostic = LoweringDiag::new(
+                        error,
+                        Span::new(self.file(), TextRange::at(start, TextSize::of(&sequence))),
+                    );
+
+                    self.diagnostics.push(diagnostic);
+                    value.push_str(&sequence);
+                },
+            }
+        }
+
+        value
+    }
+
     /// Lowers a call.
     fn call(&mut self, call: &CallExpr) -> ExprId {
         let callee = self.optional(call.function().ok());
@@ -260,7 +313,9 @@ impl BodyLowering<'_> {
                     return self.missing();
                 };
 
-                Expr::Literal(Literal::Str(Interned::new_str(string_text(&token))))
+                let value = self.string_value(&token);
+
+                Expr::Literal(Literal::Str(Interned::new_str(&value)))
             },
         };
 
@@ -296,18 +351,6 @@ impl BodyLowering<'_> {
     }
 }
 
-/// The text a string literal holds, without the quotes around it.
-///
-/// The language has no escapes yet: the text of the literal is the text of the string, and a
-/// literal the lexer could not close keeps the quote it holds.
-fn string_text(token: &SyntaxToken) -> &str {
-    let text = token.text_trimmed();
-
-    text.strip_prefix('"')
-        .and_then(|text| text.strip_suffix('"'))
-        .unwrap_or(text)
-}
-
 /// The sign a token is, if the language has one.
 fn unary_operator(kind: SyntaxKind) -> Option<UnaryOp> {
     let operator = match kind {
@@ -317,6 +360,33 @@ fn unary_operator(kind: SyntaxKind) -> Option<UnaryOp> {
     };
 
     Some(operator)
+}
+
+/// The character an escape stands for, if the language has an escape of it.
+///
+/// The escapes are the ones a string cannot hold as they are: the quote that would close it,
+/// the backslash that opens an escape, and the line breaks and the tab that a source is read
+/// in rather than written in.
+fn escape(character: char) -> Option<char> {
+    let escaped = match character {
+        '\\' => '\\',
+        '"' => '"',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        '0' => '\0',
+        _ => return None,
+    };
+
+    Some(escaped)
+}
+
+/// A byte offset of a file, as the size the tree reads positions in.
+///
+/// A file is at most `u32::MAX` bytes, which is the size the tree holds it in, so an offset
+/// it holds fits here; one that does not is an offset no file has.
+fn offset(at: usize) -> TextSize {
+    TextSize::try_from(at).unwrap_or(TextSize::from(u32::MAX))
 }
 
 /// The operator a token is, if the language has one.

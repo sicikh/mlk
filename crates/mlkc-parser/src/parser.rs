@@ -10,6 +10,7 @@ use mlkc_parser_core::{
     AnyParse, NodeParse, Parser as ParserTrait, ParserContext, diagnostic::merge_diagnostics,
     event, token_source::TokenSource as TokenSourceTrait, tree_sink::LosslessTreeSink,
 };
+use mlkc_rowan::NodeCache;
 use mlkc_syntax::{MlkLanguage, SyntaxKind};
 use mlkc_syntax_factory::SyntaxFactory;
 
@@ -39,7 +40,10 @@ impl<'src> Parser<'src> {
 
     /// Consumes the parser and returns the tree of the source, with the diagnostics
     /// of the parser and of the lexer.
-    pub(crate) fn finish(self) -> AnyParse {
+    ///
+    /// The green nodes of the tree are the ones `cache` holds where it holds them, and the
+    /// ones this parse writes into it where it does not.
+    pub(crate) fn finish(self, cache: &mut NodeCache) -> AnyParse {
         // The text is borrowed from the caller of `from_str`, not from the token source,
         // so it stays alive after the token source is consumed below.
         let text = self.source.text();
@@ -54,7 +58,7 @@ impl<'src> Parser<'src> {
         let diagnostics = merge_diagnostics(lexer_diagnostics, parser_diagnostics);
 
         let mut sink: LosslessTreeSink<'_, MlkLanguage, SyntaxFactory> =
-            LosslessTreeSink::new(text, &trivia);
+            LosslessTreeSink::with_cache(text, &trivia, cache);
         event::process(&mut sink, events, diagnostics);
 
         let (root, diagnostics) = sink.finish();

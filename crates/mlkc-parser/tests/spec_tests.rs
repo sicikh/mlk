@@ -51,6 +51,10 @@ spec_tests! {
     // A module without items: the comment it holds belongs to the end of the file.
     comments: "valid/comments.mlk",
 
+    // Strings: what a backslash escapes is part of the literal, and the literal ends at the
+    // quote that is not escaped.
+    strings: "valid/strings.mlk",
+
     // A `let` without its `in`: the binding expression is parsed and the diagnostic points
     // at the place where the body was supposed to start.
     missing_in: "invalid/missing_in.mlk",

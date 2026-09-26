@@ -64,7 +64,7 @@ spec_tests! {
     imports: "valid/imports.mlk",
 
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
-    // operator rather than a sign.
+    // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",
 
     // A module that declares one name twice: the lowering reports it, and the item tree holds
@@ -113,6 +113,10 @@ spec_tests! {
     // One parameter name declared twice: the parameters of a function are what its body
     // binds, and a name a body reads is one name.
     duplicate_parameter_name: "invalid/duplicate_parameter_name.mlk",
+
+    // An escape the language has no meaning for: the value keeps what the module wrote, and
+    // the sequence is what the lowering reports.
+    unknown_escape: "invalid/unknown_escape.mlk",
 
     // A name an import brings in is a name the module declares: the declaration is what the
     // name means, and the import is told about wherever either of them is written.

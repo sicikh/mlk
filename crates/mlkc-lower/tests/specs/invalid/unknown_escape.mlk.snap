@@ -1,0 +1,44 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// An escape the language has no meaning for: what the module wrote stands for the value
+// there, and the sequence is what the lowering reports.
+
+fun unknown(): String =
+    "a \q escape, a \z one, and a \n line break"
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  fun unknown  @2.0
+    visibility: private
+    ret: String -> unresolved
+```
+
+## Bodies
+
+```
+BODY fun unknown in module #0
+
+root expr#0
+exprs
+  expr#0  literal "a \\q escape, a \\z one, and a \n line break"
+```
+
+## Lowering Diagnostics
+
+183..185: the language has no escape `\q`
+196..198: the language has no escape `\z`
+
+## Parse Diagnostics
+
+No diagnostics.

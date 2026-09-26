@@ -314,7 +314,6 @@ fn strings() {
         STRING_LITERAL:5
     }
 
-    // There are no escapes yet: the string ends at the first quote.
     assert_lex! {
         r#""let""#,
         STRING_LITERAL:5
@@ -324,6 +323,32 @@ fn strings() {
         r#""abc""def""#,
         STRING_LITERAL:5,
         STRING_LITERAL:5
+    }
+}
+
+#[test]
+fn an_escaped_quote_does_not_end_a_string() {
+    // The string ends at the quote that is not escaped, whatever is written before it.
+    assert_lex! {
+        r#""a \" b""#,
+        STRING_LITERAL:8
+    }
+
+    assert_lex! {
+        r#""\\""#,
+        STRING_LITERAL:4
+    }
+
+    // A backslash escapes whatever follows it, and what it means is not read here: a
+    // sequence the language has no escape for is still part of the literal.
+    assert_lex! {
+        r#""\q \0""#,
+        STRING_LITERAL:7
+    }
+
+    assert_lex! {
+        r#""a\\\"b""#,
+        STRING_LITERAL:8
     }
 }
 
@@ -338,6 +363,27 @@ fn unterminated_string() {
     assert_lex! {
         "\"abc\nlet",
         ERROR_TOKEN:4,
+        NEWLINE:1,
+        LET_KW:3
+    }
+
+    // A quote that the string was escaped at is not the end of it, and a backslash with
+    // nothing after it is part of the run the lexer reports.
+    assert_lex! {
+        r#""a\""#,
+        ERROR_TOKEN:4
+    }
+
+    assert_lex! {
+        r#""ab\"#,
+        ERROR_TOKEN:4
+    }
+
+    // A backslash does not escape a line break: a literal is one line, and the backslash
+    // before the break is part of the run the lexer reports.
+    assert_lex! {
+        "\"a\\\nlet",
+        ERROR_TOKEN:3,
         NEWLINE:1,
         LET_KW:3
     }

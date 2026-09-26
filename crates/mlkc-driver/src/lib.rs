@@ -22,6 +22,18 @@
 //!   [`Parse`] is what [`mlkc_parser::parse`] returned, and nothing more:
 //!   the value and the diagnostics of the pass, stored as they came.
 //!
+//! # The green nodes of a parse
+//!
+//! A parse of a file is built through a table of green nodes, and the table it is built
+//! through is the one its own parse before it left ([`ParseSlot`]): the tokens that did not
+//! move are what the tree of a new revision shares with the tree of the old one, and a file
+//! shares them however many other files were parsed in between.
+//!
+//! One table for the whole project would not: a table holds the nodes of the parse it was
+//! last used for, so it shares a file with the file parsed just before it and with nothing
+//! else, and every parse of every file takes it mutably, which is a project parsed one file
+//! at a time.
+//!
 //! # Concurrency
 //!
 //! A pull takes `&mut self`, because it may compute, so the driver is not shared:
@@ -33,13 +45,18 @@
 //! Nothing read takes a lock on the driver, so a long pull cannot block a reader;
 //! and a pull a host abandons leaves the table as valid as it found it,
 //! because a slot is written only when its value is complete.
+//!
+//! The driver moves between threads as well, and so do the trees it handed out:
+//! everything it owns is `Send`, and a tree is `Sync` besides,
+//! which is what a host that owns the driver on a thread of its own relies on.
+//! The assertion at the end of this file is what keeps that true.
 
 use std::sync::Arc;
 
 use mlkc_diagnostics::Diagnostic;
 use mlkc_line_index::LineIndex;
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
-use mlkc_rowan::AstNode;
+use mlkc_rowan::{AstNode, NodeCache};
 use mlkc_syntax::{ModuleRoot, SyntaxNode};
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
@@ -49,8 +66,8 @@ use rustc_hash::FxHashMap;
 pub struct Driver {
     /// The state of every file a host has pushed.
     vfs: Vfs,
-    /// The parse of every file that has been parsed.
-    parses: FxHashMap<FileId, TextSlot<Parse>>,
+    /// The parse of every file that has been parsed, with the green nodes it was built through.
+    parses: FxHashMap<FileId, ParseSlot>,
     /// The diagnostics of every file that has been asked for them.
     diagnostics: FxHashMap<FileId, TextSlot<[Diagnostic]>>,
     /// The line index of every file whose positions have been read.
@@ -69,6 +86,23 @@ struct TextSlot<T: ?Sized> {
     value: Arc<T>,
 }
 
+/// The parse of one file, and the green nodes it was built through.
+///
+/// The nodes are kept next to the tree rather than in one table for the whole project. A
+/// table holds the nodes of the parse it was last used for, so one table for a project shares
+/// a file with the file parsed just before it, and nothing with its own earlier revisions: a
+/// file that is parsed, then another, then parsed again begins from nothing. One table per
+/// file is what makes a revision of a file share with the revision before it however many
+/// other files were parsed in between, and what lets the files of a project be parsed at once.
+struct ParseSlot {
+    /// The version of the contents the tree was built from.
+    version: FileVersion,
+    /// The tree, retained so that the driver can hand it out and compare it later.
+    value: Arc<Parse>,
+    /// The green nodes of the parse, which the next parse of this file shares.
+    cache: NodeCache,
+}
+
 /// The value of the parse slot: what the parser returned, whole.
 ///
 /// The tree is immutable and shared, so whoever holds it
@@ -83,9 +117,12 @@ impl Parse {
     /// This is the only place where the driver touches the parser:
     /// the value is stored as the parser produced it,
     /// which is what makes the slot's key the input of the pass.
-    fn of(source: &str) -> Self {
+    ///
+    /// The tree is built through `cache`, which is the table of the file this parse is of:
+    /// what the parse before it wrote is what this one shares.
+    fn of(source: &str, cache: &mut NodeCache) -> Self {
         Self {
-            parse: mlkc_parser::parse(source),
+            parse: mlkc_parser::parse_with_cache(source, cache),
         }
     }
 
@@ -177,15 +214,39 @@ impl Driver {
     /// [`Driver::file_state`] tells which of those it is.
     pub fn parse(&mut self, file: FileId) -> Option<Arc<Parse>> {
         let version = self.file_version(file);
-        let text = self.file_text(file);
 
         // There is nothing to back-date here: the parse is a function of the text,
         // and the tree of different text is a different tree.
         // The stages where a recomputation can end up equal to the retained value —
         // the item tree, the interface — are the ones that follow.
-        Self::text_derived(&mut self.parses, file, version, || {
-            text.map(|text| Arc::new(Parse::of(&text)))
-        })
+        if let Some(slot) = self.parses.get(&file)
+            && slot.version == version
+        {
+            return Some(slot.value.clone());
+        }
+
+        let Some(text) = self.file_text(file) else {
+            // There is no input left to describe, so the slot goes, and the green nodes of
+            // this file go with it: nothing is going to be parsed the way it was.
+            self.parses.remove(&file);
+            return None;
+        };
+
+        // The table this parse is built through is the one the parse before it left: the
+        // tokens that did not move are what the two revisions of this file share.
+        let mut cache = self
+            .parses
+            .remove(&file)
+            .map_or_else(NodeCache::default, |slot| slot.cache);
+        let value = Arc::new(Parse::of(&text, &mut cache));
+
+        self.parses.insert(file, ParseSlot {
+            version,
+            value: value.clone(),
+            cache,
+        });
+
+        Some(value)
     }
 
     /// The diagnostics of the parse of `file`, in the shape a host renders.
@@ -240,6 +301,10 @@ impl Driver {
 
     /// The value of a slot keyed by the version of a file,
     /// computed when the slot is missing or stale and remembered otherwise.
+    ///
+    /// The parse is the one stage whose slot does not have this shape: it keeps the green
+    /// nodes of the parse next to its value ([`ParseSlot`]), and that is what its own pull is
+    /// written out for.
     fn text_derived<T: ?Sized>(
         slots: &mut FxHashMap<FileId, TextSlot<T>>,
         file: FileId,
@@ -268,11 +333,25 @@ impl Driver {
     }
 }
 
+/// The driver, and the trees it hands out, cross threads.
+///
+/// The check is here rather than in a test so that a change to what the driver owns --- a
+/// value that holds a handle another thread cannot have --- is a change the build refuses.
+const _: fn() = || {
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
+    assert_send::<Driver>();
+    assert_send::<Parse>();
+    assert_sync::<Parse>();
+};
+
 #[cfg(test)]
 mod tests {
     use mlkc_diagnostics::{Category, Level};
     use mlkc_line_index::LineCol;
-    use mlkc_rowan::AstNodeList;
+    use mlkc_rowan::{AstNodeList, Direction};
+    use mlkc_syntax::{FUN_KW, SyntaxKind, SyntaxToken};
     use mlkc_text_size::TextLen;
     use mlkc_vfs::Change;
 
@@ -346,6 +425,88 @@ mod tests {
             &first,
             &driver.parse(file).expect("the file to be parsed")
         ));
+    }
+
+    /// The first token of a kind in a parse, which is what shows what the parses shared.
+    fn first_token(parse: &Parse, kind: SyntaxKind) -> SyntaxToken {
+        parse
+            .syntax()
+            .descendants_tokens(Direction::Next)
+            .find(|token| token.kind() == kind)
+            .expect("the tree to hold a token of that kind")
+    }
+
+    #[test]
+    fn a_revision_of_a_file_shares_the_tokens_it_did_not_edit() {
+        let (mut driver, file) = driver_with("main.mlk", MODULE);
+        let before = driver.parse(file).expect("the file to be parsed");
+
+        // A function written after the module: every token of the module is what it was.
+        let text = format!("{MODULE}\nfun added(): Unit =\n    1\n");
+        assert!(driver.set_file_text(path("main.mlk"), Some(text.clone())));
+
+        let after = driver.parse(file).expect("the file to be parsed");
+
+        assert_eq!(after.syntax().to_string(), text);
+        assert!(
+            first_token(&before, FUN_KW).key() == first_token(&after, FUN_KW).key(),
+            "the parse was not built through the nodes the parse before it left"
+        );
+    }
+
+    #[test]
+    fn the_parses_of_two_files_share_no_nodes() {
+        // The files are written the same way, and each is parsed through the nodes of its own
+        // parses: what one file shares is with the revision before it, and not with another
+        // file. That is the price of parsing the files of a project at once.
+        let (mut driver, first) = driver_with("one.mlk", MODULE);
+        driver.set_file_text(path("two.mlk"), Some(MODULE.to_string()));
+
+        let second = driver
+            .file_id(&path("two.mlk"))
+            .expect("the file to have an id");
+
+        let one = driver.parse(first).expect("the file to be parsed");
+        let two = driver.parse(second).expect("the file to be parsed");
+
+        assert!(first_token(&one, FUN_KW).key() != first_token(&two, FUN_KW).key());
+    }
+
+    #[test]
+    fn the_driver_and_the_trees_it_hands_out_cross_threads() {
+        let (mut driver, file) = driver_with("main.mlk", MODULE);
+        let before = driver.parse(file).expect("the file to be parsed");
+
+        // A tree is immutable and shared, so it is read anywhere: a host answers the requests
+        // that only read from the thread that asked, and the parsing to the thread that owns
+        // the driver.
+        let text = std::thread::spawn({
+            let before = before.clone();
+
+            move || before.syntax().to_string()
+        })
+        .join()
+        .expect("the thread not to panic");
+
+        assert_eq!(text, MODULE);
+
+        // The driver owns the green nodes of every file it parsed, and they move with it: a
+        // host may hand it to another thread, which is what lets the files of a project be
+        // parsed at once.
+        let (mut driver, text) = std::thread::spawn(move || {
+            let parse = driver.parse(file).expect("the file to be parsed");
+
+            (driver, parse.syntax().to_string())
+        })
+        .join()
+        .expect("the thread not to panic");
+
+        assert_eq!(text, MODULE);
+
+        // The driver comes back as it was: the parse of the file is the value it already was.
+        let after = driver.parse(file).expect("the file to be parsed");
+
+        assert!(Arc::ptr_eq(&before, &after), "the slot was built again");
     }
 
     #[test]

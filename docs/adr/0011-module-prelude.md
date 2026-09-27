@@ -21,11 +21,11 @@ The `std` project needs a prelude of its own, one that names its own modules
 (`use project.core.Int`), and it should not repeat that line in every module either.
 
 Second, the incrementality model is built on the claim
-that a module's meaning is a function of the module's own text ([ADR-0004][0004], [ADR-0008][0008]).
+that a module's meaning is a function of the module's own text ([ADR-0004][0004-module-system.md], [ADR-0008][0008-compiler-driver.md]).
 A prelude is project-wide configuration that changes what a module's text means,
 so where it enters the pipeline decides what it invalidates and what has to be in a key.
 
-Third, [ADR-0004][0004] forbids glob imports on purpose:
+Third, [ADR-0004][0004-module-system.md] forbids glob imports on purpose:
 with a glob, the names visible in a module depend on the _contents_ of another module.
 A prelude that is a glob would reintroduce exactly that dependency,
 so whatever the prelude is, it must be a fixed list of names,
@@ -44,9 +44,9 @@ and what does it mean for a name the module declares itself?
   and it must win silently: the prelude is a convenience, not a declaration the module made,
   so shadowing it is not a mistake to report.
 - The parse must stay a function of the file's text alone,
-  or the identity of a parse stops being the version of the text ([ADR-0007][0007], [ADR-0008][0008]).
+  or the identity of a parse stops being the version of the text ([ADR-0007][0007-vfs-file-state.md], [ADR-0008][0008-compiler-driver.md]).
 - The prelude must be an input of the pass that reads it and of no other,
-  and changing it must invalidate what depends on it without touching a parse ([ADR-0009][0009]).
+  and changing it must invalidate what depends on it without touching a parse ([ADR-0009][0009-pass-contract.md]).
 - `std` must be able to compile without the language prelude and with its own,
   and a single module must be able to refuse a prelude
   (the module that defines the prelude's names is the one that has to).
@@ -84,7 +84,7 @@ pub fn lower_module(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> L
 Lowering declares one `use` entity per import, with the path of the import as its data,
 after it has declared the module's own items.
 The order is the whole of the shadowing rule:
-what a module declares or imports first is what its names denote ([ADR-0010][0010]),
+what a module declares or imports first is what its names denote ([ADR-0010][0010-stable-entity-identity.md]),
 so a prelude entry that finds a name already taken is not recorded and nothing is reported.
 A module that declares `type Int` keeps meaning its own `Int`;
 a module that writes `use std.core.Int` keeps meaning that import;
@@ -113,7 +113,7 @@ a project whose prelude is empty gets nothing.
 
 ### A prelude entity is not written anywhere, and that is a property of the item tree
 
-The entities of a module are found in its syntax by a path of child slots ([ADR-0010][0010]),
+The entities of a module are found in its syntax by a path of child slots ([ADR-0010][0010-stable-entity-identity.md]),
 and a prelude import has no syntax.
 `Entity` therefore holds an `Option<ItemSyntaxLoc>`:
 `None` for an entity the module did not write, which today is exactly the prelude imports.
@@ -196,10 +196,10 @@ Prepend the text of the prelude's imports to the source and parse that.
 
 - Good, because it is trivial to implement.
 - Bad, because the parse would no longer be a function of the file's text,
-  which is what its key --- the `FileVersion` --- claims ([ADR-0007][0007]).
+  which is what its key --- the `FileVersion` --- claims ([ADR-0007][0007-vfs-file-state.md]).
 - Bad, because every range, every diagnostic, and every node of the tree
   would move by the length of the injected text, and a lossless tree
-  would hold text the file does not ([ADR-0002][0002]).
+  would hold text the file does not ([ADR-0002][0002-lossless-syntax-tree.md]).
 - Bad, because every host that shows the source would have to know
   that what is parsed is not what is written.
 
@@ -227,10 +227,10 @@ a name the module does not declare resolves to an anchor that names the path dir
   and the case is not an import: it is a path that has to be resolved on the spot.
 - Bad for incrementality: a signature that mentions a prelude name
   would have to carry either the resolved entity --- foreign data,
-  which [ADR-0010][0010] forbids an interface to hold ---
+  which [ADR-0010][0010-stable-entity-identity.md] forbids an interface to hold ---
   or the defining module's prelude configuration,
   which puts another module's configuration into every dependent's key
-  ([ADR-0008][0008]'s locality).
+  ([ADR-0008][0008-compiler-driver.md]'s locality).
 - Bad, because the module namespace, the import table, and the interface
   would each need a second way to say "this name comes from elsewhere".
 

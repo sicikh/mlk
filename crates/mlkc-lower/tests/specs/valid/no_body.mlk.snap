@@ -21,7 +21,7 @@ fun main() =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::no_body
 
 ITEM TREE
   type Int  @2.0

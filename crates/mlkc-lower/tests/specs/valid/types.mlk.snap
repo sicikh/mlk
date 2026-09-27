@@ -33,7 +33,7 @@ fun inferred(value: _): _ =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::types
 
 ITEM TREE
   fun qualified  @2.0

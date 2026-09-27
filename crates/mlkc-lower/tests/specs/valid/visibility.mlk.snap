@@ -27,7 +27,7 @@ fun private(value: Int): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::visibility
 
 ITEM TREE
   type Int  @2.0

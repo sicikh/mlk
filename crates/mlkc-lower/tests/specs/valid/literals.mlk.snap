@@ -28,7 +28,7 @@ fun subtracted(): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::literals
 
 ITEM TREE
   type Int  @2.0

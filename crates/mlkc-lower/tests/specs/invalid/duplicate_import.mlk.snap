@@ -17,7 +17,7 @@ use std::core::Int
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::duplicate_import
 
 ITEM TREE
   use Int  @2.0

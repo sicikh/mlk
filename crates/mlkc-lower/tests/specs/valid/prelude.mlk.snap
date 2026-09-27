@@ -21,7 +21,7 @@ fun unit(): Unit =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::prelude
 
 ITEM TREE
   type Unit  @2.0

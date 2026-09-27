@@ -25,7 +25,7 @@ fun main(): Unit =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::hello
 
 ITEM TREE
   type Unit  @2.0

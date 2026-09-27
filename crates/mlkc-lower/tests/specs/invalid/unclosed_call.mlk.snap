@@ -16,7 +16,7 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::unclosed_call
 
 ITEM TREE
   fun main  @2.0

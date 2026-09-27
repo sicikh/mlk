@@ -18,7 +18,7 @@ fun max(left: Int, right: Int): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::builtin_with_body
 
 ITEM TREE
   fun max  @2.0

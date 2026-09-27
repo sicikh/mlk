@@ -28,7 +28,7 @@ fun misused(): helper =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::namespaces
 
 ITEM TREE
   type Box  @2.0

@@ -19,7 +19,7 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::unknown_attribute
 
 ITEM TREE
   type Int  @2.0

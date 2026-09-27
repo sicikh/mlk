@@ -15,7 +15,7 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::missing_body_expr
 
 ITEM TREE
   fun main  @2.0

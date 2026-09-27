@@ -3,11 +3,11 @@
 use mlkc_hir_def::{
     Attributes, BodyEntityLoc, ClassData, ClassLoc, EntityData, EntityLoc, FunctionData,
     FunctionLoc, ItemLoc, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, LocalTarget, ModuleAttributes,
-    ModuleId, Name, PlainPathId, Prelude, UseData, UseLoc, Visibility,
+    ModuleId, Name, PathRoot, PlainPath, PlainPathId, Prelude, UseData, UseLoc, Visibility,
 };
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl, UseDecl};
-use mlkc_vfs::FileId;
+use mlkc_vfs::{FileId, RelPath};
 
 use crate::{
     BodyDecl, LoweredModule, LoweringDiag, LoweringError, decl, path,
@@ -20,8 +20,17 @@ use crate::{
 /// declared after the items of the module, so that what the module says of itself is what its
 /// names denote ([ADR-0011][adr-0011]).
 ///
+/// `relative` is where the file of the module stands: the path of the file under the root of
+/// the project it is in, or the name of the file itself when it stands in none. It is what the
+/// module is called when it declares no path of its own.
+///
 /// [adr-0011]: ../../docs/adr/0011-module-prelude.md
-pub(crate) fn lower(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> LoweredModule {
+pub(crate) fn lower(
+    module: ModuleId,
+    root: &ModuleRoot,
+    prelude: &Prelude,
+    relative: &RelPath,
+) -> LoweredModule {
     let file = module.0;
     let mut lowering = ItemLowering {
         root,
@@ -31,7 +40,7 @@ pub(crate) fn lower(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> L
         bodies: Vec::new(),
     };
 
-    let attributes = lowering.preamble();
+    let attributes = lowering.preamble(relative);
     lowering.items();
     lowering.prelude(prelude, attributes);
 
@@ -55,6 +64,41 @@ pub(crate) fn lower(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> L
         diagnostics,
         bodies: lowering.bodies,
     }
+}
+
+/// The path a module is called by, read from where its file stands in its project.
+///
+/// The names of a module are the names of the directories its file is under, and the name of
+/// the file itself: the file `lib/arith.mlk` of a project is the module `project::lib::arith`.
+/// The path is rooted at the project, which is what the file stands in, and the extension of
+/// the file is not a name of the module: it is what says that the file is a file of the
+/// language. A path that names no file names no module.
+fn module_path(relative: &RelPath) -> Option<PlainPath> {
+    let file = relative.as_utf8_path();
+
+    // The name of the file, without the extension of it, is the last name of the module.
+    let mut names = vec![Name::new(file.file_stem()?)];
+
+    // And the names before it are the names of the directories the file is under, from the
+    // innermost outwards, which is the order the path is walked in.
+    let mut directory = file.parent();
+
+    while let Some(place) = directory {
+        // What stands before the file and is not a name --- the root of the file system, or
+        // nothing at all --- is where the project is, and a path is rooted at the project
+        // rather than at a name of it.
+        let Some(name) = place.file_name() else {
+            break;
+        };
+
+        names.push(Name::new(name));
+        directory = place.parent();
+    }
+
+    // A path is written outermost first, and the names were read the other way round.
+    names.reverse();
+
+    Some(PlainPath::from_root(PathRoot::Project, names))
 }
 
 /// The names that an import brings in and the module declares.
@@ -154,23 +198,32 @@ impl ItemLowering<'_> {
     /// Records what the preamble of the module says: its path, and what it says about itself
     /// as a whole, which is what the caller gets back.
     ///
-    /// A module that has no preamble declares no path: what it is called is what the project
-    /// it belongs to says, and the path of the file is the canonical form of that.
-    fn preamble(&mut self) -> ModuleAttributes {
-        let Some(preamble) = self.root.preamble() else {
-            return ModuleAttributes::default();
-        };
-
+    /// A module that declares no path --- one with no preamble, or one whose path the parser
+    /// could not read --- is called what its file is called: where a file stands is the
+    /// canonical path of the module, and `relative` is that place.
+    fn preamble(&mut self, relative: &RelPath) -> ModuleAttributes {
         // What the module says about itself is read whether or not the path is there: a
         // preamble whose path could not be read still says what it says of the module.
-        let attributes = self.attributes(&preamble.attributes());
-        self.builder.set_attributes(attributes);
+        let (attributes, declared) = match self.root.preamble() {
+            Some(preamble) => {
+                let attributes = self.attributes(&preamble.attributes());
+                self.builder.set_attributes(attributes);
 
-        // A preamble whose path the parser could not read declares nothing: a path of no
-        // segments names nothing, and the parse is what reported the mistake.
-        if let Ok(path) = preamble.name() {
-            self.plain_path(&path);
-            self.builder.set_path(PlainPathId::new(path::plain(&path)));
+                // A preamble whose path the parser could not read declares nothing: a path of no
+                // segments names nothing, and the parse is what reported the mistake.
+                let declared = preamble.name().ok().map(|path| {
+                    self.plain_path(&path);
+
+                    path::plain(&path)
+                });
+
+                (attributes, declared)
+            },
+            None => (ModuleAttributes::default(), None),
+        };
+
+        if let Some(path) = declared.or_else(|| module_path(relative)) {
+            self.builder.set_path(PlainPathId::new(path));
         }
 
         attributes
@@ -503,7 +556,7 @@ mod tests {
         ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, PathAnchor,
         PlainPath, TypeRef,
     };
-    use mlkc_vfs::FileId;
+    use mlkc_vfs::{FileId, RelPathBuf};
 
     use super::*;
 
@@ -550,7 +603,21 @@ fun same(left: Int, left: Int): Int =
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
 
-        crate::lower_module(module(), &root, prelude)
+        crate::lower_module(module(), &root, prelude, relative("main.mlk").as_path())
+    }
+
+    /// The lowering of a module whose file stands at `place`.
+    fn lower_at(source: &str, place: &str) -> LoweredModule {
+        let parsed = mlkc_parser::parse(source);
+        let root = parsed.tree::<ModuleRoot>();
+
+        crate::lower_module(module(), &root, &Prelude::none(), relative(place).as_path())
+    }
+
+    /// The path of a file, as the lowering is given it: relative to the root of the project the
+    /// module is in, or the name of the file alone when it stands in no project.
+    fn relative(name: &str) -> RelPathBuf {
+        RelPathBuf::try_from(name).expect("a relative path")
     }
 
     /// The name of the entity a name of the module denotes in `namespace`.
@@ -575,6 +642,46 @@ fun same(left: Int, left: Int): Int =
 
     fn function(tree: &ItemTree, name: &str) -> FunctionLoc {
         FunctionLoc::try_from(item(tree, Namespace::Value, name)).expect("a function")
+    }
+
+    #[test]
+    fn a_module_that_declares_no_path_is_called_by_where_its_file_stands() {
+        // A file of a project is a module of it, and the names of the directories the file is
+        // under are the names before its own: `lib/arith.mlk` is `project::lib::arith`.
+        let lowered = lower_at("fun main(): Unit = 1\n", "lib/arith.mlk");
+
+        assert_eq!(called_by(&lowered), "project::lib::arith");
+
+        // The extension of the file is not a name of the module.
+        let lowered = lower_at("fun main(): Unit = 1\n", "arith.mlk");
+
+        assert_eq!(called_by(&lowered), "project::arith");
+
+        // What the module writes is what it is called: a preamble is the path, and the file it
+        // is written in is not one when the module declares another.
+        let lowered = lower_at(
+            "module project::other\n\nfun main(): Unit = 1\n",
+            "arith.mlk",
+        );
+
+        assert_eq!(called_by(&lowered), "project::other");
+
+        // A file that stands in no project is called by the name of its file, and a path that
+        // names no file at all names no module either.
+        assert_eq!(called_by(&lower("fun main(): Unit = 1\n")), "project::main");
+        assert_eq!(
+            lower_at("fun main(): Unit = 1\n", "").item_tree.path(),
+            None
+        );
+    }
+
+    /// The path a lowered module is called by.
+    fn called_by(lowered: &LoweredModule) -> String {
+        lowered
+            .item_tree
+            .path()
+            .expect("the module to be called by a path")
+            .to_string()
     }
 
     #[test]

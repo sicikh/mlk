@@ -49,7 +49,7 @@ fun summed(left: Int, right: Int): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::pipelines
 
 ITEM TREE
   type Int  @2.0

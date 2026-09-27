@@ -21,7 +21,7 @@ fun open(handle: Handle): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::extern_misuse
 
 ITEM TREE
   type Handle  @2.0

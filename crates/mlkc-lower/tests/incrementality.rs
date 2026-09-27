@@ -15,7 +15,7 @@ use mlkc_hir_def::{
 use mlkc_lower::{LoweredModule, lower_body, lower_module};
 use mlkc_parser_core::AnyParse;
 use mlkc_syntax::ModuleRoot;
-use mlkc_vfs::FileId;
+use mlkc_vfs::{FileId, RelPathBuf};
 
 /// A function, another one, and nothing between them.
 const TWO_FUNCTIONS: &str = "\
@@ -56,6 +56,12 @@ fun Box(): Int = 1
 fun use_box(): Int = Box
 ";
 
+/// The path of the file the modules here are lowered from: the modules stand in no project,
+/// and a module of none is called by the name of its file.
+fn relative() -> RelPathBuf {
+    RelPathBuf::try_from("main.mlk").expect("a relative path")
+}
+
 fn parse(source: &str) -> AnyParse {
     mlkc_parser::parse(source)
 }
@@ -65,7 +71,12 @@ fn lower(source: &str) -> LoweredModule {
     let root = parsed.tree::<ModuleRoot>();
 
     // A prelude is not what this is about: the modules here are lowered without one.
-    lower_module(ModuleId(FileId::from_raw(0)), &root, &Prelude::none())
+    lower_module(
+        ModuleId(FileId::from_raw(0)),
+        &root,
+        &Prelude::none(),
+        relative().as_path(),
+    )
 }
 
 /// The anchor of a name the module declares where a value belongs, which is what a dependent

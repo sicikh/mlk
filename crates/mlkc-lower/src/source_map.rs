@@ -56,12 +56,18 @@ impl BodySourceMap {
 mod tests {
     use mlkc_hir_def::{Expr, ModuleId, Pat, PathAnchor, Prelude};
     use mlkc_syntax::{ModuleRoot, TextRange, TextSize};
-    use mlkc_vfs::FileId;
+    use mlkc_vfs::{FileId, RelPathBuf};
 
     use crate::{LoweredBody, lower_body, lower_module};
 
     /// The file a fixture is lowered as.
     const FILE: FileId = FileId::from_raw(0);
+
+    /// The path of the file a fixture is lowered from, which is what its module is called by:
+    /// the fixtures stand in no project, and a module of none is called by the name of its file.
+    fn relative() -> RelPathBuf {
+        RelPathBuf::try_from("main.mlk").expect("a relative path")
+    }
 
     /// The range `text` is written at in `source`.
     fn at(source: &str, text: &str) -> TextRange {
@@ -76,7 +82,12 @@ mod tests {
     fn body_of(source: &str) -> LoweredBody {
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
-        let module = lower_module(ModuleId(FILE), &root, &Prelude::none());
+        let module = lower_module(
+            ModuleId(FILE),
+            &root,
+            &Prelude::none(),
+            relative().as_path(),
+        );
         let decl = module.bodies.first().expect("a function with a body");
 
         lower_body(&module.item_tree, &decl.decl).expect("a body to be lowered")

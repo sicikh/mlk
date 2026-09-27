@@ -22,7 +22,7 @@ use std::geometry::Point
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::import_of_declared_name
 
 ITEM TREE
   use Handle  @2.0

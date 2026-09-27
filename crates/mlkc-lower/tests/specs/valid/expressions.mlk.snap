@@ -44,7 +44,7 @@ fun qualified_call(): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::expressions
 
 ITEM TREE
   type Int  @2.0

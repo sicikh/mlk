@@ -32,7 +32,7 @@ use mlkc_lower::{LoweredBody, LoweredModule, lower_body, lower_module, syntax_at
 use mlkc_parser_core::AnyParse;
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{FunDecl, ModuleRoot};
-use mlkc_vfs::FileId;
+use mlkc_vfs::{FileId, RelPathBuf};
 
 /// The directory of the tests of this crate.
 ///
@@ -51,7 +51,8 @@ pub(crate) const SPECS_DIR: &str = "specs";
 /// The file a fixture is lowered as.
 ///
 /// One module per fixture: what is lowered of a module is what the module's own text says,
-/// and the file it is read from is what the names inside it are names in.
+/// and the file it is read from is what the names inside it are names in --- the fixture is
+/// a file of no project, and a module of none is called by the name of its own file.
 const FIXTURE_FILE: FileId = FileId::from_raw(0);
 
 /// What the lowering of a fixture is expected to be.
@@ -75,18 +76,25 @@ pub(crate) fn run(fixture: &str) {
     let parsed = mlkc_parser::parse(&source);
     let root = parsed.tree::<ModuleRoot>();
 
-    let lowered = lower_module(ModuleId(FIXTURE_FILE), &root, Prelude::standard());
+    let file_name = path
+        .file_name()
+        .expect("the fixture to have a name")
+        .to_str()
+        .expect("the name of the fixture to be UTF-8");
+    let relative = RelPathBuf::try_from(file_name).expect("a file name to be a relative path");
+
+    let lowered = lower_module(
+        ModuleId(FIXTURE_FILE),
+        &root,
+        Prelude::standard(),
+        relative.as_path(),
+    );
     let bodies = bodies(&lowered);
 
     assert_outcome(&parsed, &lowered, &bodies, outcome_of(fixture), &path);
     assert_positions(&root, &lowered);
 
     let snapshot = snapshot(&source, &parsed, &lowered, &bodies);
-    let file_name = path
-        .file_name()
-        .expect("the fixture to have a name")
-        .to_str()
-        .expect("the name of the fixture to be UTF-8");
     let directory = Path::new(fixture)
         .parent()
         .expect("the fixture to be in a directory");

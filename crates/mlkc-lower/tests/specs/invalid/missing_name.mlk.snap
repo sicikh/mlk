@@ -19,7 +19,7 @@ fun after(): Int = 3
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::missing_name
 
 ITEM TREE
   fun <missing>  @2.0

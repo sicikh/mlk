@@ -48,7 +48,7 @@ mod vfs_path;
 use std::{fmt, hash::BuildHasherDefault, mem, sync::Arc};
 
 use indexmap::{IndexMap, map::Entry};
-pub use mlkc_paths::{AbsPath, AbsPathBuf};
+pub use mlkc_paths::{AbsPath, AbsPathBuf, RelPath, RelPathBuf};
 use rustc_hash::FxHasher;
 use tracing::{Level, span};
 

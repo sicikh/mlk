@@ -533,8 +533,9 @@ mod tests {
             .as_array()
             .expect("the HIR to hold lines");
 
-        // The module is read first, and it is a line about nothing a host can mark.
-        assert_eq!(nodes[0]["text"], "MODULE #0");
+        // The module is read first, and it is a line about nothing a host can mark: the file
+        // stands in no project, and the module is called by the name of its file.
+        assert_eq!(nodes[0]["text"], "MODULE #0 project::main");
         assert_eq!(nodes[0]["kind"], "module");
         assert!(nodes[0]["range"].is_null());
 

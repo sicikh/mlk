@@ -17,7 +17,7 @@ fun handle(value: project[Int]::Handle): project[String]::Handle =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::project_with_type_args
 
 ITEM TREE
   fun handle  @2.0

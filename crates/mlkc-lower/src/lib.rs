@@ -11,7 +11,8 @@
 //! # What lowering does
 //!
 //! - it reads the preamble of a module: the path the module declares itself as, and what the
-//!   module says about itself as a whole;
+//!   module says about itself as a whole. A module that declares no path of its own is called
+//!   by where its file stands, which is what the caller hands it;
 //! - it reads the items of a module and declares each of them with the data a dependent may
 //!   read: the attributes a declaration carries, its visibility, the signature of a function,
 //!   the path an import names;
@@ -47,13 +48,19 @@
 //! ```
 //! use mlkc_hir_def::{Namespace, PathAnchor, Prelude};
 //! use mlkc_lower::{ModuleId, lower_body, lower_module};
-//! use mlkc_vfs::FileId;
+//! use mlkc_vfs::{FileId, RelPathBuf};
 //!
 //! let source = "fun main(): Int = 1\n";
 //! let parse = mlkc_parser::parse(source);
 //! let root = parse.tree::<mlkc_syntax::ModuleRoot>();
+//! let relative = RelPathBuf::try_from("main.mlk").expect("a relative path");
 //!
-//! let lowered = lower_module(ModuleId(FileId::from_raw(0)), &root, Prelude::standard());
+//! let lowered = lower_module(
+//!     ModuleId(FileId::from_raw(0)),
+//!     &root,
+//!     Prelude::standard(),
+//!     relative.as_path(),
+//! );
 //! assert!(lowered.diagnostics.is_empty());
 //!
 //! // The surface of the module: its entities, their names, and their data.
@@ -104,6 +111,7 @@ use std::fmt;
 pub use mlkc_hir_def::{Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId, Prelude};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{FunDecl, ModuleRoot};
+use mlkc_vfs::RelPath;
 
 pub use crate::{
     diagnostic::{LoweringDiag, LoweringError},
@@ -167,9 +175,20 @@ pub struct LoweredBody {
 /// `#[no-prelude]`, the imports of the prelude are declared after the items of the module, so
 /// that what the module writes is what its names denote ([ADR-0011]).
 ///
+/// `relative` is where the file of the module stands: the path of the file under the root of
+/// the project it is in --- `lib/arith.mlk` --- or the name of the file itself when it stands
+/// in none. It is what the module is called when it declares no path of its own: a file of a
+/// project is a module of it, and the place the file stands at is the canonical path of the
+/// module (`project::lib::arith`).
+///
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
-pub fn lower_module(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> LoweredModule {
-    item::lower(module, root, prelude)
+pub fn lower_module(
+    module: ModuleId,
+    root: &ModuleRoot,
+    prelude: &Prelude,
+    relative: &RelPath,
+) -> LoweredModule {
+    item::lower(module, root, prelude, relative)
 }
 
 /// Lowers the body of a function, or nothing if the declaration declares no body.

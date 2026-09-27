@@ -575,9 +575,15 @@ mod tests {
     use mlkc_hir_def::{ItemLocLike, ModuleId, Name, Namespace, PathAnchor, Prelude};
     use mlkc_rowan::AstNode;
     use mlkc_syntax::ModuleRoot;
-    use mlkc_vfs::FileId;
+    use mlkc_vfs::{FileId, RelPathBuf};
 
     use super::*;
+
+    /// The path of the file these tests read a module from, which is what the module is called
+    /// by: the modules here stand in no project, and a module of none is called by its name.
+    fn relative() -> RelPathBuf {
+        RelPathBuf::try_from("main.mlk").expect("a relative path")
+    }
 
     /// A declaration that declares no body, and one that declares a body.
     const SOURCE: &str = "\
@@ -610,7 +616,12 @@ fun main(): Int = 1
     fn a_declaration_that_declares_no_body_has_no_body() {
         let parsed = mlkc_parser::parse(SOURCE);
         let root = parsed.tree::<ModuleRoot>();
-        let lowered = crate::lower_module(ModuleId(FileId::from_raw(0)), &root, &Prelude::none());
+        let lowered = crate::lower_module(
+            ModuleId(FileId::from_raw(0)),
+            &root,
+            &Prelude::none(),
+            relative().as_path(),
+        );
 
         // The work list holds the declaration of a body.
         assert_eq!(lowered.bodies.len(), 1);

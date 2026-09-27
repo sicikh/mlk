@@ -21,7 +21,7 @@ fun open(): Int
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::repeated_attribute
 
 ITEM TREE
   type Int  @2.0

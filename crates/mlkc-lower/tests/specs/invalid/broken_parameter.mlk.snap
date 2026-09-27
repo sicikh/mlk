@@ -17,7 +17,7 @@ fun after(): Unit = 2
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::broken_parameter
 
 ITEM TREE
   fun broken  @2.0

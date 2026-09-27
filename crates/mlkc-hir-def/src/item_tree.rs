@@ -160,11 +160,12 @@ impl ItemTree {
         self.attributes
     }
 
-    /// The path the module declares itself as, if the module has a preamble.
+    /// The path the module is called by, if it is called by one.
     ///
     /// It is a claim about the file rather than an item of it: the module is named by its file
-    /// ([`ModuleId`]), the preamble is the path the project knows it by ---
-    /// `project::main-module` --- and what checks that the two agree is the project.
+    /// ([`ModuleId`]), the path is what the project knows it by --- `project::main-module` ---
+    /// and a module that declares no path of its own is called by where its file stands in its
+    /// project. What checks that the two agree is the project.
     pub fn path(&self) -> Option<PlainPathId> {
         self.path.clone()
     }

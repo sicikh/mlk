@@ -17,7 +17,7 @@ fun broken(project: Int): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::project_where_a_pattern_belongs
 
 ITEM TREE
   fun broken  @2.0

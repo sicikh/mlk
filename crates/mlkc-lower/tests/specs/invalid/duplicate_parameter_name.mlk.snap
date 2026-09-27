@@ -22,7 +22,7 @@ fun different(left: Int, right: Int): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::duplicate_parameter_name
 
 ITEM TREE
   type Int  @2.0

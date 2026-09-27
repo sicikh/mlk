@@ -22,7 +22,7 @@ pub fun ignored(_) =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::public_without_signature
 
 ITEM TREE
   fun size  @2.0

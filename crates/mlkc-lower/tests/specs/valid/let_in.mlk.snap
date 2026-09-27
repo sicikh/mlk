@@ -32,7 +32,7 @@ fun shadows_a_parameter(x: Int): Int =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::let_in
 
 ITEM TREE
   type Int  @2.0

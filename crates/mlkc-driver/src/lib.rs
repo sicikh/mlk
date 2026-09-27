@@ -42,6 +42,11 @@
 //! rather than a host's ([`mlkc_stdlib`]): a host records it with [`Driver::use_std`], and a
 //! host that shows it to a person --- the editor --- shows the files it was handed.
 //!
+//! A project also says where its modules stand: the path of a file under the directory the
+//! project is rooted at is the place the module is called by, unless the module declares a
+//! path of its own ([`Driver::module_path`]). A module no project claims stands in no tree,
+//! and is called by the name of its file.
+//!
 //! # The green nodes of a parse
 //!
 //! A parse of a file is built through a table of green nodes, and the table it is built
@@ -83,7 +88,7 @@ use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at}
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
 use mlkc_rowan::{AstNode, NodeCache};
 use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, SyntaxNode, TextRange};
-use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, Vfs, VfsPath};
+use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, RelPath, RelPathBuf, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
 
 /// One file of the standard library: the path a driver keeps a module under, and its source.
@@ -226,8 +231,11 @@ impl Lowered {
     ///
     /// The HIR of a module is lowered in two steps, and this is both of them: the surface of
     /// the module, and then each body, from the declaration it is written in.
-    fn of(module: ModuleId, root: &ModuleRoot, prelude: &Prelude) -> Self {
-        let lowered = lower_module(module, root, prelude);
+    ///
+    /// `relative` is where the file of the module stands, which is what the module is called
+    /// when it declares no path of its own: see [`Driver::module_path`].
+    fn of(module: ModuleId, root: &ModuleRoot, prelude: &Prelude, relative: &RelPath) -> Self {
+        let lowered = lower_module(module, root, prelude, relative);
 
         // An entity the module did not write --- a prelude import --- is written nowhere, and
         // a host is given no range for it.
@@ -614,6 +622,11 @@ impl Driver {
 
         let version = self.file_version(file);
 
+        // Where the module stands, which is what it is called when it declares no path of its
+        // own. It is read before the slot is taken: the lowering holds the slot of the HIR
+        // while it runs.
+        let relative = self.module_path(ModuleId(file));
+
         Self::text_derived(&mut self.lowered, file, version, || {
             let root = parse.module_root()?;
             let module = ModuleId(file);
@@ -622,7 +635,48 @@ impl Driver {
             // prelude of the language for a module no project claims.
             let prelude = self.projects.prelude_of(module);
 
-            Some(Arc::new(Lowered::of(module, &root, prelude)))
+            Some(Arc::new(Lowered::of(
+                module,
+                &root,
+                prelude,
+                relative.as_path(),
+            )))
+        })
+    }
+
+    /// Where a module stands: the path of its file under the directory the file the project
+    /// starts from is written in, which is what the project is rooted at.
+    ///
+    /// The module `lib/arith.mlk` of a project rooted at `main.mlk` is the module
+    /// `project::lib::arith`, and `main.mlk` itself is `project::main`: a module is called by
+    /// the place its file stands at, whether or not it declares a path of its own.
+    ///
+    /// A module no project claims stands in no tree, and neither does a file that stands
+    /// outside the directory its project is rooted in: a module of either is called by the
+    /// name of its file, since the name of the file is all there is to say where it stands.
+    fn module_path(&self, module: ModuleId) -> RelPathBuf {
+        let file = self.vfs.file_path(module.0);
+
+        self.project_directory(module)
+            .and_then(|directory| file.strip_prefix(&directory))
+            .map_or_else(|| file_name(file), RelPath::to_path_buf)
+    }
+
+    /// The directory a project is rooted at: the directory the file it starts from is written
+    /// in, or nothing for a module no project claims.
+    ///
+    /// A project may be rooted where the file system is: the file it starts from may be
+    /// written at the root itself, which a virtual path spells as an empty path. What a path
+    /// under it is read from is the root, and a path is read relative to it.
+    fn project_directory(&self, module: ModuleId) -> Option<VfsPath> {
+        let project = self.projects.project_of(module)?;
+        let root = self.projects.project(project)?.root_module;
+        let directory = self.vfs.file_path(root.0).parent()?;
+
+        Some(if directory.to_string().is_empty() {
+            VfsPath::new_virtual_path("/".to_owned())
+        } else {
+            directory
         })
     }
 
@@ -733,6 +787,22 @@ impl Driver {
         self.lowered.remove(&module.0);
         self.diagnostics.remove(&module.0);
     }
+}
+
+/// The path of a file under the directory it is written in: the name of the file itself.
+///
+/// This is what a module whose file stands in no tree is called by. The extension is kept ---
+/// it is what says that the file is a file of the language, and it is lowering that leaves it
+/// out of the name of the module --- and a path that names no file, such as the root of the
+/// file system, is read as naming no module at all.
+fn file_name(path: &VfsPath) -> RelPathBuf {
+    let name = match path.name_and_extension() {
+        Some((stem, Some(extension))) => format!("{stem}.{extension}"),
+        Some((stem, None)) => stem.to_owned(),
+        None => String::new(),
+    };
+
+    RelPathBuf::try_from(name.as_str()).expect("the name of a file to be a relative path")
 }
 
 /// The driver, and the trees it hands out, cross threads.
@@ -1048,6 +1118,61 @@ mod tests {
         );
         let parsed_again = driver.parse(file).expect("the file to be parsed");
         assert!(Arc::ptr_eq(&parse, &parsed_again), "the parse was not kept");
+    }
+
+    #[test]
+    fn a_module_is_called_by_where_its_file_stands() {
+        let (mut driver, main) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        let lib = path("lib/arith.mlk");
+
+        driver.set_file_text(lib.clone(), Some("fun size(): Int =\n    1\n".to_string()));
+        let lib = driver.file_id(&lib).expect("the file to have an id");
+
+        // A project is rooted where the file it starts from is written, and a file of it is
+        // a module of it: what is left of the place of a file after that directory is the path
+        // the module is called by.
+        assert!(driver.set_project(project(), ProjectData::new(ModuleId(main))));
+        assert!(driver.set_module_project(ModuleId(lib), project()));
+
+        let root = driver.lower(main).expect("the file to be lowered");
+        let module = driver.lower(lib).expect("the file to be lowered");
+
+        assert_eq!(called_by(&root), "project::main");
+        assert_eq!(called_by(&module), "project::lib::arith");
+
+        // A file no project claims stands in no tree, and is called by the name of its file:
+        // a module a host pushes on its own is the module the file it is written in is called.
+        let (mut driver, lone) = driver_with("lone.mlk", "fun main(): Int =\n    1\n");
+        let lowered = driver.lower(lone).expect("the file to be lowered");
+
+        assert_eq!(called_by(&lowered), "project::lone");
+
+        // A file that stands outside the directory its project is rooted in stands in no tree
+        // of it either, and is called the same way.
+        let (mut driver, root) = driver_with("lib/main.mlk", "fun main(): Int =\n    1\n");
+        let outside = path("main.mlk");
+
+        driver.set_file_text(
+            outside.clone(),
+            Some("fun size(): Int =\n    1\n".to_string()),
+        );
+        let outside = driver.file_id(&outside).expect("the file to have an id");
+
+        assert!(driver.set_project(project(), ProjectData::new(ModuleId(root))));
+        assert!(driver.set_module_project(ModuleId(outside), project()));
+
+        let lowered = driver.lower(outside).expect("the file to be lowered");
+
+        assert_eq!(called_by(&lowered), "project::main");
+    }
+
+    /// The path a lowered module is called by.
+    fn called_by(lowered: &Lowered) -> String {
+        lowered
+            .item_tree()
+            .path()
+            .expect("the module to be called by a path")
+            .to_string()
     }
 
     #[test]

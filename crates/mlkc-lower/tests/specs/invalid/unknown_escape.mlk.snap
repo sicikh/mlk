@@ -16,7 +16,7 @@ fun unknown(): String =
 ## Item Tree
 
 ```
-MODULE #0
+MODULE #0 project::unknown_escape
 
 ITEM TREE
   fun unknown  @2.0

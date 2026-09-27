@@ -901,7 +901,10 @@ function report(page, problems, warnings, asked) {
                 page.astHover.marked.trim().length >
                     page.hover.marked.trim().length,
         ],
-        ["the hir is headed by the module", page.hir.module === "MODULE #0"],
+        [
+            "the hir is headed by the module and the path it is called by",
+            page.hir.module === "MODULE #0 project::main",
+        ],
         ["the hir names the items of the module", page.hir.item],
         ["the hir reads a body", page.hir.body],
         [

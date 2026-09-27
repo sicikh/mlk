@@ -164,7 +164,7 @@ pub struct LoweredBody {
 /// resolves to that entity.
 ///
 /// `prelude` is what the module is given without writing it: unless the module says
-/// `@no-prelude`, the imports of the prelude are declared after the items of the module, so
+/// `#[no-prelude]`, the imports of the prelude are declared after the items of the module, so
 /// that what the module writes is what its names denote ([ADR-0011]).
 ///
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md

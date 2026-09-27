@@ -240,7 +240,8 @@ fn keywords_are_not_identifiers() {
 #[test]
 fn punctuators() {
     assert_lex! {
-        "@(),:.{}[];=",
+        "#@(),:.{}[];=",
+        HASH:1,
         AT:1,
         L_PAREN:1,
         R_PAREN:1,
@@ -258,6 +259,16 @@ fn punctuators() {
     assert_lex! {
         "->",
         ARROW:2
+    }
+
+    // Two colons together are one token, and a colon is what a lone one is: the longest
+    // match wins, so `::` is never read as two of them.
+    assert_lex! {
+        ":::: :",
+        COLON_COLON:2,
+        COLON_COLON:2,
+        WHITESPACE:1,
+        COLON:1
     }
 }
 

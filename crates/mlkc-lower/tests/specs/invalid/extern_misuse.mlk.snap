@@ -5,14 +5,14 @@ expression: snapshot
 ## Input
 
 ```mlk
-// `@extern` on a function that declares a body, and on a type: an external function is
+// `#[extern]` on a function that declares a body, and on a type: an external function is
 // implemented outside the project, and an external type is a declaration the language does
 // not have yet.
 
-@extern
+#[extern]
 type Handle
 
-@extern
+#[extern]
 fun open(handle: Handle): Int =
     1
 
@@ -25,18 +25,18 @@ MODULE #0
 
 ITEM TREE
   type Handle  @2.0
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
   fun open  @2.1
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     param: Handle -> type Handle
     ret: Int -> use Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -56,8 +56,8 @@ pats
 
 ## Lowering Diagnostics
 
-198..217: `type Handle` is declared `@extern`, and the language has no external types yet
-257..264: `fun open` is declared `@extern`, and an external function is implemented outside the project: it has no body here
+200..221: `type Handle` is declared `#[extern]`, and the language has no external types yet
+263..270: `fun open` is declared `#[extern]`, and an external function is implemented outside the project: it has no body here
 
 ## Parse Diagnostics
 

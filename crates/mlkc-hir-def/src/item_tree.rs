@@ -164,7 +164,7 @@ impl ItemTree {
     ///
     /// It is a claim about the file rather than an item of it: the module is named by its file
     /// ([`ModuleId`]), the preamble is the path the project knows it by ---
-    /// `project.main-module` --- and what checks that the two agree is the project.
+    /// `project::main-module` --- and what checks that the two agree is the project.
     pub fn path(&self) -> Option<PlainPathId> {
         self.path.clone()
     }
@@ -738,7 +738,7 @@ mod tests {
     #[test]
     fn a_name_the_module_imports_itself_shadows_the_prelude() {
         let mut builder = ItemTreeBuilder::new(module());
-        let written = builder.declare(Some(Name::new("Int")), import("std.core.Int"), syntax(0));
+        let written = builder.declare(Some(Name::new("Int")), import("Int"), syntax(0));
         builder.declare_prelude(&prelude_import(&["std", "prelude", "Int"]));
         let tree = builder.finish();
 

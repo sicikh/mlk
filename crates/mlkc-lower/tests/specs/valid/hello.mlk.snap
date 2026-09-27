@@ -7,13 +7,13 @@ expression: snapshot
 ```mlk
 // The declarations of a prelude, and a function that binds a name and calls another one.
 
-@builtin
+#[builtin]
 type Unit
 
-@builtin
+#[builtin]
 type Int
 
-@extern
+#[extern]
 fun println-int(value: Int): Unit
 
 fun main(): Unit =
@@ -29,13 +29,13 @@ MODULE #0
 
 ITEM TREE
   type Unit  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   type Int  @2.1
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   fun println-int  @2.2
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     param: Int -> type Int
     ret: Unit -> type Unit
@@ -43,10 +43,10 @@ ITEM TREE
     visibility: private
     ret: Unit -> type Unit
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

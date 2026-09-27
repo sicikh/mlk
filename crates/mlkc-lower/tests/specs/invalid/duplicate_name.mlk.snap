@@ -44,10 +44,10 @@ ITEM TREE
   type Point#1  @2.4
     visibility: private
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

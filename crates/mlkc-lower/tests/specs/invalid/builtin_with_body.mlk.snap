@@ -5,11 +5,11 @@ expression: snapshot
 ## Input
 
 ```mlk
-// `@builtin` on a function that declares a body: what a builtin does is the compiler's, and
+// `#[builtin]` on a function that declares a body: what a builtin does is the compiler's, and
 // the declaration is what puts its name in the scope of the module, so a body here is a body
 // nothing calls.
 
-@builtin
+#[builtin]
 fun max(left: Int, right: Int): Int =
     left
 
@@ -22,16 +22,16 @@ MODULE #0
 
 ITEM TREE
   fun max  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
     param: Int -> use Int
     param: Int -> use Int
     ret: Int -> use Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -55,7 +55,7 @@ paths
 
 ## Lowering Diagnostics
 
-251..261: `fun max` is declared `@builtin`, and what a builtin does is the compiler's: it has no body here
+255..265: `fun max` is declared `#[builtin]`, and what a builtin does is the compiler's: it has no body here
 
 ## Parse Diagnostics
 

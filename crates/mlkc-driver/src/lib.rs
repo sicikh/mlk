@@ -895,8 +895,8 @@ mod tests {
         let (mut driver, file) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
         let lowered = driver.lower(file).expect("the file to be lowered");
 
-        assert_eq!(import_path(&lowered, "Int"), "std.prelude.Int");
-        assert_eq!(import_path(&lowered, "Unit"), "std.prelude.Unit");
+        assert_eq!(import_path(&lowered, "Int"), "std::prelude::Int");
+        assert_eq!(import_path(&lowered, "Unit"), "std::prelude::Unit");
 
         // The import is written nowhere in the buffer, so a host is given no place to mark.
         let int = item(&lowered, "Int");
@@ -907,7 +907,7 @@ mod tests {
     fn a_module_that_says_no_prelude_is_given_none() {
         let (mut driver, file) = driver_with(
             "main.mlk",
-            "@no-prelude\nmodule project.main-module\n\nfun main(): Int =\n    1\n",
+            "#[no-prelude]\nmodule project::main-module\n\nfun main(): Int =\n    1\n",
         );
         let lowered = driver.lower(file).expect("the file to be lowered");
 
@@ -932,7 +932,7 @@ mod tests {
         let before = driver.lower(file).expect("the file to be lowered");
         let parse = driver.parse(file).expect("the file to be parsed");
 
-        assert_eq!(import_path(&before, "Int"), "std.prelude.Int");
+        assert_eq!(import_path(&before, "Int"), "std::prelude::Int");
 
         // A prelude of the project replaces the one of the language.
         let data = ProjectData {
@@ -949,7 +949,7 @@ mod tests {
         let after = driver.lower(file).expect("the file to be lowered");
 
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
-        assert_eq!(import_path(&after, "Int"), "project.core.Int");
+        assert_eq!(import_path(&after, "Int"), "project::core::Int");
         assert_eq!(
             after
                 .item_tree()
@@ -992,8 +992,8 @@ mod tests {
         let before_main = driver.lower(main).expect("the file to be lowered");
         let before_lib = driver.lower(lib).expect("the file to be lowered");
 
-        assert_eq!(import_path(&before_main, "Int"), "project.core.Int");
-        assert_eq!(import_path(&before_lib, "Int"), "std.prelude.Int");
+        assert_eq!(import_path(&before_main, "Int"), "project::core::Int");
+        assert_eq!(import_path(&before_lib, "Int"), "std::prelude::Int");
 
         // The prelude of one project changes, and the module of the other is left alone.
         assert!(driver.set_project(first, ProjectData {
@@ -1009,7 +1009,7 @@ mod tests {
             "the slot was not dropped"
         );
         assert!(Arc::ptr_eq(&before_lib, &after_lib), "the slot was dropped");
-        assert_eq!(import_path(&after_main, "Int"), "project.other.Int");
+        assert_eq!(import_path(&after_main, "Int"), "project::other::Int");
     }
 
     #[test]
@@ -1033,7 +1033,7 @@ mod tests {
             .expect("the file to have an id");
         let before = driver.lower(lib).expect("the file to be lowered");
 
-        assert_eq!(import_path(&before, "Int"), "std.prelude.Int");
+        assert_eq!(import_path(&before, "Int"), "std::prelude::Int");
 
         assert!(driver.set_module_project(ModuleId(lib), project.clone()));
         assert!(!driver.set_module_project(ModuleId(lib), project));
@@ -1041,7 +1041,7 @@ mod tests {
         let after = driver.lower(lib).expect("the file to be lowered");
 
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
-        assert_eq!(import_path(&after, "Int"), "project.core.Int");
+        assert_eq!(import_path(&after, "Int"), "project::core::Int");
     }
 
     #[test]
@@ -1069,7 +1069,7 @@ mod tests {
         let after = driver.lower(file).expect("the file to be lowered");
 
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
-        assert_eq!(import_path(&after, "Int"), "std.prelude.Int");
+        assert_eq!(import_path(&after, "Int"), "std::prelude::Int");
         assert_eq!(driver.project_graph().project_of(ModuleId(file)), None);
     }
 

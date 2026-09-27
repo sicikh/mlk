@@ -1,6 +1,6 @@
 // Bindings: nested, ignored, and bound to the result of a call.
 
-@builtin
+#[builtin]
 type Int
 
 fun nested(): Int =

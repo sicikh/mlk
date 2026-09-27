@@ -8,7 +8,7 @@ expression: snapshot
 // A function that declares one parameter name twice: the parameters of a function are what
 // its body binds, and a name a body reads is one name, so the two cannot be told apart.
 
-@builtin
+#[builtin]
 type Int
 
 fun same(left: Int, left: Int): Int =
@@ -26,7 +26,7 @@ MODULE #0
 
 ITEM TREE
   type Int  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   fun same  @2.1
     visibility: private
@@ -39,10 +39,10 @@ ITEM TREE
     param: Int -> type Int
     ret: Int -> type Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -82,7 +82,7 @@ paths
 
 ## Lowering Diagnostics
 
-221..230: `fun same` declares the parameter `left` more than once, and a body cannot tell the two apart
+223..232: `fun same` declares the parameter `left` more than once, and a body cannot tell the two apart
 
 ## Parse Diagnostics
 

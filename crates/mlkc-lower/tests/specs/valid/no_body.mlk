@@ -1,9 +1,9 @@
 // A module of declarations that declare no body: what they are is their signature.
 
-@builtin
+#[builtin]
 type Int
 
-@extern
+#[extern]
 fun add(left: Int, right: Int): Int
 
 fun main() =

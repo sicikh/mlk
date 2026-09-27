@@ -20,10 +20,17 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             ATTRIBUTE => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
-                    && element.kind() == T ! [@]
+                    && element.kind() == T ! [#]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T!['[']
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -31,6 +38,13 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 slots.next_slot();
                 if let Some(element) = &current_element
                     && Name::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![']']
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -127,6 +141,39 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     );
                 }
                 slots.into_node(CALL_EXPR, children)
+            },
+            FIELD_EXPR => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T ! [@]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Name::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        FIELD_EXPR.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(FIELD_EXPR, children)
             },
             FUN_BODY => {
                 let mut elements = (&children).into_iter();
@@ -578,7 +625,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.next_slot();
                 if let Some(element) = &current_element
-                    && element.kind() == T ! [.]
+                    && element.kind() == T ! [::]
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -770,6 +817,60 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     );
                 }
                 slots.into_node(TYPE_DECL, children)
+            },
+            UFCS_CALL => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<6usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T ! [.]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Path::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T!['(']
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && ArgumentList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![')']
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        UFCS_CALL.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(UFCS_CALL, children)
             },
             UNARY_EXPR => {
                 let mut elements = (&children).into_iter();

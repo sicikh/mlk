@@ -181,7 +181,7 @@ impl ItemLowering<'_> {
     /// The prelude is declared after the items of the module, and that order is the whole of
     /// the shadowing rule: what the module declares or imports first is what its names denote,
     /// so a prelude import that finds a name taken is quietly not what the name denotes. A
-    /// module that says `@no-prelude` is given nothing at all.
+    /// module that says `#[no-prelude]` is given nothing at all.
     fn prelude(&mut self, prelude: &Prelude, attributes: ModuleAttributes) {
         if attributes.no_prelude {
             return;
@@ -509,25 +509,25 @@ mod tests {
 
     /// A module that is wrong in the ways the surface of a module can be wrong on its own.
     const SOURCE: &str = "\
-@extern
+#[extern]
 type Handle
 
-@extern
+#[extern]
 fun open(handle: Handle): Int =
     1
 
-use std.core.Handle
+use std::core::Handle
 
-use std.core.Int
+use std::core::Int
 
-use std.core.Int
+use std::core::Int
 
-@builtin
+#[builtin]
 fun max(left: Int, right: Int): Int =
     left
 
-@builtin
-@builtin
+#[builtin]
+#[builtin]
 type Point
 
 pub fun size(value) =
@@ -682,8 +682,11 @@ fun same(left: Int, left: Int): Int =
 
         assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
         // The names the module did not write are imports, and they name what the prelude says.
-        assert_eq!(import_path(tree, "Int", Namespace::Ty), "std.prelude.Int");
-        assert_eq!(import_path(tree, "Unit", Namespace::Ty), "std.prelude.Unit");
+        assert_eq!(import_path(tree, "Int", Namespace::Ty), "std::prelude::Int");
+        assert_eq!(
+            import_path(tree, "Unit", Namespace::Ty),
+            "std::prelude::Unit"
+        );
 
         // What a signature writes is anchored to them: the type of a function is a path no
         // different from a path of a body.
@@ -711,7 +714,7 @@ fun same(left: Int, left: Int): Int =
     #[test]
     fn a_module_that_says_no_prelude_is_given_none() {
         let lowered = lower_with(
-            "@no-prelude\nmodule project.prelude\n\nfun main(): Int = 1\n",
+            "#[no-prelude]\nmodule project::prelude\n\nfun main(): Int = 1\n",
             Prelude::standard(),
         );
         let tree = &lowered.item_tree;
@@ -737,7 +740,10 @@ fun same(left: Int, left: Int): Int =
         let lowered = lower_with("fun main(): Int = 1\n", &prelude);
         let tree = &lowered.item_tree;
 
-        assert_eq!(import_path(tree, "Int", Namespace::Ty), "project.core.Int");
+        assert_eq!(
+            import_path(tree, "Int", Namespace::Ty),
+            "project::core::Int"
+        );
         // The prelude replaced the standard one rather than adding to it.
         assert_eq!(
             tree.scope().anchor(&Name::new("Unit"), Namespace::Ty),
@@ -748,10 +754,10 @@ fun same(left: Int, left: Int): Int =
     #[test]
     fn a_module_attribute_the_language_has_not_is_a_mistake() {
         let lowered = lower(concat!(
-            "@unknown\n",
-            "@no-prelude\n",
-            "@no-prelude\n",
-            "module project.main-module\n",
+            "#[unknown]\n",
+            "#[no-prelude]\n",
+            "#[no-prelude]\n",
+            "module project::main-module\n",
             "\n",
             "fun main(): Int = 1\n",
         ));

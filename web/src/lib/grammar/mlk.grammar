@@ -47,7 +47,9 @@ kw<term> { @specialize[@name={term}]<identifier, term> }
 
 ModulePreamble { kw<"module"> Path }
 
-Attribute { "@" Name }
+// An attribute of a declaration: `#[extern]`. The brackets are what a list of types is
+// written with as well, and the two are told apart by the `#` and by the place.
+Attribute { "#" "[" Name "]" }
 
 // How far a declaration is visible, which the language writes in front of it, after the
 // attributes it carries.
@@ -77,7 +79,7 @@ Name { identifier }
 
 Type { Path | InferType }
 
-Path { PathSegment ("." PathSegment)* }
+Path { PathSegment ("::" PathSegment)* }
 
 // A segment of a path: a name, or the project the module is written in, which is what a path
 // is rooted at. Only the first segment of a path may be the keyword: the segments after it
@@ -95,9 +97,19 @@ Expr { BinaryExpr | UnaryExpr | PostfixExpr }
 // A call applies to what can be called, which is what keeps `let x = 1 in f(x)`
 // from being ambiguous: the decision whether `(` continues the call is taken here,
 // inside one expression, and not across the whole of it.
-PostfixExpr { PrimaryExpr | CallExpr }
+//
+// The three forms of what a value may be followed by: a call, a call with the value passed
+// as its first argument, and a field read. Each is postfix, and they chain left to right.
+PostfixExpr { PrimaryExpr | CallExpr | UfcsCall | FieldExpr }
 
 CallExpr { PostfixExpr !call "(" (Expr ("," Expr)* ","?)? ")" }
+
+// A call with the value written before the callee: `value.function(args)` is
+// `function(value, args)`. What stands after the dot is a name or a path.
+UfcsCall { PostfixExpr !call "." Path "(" (Expr ("," Expr)* ","?)? ")" }
+
+// A field read: the value, and the name of the field.
+FieldExpr { PostfixExpr !call "@" Name }
 
 // A sign in front of an expression, which binds tighter than any binary operator:
 // `-1 + 2` is `(-1) + 2`, and `-f(x)` is the negation of the call.
@@ -131,7 +143,8 @@ IntLiteral { int_literal }
 StringLiteral { string_literal }
 
 // A path written where a value belongs: a name, or a name of the project with the names
-// inside it after it.
+// inside it after it. A path is what says that a dot is never a way to name something: the
+// dot is what a call with the value passed first is written with.
 PathExpr { Path }
 
 @tokens {

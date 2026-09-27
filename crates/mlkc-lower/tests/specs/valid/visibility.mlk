@@ -3,10 +3,10 @@
 
 pub type Int
 
-@builtin
+#[builtin]
 pub type Unit
 
-@extern
+#[extern]
 fun println-int(value: Int): Unit
 
 pub fun size(value: Int): Int =

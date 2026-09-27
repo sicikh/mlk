@@ -29,6 +29,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::CallExpr::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::FIELD_EXPR => {
+                        let $pattern = unsafe { $crate::FieldExpr::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::FUN_BODY => {
                         let $pattern = unsafe { $crate::FunBody::new_unchecked(node) };
                         $body
@@ -120,6 +124,10 @@ macro_rules! map_syntax_node {
                     },
                     $crate::SyntaxKind::TYPE_DECL => {
                         let $pattern = unsafe { $crate::TypeDecl::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::UFCS_CALL => {
+                        let $pattern = unsafe { $crate::UfcsCall::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::UNARY_EXPR => {

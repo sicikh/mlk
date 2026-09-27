@@ -39,7 +39,7 @@ const syntax = styleTags({
     // which is what a pattern that binds nothing and a type that is inferred are written as:
     // a word the language does not have is not painted at all.
     "as fun in let module project pub type use _": tags.keyword,
-    // An attribute is painted whole, `@extern` and all, which the `/...` says: what the `@`
+    // An attribute is painted whole, `#[extern]` and all, which the `/...` says: what the `#`
     // introduces is a word of the language rather than a name the code gives to something,
     // and the words inside a node wear its colour only when the tag reaches them.
     "Attribute/...": tags.annotation,

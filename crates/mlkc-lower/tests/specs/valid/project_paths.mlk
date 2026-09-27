@@ -2,14 +2,14 @@
 // which no manifest can rename out from under it. What follows the keyword is read inside
 // that project, whether it is a module an import names, a type, or a value.
 
-module project.app
+module project::app
 
-use project.data
+use project::data
 
-use project.core.Int
+use project::core::Int
 
 fun start(): Int =
-    project.data.start-app(1)
+    project::data::start-app(1)
 
-fun handle(value: project.data.Handle): Int =
+fun handle(value: project::data::Handle): Int =
     value

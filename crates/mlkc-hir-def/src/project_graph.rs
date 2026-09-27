@@ -55,8 +55,8 @@ impl fmt::Display for ProjectId {
 /// A `use` that names a module of a project binds that module:
 ///
 /// ```text
-/// // module.mlk:  module project.main-module
-/// // main.mlk:    use project.main-module
+/// // module.mlk:  module project::main-module
+/// // main.mlk:    use project::main-module
 /// ```
 ///
 /// and the entry of the scope is [`ModuleLocator::Module`],
@@ -66,11 +66,11 @@ impl fmt::Display for ProjectId {
 /// which is not a module and has no file of its own:
 ///
 /// ```text
-/// // module.mlk:  module project.data.main-module
-/// // main.mlk:    use project.data
+/// // module.mlk:  module project::data::main-module
+/// // main.mlk:    use project::data
 /// //
 /// //              fun main() =
-/// //                  data.main-module.start-app()
+/// //                  data::main-module::start-app()
 /// ```
 ///
 /// and the entry is [`ModuleLocator::Prefix`].
@@ -82,7 +82,7 @@ impl fmt::Display for ProjectId {
 /// The root of a path says which project the names after it are read in. The keyword `project`
 /// is the project the module is written in --- what a module knows of itself without a manifest,
 /// which is what makes it steadier than the name the project is declared under --- and the name
-/// of another project is one the module depends on, as in `std.core`, the prefix `core` of the
+/// of another project is one the module depends on, as in `std::core`, the prefix `core` of the
 /// project `std`. A module may name its own project the way the manifest does all the same, and
 /// the two spellings of one prefix are for the stage that builds the entries to merge.
 #[derive(Debug, Clone, PartialEq, Eq)]

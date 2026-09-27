@@ -9,7 +9,7 @@ expression: snapshot
 // it; a sign in front of an expression reads the same way, and a path names a value the way
 // it names a type.
 
-@builtin
+#[builtin]
 type Int
 
 fun products(): Int =
@@ -34,10 +34,10 @@ fun negated_call(): Int =
     -f(1)
 
 fun path_to_a_value(): Int =
-    data.main-module.start-app(1)
+    data::main-module::start-app(1)
 
 fun qualified_call(): Int =
-    std.core.size(1)
+    std::core::size(1)
 
 ```
 
@@ -48,7 +48,7 @@ MODULE #0
 
 ITEM TREE
   type Int  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   fun products  @2.1
     visibility: private
@@ -78,10 +78,10 @@ ITEM TREE
     visibility: private
     ret: Int -> type Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -206,7 +206,7 @@ exprs
   expr#1  literal 1
   expr#2  call expr#0 (expr#1)
 paths
-  path#0  data.main-module.start-app -> unresolved
+  path#0  data::main-module::start-app -> unresolved
 ```
 
 ```
@@ -218,7 +218,7 @@ exprs
   expr#1  literal 1
   expr#2  call expr#0 (expr#1)
 paths
-  path#0  std.core.size -> unresolved
+  path#0  std::core::size -> unresolved
 ```
 
 ## Lowering Diagnostics

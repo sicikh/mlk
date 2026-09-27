@@ -8,12 +8,12 @@ expression: snapshot
 // The same attribute written twice on one declaration: an attribute is what a declaration
 // says about itself, and what it says is what its first writing says.
 
-@builtin
-@builtin
+#[builtin]
+#[builtin]
 type Int
 
-@extern
-@extern
+#[extern]
+#[extern]
 fun open(): Int
 
 ```
@@ -25,17 +25,17 @@ MODULE #0
 
 ITEM TREE
   type Int  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   fun open  @2.1
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     ret: Int -> type Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -45,8 +45,8 @@ No bodies.
 
 ## Lowering Diagnostics
 
-172..180: the attribute `@builtin` is written more than once on one declaration
-199..206: the attribute `@extern` is written more than once on one declaration
+174..184: the attribute `#[builtin]` is written more than once on one declaration
+205..214: the attribute `#[extern]` is written more than once on one declaration
 
 ## Parse Diagnostics
 

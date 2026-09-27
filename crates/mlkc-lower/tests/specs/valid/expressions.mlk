@@ -2,7 +2,7 @@
 // it; a sign in front of an expression reads the same way, and a path names a value the way
 // it names a type.
 
-@builtin
+#[builtin]
 type Int
 
 fun products(): Int =
@@ -27,7 +27,7 @@ fun negated_call(): Int =
     -f(1)
 
 fun path_to_a_value(): Int =
-    data.main-module.start-app(1)
+    data::main-module::start-app(1)
 
 fun qualified_call(): Int =
-    std.core.size(1)
+    std::core::size(1)

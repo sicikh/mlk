@@ -49,12 +49,12 @@ Path =
     qualifier: PathQualifier?
     segment: PathSegment
 
-PathQualifier = Path '.'
+PathQualifier = Path '::'
 
 // What one segment of a path is written as: the root the path starts at, or a name.
 //
-// The first segment of a path is its root, and only it: `project.data` is a path of the name
-// `data` inside the project the module is written in, while a keyword written after a dot is
+// The first segment of a path is its root, and only it: `project::data` is a path of the name
+// `data` inside the project the module is written in, while a keyword written after a `::` is
 // not a root. The grammar holds one shape for every segment; the parser is what reads a
 // keyword where the root belongs, and what reports one written elsewhere while keeping it the
 // segment of the path it is, so that the path around the mistake is read whole.
@@ -88,7 +88,7 @@ ModuleRoot =
 
 // The preamble of a module: what the module says about itself as a whole, and the path it
 // declares itself as. The attributes are the ones the language has for a module rather than
-// for a declaration of one, and `@no-prelude` is the one there is today.
+// for a declaration of one, and `#[no-prelude]` is the one there is today.
 ModulePreamble =
     attributes: AttributeList
     'module' name: Path
@@ -103,9 +103,16 @@ ModuleItem =
 
 AttributeList = Attribute*
 
+// An attribute of a declaration: `#[extern]`.
+//
+// The brackets are what a list of types is written with as well, and the two are told apart
+// by the `#` and by the place: an attribute list stands in front of a declaration, and a list
+// of types follows a name.
 Attribute =
-    '@'
+    '#'
+    '['
     name: Name
+    ']'
 
 TypeDecl =
     attributes: AttributeList
@@ -179,6 +186,8 @@ Expr =
     Literal
     | PathExpr
     | CallExpr
+    | UfcsCall
+    | FieldExpr
     | UnaryExpr
     | BinExpr
     | LetExpr
@@ -207,6 +216,26 @@ CallExpr =
     '('
     arguments: ArgumentList
     ')'
+
+// A call with the value written before the name it calls: `value.function(args)`.
+//
+// The receiver is passed as the first argument of the call the spelling means:
+// `value.function(a)` is `function(value, a)`. What stands after the dot is the callee the
+// call means, which is a name or a path, and the call is written after it, so a dot is never
+// a way to name a function with its first argument left open.
+UfcsCall =
+    receiver: Expr
+    '.'
+    callee: Path
+    '('
+    arguments: ArgumentList
+    ')'
+
+// A field read: the value, and the name of the field: `data@field`.
+FieldExpr =
+    receiver: Expr
+    '@'
+    field: Name
 
 ArgumentList = (Expr (',' Expr)* ','?)
 

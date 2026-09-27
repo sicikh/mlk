@@ -59,6 +59,10 @@ spec_tests! {
     // expression.
     project_paths: "valid/project_paths.mlk",
 
+    // What a value may be followed by: a call, a call with the value passed as the first
+    // argument, a field read, and a chain of them.
+    chains: "valid/chains.mlk",
+
     // A `let` without its `in`: the binding expression is parsed and the diagnostic points
     // at the place where the body was supposed to start.
     missing_in: "invalid/missing_in.mlk",
@@ -81,6 +85,10 @@ spec_tests! {
     // starts at. The path keeps the segments around it, and the `let` around the mistake is
     // read whole.
     project_not_a_root: "invalid/project_not_a_root.mlk",
+
+    // A dot that is not followed by a call: a step is a callee and an argument list, and what
+    // is written of it around the mistake is kept.
+    dot_without_a_call: "invalid/dot_without_a_call.mlk",
 
     // The keyword written where a name belongs all over a module: the preamble, the items and
     // the `in` of a `let` are read whole around it.

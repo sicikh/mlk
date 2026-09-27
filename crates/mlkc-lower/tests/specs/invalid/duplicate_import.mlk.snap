@@ -8,9 +8,9 @@ expression: snapshot
 // A module that imports one name twice: the first import is what the name denotes, and the
 // second is what lowering reports.
 
-use std.core.Int
+use std::core::Int
 
-use std.core.Int
+use std::core::Int
 
 ```
 
@@ -21,16 +21,16 @@ MODULE #0
 
 ITEM TREE
   use Int  @2.0
-    path: std.core.Int
+    path: std::core::Int
     visibility: private
   use Int#1  @2.1
-    path: std.core.Int
+    path: std::core::Int
     visibility: private
   use Int#2  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -40,7 +40,7 @@ No bodies.
 
 ## Lowering Diagnostics
 
-147..163: `use Int` is declared more than once in this module
+149..167: `use Int` is declared more than once in this module
 
 ## Parse Diagnostics
 

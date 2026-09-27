@@ -2,11 +2,11 @@
 // import names is a path of names, and an argument written at a segment --- the root of the
 // path included --- is what a type is applied to.
 
-module project.main[Int]
+module project::main[Int]
 
-use std[Int].core
+use std[Int]::core
 
-use project.data.Map[Int, String]
+use project::data::Map[Int, String]
 
 fun main(): Int =
     1

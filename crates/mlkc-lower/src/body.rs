@@ -13,15 +13,16 @@ use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
 use mlkc_span::Span;
 use mlkc_syntax::{
-    BinExpr, CallExpr, Expr as ExprSyntax, FunDecl, LetExpr, Literal as LiteralSyntax,
+    BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, LetExpr, Literal as LiteralSyntax,
     Pat as PatSyntax, Path as PathSyntax, PathExpr, SyntaxKind, SyntaxToken, TextRange, TextSize,
-    UnaryExpr, inner_string_text,
+    UfcsCall, UnaryExpr, inner_string_text,
 };
 use mlkc_vfs::FileId;
 
 use crate::{
-    LoweredBody, LoweringDiag, LoweringError, decl, pat, path, source_map::BodySourceMap,
-    syntax::span,
+    LoweredBody, LoweringDiag, LoweringError, decl, pat, path,
+    source_map::BodySourceMap,
+    syntax::{name, span},
 };
 
 /// Lowers the body of `decl`, a function of the module `tree` describes, or nothing if the
@@ -106,6 +107,8 @@ impl BodyLowering<'_> {
             ExprSyntax::Literal(literal) => self.literal(literal),
             ExprSyntax::PathExpr(path) => self.path_expr(path),
             ExprSyntax::CallExpr(call) => self.call(call),
+            ExprSyntax::UfcsCall(call) => self.ufcs_call(call),
+            ExprSyntax::FieldExpr(field) => self.field_expr(field),
             ExprSyntax::UnaryExpr(unary) => self.unary_expr(unary),
             ExprSyntax::BinExpr(binary) => self.binary(binary),
             ExprSyntax::LetExpr(let_expr) => self.let_expr(let_expr),
@@ -142,13 +145,25 @@ impl BodyLowering<'_> {
             return self.missing();
         };
 
+        self.path_of(&path)
+    }
+
+    /// Lowers a path into the expression that names what the path names.
+    ///
+    /// A path is what a value is named by, and the callee of a call written with a dot is
+    /// a path outside an expression: a caller that holds one reads it here, and is handed an
+    /// expression written where the path is.
+    fn path_of(&mut self, path: &PathSyntax) -> ExprId {
         let written = path.syntax().text_trimmed_range();
-        let data = self.path_data(&path);
+        let data = self.path_data(path);
         let id = self.builder.alloc_path(data);
 
         self.source_map.set_path(id, written);
 
-        self.builder.alloc_expr(Expr::Path(id))
+        let expr = self.builder.alloc_expr(Expr::Path(id));
+        self.source_map.set_expr(expr, written);
+
+        expr
     }
 
     /// The path of an expression, anchored to what the body can tell of it.
@@ -232,7 +247,7 @@ impl BodyLowering<'_> {
         value
     }
 
-    /// Lowers a call.
+    /// Lowers a call: the callee, and the arguments in the order they are written.
     fn call(&mut self, call: &CallExpr) -> ExprId {
         let callee = self.optional(call.function().ok());
         let args = call
@@ -244,6 +259,42 @@ impl BodyLowering<'_> {
             .collect();
 
         self.builder.alloc_expr(Expr::Call { callee, args })
+    }
+
+    /// Lowers a call written with the receiver before the callee: `receiver.function(a)`.
+    ///
+    /// The spelling means the call `function(receiver, a)`: the receiver is the first
+    /// argument, and the callee is the path written after the dot. The dot is a spelling and
+    /// stops here — what the HIR holds is the call it means — while the receiver and the
+    /// arguments keep the places they are written at.
+    fn ufcs_call(&mut self, call: &UfcsCall) -> ExprId {
+        let receiver = self.optional(call.receiver().ok());
+        let callee = match call.callee() {
+            Ok(path) => self.path_of(&path),
+            Err(_) => self.missing(),
+        };
+
+        let mut args = vec![receiver];
+        args.extend(
+            call.arguments()
+                .syntax()
+                .children()
+                .filter_map(ExprSyntax::cast)
+                .map(|arg| self.expr(&arg)),
+        );
+
+        self.builder.alloc_expr(Expr::Call { callee, args })
+    }
+
+    /// Lowers a field read: the value, and the name of the field.
+    ///
+    /// The field is not resolved here: what fields the type of the value has is what the type
+    /// is, and the name is kept as the module wrote it, for the stage that holds the types.
+    fn field_expr(&mut self, expr: &FieldExpr) -> ExprId {
+        let receiver = self.optional(expr.receiver().ok());
+        let field = name(expr.field());
+
+        self.builder.alloc_expr(Expr::Field { receiver, field })
     }
 
     /// Lowers a sign written in front of an expression.
@@ -456,7 +507,7 @@ mod tests {
 
     /// A declaration that declares no body, and one that declares a body.
     const SOURCE: &str = "\
-@extern
+#[extern]
 fun add(left: Int, right: Int): Int
 
 fun main(): Int = 1

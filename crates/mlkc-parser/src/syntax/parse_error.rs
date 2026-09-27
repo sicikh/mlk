@@ -15,21 +15,22 @@ pub(crate) fn expected_declaration(p: &MlkParser, range: TextRange) -> ParseDiag
     ParseDiagnostic::new_single_node("declaration", range, p)
 }
 
-/// The parser expected a name, which is what `fun`, `type`, `@` and a path segment need.
+/// The parser expected a name, which is what `fun`, `type`, an attribute, a field, and a path
+/// segment need.
 pub(crate) fn expected_name(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("name", range, p)
 }
 
 /// The parser found the project keyword where a name of a path belongs.
 ///
-/// A path is rooted at the project --- `project.data` --- and the segment it starts at is the
-/// only one that is written that way: after a dot, a name belongs. The keyword is read as the
+/// A path is rooted at the project --- `project::data` --- and the segment it starts at is the
+/// only one that is written that way: after a `::`, a name belongs. The keyword is read as the
 /// segment it is written as all the same, so that a path a mistake is written in stays whole.
 pub(crate) fn project_where_a_name_belongs(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new(
         format!(
             "Expected a name but instead found '{}': the keyword `project` roots a path, and a \
-         name belongs after a dot.",
+         name belongs after a `::`.",
             p.text(range)
         ),
         range,
@@ -56,9 +57,23 @@ pub(crate) fn expected_type(p: &MlkParser, range: TextRange) -> ParseDiagnostic 
     ParseDiagnostic::new_single_node("type", range, p)
 }
 
-/// The parser expected a path, which is what a preamble and a type are written with.
+/// The parser expected a path, which is what a preamble, a type, and the callee of a call
+/// written with a dot are written with.
 pub(crate) fn expected_path(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("path", range, p)
+}
+
+/// The parser expected the callee of the call a dot makes, and the dot is what it reports on.
+///
+/// The callee is what stands after the dot, and the token that stands where it belongs is
+/// very often the next declaration --- a body that ends with `value.` is followed by the `fun`
+/// of the one after it --- so what is said is that the dot has no callee, rather than that the
+/// token a reader would be pointed at is one the path cannot be made of.
+pub(crate) fn expected_path_after_the_dot(range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        "Expected a path after the `.`: a dot is written with the call it makes.",
+        range,
+    )
 }
 
 /// The parser expected a pattern, which is what the left-hand side of `let` is.

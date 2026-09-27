@@ -1,4 +1,4 @@
-//! Attributes: the `@name` list that stands in front of a declaration.
+//! Attributes: the `#[name]` list that stands in front of a declaration.
 
 use mlkc_parser_core::{parsed_syntax::ParsedSyntax::Present, prelude::*};
 use mlkc_syntax::{
@@ -14,19 +14,23 @@ use crate::{
 /// Whether the parser is at a declaration that starts with the keyword `keyword`,
 /// possibly preceded by an attribute list and by `pub`.
 ///
-/// The keyword cannot simply be looked at when the declaration starts with `@`: both a
+/// The keyword cannot simply be looked at when the declaration starts with `#`: both a
 /// `fun` and a `type` declaration carry attributes, so a rule has to look past the
 /// attributes to tell which of the two it is. Walking them is possible because an
-/// attribute is always `@` followed by a name.
+/// attribute is always `#[` followed by a name and a `]`.
 ///
-/// A malformed attribute list (`@` in front of something that is not a name) does not
+/// A malformed attribute list (`#` in front of something that is not an attribute) does not
 /// match: the tokens around it are foreign to a declaration, and the caller recovers from
 /// them as a broken declaration.
 pub(crate) fn is_at_declaration(p: &mut MlkParser, keyword: SyntaxKind) -> bool {
     let mut index = 0;
 
-    while p.nth_at(index, AT) && p.nth_at(index + 1, IDENT) {
-        index += 2;
+    while p.nth_at(index, HASH)
+        && p.nth_at(index + 1, L_BRACK)
+        && p.nth_at(index + 2, IDENT)
+        && p.nth_at(index + 3, R_BRACK)
+    {
+        index += 4;
     }
 
     // `pub` is a word of its own in front of the keyword: a declaration is public when it is
@@ -51,14 +55,14 @@ pub(crate) fn parse_visibility(p: &mut MlkParser) {
 /// The list is created even when it stays empty: the parent node has a slot for it, and a
 /// missing slot would be read as a missing list by everything that reads the tree.
 // test mlk a_declaration_may_carry_several_attributes
-// @builtin
-// @extern
+// #[builtin]
+// #[extern]
 // type Int
 pub(crate) fn parse_attribute_list(p: &mut MlkParser) -> CompletedMarker {
     let m = p.start();
 
-    while p.at(AT) {
-        // An attribute is present as soon as there is an `@`, so the rule cannot return
+    while p.at(HASH) {
+        // An attribute is present as soon as there is a `#`, so the rule cannot return
         // absent here and the mistake is reported by `parse_attribute`.
         parse_attribute(p).ok();
     }
@@ -66,16 +70,18 @@ pub(crate) fn parse_attribute_list(p: &mut MlkParser) -> CompletedMarker {
     m.complete(p, ATTRIBUTE_LIST)
 }
 
-/// Parses a single attribute.
+/// Parses a single attribute: `#[extern]`.
 fn parse_attribute(p: &mut MlkParser) -> ParsedSyntax {
-    if !p.at(AT) {
+    if !p.at(HASH) {
         return ParsedSyntax::Absent;
     }
 
     let m = p.start();
 
-    p.bump(AT);
+    p.bump(HASH);
+    p.expect(T!['[']);
     parse_name(p).or_add_diagnostic(p, expected_name);
+    p.expect(T![']']);
 
     Present(m.complete(p, ATTRIBUTE))
 }

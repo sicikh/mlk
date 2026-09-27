@@ -1,0 +1,15 @@
+// A dot is written with the call it makes: the callee after it, and the argument list after
+// the callee. What is there of the call is kept, and the mistake is what the parser reports.
+//
+// A dot that has no callee is reported at the dot: what stands where the callee belongs is
+// very often the next declaration, and a reader who wrote `value.` is told about the dot
+// rather than about the `fun` that happens to follow it.
+//
+// The last function is what the paths of an older spelling read as: `data.main-module` is
+// a step of `data`, because a path is written with `::`.
+
+fun missing_a_call(): Int =
+    value.
+
+fun an_old_path(): Int =
+    data.main-module.start-app(1)

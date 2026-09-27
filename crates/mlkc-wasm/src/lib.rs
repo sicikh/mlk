@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(prelude["text"], "use Unit  prelude");
         assert_eq!(prelude["kind"], "item");
         assert!(prelude["range"].is_null());
-        assert_eq!(prelude["children"][0]["text"], "path: std.prelude.Unit");
+        assert_eq!(prelude["children"][0]["text"], "path: std::prelude::Unit");
 
         // And then the body of the function, as the tree of what it holds.
         let body = &nodes[2];
@@ -544,7 +544,7 @@ mod tests {
             &source[from..to]
         }
 
-        let source = "use std.core.Int\n\nfun main(value: Int): Int =\n    value\n";
+        let source = "use std::core::Int\n\nfun main(value: Int): Int =\n    value\n";
         let mut driver = WasmDriver::new();
 
         driver.set_text("/main.mlk", Some(source.to_string()));
@@ -577,7 +577,7 @@ mod tests {
         assert_eq!(covered(source, &param["range"]), "Int");
         assert_eq!(
             covered(source, &param["resolves"]),
-            "use std.core.Int",
+            "use std::core::Int",
             "a type a signature writes marks what its name comes from"
         );
 
@@ -599,7 +599,7 @@ mod tests {
             &source[from..to]
         }
 
-        let source = "use std.core.Int\n\nfun main(): Int =\n    Int\n";
+        let source = "use std::core::Int\n\nfun main(): Int =\n    Int\n";
         let mut driver = WasmDriver::new();
 
         driver.set_text("/main.mlk", Some(source.to_string()));
@@ -612,7 +612,7 @@ mod tests {
         assert_eq!(covered(source, &path["range"]), "Int");
         assert_eq!(
             covered(source, &path["resolves"]),
-            "use std.core.Int",
+            "use std::core::Int",
             "a name an import brought in leads to the import"
         );
     }

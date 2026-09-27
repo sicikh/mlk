@@ -7,7 +7,7 @@ expression: snapshot
 ```mlk
 // The path a module declares itself as, which is what its project knows it by.
 
-module project.main-module
+module project::main-module
 
 fun main(): Int =
     1
@@ -17,17 +17,17 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0 project.main-module
+MODULE #0 project::main-module
 
 ITEM TREE
   fun main  @2.0
     visibility: private
     ret: Int -> use Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

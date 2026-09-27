@@ -3,7 +3,7 @@
 // up by position --- and a parameter may leave its type to be inferred where the function is
 // not public.
 
-@builtin
+#[builtin]
 type Int
 
 fun used(value: Int): Int =

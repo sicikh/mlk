@@ -7,10 +7,10 @@ expression: snapshot
 ```mlk
 // A module of declarations that declare no body: what they are is their signature.
 
-@builtin
+#[builtin]
 type Int
 
-@extern
+#[extern]
 fun add(left: Int, right: Int): Int
 
 fun main() =
@@ -25,10 +25,10 @@ MODULE #0
 
 ITEM TREE
   type Int  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   fun add  @2.1
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     param: Int -> type Int
     param: Int -> type Int
@@ -36,10 +36,10 @@ ITEM TREE
   fun main  @2.2
     visibility: private
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

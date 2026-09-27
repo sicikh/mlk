@@ -1,16 +1,16 @@
 //! The imports a project gives every module without the module writing them.
 //!
-//! A prelude is what lets a module use `Int` without writing `use std.prelude.Int`: lowering
+//! A prelude is what lets a module use `Int` without writing `use std::prelude::Int`: lowering
 //! declares the imports of the prelude into the item tree of a module that does not refuse
 //! them, so that everything after lowering reads a prelude import as it reads any other import
 //! ([ADR-0011][adr-0011]).
 //!
 //! The language has a standard prelude ([`Prelude::standard`]), and a project may replace it
 //! with one of its own: `std` itself is compiled with a prelude that names its own modules,
-//! and a module that declares the prelude's names refuses the prelude as a whole ([`@no-prelude`]).
+//! and a module that declares the prelude's names refuses the prelude as a whole ([`#[no-prelude]`]).
 //!
 //! [adr-0011]: ../../docs/adr/0011-module-prelude.md
-//! [`@no-prelude`]: crate::item_data::ModuleAttributes::no_prelude
+//! [`#[no-prelude]`]: crate::item_data::ModuleAttributes::no_prelude
 
 use std::sync::OnceLock;
 
@@ -146,7 +146,7 @@ mod tests {
         ]));
 
         assert_eq!(import.name(), &Name::new("Int"));
-        assert_eq!(import.path().to_string(), "std.prelude.Int");
+        assert_eq!(import.path().to_string(), "std::prelude::Int");
     }
 
     #[test]
@@ -168,7 +168,7 @@ mod tests {
             .collect();
 
         assert_eq!(names, ["Int", "Unit"]);
-        assert_eq!(prelude.imports()[0].path().to_string(), "std.prelude.Int");
+        assert_eq!(prelude.imports()[0].path().to_string(), "std::prelude::Int");
     }
 
     #[test]

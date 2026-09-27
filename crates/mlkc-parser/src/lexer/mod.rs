@@ -111,6 +111,8 @@ enum Tok {
     LCurly,
     #[token("}")]
     RCurly,
+    #[token("#")]
+    Hash,
     #[token("@")]
     At,
     #[token("(")]
@@ -123,6 +125,8 @@ enum Tok {
     RBrack,
     #[token(":")]
     Colon,
+    #[token("::")]
+    ColonColon,
     #[token(";")]
     Semicolon,
     #[token("=")]
@@ -185,12 +189,14 @@ impl Tok {
             Self::Comma => COMMA,
             Self::LCurly => L_CURLY,
             Self::RCurly => R_CURLY,
+            Self::Hash => HASH,
             Self::At => AT,
             Self::LParen => L_PAREN,
             Self::RParen => R_PAREN,
             Self::LBrack => L_BRACK,
             Self::RBrack => R_BRACK,
             Self::Colon => COLON,
+            Self::ColonColon => COLON_COLON,
             Self::Semicolon => SEMICOLON,
             Self::Eq => EQ,
             Self::Arrow => ARROW,

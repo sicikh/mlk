@@ -52,25 +52,25 @@ fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
     Present(m.complete(p, INFER_TYPE))
 }
 
-/// Parses a path: a single segment, or a segment qualified by another path, as in `a.b.c`.
+/// Parses a path: a single segment, or a segment qualified by another path, as in `a::b::c`.
 ///
 /// A qualified path is a path whose qualifier is a path of its own, and the qualifier is
-/// what holds the dot: `a.b` is a path of the segment `b` qualified by `a.`. Every dot
+/// what holds the `::`: `a::b` is a path of the segment `b` qualified by `a::`. Every `::`
 /// therefore closes the path parsed so far into a qualifier, and starts a path around it.
 ///
 /// The first segment of a path is its root, and it is the only one that may be written as the
-/// project the module is in: `project.data` is a path of the name `data` inside this project,
-/// and a keyword after a dot is not a root.
+/// project the module is in: `project::data` is a path of the name `data` inside this project,
+/// and a keyword after a `::` is not a root.
 //
 // A path is what a type is written as and what an expression names a value by, so the rule
 // is read from both sides of the grammar and lives apart from either.
 // test mlk a_path_qualifies_its_segments
-// fun qualified(value: std.core.Int): Unit =
+// fun qualified(value: std::core::Int): Unit =
 //     value
 //
 // test mlk a_path_may_be_rooted_at_the_project
 // fun rooted(): Int =
-//     project.data.start-app(1)
+//     project::data::start-app(1)
 pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
     let segment = parse_path_segment(p, true);
 
@@ -81,13 +81,13 @@ pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
     // A single segment is a path already.
     let mut path = segment.map(|segment| segment.precede(p).complete(p, PATH));
 
-    while p.at(T![.]) {
+    while p.at(T![::]) {
         let qualifier = path.precede(p);
 
-        p.bump(T![.]);
+        p.bump(T![::]);
         let qualifier = qualifier.complete(p, PATH_QUALIFIER);
 
-        // The segment that follows the dot is the segment of the new path, not a child of
+        // The segment that follows the `::` is the segment of the new path, not a child of
         // the qualifier: the qualifier is closed before it is parsed.
         let m = qualifier.precede(p);
         parse_path_segment(p, false).or_add_diagnostic(p, expected_name);
@@ -101,7 +101,7 @@ pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
 ///
 /// A segment that a path is rooted at may be the project keyword, which is what `root` says:
 /// only the first segment of a path is read that way, and the segments after it are names. A
-/// keyword written after a dot is a mistake a reader is told about, and it is read as the
+/// keyword written after a `::` is a mistake a reader is told about, and it is read as the
 /// segment it is written as all the same: what a mistake in a path costs is the segment, and
 /// not the path it is written in.
 fn parse_path_segment(p: &mut MlkParser, root: bool) -> ParsedSyntax {

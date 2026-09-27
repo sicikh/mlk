@@ -75,6 +75,10 @@ spec_tests! {
     // preamble, in an import, in a type and in an expression.
     project_paths: "valid/project_paths.mlk",
 
+    // The split of the dot: a call with the value passed as the first argument, a field read,
+    // and a path, which is how a step that a name does not name is written.
+    chains: "valid/chains.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",
@@ -124,10 +128,10 @@ spec_tests! {
     // wrote, the `let` keeps its value, and what binds a name is missing.
     project_where_a_pattern_belongs: "invalid/project_where_a_pattern_belongs.mlk",
 
-    // `@extern` on a function with a body, and on a type: neither is a thing the language has.
+    // `#[extern]` on a function with a body, and on a type: neither is a thing the language has.
     extern_misuse: "invalid/extern_misuse.mlk",
 
-    // `@builtin` on a function with a body: a builtin is implemented by the compiler, and the
+    // `#[builtin]` on a function with a body: a builtin is implemented by the compiler, and the
     // declaration is what puts its name in the scope of the module.
     builtin_with_body: "invalid/builtin_with_body.mlk",
 

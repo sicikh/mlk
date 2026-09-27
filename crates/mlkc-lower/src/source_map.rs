@@ -149,6 +149,68 @@ mod tests {
     }
 
     #[test]
+    fn a_call_written_with_a_dot_reads_as_the_call_it_means() {
+        let source = "fun main(): Int =\n    value.function(1)\n";
+        let lowered = body_of(source);
+        let body = &lowered.body;
+
+        let Expr::Call { callee, args } = &body[body.root()] else {
+            panic!("a call is the root of the body");
+        };
+
+        // The call is about the whole spelling, the callee is the name written after the dot,
+        // and the receiver is the first argument, where it is written.
+        assert_eq!(
+            lowered.source_map.expr(body.root()),
+            Some(at(source, "value.function(1)")),
+        );
+        assert_eq!(
+            lowered.source_map.expr(*callee),
+            Some(at(source, "function"))
+        );
+        assert_eq!(lowered.source_map.expr(args[0]), Some(at(source, "value")));
+        assert_eq!(lowered.source_map.expr(args[1]), Some(at(source, "1")));
+    }
+
+    #[test]
+    fn a_call_written_with_a_dot_may_be_named_by_a_path() {
+        let source = "fun main(): Int =\n    value.Map::insert(name)\n";
+        let lowered = body_of(source);
+        let body = &lowered.body;
+
+        let Expr::Call { callee, args } = &body[body.root()] else {
+            panic!("a call is the root of the body");
+        };
+
+        // What a step is a step of is the path written after the dot, and the path is written
+        // where it is: the receiver is passed before the arguments of the call.
+        assert_eq!(
+            lowered.source_map.expr(*callee),
+            Some(at(source, "Map::insert")),
+        );
+        assert_eq!(lowered.source_map.expr(args[0]), Some(at(source, "value")));
+        assert_eq!(lowered.source_map.expr(args[1]), Some(at(source, "name")));
+    }
+
+    #[test]
+    fn a_field_read_is_where_the_field_is_written() {
+        let source = "fun main(): Int =\n    data@field\n";
+        let lowered = body_of(source);
+        let body = &lowered.body;
+
+        let Expr::Field { receiver, field } = &body[body.root()] else {
+            panic!("a field read is the root of the body");
+        };
+
+        assert_eq!(field.as_str(), "field");
+        assert_eq!(
+            lowered.source_map.expr(body.root()),
+            Some(at(source, "data@field")),
+        );
+        assert_eq!(lowered.source_map.expr(*receiver), Some(at(source, "data")));
+    }
+
+    #[test]
     fn a_parameter_is_the_pattern_it_was_written_as() {
         let source = "fun main(value: Int): Int =\n    value\n";
         let lowered = body_of(source);

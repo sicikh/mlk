@@ -10,10 +10,10 @@ expression: snapshot
 
 pub type Int
 
-@builtin
+#[builtin]
 pub type Unit
 
-@extern
+#[extern]
 fun println-int(value: Int): Unit
 
 pub fun size(value: Int): Int =
@@ -33,10 +33,10 @@ ITEM TREE
   type Int  @2.0
     visibility: public
   type Unit  @2.1
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: public
   fun println-int  @2.2
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     param: Int -> type Int
     ret: Unit -> type Unit
@@ -49,10 +49,10 @@ ITEM TREE
     param: Int -> type Int
     ret: Int -> type Int
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

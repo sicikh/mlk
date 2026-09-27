@@ -9,8 +9,8 @@ expression: snapshot
 // for an argument written at it to be applied to. In a path of names what the arguments make of
 // the path is what a reader is told about; a type and a body are told about what they wrote.
 
-fun handle(value: project[Int].Handle): project[String].Handle =
-    project[Bool].data.start-app(value)
+fun handle(value: project[Int]::Handle): project[String]::Handle =
+    project[Bool]::data::start-app(value)
 
 ```
 
@@ -22,13 +22,13 @@ MODULE #0
 ITEM TREE
   fun handle  @2.0
     visibility: private
-    param: project[Int -> use Int].Handle -> the project
-    ret: project[String -> unresolved].Handle -> the project
+    param: project[Int -> use Int]::Handle -> the project
+    ret: project[String -> unresolved]::Handle -> the project
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -47,15 +47,15 @@ exprs
 pats
   pat#0  bind value
 paths
-  path#0  project[Bool -> unresolved].data.start-app -> the project
+  path#0  project[Bool -> unresolved]::data::start-app -> the project
   path#1  value -> binding pat#0
 ```
 
 ## Lowering Diagnostics
 
-313..318: `project.Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
-335..343: `project.Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
-364..370: `project.data.start-app` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+313..318: `project::Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+336..344: `project::Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+366..372: `project::data::start-app` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
 
 ## Parse Diagnostics
 

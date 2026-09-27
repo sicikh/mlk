@@ -15,7 +15,7 @@ use crate::{
 
 /// Where a path of the project starts: what the names after it are names inside.
 ///
-/// A path is written root first --- `project.data`, `std.core` --- and the root is
+/// A path is written root first --- `project::data`, `std::core` --- and the root is
 /// what says which project the names belong to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PathRoot {
@@ -116,7 +116,7 @@ impl fmt::Display for PlainPath {
         write!(f, "{}", self.root)?;
 
         for segment in &self.segments {
-            write!(f, ".{segment}")?;
+            write!(f, "::{segment}")?;
         }
 
         Ok(())
@@ -371,7 +371,7 @@ mod tests {
 
         assert_eq!(path.root(), &PathRoot::Named(Name::new("std")));
         assert_eq!(path.segments(), [Name::new("module")]);
-        assert_eq!(path.to_string(), "std.module");
+        assert_eq!(path.to_string(), "std::module");
     }
 
     #[test]
@@ -380,7 +380,7 @@ mod tests {
 
         assert_eq!(path.segments(), [Name::new("module")]);
         assert_eq!(path.last(), Some(&Name::new("module")));
-        assert_eq!(path.to_string(), "project.module");
+        assert_eq!(path.to_string(), "project::module");
         // A path of one name is a root and no name after it, and the keyword is not a name.
         assert!(!path.is_ident());
     }

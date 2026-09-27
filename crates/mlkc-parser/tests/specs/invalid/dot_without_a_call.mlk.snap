@@ -1,0 +1,262 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A dot is written with the call it makes: the callee after it, and the argument list after
+// the callee. What is there of the call is kept, and the mistake is what the parser reports.
+//
+// A dot that has no callee is reported at the dot: what stands where the callee belongs is
+// very often the next declaration, and a reader who wrote `value.` is told about the dot
+// rather than about the `fun` that happens to follow it.
+//
+// The last function is what the paths of an older spelling read as: `data.main-module` is
+// a step of `data`, because a path is written with `::`.
+
+fun missing_a_call(): Int =
+    value.
+
+fun an_old_path(): Int =
+    data.main-module.start-app(1)
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: missing (optional),
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@0..587 "fun" [Comments("// A dot is written w ..."), Newline("\n"), Comments("// the callee. What i ..."), Newline("\n"), Comments("//"), Newline("\n"), Comments("// A dot that has no  ..."), Newline("\n"), Comments("// very often the nex ..."), Newline("\n"), Comments("// rather than about  ..."), Newline("\n"), Comments("//"), Newline("\n"), Comments("// The last function  ..."), Newline("\n"), Comments("// a step of `data`,  ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@587..601 "missing_a_call" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@601..602 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@602..603 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@603..605 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@605..609 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@609..610 "=" [] [],
+                expr: UfcsCall {
+                    receiver: PathExpr {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@610..620 "value" [Newline("\n"), Whitespace("    ")] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                    },
+                    dot_token: DOT@620..621 "." [] [],
+                    callee: missing (required),
+                    l_paren_token: missing (required),
+                    arguments: ArgumentList [],
+                    r_paren_token: missing (required),
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@621..627 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@627..638 "an_old_path" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@638..639 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@639..640 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@640..642 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@642..646 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@646..647 "=" [] [],
+                expr: UfcsCall {
+                    receiver: UfcsCall {
+                        receiver: PathExpr {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    root: Name {
+                                        value_token: IDENT@647..656 "data" [Newline("\n"), Whitespace("    ")] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
+                            },
+                        },
+                        dot_token: DOT@656..657 "." [] [],
+                        callee: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@657..668 "main-module" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                        l_paren_token: missing (required),
+                        arguments: ArgumentList [],
+                        r_paren_token: missing (required),
+                    },
+                    dot_token: DOT@668..669 "." [] [],
+                    callee: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@669..678 "start-app" [] [],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                    l_paren_token: L_PAREN@678..679 "(" [] [],
+                    arguments: ArgumentList [
+                        IntLiteral {
+                            value_token: INT_LITERAL@679..680 "1" [] [],
+                        },
+                    ],
+                    r_paren_token: R_PAREN@680..681 ")" [] [],
+                },
+            },
+        },
+    ],
+    eof_token: EOF@681..682 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..682
+  0: (empty)
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..681
+    0: FUN_DECL@0..621
+      0: ATTRIBUTE_LIST@0..0
+      1: (empty)
+      2: FUN_KW@0..587 "fun" [Comments("// A dot is written w ..."), Newline("\n"), Comments("// the callee. What i ..."), Newline("\n"), Comments("//"), Newline("\n"), Comments("// A dot that has no  ..."), Newline("\n"), Comments("// very often the nex ..."), Newline("\n"), Comments("// rather than about  ..."), Newline("\n"), Comments("//"), Newline("\n"), Comments("// The last function  ..."), Newline("\n"), Comments("// a step of `data`,  ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@587..601
+        0: IDENT@587..601 "missing_a_call" [] []
+      4: PARAMETERS@601..603
+        0: L_PAREN@601..602 "(" [] []
+        1: PARAMETER_LIST@602..602
+        2: R_PAREN@602..603 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@603..609
+        0: COLON@603..605 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@605..609
+          0: PATH@605..609
+            0: (empty)
+            1: PATH_SEGMENT@605..609
+              0: NAME@605..609
+                0: IDENT@605..609 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@609..621
+        0: EQ@609..610 "=" [] []
+        1: UFCS_CALL@610..621
+          0: PATH_EXPR@610..620
+            0: PATH@610..620
+              0: (empty)
+              1: PATH_SEGMENT@610..620
+                0: NAME@610..620
+                  0: IDENT@610..620 "value" [Newline("\n"), Whitespace("    ")] []
+                1: (empty)
+          1: DOT@620..621 "." [] []
+          2: (empty)
+          3: (empty)
+          4: ARGUMENT_LIST@621..621
+          5: (empty)
+    1: FUN_DECL@621..681
+      0: ATTRIBUTE_LIST@621..621
+      1: (empty)
+      2: FUN_KW@621..627 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@627..638
+        0: IDENT@627..638 "an_old_path" [] []
+      4: PARAMETERS@638..640
+        0: L_PAREN@638..639 "(" [] []
+        1: PARAMETER_LIST@639..639
+        2: R_PAREN@639..640 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@640..646
+        0: COLON@640..642 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@642..646
+          0: PATH@642..646
+            0: (empty)
+            1: PATH_SEGMENT@642..646
+              0: NAME@642..646
+                0: IDENT@642..646 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@646..681
+        0: EQ@646..647 "=" [] []
+        1: UFCS_CALL@647..681
+          0: UFCS_CALL@647..668
+            0: PATH_EXPR@647..656
+              0: PATH@647..656
+                0: (empty)
+                1: PATH_SEGMENT@647..656
+                  0: NAME@647..656
+                    0: IDENT@647..656 "data" [Newline("\n"), Whitespace("    ")] []
+                  1: (empty)
+            1: DOT@656..657 "." [] []
+            2: PATH@657..668
+              0: (empty)
+              1: PATH_SEGMENT@657..668
+                0: NAME@657..668
+                  0: IDENT@657..668 "main-module" [] []
+                1: (empty)
+            3: (empty)
+            4: ARGUMENT_LIST@668..668
+            5: (empty)
+          1: DOT@668..669 "." [] []
+          2: PATH@669..678
+            0: (empty)
+            1: PATH_SEGMENT@669..678
+              0: NAME@669..678
+                0: IDENT@669..678 "start-app" [] []
+              1: (empty)
+          3: L_PAREN@678..679 "(" [] []
+          4: ARGUMENT_LIST@679..680
+            0: INT_LITERAL@679..680
+              0: INT_LITERAL@679..680 "1" [] []
+          5: R_PAREN@680..681 ")" [] []
+  3: EOF@681..682 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+620..621: Expected a path after the `.`: a dot is written with the call it makes.
+668..669: expected `(` but instead found `.`
+    Hint None: Remove .

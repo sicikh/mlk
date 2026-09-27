@@ -10,7 +10,7 @@ expression: snapshot
 // up by position --- and a parameter may leave its type to be inferred where the function is
 // not public.
 
-@builtin
+#[builtin]
 type Int
 
 fun used(value: Int): Int =
@@ -34,7 +34,7 @@ MODULE #0
 
 ITEM TREE
   type Int  @2.0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: private
   fun used  @2.1
     visibility: private
@@ -54,10 +54,10 @@ ITEM TREE
     param
     param
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

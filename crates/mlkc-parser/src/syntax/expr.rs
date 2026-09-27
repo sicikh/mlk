@@ -25,7 +25,12 @@ use mlkc_syntax::{
 
 use crate::{
     parser::MlkParser,
-    syntax::{parse_error::expected_expr, pat::parse_pat_or_recover, ty::parse_path},
+    syntax::{
+        auxiliary::parse_name,
+        parse_error::{expected_expr, expected_name, expected_path_after_the_dot},
+        pat::parse_pat_or_recover,
+        ty::parse_path,
+    },
 };
 
 /// The precedence the operators of the outermost expression start with.
@@ -125,24 +130,101 @@ fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
     Present(m.complete(p, UNARY_EXPR))
 }
 
-/// Parses an expression that may be applied to arguments: `f(a, b)(c)`.
+/// Parses an expression that may be applied to arguments and to the operators of a chain:
+/// `f(a, b)(c)`, `value.function(a)`, `data@field`.
+///
+/// Every form is postfix: what stands before the operator is what it applies to, and the
+/// forms chain left to right, so `config.load().validate()` calls `validate` on the value of
+/// the call of `load`, and `config@server@port` reads a field of a field.
 // test mlk calls_take_arguments_and_are_applied_to_the_result
 // fun calls(): Int =
 //     f(g(1), h(2, 3))(4)
+//
+// test mlk a_value_may_be_passed_as_the_first_argument_of_a_call
+// fun passed(): Int =
+//     value.function(1, 2)
+//
+// test mlk a_call_may_be_chained_to_another
+// fun chained(): Int =
+//     value.load().validate()
+//
+// test mlk a_field_is_read_with_an_at_sign
+// fun field(): Int =
+//     data@field
 fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
     let mut expr = parse_primary_expr(p);
 
-    while expr.is_present() && p.at(T!['(']) {
-        let m = expr.precede(p);
+    while expr.is_present() {
+        if p.at(T!['(']) {
+            // A call: the arguments, applied to what stands before them.
+            let m = expr.precede(p);
 
-        p.bump(T!['(']);
-        ArgumentListParse.parse_list(p);
-        p.expect(T![')']);
+            parse_call_arguments(p);
 
-        expr = Present(m.complete(p, CALL_EXPR));
+            expr = Present(m.complete(p, CALL_EXPR));
+        } else if p.at(T![.]) {
+            // A call with the receiver written before the callee: `value.function(a)` is
+            // `function(value, a)`. What stands after the dot is the callee the call means,
+            // which is a name or a path.
+            let m = expr.precede(p);
+
+            let dot = p.cur_range();
+            p.bump(T![.]);
+
+            if parse_path(p).is_present() {
+                parse_call_arguments(p);
+            } else {
+                // The callee is not there, and the dot is what the mistake is reported at:
+                // the token that stands where the callee belongs is very often the next
+                // declaration, and a reader who wrote `value.` is told about the dot. The
+                // arguments are not asked for on top of that: the call is broken once.
+                p.error(expected_path_after_the_dot(dot));
+                parse_missing_arguments(p);
+            }
+
+            expr = Present(m.complete(p, UFCS_CALL));
+        } else if p.at(T![@]) {
+            // A field read: the value, and the name of the field.
+            let m = expr.precede(p);
+
+            p.bump(T![@]);
+            parse_name(p).or_add_diagnostic(p, expected_name);
+
+            expr = Present(m.complete(p, FIELD_EXPR));
+        } else {
+            break;
+        }
     }
 
     expr
+}
+
+/// Parses the arguments of a call, parens included: `(a, b)`.
+///
+/// The rule is read from the two places a call is written: after a callee, and after the
+/// callee a dot names. A dot commits the parser to a call, so a `(` that is not there is
+/// a mistake rather than a reason not to read a call, while a plain call is only read where
+/// the `(` already stands.
+fn parse_call_arguments(p: &mut MlkParser) {
+    if !p.expect(T!['(']) {
+        parse_missing_arguments(p);
+
+        return;
+    }
+
+    ArgumentListParse.parse_list(p);
+    p.expect(T![')']);
+}
+
+/// Completes a call that has no arguments written: `value.` and `value.function`.
+///
+/// The call has a slot for the argument list, and a slot without a list is read as a missing
+/// one by everything that reads the tree, so the empty list is created even when the parens
+/// are not written. Nothing is reported here: the caller has reported the mistake the call is
+/// broken by, if there is one.
+fn parse_missing_arguments(p: &mut MlkParser) {
+    let m = p.start();
+    m.complete(p, ARGUMENT_LIST);
 }
 
 /// Parses an expression that cannot take part in a binary expression itself.
@@ -185,7 +267,7 @@ fn parse_literal(p: &mut MlkParser) -> ParsedSyntax {
 /// first one denotes, which is what the stage that holds the scopes of the project reads.
 // test mlk a_value_may_be_named_by_a_qualified_path
 // fun main(): Int =
-//     data.main-module.start-app(1)
+//     data::main-module::start-app(1)
 fn parse_path_expr(p: &mut MlkParser) -> ParsedSyntax {
     parse_path(p).map(|path| path.precede(p).complete(p, PATH_EXPR))
 }

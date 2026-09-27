@@ -3,10 +3,17 @@
 #![allow(clippy::redundant_closure)]
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, *};
-pub fn attribute(at_token: SyntaxToken, name: Name) -> Attribute {
+pub fn attribute(
+    hash_token: SyntaxToken,
+    l_brack_token: SyntaxToken,
+    name: Name,
+    r_brack_token: SyntaxToken,
+) -> Attribute {
     Attribute::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::ATTRIBUTE, [
-        Some(SyntaxElement::Token(at_token)),
+        Some(SyntaxElement::Token(hash_token)),
+        Some(SyntaxElement::Token(l_brack_token)),
         Some(SyntaxElement::Node(name.into_syntax())),
+        Some(SyntaxElement::Token(r_brack_token)),
     ]))
 }
 pub fn bin_expr(lhs: Expr, operator_token_token: SyntaxToken, rhs: Expr) -> BinExpr {
@@ -27,6 +34,13 @@ pub fn call_expr(
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(arguments.into_syntax())),
         Some(SyntaxElement::Token(r_paren_token)),
+    ]))
+}
+pub fn field_expr(receiver: Expr, at_token: SyntaxToken, field: Name) -> FieldExpr {
+    FieldExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FIELD_EXPR, [
+        Some(SyntaxElement::Node(receiver.into_syntax())),
+        Some(SyntaxElement::Token(at_token)),
+        Some(SyntaxElement::Node(field.into_syntax())),
     ]))
 }
 pub fn fun_body(eq_token: SyntaxToken, expr: Expr) -> FunBody {
@@ -253,10 +267,10 @@ pub fn path_expr(path: Path) -> PathExpr {
         SyntaxElement::Node(path.into_syntax()),
     )]))
 }
-pub fn path_qualifier(path: Path, dot_token: SyntaxToken) -> PathQualifier {
+pub fn path_qualifier(path: Path, double_colon_token: SyntaxToken) -> PathQualifier {
     PathQualifier::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_QUALIFIER, [
         Some(SyntaxElement::Node(path.into_syntax())),
-        Some(SyntaxElement::Token(dot_token)),
+        Some(SyntaxElement::Token(double_colon_token)),
     ]))
 }
 pub fn path_segment(root: PathRoot) -> PathSegmentBuilder {
@@ -346,6 +360,23 @@ impl TypeDeclBuilder {
             Some(SyntaxElement::Node(self.name.into_syntax())),
         ]))
     }
+}
+pub fn ufcs_call(
+    receiver: Expr,
+    dot_token: SyntaxToken,
+    callee: Path,
+    l_paren_token: SyntaxToken,
+    arguments: ArgumentList,
+    r_paren_token: SyntaxToken,
+) -> UfcsCall {
+    UfcsCall::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::UFCS_CALL, [
+        Some(SyntaxElement::Node(receiver.into_syntax())),
+        Some(SyntaxElement::Token(dot_token)),
+        Some(SyntaxElement::Node(callee.into_syntax())),
+        Some(SyntaxElement::Token(l_paren_token)),
+        Some(SyntaxElement::Node(arguments.into_syntax())),
+        Some(SyntaxElement::Token(r_paren_token)),
+    ]))
 }
 pub fn unary_expr(operator_token_token: SyntaxToken, operand: Expr) -> UnaryExpr {
     UnaryExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::UNARY_EXPR, [

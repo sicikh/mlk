@@ -26,7 +26,7 @@ pub enum LoweringError {
     },
     /// A declaration carries an attribute the language has no meaning for.
     UnknownAttribute {
-        /// The name written after the `@`.
+        /// The name written between the `#[` and the `]`.
         name: Name,
     },
     /// A declaration writes the same attribute twice.
@@ -35,7 +35,7 @@ pub enum LoweringError {
     /// says it twice says no more than one that says it once: the second writing is what a
     /// reader is told about.
     RepeatedAttribute {
-        /// The name written after the `@`.
+        /// The name written between the `#[` and the `]`.
         name: Name,
     },
     /// A function declares one parameter name twice.
@@ -81,12 +81,12 @@ pub enum LoweringError {
         /// The path as far as it is a path of the project.
         path: PlainPath,
     },
-    /// `@extern` is on a function that declares a body.
+    /// `#[extern]` is on a function that declares a body.
     ExternFunctionHasBody {
         /// The function.
         function: FunctionLoc,
     },
-    /// `@builtin` is on a function that declares a body.
+    /// `#[builtin]` is on a function that declares a body.
     ///
     /// What a builtin does is the compiler's, and the declaration is what puts its name in the
     /// scope of the module: a body here is a body nothing calls.
@@ -94,7 +94,7 @@ pub enum LoweringError {
         /// The function.
         function: FunctionLoc,
     },
-    /// `@extern` is on a type, and the language has no external types yet.
+    /// `#[extern]` is on a type, and the language has no external types yet.
     ExternType {
         /// The type.
         class: ClassLoc,
@@ -157,7 +157,7 @@ impl LoweringError {
                 format!("the language has no attribute `{name:?}`")
             },
             Self::RepeatedAttribute { name } => {
-                format!("the attribute `@{name:?}` is written more than once on one declaration")
+                format!("the attribute `#[{name:?}]` is written more than once on one declaration")
             },
             Self::DuplicateParameterName { function, name } => {
                 format!(
@@ -187,19 +187,19 @@ impl LoweringError {
             },
             Self::ExternFunctionHasBody { function } => {
                 format!(
-                    "`{function:?}` is declared `@extern`, and an external function is implemented \
+                    "`{function:?}` is declared `#[extern]`, and an external function is implemented \
                  outside the project: it has no body here",
                 )
             },
             Self::BuiltinFunctionHasBody { function } => {
                 format!(
-                    "`{function:?}` is declared `@builtin`, and what a builtin does is the \
+                    "`{function:?}` is declared `#[builtin]`, and what a builtin does is the \
                  compiler's: it has no body here",
                 )
             },
             Self::ExternType { class } => {
                 format!(
-                    "`{class:?}` is declared `@extern`, and the language has no external types yet",
+                    "`{class:?}` is declared `#[extern]`, and the language has no external types yet",
                 )
             },
             Self::PublicFunctionWithoutResult { function } => {

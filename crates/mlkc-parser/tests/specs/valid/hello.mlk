@@ -1,14 +1,14 @@
 // --- stdlib.mlk
 
-@builtin
+#[builtin]
 type Unit
 
-@builtin
+#[builtin]
 type Int
 
 // --- main.mlk ---
 
-@extern
+#[extern]
 fun println-int(value : Int): Unit
 
 fun main(): Unit =

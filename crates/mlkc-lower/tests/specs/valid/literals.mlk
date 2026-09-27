@@ -1,7 +1,7 @@
 // The shape of a literal: an integer, a string, and a subtraction, which is an operator
 // rather than the sign of a number. What a string holds is what its escapes decode to.
 
-@builtin
+#[builtin]
 type Int
 
 fun positive(): Int =

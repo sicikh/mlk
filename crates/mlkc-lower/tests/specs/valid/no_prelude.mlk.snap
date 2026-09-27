@@ -8,8 +8,8 @@ expression: snapshot
 // A module that refuses the prelude of its project: what it does not declare itself is a name
 // nothing knows, and no import of the prelude is brought in.
 
-@no-prelude
-module project.main-module
+#[no-prelude]
+module project::main-module
 
 fun main(): Int =
     1
@@ -19,7 +19,7 @@ fun main(): Int =
 ## Item Tree
 
 ```
-MODULE #0 project.main-module  @no-prelude
+MODULE #0 project::main-module  #[no-prelude]
 
 ITEM TREE
   fun main  @2.0

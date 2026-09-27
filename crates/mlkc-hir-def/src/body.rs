@@ -41,6 +41,13 @@ pub enum Expr {
         /// The arguments, in the order they are written.
         args: Vec<ExprId>,
     },
+    /// A field read: the value the field is on, and the name of the field.
+    Field {
+        /// The value the field is read from.
+        receiver: ExprId,
+        /// The name of the field, as it is written.
+        field: Name,
+    },
     /// A binary operation.
     Binary {
         /// The left operand.
@@ -60,13 +67,6 @@ pub enum Expr {
         op: UnaryOp,
         /// The operand.
         operand: ExprId,
-    },
-    /// The first expression, then the second.
-    Seq {
-        /// The expression evaluated first.
-        first: ExprId,
-        /// The expression evaluated after it.
-        then: ExprId,
     },
     /// A `let`: a pattern, the expression it is bound to, and the body it is visible in.
     Let {

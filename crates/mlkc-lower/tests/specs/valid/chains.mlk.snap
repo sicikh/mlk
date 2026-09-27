@@ -1,0 +1,247 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// The split of the dot: a call with the value passed as its first argument, a field read, and
+// a path. What a chain is a chain of is known from the text alone.
+
+#[builtin]
+type Int
+
+fun load(config: Config): Config =
+    config
+
+fun validate(config: Config): Config =
+    config
+
+fun start(config: Config): Int =
+    config
+
+fun chained(config: Config): Int =
+    config.load().validate().start()
+
+fun insert(persons: Persons, name: Name, data: Data): Persons =
+    persons
+
+// The callee of a step may be a path: the path says which `insert` the step means, and the
+// receiver is passed as the first argument.
+fun add(persons: Persons, name: Name, data: Data): Persons =
+    persons.Map::insert(name, data)
+
+// A field read: the name is what the type of the value is read for, and the value may be the
+// result of a call.
+fun port(config: Config): Int =
+    config@server@port
+
+fun loaded_port(config: Config): Int =
+    config.load()@port
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  fun load  @2.1
+    visibility: private
+    param: Config -> unresolved
+    ret: Config -> unresolved
+  fun validate  @2.2
+    visibility: private
+    param: Config -> unresolved
+    ret: Config -> unresolved
+  fun start  @2.3
+    visibility: private
+    param: Config -> unresolved
+    ret: Int -> type Int
+  fun chained  @2.4
+    visibility: private
+    param: Config -> unresolved
+    ret: Int -> type Int
+  fun insert  @2.5
+    visibility: private
+    param: Persons -> unresolved
+    param: Name -> unresolved
+    param: Data -> unresolved
+    ret: Persons -> unresolved
+  fun add  @2.6
+    visibility: private
+    param: Persons -> unresolved
+    param: Name -> unresolved
+    param: Data -> unresolved
+    ret: Persons -> unresolved
+  fun port  @2.7
+    visibility: private
+    param: Config -> unresolved
+    ret: Int -> type Int
+  fun loaded_port  @2.8
+    visibility: private
+    param: Config -> unresolved
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun load in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind config
+paths
+  path#0  config -> binding pat#0
+```
+
+```
+BODY fun validate in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind config
+paths
+  path#0  config -> binding pat#0
+```
+
+```
+BODY fun start in module #0
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind config
+paths
+  path#0  config -> binding pat#0
+```
+
+```
+BODY fun chained in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#1 (expr#0)
+  expr#3  path path#2
+  expr#4  call expr#3 (expr#2)
+  expr#5  path path#3
+  expr#6  call expr#5 (expr#4)
+pats
+  pat#0  bind config
+paths
+  path#0  config -> binding pat#0
+  path#1  load -> fun load
+  path#2  validate -> fun validate
+  path#3  start -> fun start
+```
+
+```
+BODY fun insert in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+  pat#2
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind persons
+  pat#1  bind name
+  pat#2  bind data
+paths
+  path#0  persons -> binding pat#0
+```
+
+```
+BODY fun add in module #0
+
+root expr#4
+params
+  pat#0
+  pat#1
+  pat#2
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  path path#3
+  expr#4  call expr#1 (expr#0, expr#2, expr#3)
+pats
+  pat#0  bind persons
+  pat#1  bind name
+  pat#2  bind data
+paths
+  path#0  persons -> binding pat#0
+  path#1  Map::insert -> unresolved
+  path#2  name -> binding pat#1
+  path#3  data -> binding pat#2
+```
+
+```
+BODY fun port in module #0
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  field expr#0 server
+  expr#2  field expr#1 port
+pats
+  pat#0  bind config
+paths
+  path#0  config -> binding pat#0
+```
+
+```
+BODY fun loaded_port in module #0
+
+root expr#3
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#1 (expr#0)
+  expr#3  field expr#2 port
+pats
+  pat#0  bind config
+paths
+  path#0  config -> binding pat#0
+  path#1  load -> fun load
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

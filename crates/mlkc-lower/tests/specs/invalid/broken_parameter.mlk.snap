@@ -28,10 +28,10 @@ ITEM TREE
     visibility: private
     ret: Unit -> use Unit
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 

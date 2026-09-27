@@ -38,15 +38,23 @@ impl Attribute {
     }
     pub fn as_fields(&self) -> AttributeFields {
         AttributeFields {
-            at_token: self.at_token(),
+            hash_token: self.hash_token(),
+            l_brack_token: self.l_brack_token(),
             name: self.name(),
+            r_brack_token: self.r_brack_token(),
         }
     }
-    pub fn at_token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn hash_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 0usize)
     }
+    pub fn l_brack_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
     pub fn name(&self) -> SyntaxResult<Name> {
-        support::required_node(&self.syntax, 1usize)
+        support::required_node(&self.syntax, 2usize)
+    }
+    pub fn r_brack_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 3usize)
     }
 }
 impl Serialize for Attribute {
@@ -62,8 +70,10 @@ impl Serialize for Attribute {
 }
 #[derive(Serialize)]
 pub struct AttributeFields {
-    pub at_token: SyntaxResult<SyntaxToken>,
+    pub hash_token: SyntaxResult<SyntaxToken>,
+    pub l_brack_token: SyntaxResult<SyntaxToken>,
     pub name: SyntaxResult<Name>,
+    pub r_brack_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BinExpr {
@@ -165,6 +175,54 @@ pub struct CallExprFields {
     pub l_paren_token: SyntaxResult<SyntaxToken>,
     pub arguments: ArgumentList,
     pub r_paren_token: SyntaxResult<SyntaxToken>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct FieldExpr {
+    pub(crate) syntax: SyntaxNode,
+}
+impl FieldExpr {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> FieldExprFields {
+        FieldExprFields {
+            receiver: self.receiver(),
+            at_token: self.at_token(),
+            field: self.field(),
+        }
+    }
+    pub fn receiver(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 0usize)
+    }
+    pub fn at_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+    pub fn field(&self) -> SyntaxResult<Name> {
+        support::required_node(&self.syntax, 2usize)
+    }
+}
+impl Serialize for FieldExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "FieldExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct FieldExprFields {
+    pub receiver: SyntaxResult<Expr>,
+    pub at_token: SyntaxResult<SyntaxToken>,
+    pub field: SyntaxResult<Name>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct FunBody {
@@ -869,13 +927,13 @@ impl PathQualifier {
     pub fn as_fields(&self) -> PathQualifierFields {
         PathQualifierFields {
             path: self.path(),
-            dot_token: self.dot_token(),
+            double_colon_token: self.double_colon_token(),
         }
     }
     pub fn path(&self) -> SyntaxResult<Path> {
         support::required_node(&self.syntax, 0usize)
     }
-    pub fn dot_token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn double_colon_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 1usize)
     }
 }
@@ -893,7 +951,7 @@ impl Serialize for PathQualifier {
 #[derive(Serialize)]
 pub struct PathQualifierFields {
     pub path: SyntaxResult<Path>,
-    pub dot_token: SyntaxResult<SyntaxToken>,
+    pub double_colon_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PathSegment {
@@ -1195,6 +1253,69 @@ pub struct TypeDeclFields {
     pub name: SyntaxResult<Name>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct UfcsCall {
+    pub(crate) syntax: SyntaxNode,
+}
+impl UfcsCall {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> UfcsCallFields {
+        UfcsCallFields {
+            receiver: self.receiver(),
+            dot_token: self.dot_token(),
+            callee: self.callee(),
+            l_paren_token: self.l_paren_token(),
+            arguments: self.arguments(),
+            r_paren_token: self.r_paren_token(),
+        }
+    }
+    pub fn receiver(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 0usize)
+    }
+    pub fn dot_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+    pub fn callee(&self) -> SyntaxResult<Path> {
+        support::required_node(&self.syntax, 2usize)
+    }
+    pub fn l_paren_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 3usize)
+    }
+    pub fn arguments(&self) -> ArgumentList {
+        support::list(&self.syntax, 4usize)
+    }
+    pub fn r_paren_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 5usize)
+    }
+}
+impl Serialize for UfcsCall {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UfcsCall")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct UfcsCallFields {
+    pub receiver: SyntaxResult<Expr>,
+    pub dot_token: SyntaxResult<SyntaxToken>,
+    pub callee: SyntaxResult<Path>,
+    pub l_paren_token: SyntaxResult<SyntaxToken>,
+    pub arguments: ArgumentList,
+    pub r_paren_token: SyntaxResult<SyntaxToken>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct UnaryExpr {
     pub(crate) syntax: SyntaxNode,
 }
@@ -1406,10 +1527,12 @@ pub enum Expr {
     BinExpr(BinExpr),
     BogusExpr(BogusExpr),
     CallExpr(CallExpr),
+    FieldExpr(FieldExpr),
     LetExpr(LetExpr),
     Literal(Literal),
     ParenExpr(ParenExpr),
     PathExpr(PathExpr),
+    UfcsCall(UfcsCall),
     UnaryExpr(UnaryExpr),
 }
 impl Serialize for Expr {
@@ -1421,10 +1544,12 @@ impl Serialize for Expr {
             Self::BinExpr(it) => it.serialize(serializer),
             Self::BogusExpr(it) => it.serialize(serializer),
             Self::CallExpr(it) => it.serialize(serializer),
+            Self::FieldExpr(it) => it.serialize(serializer),
             Self::LetExpr(it) => it.serialize(serializer),
             Self::Literal(it) => it.serialize(serializer),
             Self::ParenExpr(it) => it.serialize(serializer),
             Self::PathExpr(it) => it.serialize(serializer),
+            Self::UfcsCall(it) => it.serialize(serializer),
             Self::UnaryExpr(it) => it.serialize(serializer),
         }
     }
@@ -1445,6 +1570,12 @@ impl Expr {
     pub fn as_call_expr(&self) -> Option<&CallExpr> {
         match &self {
             Self::CallExpr(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_field_expr(&self) -> Option<&FieldExpr> {
+        match &self {
+            Self::FieldExpr(item) => Some(item),
             _ => None,
         }
     }
@@ -1469,6 +1600,12 @@ impl Expr {
     pub fn as_path_expr(&self) -> Option<&PathExpr> {
         match &self {
             Self::PathExpr(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_ufcs_call(&self) -> Option<&UfcsCall> {
+        match &self {
+            Self::UfcsCall(item) => Some(item),
             _ => None,
         }
     }
@@ -1689,8 +1826,16 @@ impl std::fmt::Debug for Attribute {
         let result = if current_depth < 16 {
             DEPTH.set(current_depth + 1);
             f.debug_struct("Attribute")
-                .field("at_token", &support::DebugSyntaxResult(self.at_token()))
+                .field("hash_token", &support::DebugSyntaxResult(self.hash_token()))
+                .field(
+                    "l_brack_token",
+                    &support::DebugSyntaxResult(self.l_brack_token()),
+                )
                 .field("name", &support::DebugSyntaxResult(self.name()))
+                .field(
+                    "r_brack_token",
+                    &support::DebugSyntaxResult(self.r_brack_token()),
+                )
                 .finish()
         } else {
             f.debug_struct("Attribute").finish()
@@ -1814,6 +1959,55 @@ impl From<CallExpr> for SyntaxNode {
 }
 impl From<CallExpr> for SyntaxElement {
     fn from(n: CallExpr) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for FieldExpr {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(FIELD_EXPR as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == FIELD_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for FieldExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("FieldExpr")
+                .field("receiver", &support::DebugSyntaxResult(self.receiver()))
+                .field("at_token", &support::DebugSyntaxResult(self.at_token()))
+                .field("field", &support::DebugSyntaxResult(self.field()))
+                .finish()
+        } else {
+            f.debug_struct("FieldExpr").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<FieldExpr> for SyntaxNode {
+    fn from(n: FieldExpr) -> Self {
+        n.syntax
+    }
+}
+impl From<FieldExpr> for SyntaxElement {
+    fn from(n: FieldExpr) -> Self {
         n.syntax.into()
     }
 }
@@ -2618,7 +2812,10 @@ impl std::fmt::Debug for PathQualifier {
             DEPTH.set(current_depth + 1);
             f.debug_struct("PathQualifier")
                 .field("path", &support::DebugSyntaxResult(self.path()))
-                .field("dot_token", &support::DebugSyntaxResult(self.dot_token()))
+                .field(
+                    "double_colon_token",
+                    &support::DebugSyntaxResult(self.double_colon_token()),
+                )
                 .finish()
         } else {
             f.debug_struct("PathQualifier").finish()
@@ -2994,6 +3191,64 @@ impl From<TypeDecl> for SyntaxElement {
         n.syntax.into()
     }
 }
+impl AstNode for UfcsCall {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(UFCS_CALL as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == UFCS_CALL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for UfcsCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("UfcsCall")
+                .field("receiver", &support::DebugSyntaxResult(self.receiver()))
+                .field("dot_token", &support::DebugSyntaxResult(self.dot_token()))
+                .field("callee", &support::DebugSyntaxResult(self.callee()))
+                .field(
+                    "l_paren_token",
+                    &support::DebugSyntaxResult(self.l_paren_token()),
+                )
+                .field("arguments", &self.arguments())
+                .field(
+                    "r_paren_token",
+                    &support::DebugSyntaxResult(self.r_paren_token()),
+                )
+                .finish()
+        } else {
+            f.debug_struct("UfcsCall").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<UfcsCall> for SyntaxNode {
+    fn from(n: UfcsCall) -> Self {
+        n.syntax
+    }
+}
+impl From<UfcsCall> for SyntaxElement {
+    fn from(n: UfcsCall) -> Self {
+        n.syntax.into()
+    }
+}
 impl AstNode for UnaryExpr {
     type Language = Language;
     const KIND_SET: SyntaxKindSet<Language> =
@@ -3270,6 +3525,11 @@ impl From<CallExpr> for Expr {
         Self::CallExpr(node)
     }
 }
+impl From<FieldExpr> for Expr {
+    fn from(node: FieldExpr) -> Self {
+        Self::FieldExpr(node)
+    }
+}
 impl From<LetExpr> for Expr {
     fn from(node: LetExpr) -> Self {
         Self::LetExpr(node)
@@ -3285,6 +3545,11 @@ impl From<PathExpr> for Expr {
         Self::PathExpr(node)
     }
 }
+impl From<UfcsCall> for Expr {
+    fn from(node: UfcsCall) -> Self {
+        Self::UfcsCall(node)
+    }
+}
 impl From<UnaryExpr> for Expr {
     fn from(node: UnaryExpr) -> Self {
         Self::UnaryExpr(node)
@@ -3295,16 +3560,17 @@ impl AstNode for Expr {
     const KIND_SET: SyntaxKindSet<Language> = BinExpr::KIND_SET
         .union(BogusExpr::KIND_SET)
         .union(CallExpr::KIND_SET)
+        .union(FieldExpr::KIND_SET)
         .union(LetExpr::KIND_SET)
         .union(Literal::KIND_SET)
         .union(ParenExpr::KIND_SET)
         .union(PathExpr::KIND_SET)
+        .union(UfcsCall::KIND_SET)
         .union(UnaryExpr::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
-            BIN_EXPR | BOGUS_EXPR | CALL_EXPR | LET_EXPR | PAREN_EXPR | PATH_EXPR | UNARY_EXPR => {
-                true
-            },
+            BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | LET_EXPR | PAREN_EXPR | PATH_EXPR
+            | UFCS_CALL | UNARY_EXPR => true,
             k if Literal::can_cast(k) => true,
             _ => false,
         }
@@ -3314,9 +3580,11 @@ impl AstNode for Expr {
             BIN_EXPR => Self::BinExpr(BinExpr { syntax }),
             BOGUS_EXPR => Self::BogusExpr(BogusExpr { syntax }),
             CALL_EXPR => Self::CallExpr(CallExpr { syntax }),
+            FIELD_EXPR => Self::FieldExpr(FieldExpr { syntax }),
             LET_EXPR => Self::LetExpr(LetExpr { syntax }),
             PAREN_EXPR => Self::ParenExpr(ParenExpr { syntax }),
             PATH_EXPR => Self::PathExpr(PathExpr { syntax }),
+            UFCS_CALL => Self::UfcsCall(UfcsCall { syntax }),
             UNARY_EXPR => Self::UnaryExpr(UnaryExpr { syntax }),
             _ => {
                 if let Some(literal) = Literal::cast(syntax) {
@@ -3332,9 +3600,11 @@ impl AstNode for Expr {
             Self::BinExpr(it) => it.syntax(),
             Self::BogusExpr(it) => it.syntax(),
             Self::CallExpr(it) => it.syntax(),
+            Self::FieldExpr(it) => it.syntax(),
             Self::LetExpr(it) => it.syntax(),
             Self::ParenExpr(it) => it.syntax(),
             Self::PathExpr(it) => it.syntax(),
+            Self::UfcsCall(it) => it.syntax(),
             Self::UnaryExpr(it) => it.syntax(),
             Self::Literal(it) => it.syntax(),
         }
@@ -3344,9 +3614,11 @@ impl AstNode for Expr {
             Self::BinExpr(it) => it.into_syntax(),
             Self::BogusExpr(it) => it.into_syntax(),
             Self::CallExpr(it) => it.into_syntax(),
+            Self::FieldExpr(it) => it.into_syntax(),
             Self::LetExpr(it) => it.into_syntax(),
             Self::ParenExpr(it) => it.into_syntax(),
             Self::PathExpr(it) => it.into_syntax(),
+            Self::UfcsCall(it) => it.into_syntax(),
             Self::UnaryExpr(it) => it.into_syntax(),
             Self::Literal(it) => it.into_syntax(),
         }
@@ -3358,10 +3630,12 @@ impl std::fmt::Debug for Expr {
             Self::BinExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::BogusExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::CallExpr(it) => std::fmt::Debug::fmt(it, f),
+            Self::FieldExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::LetExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::Literal(it) => std::fmt::Debug::fmt(it, f),
             Self::ParenExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::PathExpr(it) => std::fmt::Debug::fmt(it, f),
+            Self::UfcsCall(it) => std::fmt::Debug::fmt(it, f),
             Self::UnaryExpr(it) => std::fmt::Debug::fmt(it, f),
         }
     }
@@ -3372,10 +3646,12 @@ impl From<Expr> for SyntaxNode {
             Expr::BinExpr(it) => it.into_syntax(),
             Expr::BogusExpr(it) => it.into_syntax(),
             Expr::CallExpr(it) => it.into_syntax(),
+            Expr::FieldExpr(it) => it.into_syntax(),
             Expr::LetExpr(it) => it.into_syntax(),
             Expr::Literal(it) => it.into_syntax(),
             Expr::ParenExpr(it) => it.into_syntax(),
             Expr::PathExpr(it) => it.into_syntax(),
+            Expr::UfcsCall(it) => it.into_syntax(),
             Expr::UnaryExpr(it) => it.into_syntax(),
         }
     }
@@ -3778,6 +4054,11 @@ impl std::fmt::Display for CallExpr {
         std::fmt::Display::fmt(self.syntax(), f)
     }
 }
+impl std::fmt::Display for FieldExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
 impl std::fmt::Display for FunBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
@@ -3889,6 +4170,11 @@ impl std::fmt::Display for TypeArgs {
     }
 }
 impl std::fmt::Display for TypeDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UfcsCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }

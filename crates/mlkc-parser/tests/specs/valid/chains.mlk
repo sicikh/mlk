@@ -1,0 +1,20 @@
+// What a value may be followed by: a call, a call with the value passed as its first argument,
+// and a field read. A path is written with `::`, so a dot is never a way to name something.
+
+fun calls(): Int =
+    f(1)(2)
+
+fun passed(): Int =
+    value.function(1, 2)
+
+fun chained(): Int =
+    value.load().validate()
+
+fun a_step_may_be_named_by_a_path(): Int =
+    value.data::Map::insert(1)
+
+fun fields(): Int =
+    data@server@port
+
+fun a_field_of_a_call(): Int =
+    f(1)@field

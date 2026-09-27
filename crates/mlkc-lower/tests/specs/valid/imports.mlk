@@ -2,24 +2,24 @@
 // is brought in under, and the path of a module, which is what the names after a path of it
 // are resolved against.
 
-module project.app
+module project::app
 
-use std.core.Int
+use std::core::Int
 
-pub use std.core.io as IO
+pub use std::core::io as IO
 
-use project.data
+use project::data
 
-use project.data.start-app
+use project::data::start-app
 
 fun main(): IO =
     start-app(1)
 
-fun handle(value: data.Handle): Int =
+fun handle(value: data::Handle): Int =
     value
 
 // A path that starts at a name of the module: what follows the first name is read inside
 // what it denotes, and the module of the import is what the names after it are resolved
 // against.
 fun start(): Int =
-    data.main-module.start-app()
+    data::main-module::start-app()

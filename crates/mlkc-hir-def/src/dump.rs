@@ -228,7 +228,7 @@ fn module_attributes_text(attributes: ModuleAttributes) -> Option<String> {
     let mut words = Vec::new();
 
     if attributes.no_prelude {
-        words.push("@no-prelude");
+        words.push("#[no-prelude]");
     }
 
     Some(words.join(" "))
@@ -461,15 +461,12 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
             children.push(expr_node(body, module, *callee));
             children.extend(args.iter().map(|arg| expr_node(body, module, *arg)));
         },
+        Expr::Field { receiver, .. } => children.push(expr_node(body, module, *receiver)),
         Expr::Binary { lhs, rhs, .. } => {
             children.push(expr_node(body, module, *lhs));
             children.push(expr_node(body, module, *rhs));
         },
         Expr::Unary { operand, .. } => children.push(expr_node(body, module, *operand)),
-        Expr::Seq { first, then } => {
-            children.push(expr_node(body, module, *first));
-            children.push(expr_node(body, module, *then));
-        },
         Expr::Let {
             pat,
             expr,
@@ -675,11 +672,11 @@ fn attributes_line(attributes: Option<&Attributes>) -> Option<Node> {
     let mut words = Vec::new();
 
     if attributes.builtin {
-        words.push("@builtin");
+        words.push("#[builtin]");
     }
 
     if attributes.external {
-        words.push("@extern");
+        words.push("#[extern]");
     }
 
     Some(field_node(format!("attributes: {}", words.join(" "))))
@@ -722,7 +719,7 @@ fn path_text(path: &PathData, module: ModuleId) -> String {
     arguments_text(&mut text, &path.root_args, module);
 
     for segment in &path.segments {
-        text.push('.');
+        text.push_str("::");
         segment_text(&mut text, segment, module);
     }
 
@@ -801,7 +798,9 @@ fn expr_text(expr: &Expr) -> String {
             format!("binary {} {op} {}", expr_ref(*lhs), expr_ref(*rhs))
         },
         Expr::Unary { op, operand } => format!("unary {op} {}", expr_ref(*operand)),
-        Expr::Seq { first, then } => format!("seq {} {}", expr_ref(*first), expr_ref(*then)),
+        Expr::Field { receiver, field } => {
+            format!("field {} {field:?}", expr_ref(*receiver))
+        },
         Expr::Let { pat, expr, body } => {
             format!(
                 "let {} = {} in {}",
@@ -1062,14 +1061,14 @@ ITEM TREE
         assert_eq!(
             crate::dump::item_tree(&tree),
             "\
-MODULE #0 project.main-module
+MODULE #0 project::main-module
 
 ITEM TREE
   type Unit  @0
-    attributes: @builtin
+    attributes: #[builtin]
     visibility: public
   fun println-int  @1
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     param: Int -> unresolved
     ret: Unit -> type Unit
@@ -1210,11 +1209,11 @@ functions
             op: BinaryOp::Add,
             rhs: text,
         });
-        let seq = builder.alloc_expr(Expr::Seq {
-            first: sum,
-            then: text,
+        let field = builder.alloc_expr(Expr::Field {
+            receiver: sum,
+            field: Name::new("port"),
         });
-        builder.set_root(seq);
+        builder.set_root(field);
 
         let body = builder.finish();
 
@@ -1228,7 +1227,7 @@ exprs
   expr#0  missing
   expr#1  literal \"say \\\"hi\\\"\"
   expr#2  binary expr#0 + expr#1
-  expr#3  seq expr#2 expr#1
+  expr#3  field expr#2 port
 "
         );
     }
@@ -1280,7 +1279,7 @@ consts
         let tree = builder.finish();
         let nodes = crate::dump::item_tree_nodes(&tree);
 
-        assert_eq!(nodes[0].text(), "MODULE #0 project.main-module");
+        assert_eq!(nodes[0].text(), "MODULE #0 project::main-module");
         assert_eq!(nodes[0].kind, NodeKind::Module);
         assert_eq!(nodes[0].target, None);
 

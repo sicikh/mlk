@@ -46,10 +46,10 @@ impl Visibility {
 /// that is not a thing the compiler decides on its own.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Attributes {
-    /// `@builtin`: the entity is a builtin of the language, so what it means is the
+    /// `#[builtin]`: the entity is a builtin of the language, so what it means is the
     /// compiler's, and the declaration is what puts its name in the scope of the module.
     pub builtin: bool,
-    /// `@extern`: the entity is implemented outside the project, so it has no body here.
+    /// `#[extern]`: the entity is implemented outside the project, so it has no body here.
     pub external: bool,
 }
 
@@ -100,8 +100,8 @@ impl Attributes {
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ModuleAttributes {
-    /// `@no-prelude`: the module is read without the prelude of its project, and the names of
-    /// the prelude are not names of this module.
+    /// `#[no-prelude]`: the module is read without the prelude of its project, and the names
+    /// of the prelude are not names of this module.
     pub no_prelude: bool,
 }
 
@@ -403,7 +403,7 @@ mod tests {
         assert!(attributes.is_none());
 
         // A declaration's attribute is not a module's: a module does not become a builtin by
-        // being written with `@builtin`, and the name is what a caller is told about.
+        // being written with `#[builtin]`, and the name is what a caller is told about.
         assert!(!attributes.insert(&Name::new("builtin")));
         assert!(attributes.insert(&Name::new("no-prelude")));
 

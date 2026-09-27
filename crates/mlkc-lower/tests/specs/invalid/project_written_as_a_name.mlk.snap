@@ -9,13 +9,13 @@ expression: snapshot
 // the path of an expression, and in the path of a call. The item tree and the body around the
 // mistakes are read whole, and the names the keyword took the place of are missing.
 
-module project.project.project
+module project::project::project
 
-@extern
+#[extern]
 fun println-int(x: Int): Unit
 
 fun main(): Unit =
-    let x = project.project.abs(42) * 2 - 10 in
+    let x = project::project::abs(42) * 2 - 10 in
     println-int(x + 20)
 
 ```
@@ -23,11 +23,11 @@ fun main(): Unit =
 ## Item Tree
 
 ```
-MODULE #0 project.<missing>.<missing>
+MODULE #0 project::<missing>::<missing>
 
 ITEM TREE
   fun println-int  @2.0
-    attributes: @extern
+    attributes: #[extern]
     visibility: private
     param: Int -> use Int
     ret: Unit -> use Unit
@@ -35,10 +35,10 @@ ITEM TREE
     visibility: private
     ret: Unit -> use Unit
   use Int  prelude
-    path: std.prelude.Int
+    path: std::prelude::Int
     visibility: private
   use Unit  prelude
-    path: std.prelude.Unit
+    path: std::prelude::Unit
     visibility: private
 ```
 
@@ -65,7 +65,7 @@ exprs
 pats
   pat#0  bind x
 paths
-  path#0  project.<missing>.abs -> the project
+  path#0  project::<missing>::abs -> the project
   path#1  println-int -> fun println-int
   path#2  x -> binding pat#0
 ```
@@ -76,6 +76,6 @@ No diagnostics.
 
 ## Parse Diagnostics
 
-288..295: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
-296..303: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
-383..390: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a dot.
+289..296: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a `::`.
+298..305: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a `::`.
+388..395: Expected a name but instead found 'project': the keyword `project` roots a path, and a name belongs after a `::`.

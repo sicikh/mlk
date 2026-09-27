@@ -286,11 +286,14 @@ const STEPS = {
     bogusMark: `const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
 	return JSON.stringify({ count: parts.length, marked: parts.map((it) => it.textContent).join('') })`,
 
-    closeTab: `document.querySelector('[data-open="/lib/arith.mlk"] .close').click(); return true`,
+    // The prelude of the library, opened as a tab: the step after this one closes it again.
+    openPrelude: `document.querySelector('[data-file="/std/prelude.mlk"] .pick').click(); return true`,
+
+    closeTab: `document.querySelector('[data-open="/std/prelude.mlk"] .close').click(); return true`,
 
     closed: `return JSON.stringify({
     		open: document.querySelectorAll('[data-panel=editor] [data-open]').length,
-    		listed: document.querySelector('[data-file="/lib/arith.mlk"]') !== null
+    		listed: document.querySelector('[data-file="/std/prelude.mlk"]') !== null
     	})`,
 
     askDrop: `document.querySelector('[data-file="/lib/sample.mlk"] .drop').click(); return true`,
@@ -374,7 +377,7 @@ const STEPS = {
 
     // Picking a buffer among the files is a request to write in it, not to read its name
     // again: the editor comes in front, with the buffer that was picked in it.
-    pickBuffer: `document.querySelector('[data-file="/lib/arith.mlk"] .pick').click(); return true`,
+    pickBuffer: `document.querySelector('[data-file="/main.mlk"] .pick').click(); return true`,
 
     shownBuffer: `return JSON.stringify({
     		shown: panel(),
@@ -693,6 +696,10 @@ async function main() {
     await ask(STEPS.hoverBogus);
     const bogusMark = JSON.parse(await ask(STEPS.bogusMark));
 
+    // A file of the library opens as a tab like any other, and closing the tab is not dropping
+    // the file: the library is read, not locked away.
+    await ask(STEPS.openPrelude);
+
     await ask(STEPS.closeTab);
     const closed = JSON.parse(await ask(STEPS.closed));
 
@@ -935,7 +942,7 @@ function report(page, problems, warnings, asked) {
         ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
-        ["a buffer opens as a tab", page.made.open === 3],
+        ["a buffer opens as a tab", page.made.open === 2],
         [
             "a tab closes without the file",
             page.closed.open === 2 && page.closed.listed,
@@ -982,13 +989,13 @@ function report(page, problems, warnings, asked) {
         [
             "picking Files shows the files",
             page.phoneFiles.shown === "files" &&
-                page.phoneFiles.files === 4 &&
+                page.phoneFiles.files === 3 &&
                 !page.phoneFiles.overflows,
         ],
         [
             "picking a buffer shows the editor, with the buffer in front",
             page.phoneBuffer.shown === "editor" &&
-                page.phoneBuffer.file === "arith.mlk" &&
+                page.phoneBuffer.file === "main.mlk" &&
                 !page.phoneBuffer.overflows,
         ],
         [

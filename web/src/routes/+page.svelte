@@ -38,14 +38,6 @@ fun main(): Unit =
     println-int(x + 20)
 `,
         },
-        {
-            path: "/lib/arith.mlk",
-            text: `fun nested(): Int =
-    let x = 1 in
-    let y = 2 in
-    x + y
-`,
-        },
     ];
 
     /** The name of the buffer the editor opens with. */

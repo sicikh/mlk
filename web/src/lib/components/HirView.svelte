@@ -17,9 +17,19 @@
             range: [number, number] | null,
             resolves?: [number, number] | null,
         ) => void;
+
+        /**
+         * Called when a line that holds nothing is picked: such a line is a place in the source
+         * rather than something to fold, and picking it is a request to be shown that place.
+         * A line that is about nothing a module wrote says as much, and has no place to show.
+         */
+        onPick: (
+            at: [number, number] | null,
+            names: [number, number] | null,
+        ) => void;
     }
 
-    let { node, onHover }: Props = $props();
+    let { node, onHover, onPick }: Props = $props();
 
     /** Whether the line shows what it holds: a person folds what they are not reading. */
     let open = $state(true);
@@ -69,15 +79,19 @@
         {#if open}
             <div class="children">
                 {#each children as child, index (index)}
-                    <HirView node={child} {onHover} />
+                    <HirView node={child} {onHover} {onPick} />
                 {/each}
             </div>
         {/if}
     {:else}
-        <div class="row" {...pointing(node.range, node.resolves)}>
+        <button
+            class="row"
+            {...pointing(node.range, node.resolves)}
+            onclick={() => onPick(node.range, node.resolves)}
+        >
             <span class="spacer"></span>
             {@render saying(node)}
-        </div>
+        </button>
     {/if}
 </div>
 
@@ -150,5 +164,12 @@
        it is painted the way a path is painted wherever it is written. */
     .part[data-part="path"] {
         color: var(--ok);
+    }
+
+    /* A phone reads a tree with a finger, and a finger wants a row it can land on. */
+    @media (max-width: 860px), (max-height: 520px) {
+        .row {
+            padding: 0.15rem 0;
+        }
     }
 </style>

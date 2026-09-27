@@ -281,4 +281,35 @@
     .caret {
         width: 0.75rem;
     }
+
+    /* A finger has no hover to ask a row what it hides, and it aims at what it taps:
+       the button is simply there, and the rows are roomy enough to be hit. */
+    @media (hover: none) {
+        .drop {
+            opacity: 1;
+        }
+    }
+
+    @media (max-width: 860px), (max-height: 520px) {
+        .folder {
+            padding: 0.45rem 0.75rem;
+            font-size: 13px;
+        }
+
+        .pick {
+            padding: 0.45rem 0.4rem 0.45rem 1.25rem;
+            font-size: 13px;
+        }
+
+        .drop {
+            padding: 0 0.6rem;
+            font-size: 16px;
+        }
+
+        .yes,
+        .no {
+            padding: 0.25rem 0.6rem;
+            font-size: 12px;
+        }
+    }
 </style>

@@ -23,6 +23,7 @@
         keymap,
         lineNumbers,
     } from "@codemirror/view";
+    import { untrack } from "svelte";
 
     import { codeOf, mainLabel, rangeOf, severityOf } from "$lib/diagnostics";
     import type { Diagnostic } from "$lib/driver";
@@ -55,6 +56,15 @@
          */
         resolved?: [number, number] | null;
 
+        /**
+         * How many times a person has asked to be taken to a place rather than shown one.
+         *
+         * A row of a tree that holds nothing stands for a place in the code, and picking one
+         * is a request to read it there: the editor scrolls the mark into view for every
+         * such pick, while a pointer moving over a tree only marks what it passes.
+         */
+        reveals?: number;
+
         /** Called with the whole text of a buffer after every change. */
         onInput: (path: string, text: string) => void;
 
@@ -72,6 +82,7 @@
         diagnostics = [],
         hovered = null,
         resolved = null,
+        reveals = 0,
         onInput,
         onSelect,
         onClose,
@@ -98,7 +109,8 @@
             },
             ".cm-scroller": {
                 fontFamily: "var(--mono)",
-                fontSize: "13px",
+                /* The size a phone reads code in is set where the theme is (see `app.css`). */
+                fontSize: "var(--code-size)",
                 lineHeight: "1.6",
             },
             ".cm-content": { padding: "0.5rem 0", caretColor: "var(--accent)" },
@@ -327,6 +339,27 @@
     });
 
     /**
+     * A pick of a row of a tree is a request to read the place that row stands for, and a place
+     * a person asked for is brought to them: the editor scrolls it to the middle of the view,
+     * which is also where a phone keyboard leaves the most room to read it.
+     */
+    $effect(() => {
+        reveals;
+
+        if (!view) return;
+
+        // The mark is what a pick leaves behind, and reading it here does not make this effect
+        // run on every move of a pointer over a tree.
+        const text = view.state.doc.toString();
+        const at = untrack(() => rangeIn(text, hovered));
+
+        if (at)
+            view.dispatch({
+                effects: EditorView.scrollIntoView(at.from, { y: "center" }),
+            });
+    });
+
+    /**
      * Gives the host an editor, and shows the state of the buffer in front in it.
      *
      * The editor is built once and lives as long as the page: switching tabs swaps
@@ -334,7 +367,10 @@
      */
     function editor(host: HTMLDivElement, first: string) {
         view = new EditorView({ parent: host, state: stateOf(first) });
-        view.focus();
+
+        // A phone would open its keyboard over half the screen for a person who only asked
+        // to read the page: there, the editor is touched before it is written in.
+        if (window.matchMedia("(pointer: fine)").matches) view.focus();
 
         return {
             update(next: string) {
@@ -388,6 +424,9 @@
         flex-direction: column;
         height: 100%;
         min-height: 0;
+        /* A line of code is as wide as it is; the panel it is read in is the width it was
+           given, and the editor scrolls what does not fit. */
+        min-width: 0;
         background: var(--bg);
         border-left: 1px solid var(--border);
         border-right: 1px solid var(--border);
@@ -439,5 +478,29 @@
     .host {
         flex: 1;
         min-height: 0;
+    }
+
+    /* A finger picks a tab the way a pointer does, but it needs more room to land in. */
+    @media (max-width: 860px), (max-height: 520px) {
+        /* The editor is the screen here and not a panel among others: it has no seam to show. */
+        .editor {
+            border: none;
+        }
+
+        /* The switcher above is underlined along its bottom, and a mark along the top of a tab
+           sat right under it, reading as one thick line: the tab that is open is marked the
+           way the switcher is, along its own bottom. */
+        .tab.active {
+            box-shadow: inset 0 -2px 0 var(--accent);
+        }
+
+        .pick {
+            padding: 0.55rem 0.3rem 0.55rem 0.7rem;
+        }
+
+        .close {
+            padding: 0 0.6rem;
+            font-size: 15px;
+        }
     }
 </style>

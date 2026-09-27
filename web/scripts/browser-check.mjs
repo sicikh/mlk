@@ -42,6 +42,10 @@ const HELPERS = `
 	const inspector = () => document.querySelector('[data-panel="inspector"]');
 	const show = (which) => document.querySelector('[data-tab=' + which + ']').click();
 	const diagnostics = () => [...inspector().querySelectorAll('li')];
+	const panel = () => [...document.querySelectorAll('[data-panel]')]
+		.filter((it) => it.getBoundingClientRect().width > 0)
+		.map((it) => it.dataset.panel)
+		.join(' ');
 `;
 
 /** What is typed into the editor to make it say something: a module that is not one. */
@@ -63,6 +67,19 @@ const STRAY = "fun main(): Unit =\n    x\nabc\n";
  */
 const VISIBLE =
     "use project::data::core as data\n\npub fun main(): Unit =\n    data.start()\n";
+
+/**
+ * A buffer long enough that its end is not on the screen.
+ *
+ * A pick of a row of a tree is a request to be taken to the place the row stands for, and
+ * a buffer whose end is already in view has nowhere to be taken: this one has.
+ */
+const LONG =
+    "fun main(): Unit =\n" +
+    Array.from({ length: 80 }, (_, it) => `    let x${it} = ${it} in`).join(
+        "\n",
+    ) +
+    "\n    x0\n";
 
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
@@ -311,6 +328,90 @@ const STEPS = {
     		green,
     		marks: document.querySelectorAll('.cm-content [class*=cm-lintRange], .cm-content [class*=cm-lintPoint]').length
     	})`,
+
+    /**
+     * A wide screen, where there is room for every panel at once and nothing to pick.
+     *
+     * The switcher is asked the same question a phone asks it: what it measures.
+     */
+    wide: `return JSON.stringify({
+    		width: innerWidth,
+    		switches: [...document.querySelectorAll('[data-pane]')]
+    			.filter((it) => it.getBoundingClientRect().width > 0).length
+    	})`,
+
+    /**
+     * A phone: the page at the width of one, where there is room for a single panel.
+     *
+     * What a panel is drawn as is what it measures: a panel a person did not pick takes
+     * no room at all, so the boxes of the four of them say which one the screen shows.
+     * The width is the narrowest a phone is made in, and nothing may overflow it.
+     */
+    phone: `return JSON.stringify({
+    		width: innerWidth,
+    		shown: panel(),
+    		switches: document.querySelectorAll('[data-pane]').length,
+    		handles: [...document.querySelectorAll('[role=separator]')]
+    			.filter((it) => getComputedStyle(it).display !== 'none').length,
+    		overflows: document.documentElement.scrollWidth > innerWidth
+    	})`,
+
+    pickFiles: `document.querySelector('[data-pane=files]').click(); return true`,
+
+    shownFiles: `return JSON.stringify({
+    		shown: panel(),
+    		files: document.querySelectorAll('[data-panel=files] [data-file]').length,
+    		overflows: document.documentElement.scrollWidth > innerWidth
+    	})`,
+
+    // Picking a buffer among the files is a request to write in it, not to read its name
+    // again: the editor comes in front, with the buffer that was picked in it.
+    pickBuffer: `document.querySelector('[data-file="/lib/arith.mlk"] .pick').click(); return true`,
+
+    shownBuffer: `return JSON.stringify({
+    		shown: panel(),
+    		file: text(document.querySelector('[data-panel=editor] .tab.active .pick')),
+    		overflows: document.documentElement.scrollWidth > innerWidth
+    	})`,
+
+    pickInspector: `document.querySelector('[data-pane=inspector]').click(); return true`,
+
+    shownInspector: `return JSON.stringify({
+    		shown: panel(),
+    		tabs: document.querySelectorAll('[data-panel=inspector] [data-tab]').length,
+    		overflows: document.documentElement.scrollWidth > innerWidth
+    	})`,
+
+    pickConsole: `document.querySelector('[data-pane=console]').click(); return true`,
+
+    shownConsole: `return JSON.stringify({
+    		shown: panel(),
+    		lines: document.querySelector('[data-panel=console] .lines') !== null,
+    		overflows: document.documentElement.scrollWidth > innerWidth
+    	})`,
+
+    pickCode: `document.querySelector('[data-pane=code]').click(); return true`,
+
+    typeLong: `const content = document.querySelector('.cm-content');
+    	content.focus();
+    	content.textContent = ${JSON.stringify(LONG)};
+    	content.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
+    // The last token of the tree, which is at the far end of a buffer the screen does not hold.
+    pickLastToken: `const rows = [...document.querySelectorAll('[data-panel=inspector] [data-kind=IDENT] .row')];
+    	const row = rows[rows.length - 1];
+    	row.dispatchEvent(new MouseEvent('mouseenter'));
+    	row.click();
+    	return JSON.stringify({ says: JSON.parse(text(row.querySelector('.text'))).trim() })`,
+
+    pickedToken: `const scroller = document.querySelector('.cm-scroller');
+    	return JSON.stringify({
+    		shown: panel(),
+    		marked: text(document.querySelector('.cm-content .cm-hovered')).trim(),
+    		scrolls: scroller.scrollHeight > scroller.clientHeight,
+    		scrolled: scroller.scrollTop > 0
+    	})`,
 };
 
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
@@ -551,6 +652,57 @@ async function main() {
     await ask(STEPS.confirmDrop);
     const dropped = JSON.parse(await ask(STEPS.dropped));
 
+    // A wide screen draws every panel at once, and its switcher is asked about here: once the
+    // page is narrowed below, the panels take turns being on the screen.
+    const wide = JSON.parse(await ask(STEPS.wide));
+
+    // A phone: the page at the width of one, where the panels are picked rather than laid out
+    // side by side. The questions below are the ones a person asks with a thumb: what is on
+    // the screen now, and what a tap puts there.
+    await connection.send(
+        "Emulation.setDeviceMetricsOverride",
+        {
+            width: 320,
+            height: 568,
+            deviceScaleFactor: 2,
+            mobile: true,
+            screenWidth: 320,
+            screenHeight: 568,
+        },
+        session,
+    );
+
+    // The page hands the new size to the layout, which is not done before the next line runs.
+    await sleep(300);
+
+    const phone = JSON.parse(await ask(STEPS.phone));
+
+    await ask(STEPS.pickFiles);
+    const phoneFiles = JSON.parse(await ask(STEPS.shownFiles));
+
+    await ask(STEPS.pickBuffer);
+    const phoneBuffer = JSON.parse(await ask(STEPS.shownBuffer));
+
+    await ask(STEPS.pickInspector);
+    const phoneInspector = JSON.parse(await ask(STEPS.shownInspector));
+
+    await ask(STEPS.pickConsole);
+    const phoneConsole = JSON.parse(await ask(STEPS.shownConsole));
+
+    // A row of a tree that holds nothing is a place in the source rather than a thing to fold:
+    // picking one puts the editor in front, where the mark the row makes is read. A buffer is
+    // longer than the screen it is read on, so what a pick asks for is the place itself.
+    await ask(STEPS.pickCode);
+    await ask(STEPS.typeLong);
+    await sleep(300);
+    await ask(STEPS.pickInspector);
+    await ask(STEPS.showCst);
+    const phoneSays = JSON.parse(await ask(STEPS.pickLastToken));
+    const phoneToken = {
+        ...phoneSays,
+        ...JSON.parse(await ask(STEPS.pickedToken)),
+    };
+
     return report(
         {
             status: state.file,
@@ -576,6 +728,13 @@ async function main() {
             broken,
             bogus,
             bogusMark,
+            wide,
+            phone,
+            phoneFiles,
+            phoneBuffer,
+            phoneInspector,
+            phoneConsole,
+            phoneToken,
         },
         problems,
         warnings,
@@ -739,6 +898,56 @@ function report(page, problems, warnings, asked) {
             /^\d+$/.test(diagnostic.number ?? "") &&
                 (diagnostic.caret ?? "").includes("^"),
         ],
+        [
+            "a wide screen draws the panels together, with no switcher to pick one",
+            page.wide.width >= 860 && page.wide.switches === 0,
+        ],
+        [
+            "a phone shows one panel at a time, and the switcher is how it is picked",
+            page.phone.width < 860 &&
+                page.phone.shown === "editor" &&
+                page.phone.switches === 4 &&
+                page.phone.handles === 0 &&
+                !page.phone.overflows,
+        ],
+        [
+            "picking Files shows the files",
+            page.phoneFiles.shown === "files" &&
+                page.phoneFiles.files === 2 &&
+                !page.phoneFiles.overflows,
+        ],
+        [
+            "picking a buffer shows the editor, with the buffer in front",
+            page.phoneBuffer.shown === "editor" &&
+                page.phoneBuffer.file === "arith.mlk" &&
+                !page.phoneBuffer.overflows,
+        ],
+        [
+            "picking Inspect shows the inspector",
+            page.phoneInspector.shown === "inspector" &&
+                page.phoneInspector.tabs === 4 &&
+                !page.phoneInspector.overflows,
+        ],
+        [
+            "picking Console shows the console",
+            page.phoneConsole.shown === "console" &&
+                page.phoneConsole.lines &&
+                !page.phoneConsole.overflows,
+        ],
+        [
+            "picking a token of a tree shows the editor, with the token marked in it",
+            page.phoneToken.shown === "editor" &&
+                page.phoneToken.marked !== "" &&
+                page.phoneToken.marked === page.phoneToken.says,
+        ],
+        [
+            // A place is brought to a person, not merely marked: a buffer is read through a
+            // window onto it, and a pick moves that window. A browser that lays the editor out
+            // with nothing to scroll — the one this check drives is one — has no window to move,
+            // and is asked for the mark alone.
+            "picking a token brings the place it stands for into view",
+            !page.phoneToken.scrolls || page.phoneToken.scrolled,
+        ],
         ["the page said nothing it should not have", problems.length === 0],
     ];
 
@@ -778,6 +987,12 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,
+    );
+    console.log(
+        `a phone at ${page.phone.width}px shows ${page.phone.shown}, and the switcher has ${page.phone.switches} panels to pick`,
+    );
+    console.log(
+        `a pick of ${JSON.stringify(page.phoneToken.says)} in a tree marks ${JSON.stringify(page.phoneToken.marked)}, which the editor ${page.phoneToken.scrolls ? (page.phoneToken.scrolled ? "is taken to" : "stays away from") : "has nothing to scroll to"}`,
     );
 
     if (diagnostic.whole)

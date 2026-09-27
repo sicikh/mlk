@@ -11,9 +11,15 @@
 		 * once the pointer leaves it: the editor marks that range in the text.
 		 */
 		onHover: (range: [number, number] | null) => void;
+
+		/**
+		 * Called when a token is picked: a token holds nothing, so it is a place in the source
+		 * rather than something to fold, and picking it is a request to be shown that place.
+		 */
+		onPick: (range: [number, number]) => void;
 	}
 
-	let { node, onHover }: Props = $props();
+	let { node, onHover, onPick }: Props = $props();
 
 	/** Whether the node shows what it holds: a person folds what they are not reading. */
 	let open = $state(true);
@@ -41,12 +47,16 @@
 
 <div class="node" data-kind={node.kind} class:token>
 	{#if token}
-		<span class="row" {...pointing(node.text_range)}>
+		<button
+			class="row"
+			{...pointing(node.text_range)}
+			onclick={() => onPick(node.text_range)}
+		>
 			<span class="spacer"></span>
 			<span class="kind" class:broken={broken(node.kind)}>{node.kind}</span>
 			<span class="text">{JSON.stringify(node.text ?? '')}</span>
 			<span class="range">{range}</span>
-		</span>
+		</button>
 	{:else}
 		<button
 			class="row"
@@ -63,7 +73,7 @@
 		{#if open && children.length > 0}
 			<div class="children">
 				{#each children as child, index (index)}
-					<TreeView node={child} {onHover} />
+					<TreeView node={child} {onHover} {onPick} />
 				{/each}
 			</div>
 		{/if}
@@ -89,6 +99,7 @@
 		align-items: baseline;
 		width: 100%;
 		text-align: left;
+		white-space: nowrap;
 	}
 
 	.caret {
@@ -128,5 +139,12 @@
 
 	.count::before {
 		content: '· ';
+	}
+
+	/* A phone reads a tree with a finger, and a finger wants a row it can land on. */
+	@media (max-width: 860px), (max-height: 520px) {
+		.row {
+			padding: 0.15rem 0;
+		}
 	}
 </style>

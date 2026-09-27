@@ -25,8 +25,23 @@
 
     --radius: 4px;
 
+    /* How large the code of the editor is drawn, which a phone reads a little larger. */
+    --code-size: 13px;
+
     /* Scrollbars are the page's, not the browser's: a dark thumb on nothing at all. */
     scrollbar-color: #2b333f transparent;
+}
+
+/*
+ * A phone: the panels are stacked, one at a time, and the code is read from further away.
+ *
+ * Every component that answers this asks it the same way — the page that stacks the panels,
+ * the trees whose rows grow to be tapped — so that they answer together.
+ */
+@media (max-width: 860px), (max-height: 520px) {
+    :root {
+        --code-size: 14px;
+    }
 }
 
 * {
@@ -46,6 +61,13 @@ body {
     font-size: 13px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    /* A browser that inflates the text of a page to read it makes this one taller
+       than the screen it was given, so it is told the sizes are the sizes. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+
+    /* A pull at the top of a panel is a pull at the code, not a request to reload the page. */
+    overscroll-behavior: none;
 }
 
 /* A button that looks like the thing it is: a tab, a tool, a line of text. */
@@ -56,6 +78,8 @@ button {
     color: inherit;
     font: inherit;
     cursor: pointer;
+    /* A tap on a control is a tap, and not the first half of a zoom. */
+    touch-action: manipulation;
 }
 
 button:disabled {

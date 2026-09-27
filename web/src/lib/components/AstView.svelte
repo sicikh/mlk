@@ -147,9 +147,16 @@
          * once the pointer leaves it: the editor marks that range in the text.
          */
         onHover: (range: [number, number] | null) => void;
+
+        /**
+         * Called when a row that holds nothing is picked: such a row is a place in the source
+         * rather than something to fold, and picking it is a request to be shown that place.
+         * A row that stands for no token at all says as much, and has no place to show.
+         */
+        onPick: (at: [number, number] | null) => void;
     }
 
-    let { value, name, onHover }: Props = $props();
+    let { value, name, onHover, onPick }: Props = $props();
 
     /** Whether the value shows what it holds: a person folds what they are not reading. */
     let open = $state(true);
@@ -194,13 +201,13 @@
 {/snippet}
 
 {#if token}
-    <div class="row" {...pointing(range)}>
+    <button class="row" {...pointing(range)} onclick={() => onPick(range)}>
         <span class="spacer"></span>
         {@render Field({ name })}
         <span class="kind">{token.kind}</span>
         <span class="range">@{token.text_range[0]}..{token.text_range[1]}</span>
         <span class="text">{JSON.stringify(token.text ?? "")}</span>
-    </div>
+    </button>
 {:else if shape === "missing" || shape === "optional"}
     <div class="row" {...pointing(range)}>
         <span class="spacer"></span>
@@ -226,7 +233,7 @@
     {#if open}
         <div class="children">
             {#each rows as row (row.key)}
-                <AstView value={row.value} name={row.name} {onHover} />
+                <AstView value={row.value} name={row.name} {onHover} {onPick} />
             {/each}
         </div>
     {/if}
@@ -301,5 +308,12 @@
 
     .missing {
         color: var(--warning);
+    }
+
+    /* A phone reads a tree with a finger, and a finger wants a row it can land on. */
+    @media (max-width: 860px), (max-height: 520px) {
+        .row {
+            padding: 0.15rem 0;
+        }
     }
 </style>

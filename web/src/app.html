@@ -2,7 +2,16 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <!--
+            The page is the whole screen, and a phone keyboard resizes it rather than covering
+            it: an editor wants the line a person types in to stay in view.
+        -->
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
+        />
+        <!-- What a phone paints its own bars with, which is the background of the editor. -->
+        <meta name="theme-color" content="#0e1116" />
         %sveltekit.head%
     </head>
     <body data-sveltekit-preload-data="hover">

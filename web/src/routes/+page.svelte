@@ -49,6 +49,15 @@ fun main(): Unit =
     /** The views of what the compiler makes of the buffer on the right. */
     type Tab = "diagnostics" | "cst" | "ast" | "hir";
 
+    /**
+     * Which panel a narrow screen shows, where there is room for one at a time.
+     *
+     * A wide screen lays the panels out side by side and has no use for this: there,
+     * whichever panel is picked is already on the screen, so picking one is only felt
+     * where they are stacked.
+     */
+    type View = "files" | "code" | "inspector" | "console";
+
     let buffers = $state<Buffer[]>(STARTER);
     let active = $state(FIRST);
 
@@ -59,6 +68,14 @@ fun main(): Unit =
     let tab = $state<Tab>("diagnostics");
 
     /**
+     * The panel a narrow screen has in front, which is the editor until asked otherwise.
+     *
+     * Nothing is hidden where there is room for everything: the panels take their places
+     * side by side whatever this says, and a person is left where they were.
+     */
+    let view = $state<View>("code");
+
+    /**
      * What a pointer is on in a tree of the inspector, as the compiler counts it.
      *
      * A tree and the editor show the same buffer, so a range of one is a range of the other:
@@ -67,6 +84,13 @@ fun main(): Unit =
      */
     let hovered = $state<[number, number] | null>(null);
     let resolved = $state<[number, number] | null>(null);
+
+    /**
+     * How many times a person has asked to be taken to a place in the code rather than
+     * merely pointed at one: a row of a tree that holds nothing is picked, and the editor
+     * answers by scrolling the mark the row makes into view.
+     */
+    let reveals = $state(0);
     let log = $state<Line[]>([
         { level: "note", text: "loading the wasm driver…" },
     ]);
@@ -81,6 +105,22 @@ fun main(): Unit =
     ) {
         hovered = at;
         resolved = names;
+    }
+
+    /**
+     * A row of a tree that holds nothing is a place in the source rather than a thing to fold,
+     * and picking one is a request to be shown that place. A narrow screen has room for one
+     * panel, so it answers by putting the editor in front, where the mark it makes is read.
+     */
+    function picked(
+        at: [number, number] | null,
+        names: [number, number] | null = null,
+    ) {
+        if (!at) return;
+
+        pointed(at, names);
+        view = "code";
+        reveals += 1;
     }
 
     /**
@@ -183,6 +223,15 @@ fun main(): Unit =
     }
 
     /**
+     * A buffer picked among the files, which is a request to write in it rather than
+     * to read its name again: a narrow screen answers by putting the editor in front.
+     */
+    function edit(path: string) {
+        view = "code";
+        select(path);
+    }
+
+    /**
      * A tab goes away, and the buffer stays: closing what a person is reading
      * is not the same as dropping what it holds.
      */
@@ -208,6 +257,8 @@ fun main(): Unit =
         buffers = [...buffers, { path, text: "" }];
         open = [...open, path];
         active = path;
+        // A buffer that was just made is a buffer that was made to be written in.
+        view = "code";
         say("note", `made ${name(path)}`);
         push(path);
         check();
@@ -260,7 +311,13 @@ fun main(): Unit =
 
         check();
 
-        if (errors > 0) tab = "diagnostics";
+        if (errors > 0) {
+            tab = "diagnostics";
+
+            // What a person asked the compiler for is what it has to say about the buffer,
+            // and a narrow screen can only put one panel in front: it is the one that says it.
+            view = "inspector";
+        }
     }
 
     /** Running needs a code generator, which the pipeline does not reach yet. */
@@ -275,6 +332,7 @@ fun main(): Unit =
 
 <div
     class="ide"
+    data-view={view}
     style="--files: {files}px; --inspector: {inspector}px; --console: {console}px"
 >
     <header class="top">
@@ -285,11 +343,49 @@ fun main(): Unit =
         <button class="tool primary" onclick={compile}>Compile</button>
     </header>
 
+    <!--
+        A narrow screen has room for one panel, and this is how a person says which.
+        Where there is room for all of them the switcher is not drawn at all (see the styles).
+    -->
+    <nav class="switch" aria-label="Which panel is shown">
+        <button
+            data-pane="files"
+            class:active={view === "files"}
+            aria-pressed={view === "files"}
+            onclick={() => (view = "files")}>Files</button
+        >
+        <button
+            data-pane="code"
+            class:active={view === "code"}
+            aria-pressed={view === "code"}
+            onclick={() => (view = "code")}>Code</button
+        >
+        <button
+            data-pane="inspector"
+            class:active={view === "inspector"}
+            aria-pressed={view === "inspector"}
+            onclick={() => (view = "inspector")}
+        >
+            Inspect
+            {#if diagnostics.length > 0}
+                <span class="badge" class:error={errors > 0}
+                    >{diagnostics.length}</span
+                >
+            {/if}
+        </button>
+        <button
+            data-pane="console"
+            class:active={view === "console"}
+            aria-pressed={view === "console"}
+            onclick={() => (view = "console")}>Console</button
+        >
+    </nav>
+
     <aside class="files">
         <FileList
             files={buffers.map((it) => it.path)}
             {active}
-            onSelect={select}
+            onSelect={edit}
             onCreate={create}
             onRemove={remove}
         />
@@ -314,6 +410,7 @@ fun main(): Unit =
                 {diagnostics}
                 {hovered}
                 {resolved}
+                {reveals}
                 onInput={onText}
                 onSelect={select}
                 onClose={closeTab}
@@ -375,18 +472,26 @@ fun main(): Unit =
             {:else if !analysis}
                 <p class="empty">Waiting for a parse.</p>
             {:else if tab === "cst"}
-                <TreeView node={analysis.cst} onHover={pointed} />
+                <TreeView
+                    node={analysis.cst}
+                    onHover={pointed}
+                    onPick={picked}
+                />
             {:else if tab === "ast"}
                 {#if analysis.ast === null}
                     <p class="empty">The root of the tree is not a module.</p>
                 {:else}
-                    <AstView value={analysis.ast} onHover={pointed} />
+                    <AstView
+                        value={analysis.ast}
+                        onHover={pointed}
+                        onPick={picked}
+                    />
                 {/if}
             {:else if analysis.hir === null}
                 <p class="empty">There is nothing to lower.</p>
             {:else}
                 {#each analysis.hir.nodes as node, index (index)}
-                    <HirView {node} onHover={pointed} />
+                    <HirView {node} onHover={pointed} onPick={picked} />
                 {/each}
             {/if}
         </div>
@@ -518,6 +623,39 @@ fun main(): Unit =
         background: #33507f;
     }
 
+    /*
+     * The switcher of a narrow screen: a panel is picked here rather than sized by hand.
+     * It is not drawn where the panels fit together, so nothing is said about it until then.
+     */
+    .switch {
+        display: none;
+    }
+
+    .switch button {
+        display: flex;
+        flex: 1;
+        gap: 0.35rem;
+        align-items: center;
+        justify-content: center;
+        /* A finger is not a pointer: a control it aims at is roomy enough to hit. */
+        min-height: 44px;
+        padding: 0 0.35rem;
+        border-bottom: 2px solid transparent;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .switch button:hover {
+        color: var(--text);
+    }
+
+    .switch button.active {
+        border-bottom-color: var(--accent);
+        color: var(--text);
+    }
+
     .tabs {
         display: flex;
         padding: 0 0.25rem;
@@ -568,5 +706,72 @@ fun main(): Unit =
         margin: 0;
         padding: 0.35rem 0.25rem;
         color: var(--muted);
+    }
+
+    /*
+     * A phone: one panel at a time, the whole way across, under the header and the switcher.
+     *
+     * The panels are the same elements in the same grid; what changes is that a narrow screen
+     * draws only the one a person picked, in the row under the switcher rather than in a column
+     * of its own. The handles between them are gone with the room between them (see `Splitter`),
+     * so there is nothing left for them to size.
+     */
+    @media (max-width: 860px), (max-height: 520px) {
+        .ide {
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: auto auto minmax(0, 1fr);
+        }
+
+        .switch {
+            display: flex;
+            grid-column: 1 / -1;
+            grid-row: 2;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Nothing is drawn until it is asked for: the panels share the one cell there is. */
+        .files,
+        .editor,
+        .inspector,
+        .console {
+            display: none;
+            grid-column: 1;
+            grid-row: 3;
+        }
+
+        .ide[data-view="files"] .files,
+        .ide[data-view="code"] .editor,
+        .ide[data-view="console"] .console {
+            display: grid;
+        }
+
+        .ide[data-view="inspector"] .inspector {
+            display: flex;
+        }
+
+        .top {
+            gap: 0.5rem;
+            padding: 0.35rem 0.5rem;
+        }
+
+        /* A finger picks a tab the way a pointer does, but it needs more room to land in. */
+        .tabs button {
+            padding: 0.55rem 0.7rem;
+        }
+
+        /* A header is one line here, and a name too long for it says so rather than pushing
+           the tools off the screen. */
+        .tool-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tool {
+            min-height: 36px;
+            padding: 0.35rem 0.8rem;
+        }
     }
 </style>

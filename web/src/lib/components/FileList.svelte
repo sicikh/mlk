@@ -186,4 +186,22 @@
         padding: 0.25rem 0;
         overflow: auto;
     }
+
+    /* A finger taps what a pointer clicks, and a field it writes in is read without zooming
+       the page: a phone zooms a field whose text it thinks is too small to read. */
+    @media (max-width: 860px), (max-height: 520px) {
+        header {
+            padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+        }
+
+        .add {
+            padding: 0 0.6rem;
+            font-size: 20px;
+        }
+
+        input {
+            padding: 0.35rem 0.45rem;
+            font-size: 16px;
+        }
+    }
 </style>

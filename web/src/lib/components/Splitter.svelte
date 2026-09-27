@@ -168,4 +168,15 @@
     .handle:focus-visible {
         outline: none;
     }
+
+    /*
+     * Where the panels are stacked there is no seam to drag: the panel a person picked has
+     * the screen to itself, and what sizes it there is the screen. A handle that is taken
+     * out of the page takes its keys with it, so nothing is left to answer them with.
+     */
+    @media (max-width: 860px), (max-height: 520px) {
+        .handle {
+            display: none;
+        }
+    }
 </style>

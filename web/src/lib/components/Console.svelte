@@ -125,4 +125,16 @@
         margin: 0;
         color: var(--muted);
     }
+
+    /* The console is a panel of its own here, and the switcher above it already draws the line. */
+    @media (max-width: 860px), (max-height: 520px) {
+        .console {
+            border-top: none;
+        }
+
+        /* A finger picks a tab the way a pointer does, but it needs more room to land in. */
+        .tabs button {
+            padding: 0.55rem 0.6rem;
+        }
+    }
 </style>

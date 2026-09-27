@@ -51,6 +51,11 @@ fn run(options: &Options) -> anyhow::Result<bool> {
     let mut driver = Driver::new();
     driver.set_file_contents(vfs_path.clone(), Some(contents));
 
+    // The standard library is part of the compiler, and it goes in beside the file a person
+    // asked about: what a module of any project is read with is the library the compiler holds,
+    // not whatever a directory of the file system happens to be.
+    driver.use_std();
+
     let file = driver
         .file_id(&vfs_path)
         .context("the pushed file to have an id")?;

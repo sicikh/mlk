@@ -6,6 +6,11 @@
 //! in a browser there is none, and the driver never wanted one:
 //! an editor pushes the text it holds, and reads back what the pipeline made of it.
 //!
+//! The standard library is the one thing a host does not push: it is part of the compiler, and
+//! a browser has nowhere to read it from, so a host asks the driver for it
+//! ([`WasmDriver::use_std`]) and is handed the files it is made of. The library is the
+//! compiler's, so the editor shows it as a buffer and writes in none of it.
+//!
 //! The boundary is deliberately thin: this module converts values and nothing else,
 //! so the browser and the CLI cannot drift apart in what they ask the driver to do.
 //!
@@ -30,12 +35,27 @@ pub struct WasmDriver {
 
 #[wasm_bindgen]
 impl WasmDriver {
-    /// A driver that knows nothing: the editor pushes what it wants compiled.
+    /// A driver that knows nothing: a host pushes the buffers it holds, and asks for the
+    /// standard library of the language when it wants it ([`WasmDriver::use_std`]).
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
             driver: Driver::new(),
         }
+    }
+
+    /// Records the standard library of the language in the driver, and hands over the files it
+    /// is made of: the path each is known by, and its text.
+    ///
+    /// The library is part of the compiler, and a browser has nowhere to read it from, so a
+    /// host asks the driver for it rather than pushing text of its own. What comes back is what
+    /// a host shows: the library is the compiler's, and nothing in it is a person's to write.
+    ///
+    /// The name a host sees is `useStd`: wasm-bindgen keeps the Rust name otherwise,
+    /// and the editor around this module is written in JavaScript.
+    #[wasm_bindgen(js_name = useStd)]
+    pub fn use_std(&mut self) -> Result<JsValue, JsValue> {
+        to_js(&self.register_library())
     }
 
     /// Feeds the text of a file into the driver; `null` or `undefined` means the file is gone.
@@ -65,6 +85,20 @@ impl WasmDriver {
 }
 
 impl WasmDriver {
+    /// Records the standard library, and hands over the files it is made of.
+    fn register_library(&mut self) -> Vec<StdFile> {
+        self.driver
+            .use_std()
+            .into_iter()
+            .map(|file| {
+                StdFile {
+                    path: file.path.to_string(),
+                    text: file.text,
+                }
+            })
+            .collect()
+    }
+
     /// Everything the editor shows about one buffer.
     fn analysis(&mut self, path: &str) -> Result<Analysis, JsValue> {
         let file = self.file(path)?;
@@ -105,6 +139,16 @@ impl Default for WasmDriver {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// One file of the standard library, as a host reads it.
+#[derive(Serialize)]
+struct StdFile {
+    /// The path the driver knows the file by, which is the one a host shows.
+    path: String,
+
+    /// The source of it.
+    text: &'static str,
 }
 
 /// Everything the editor shows about one buffer.
@@ -392,6 +436,33 @@ mod tests {
             path_of("/main.mlk"),
             VfsPath::new_virtual_path("/main.mlk".to_string())
         );
+    }
+
+    #[test]
+    fn the_library_crosses_the_boundary_as_the_files_it_is() {
+        let mut driver = WasmDriver::new();
+        let files = driver.register_library();
+        let paths: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
+
+        assert_eq!(paths, ["/std/core.mlk", "/std/prelude.mlk"]);
+        assert!(
+            files[0].text.contains("module project::core"),
+            "a host is handed the source, not a path to read"
+        );
+
+        // The driver holds them, so a host that shows a file of the library gets its trees.
+        for file in files {
+            let analysis = driver
+                .analysis(&file.path)
+                .expect("a file of the library to analyze");
+
+            assert!(
+                analysis.diagnostics.is_empty(),
+                "{}: {}",
+                file.path,
+                serde_json::to_string(&analysis.diagnostics).unwrap_or_default(),
+            );
+        }
     }
 
     #[test]

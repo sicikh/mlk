@@ -38,6 +38,10 @@
 //! is dropped when the module changes project or the project's prelude changes; a parse is
 //! not, because a parse does not read the prelude.
 //!
+//! The library the language's own prelude names is one such project, and it is the compiler's
+//! rather than a host's ([`mlkc_stdlib`]): a host records it with [`Driver::use_std`], and a
+//! host that shows it to a person --- the editor --- shows the files it was handed.
+//!
 //! # The green nodes of a parse
 //!
 //! A parse of a file is built through a table of green nodes, and the table it is built
@@ -81,6 +85,19 @@ use mlkc_rowan::{AstNode, NodeCache};
 use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
+
+/// One file of the standard library: the path a driver keeps a module under, and its source.
+///
+/// A host that records the library is handed these ([`Driver::use_std`]), and a host that shows
+/// it to a person --- the editor --- shows the same files and writes in none of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StdFile {
+    /// The path the file is known by in a driver.
+    pub path: VfsPath,
+
+    /// The source of the file, as the compiler was built with it.
+    pub text: &'static str,
+}
 
 /// The driver: the only mutable component, and the owner of the memo table.
 #[derive(Default)]
@@ -375,6 +392,10 @@ impl TypePlaces {
 
 impl Driver {
     /// A driver that knows nothing: the host pushes what it wants compiled.
+    ///
+    /// The standard library of the language is the one thing a host does not have to know:
+    /// a host asks for it ([`Driver::use_std`]) and is handed the files of the library the
+    /// compiler was built with.
     pub fn new() -> Self {
         Self::default()
     }
@@ -416,6 +437,66 @@ impl Driver {
         self.invalidate_project(&project);
 
         true
+    }
+
+    /// Records the standard library of the language: pushes its sources, and records the
+    /// project they are.
+    ///
+    /// The library is part of the compiler ([`mlkc_stdlib`]) and not of a host, so nothing here
+    /// is a host's to say: where the modules land, which module the project starts from, and the
+    /// imports the library gives its own modules are all decided by the compiler.
+    ///
+    /// A host says *when* the library goes in, and a driver whose host never calls this holds no
+    /// library: the tests of this crate want that, and so does a host that compiles against
+    /// another library, which records its own ([`Driver::set_project`]).
+    ///
+    /// Returns the files the library is made of, in the order of [`mlkc_stdlib::modules`]:
+    /// the path each was recorded at, and its source, which is what a host shows. The library is
+    /// the compiler's rather than a person's, and nothing in it is a person's to write.
+    pub fn use_std(&mut self) -> Vec<StdFile> {
+        let files: Vec<StdFile> = mlkc_stdlib::modules()
+            .iter()
+            .map(|module| {
+                StdFile {
+                    path: mlkc_stdlib::path(module),
+                    text: module.source,
+                }
+            })
+            .collect();
+
+        for file in &files {
+            self.set_file_text(file.path.clone(), Some(file.text.to_owned()));
+        }
+
+        // The project starts from one module, and the rest of the library belongs to it: a
+        // project records the module it starts from as one of its own, so only the others are
+        // recorded.
+        let root = mlkc_stdlib::modules()
+            .iter()
+            .position(|module| module.name == mlkc_stdlib::ROOT)
+            .expect("the library to name the module its project starts from");
+
+        let modules: Vec<ModuleId> = files
+            .iter()
+            .map(|file| {
+                ModuleId(
+                    self.file_id(&file.path)
+                        .expect("a file of the library to have an id once it is pushed"),
+                )
+            })
+            .collect();
+
+        let id = ProjectId::new(mlkc_stdlib::PROJECT);
+
+        self.set_project(id.clone(), mlkc_stdlib::project(modules[root]));
+
+        for (index, module) in modules.iter().enumerate() {
+            if index != root {
+                self.set_module_project(*module, id.clone());
+            }
+        }
+
+        files
     }
 
     /// Drops a project, returning what it was.
@@ -1071,6 +1152,106 @@ mod tests {
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not dropped");
         assert_eq!(import_path(&after, "Int"), "std::prelude::Int");
         assert_eq!(driver.project_graph().project_of(ModuleId(file)), None);
+    }
+
+    /// The standard library of the language, as a host records it, and the files it was handed.
+    fn with_std() -> (Driver, Vec<StdFile>) {
+        let mut driver = Driver::new();
+        let files = driver.use_std();
+
+        (driver, files)
+    }
+
+    /// The id of a module of the library in a driver that holds it.
+    fn std_file(driver: &Driver, files: &[StdFile], name: &str) -> FileId {
+        let at = mlkc_stdlib::modules()
+            .iter()
+            .position(|module| module.name == name)
+            .expect("a module the library has");
+
+        driver
+            .file_id(&files[at].path)
+            .expect("a module of the library to be pushed")
+    }
+
+    #[test]
+    fn the_standard_library_is_the_project_the_compiler_names() {
+        let (driver, files) = with_std();
+        let id = ProjectId::new(mlkc_stdlib::PROJECT);
+        let project = driver
+            .project_graph()
+            .project(&id)
+            .expect("the library to be recorded");
+
+        assert_eq!(
+            project.root_module,
+            ModuleId(std_file(&driver, &files, mlkc_stdlib::ROOT)),
+        );
+
+        for module in mlkc_stdlib::modules() {
+            let module = ModuleId(std_file(&driver, &files, module.name));
+
+            assert_eq!(driver.project_graph().project_of(module), Some(&id));
+        }
+
+        // A project is what its modules are read with, and the library gives its own modules
+        // the names of the library.
+        assert_eq!(project.prelude, mlkc_stdlib::prelude());
+    }
+
+    #[test]
+    fn the_standard_library_compiles_without_diagnostics() {
+        let (mut driver, files) = with_std();
+
+        for module in mlkc_stdlib::modules() {
+            let file = std_file(&driver, &files, module.name);
+            let diagnostics = driver
+                .diagnostics(file)
+                .expect("a module of the library to be parsed");
+
+            assert!(diagnostics.is_empty(), "{}: {diagnostics:?}", module.name);
+        }
+    }
+
+    #[test]
+    fn recording_the_standard_library_twice_changes_nothing() {
+        let (mut driver, files) = with_std();
+        let root = std_file(&driver, &files, mlkc_stdlib::ROOT);
+        let before = driver.lower(root).expect("the root module to be lowered");
+
+        let again = driver.use_std();
+
+        assert_eq!(again, files, "the library lands where it landed");
+        let after = driver.lower(root).expect("the root module to be lowered");
+
+        assert!(
+            Arc::ptr_eq(&before, &after),
+            "a library that did not change is not read again",
+        );
+    }
+
+    /// The prelude of the language is a list of names the library exports: the language names
+    /// them (`std::prelude::Int`), the library declares and re-exports them, and a test is what
+    /// keeps the two sides of that fact from drifting apart ([ADR-0011]).
+    ///
+    /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+    #[test]
+    fn the_prelude_of_the_language_names_what_the_library_exports() {
+        let (mut driver, files) = with_std();
+        let prelude = driver
+            .lower(std_file(&driver, &files, "prelude"))
+            .expect("the module that re-exports the names to be lowered");
+        let scope = prelude.item_tree().scope();
+
+        for import in Prelude::standard().imports() {
+            let anchor = scope.anchor(import.name(), Namespace::Ty);
+
+            assert!(
+                matches!(anchor, PathAnchor::Use(_)),
+                "the library to export {}: {anchor:?}",
+                import.name(),
+            );
+        }
     }
 
     /// A path in a prelude, as the paths of a project are written.

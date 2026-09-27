@@ -22,6 +22,7 @@ mlkc-parser-core = { path = "crates/mlkc-parser-core", version = "0.1.0" }
 mlkc-paths = { path = "crates/mlkc-paths", version = "0.1.0" }
 mlkc-rowan = { path = "crates/mlkc-rowan", version = "0.1.0" }
 mlkc-span = { path = "crates/mlkc-span", version = "0.1.0" }
+mlkc-stdlib = { path = "crates/mlkc-stdlib", version = "0.1.0" }
 mlkc-string-case = { path = "crates/mlkc-string-case", version = "0.1.0" }
 mlkc-syntax = { path = "crates/mlkc-syntax", version = "0.1.0" }
 mlkc-syntax-factory = { path = "crates/mlkc-syntax-factory", version = "0.1.0" }

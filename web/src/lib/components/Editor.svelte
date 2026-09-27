@@ -65,6 +65,14 @@
          */
         reveals?: number;
 
+        /**
+         * Whether a person may write in a buffer.
+         *
+         * The standard library of the language is part of the compiler: the editor shows its
+         * files, and takes no text from them.
+         */
+        writable: (path: string) => boolean;
+
         /** Called with the whole text of a buffer after every change. */
         onInput: (path: string, text: string) => void;
 
@@ -83,6 +91,7 @@
         hovered = null,
         resolved = null,
         reveals = 0,
+        writable,
         onInput,
         onSelect,
         onClose,
@@ -252,6 +261,10 @@
     /** What every tab has: the same furniture, and a way back to the buffer it belongs to. */
     function extensions(it: string) {
         return [
+            // A file of the standard library is the compiler's: a read-only state refuses what
+            // a person types, and a view that is not editable does not offer to take it at all.
+            EditorState.readOnly.of(!writable(it)),
+            EditorView.editable.of(writable(it)),
             lineNumbers(),
             highlightActiveLineGutter(),
             history(),
@@ -406,6 +419,14 @@
                 <button class="pick" onclick={() => onSelect(tab)} title={tab}
                     >{name(tab)}</button
                 >
+                {#if !writable(tab)}
+                    <!-- The compiler's files are read rather than written, and a tab says at
+                         a glance which of the open buffers is one of them. -->
+                    <span
+                        class="locked"
+                        title="The standard library is read-only">r/o</span
+                    >
+                {/if}
                 <button
                     class="close"
                     onclick={() => onClose(tab)}
@@ -473,6 +494,13 @@
 
     .close:hover {
         color: var(--error);
+    }
+
+    /* What a tab of a file that is not a person's to write says for itself. */
+    .locked {
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.03em;
     }
 
     .host {

@@ -179,6 +179,25 @@ export interface Driver {
 
     /** The trees and the diagnostics of a buffer, computed only for what changed. */
     analyze(path: string): Analysis;
+
+    /**
+     * Records the standard library of the language in the driver, and hands over the files it
+     * is made of.
+     *
+     * The library is part of the compiler rather than of the editor: a host asks for it
+     * instead of pushing it, and what comes back is what a host shows — files of the
+     * compiler's, with nothing in them for a person to write.
+     */
+    useStd(): StdFile[];
+}
+
+/** One file of the standard library of the language, as the driver hands it over. */
+export interface StdFile {
+    /** The path the driver knows the file by, which is the one the editor shows. */
+    path: string;
+
+    /** The source of the file. */
+    text: string;
 }
 
 /**
@@ -195,5 +214,6 @@ export async function loadDriver(): Promise<Driver> {
     return {
         push: (path, text) => wasm.setText(path, text),
         analyze: (path) => wasm.analyze(path) as Analysis,
+        useStd: () => wasm.useStd() as StdFile[],
     };
 }

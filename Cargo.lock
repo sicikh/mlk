@@ -654,6 +654,7 @@ dependencies = [
  "mlkc-parser",
  "mlkc-parser-core",
  "mlkc-rowan",
+ "mlkc-stdlib",
  "mlkc-syntax",
  "mlkc-text-size",
  "mlkc-vfs",
@@ -764,6 +765,14 @@ name = "mlkc-span"
 version = "0.1.0"
 dependencies = [
  "mlkc-text-size",
+ "mlkc-vfs",
+]
+
+[[package]]
+name = "mlkc-stdlib"
+version = "0.1.0"
+dependencies = [
+ "mlkc-hir-def",
  "mlkc-vfs",
 ]
 

@@ -8,6 +8,14 @@
         /** The buffer the editor is editing. */
         active: string;
 
+        /**
+         * Whether a person may write at a path.
+         *
+         * The standard library of the language is part of the compiler: its files are read,
+         * and no buffer is made beside them, so the editor asks before it makes one.
+         */
+        writable: (path: string) => boolean;
+
         /** Called when a person picks another buffer. */
         onSelect: (path: string) => void;
 
@@ -18,7 +26,8 @@
         onRemove: (path: string) => void;
     }
 
-    let { files, active, onSelect, onCreate, onRemove }: Props = $props();
+    let { files, active, writable, onSelect, onCreate, onRemove }: Props =
+        $props();
 
     /** Whether a person is typing the path of a buffer to make. */
     let making = $state(false);
@@ -38,9 +47,14 @@
     /** The directories the paths make, which are the whole of the file system there is. */
     const tree = $derived(foldersOf(files));
 
-    /** A path is a name and the directories it sits in, so its hint says where it will land. */
+    /**
+     * A path is a name and the directories it sits in, so its hint says where it will land.
+     *
+     * A buffer made beside a file of the library would be one of the library's, so a file of the
+     * library in front moves the hint to the root the editor's own buffers sit in.
+     */
     const hint = $derived(
-        `${active.slice(0, active.lastIndexOf("/") + 1)}name.mlk`,
+        `${writable(active) ? active.slice(0, active.lastIndexOf("/") + 1) : "/"}name.mlk`,
     );
 
     /** What a person typed, as the editor spells paths: one leading slash, no empty parts. */
@@ -60,6 +74,11 @@
 
         if (files.includes(path)) {
             problem = "a buffer is already there";
+            return;
+        }
+
+        if (!writable(path)) {
+            problem = "the standard library is read-only";
             return;
         }
 
@@ -109,6 +128,7 @@
         <FileTree
             folder={tree}
             {active}
+            {writable}
             confirming={dropping}
             {onSelect}
             onConfirm={(path) => (dropping = path)}

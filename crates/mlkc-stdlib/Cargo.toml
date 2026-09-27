@@ -1,0 +1,15 @@
+[package]
+name = "mlkc-stdlib"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+mlkc-hir-def.workspace = true
+mlkc-vfs.workspace = true
+
+[lints]
+workspace = true

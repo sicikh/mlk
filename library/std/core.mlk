@@ -1,0 +1,8 @@
+#[no-prelude]
+module project::core
+
+#[builtin]
+type Int
+
+#[builtin]
+type Unit

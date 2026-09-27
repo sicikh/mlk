@@ -15,6 +15,7 @@ mlkc-lower.workspace = true
 mlkc-parser.workspace = true
 mlkc-parser-core.workspace = true
 mlkc-rowan.workspace = true
+mlkc-stdlib.workspace = true
 mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true
 rustc-hash.workspace = true

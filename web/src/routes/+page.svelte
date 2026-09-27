@@ -9,7 +9,12 @@
     import HirView from "$lib/components/HirView.svelte";
     import Splitter from "$lib/components/Splitter.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
-    import { loadDriver, type Analysis, type Driver } from "$lib/driver";
+    import {
+        loadDriver,
+        type Analysis,
+        type Driver,
+        type StdFile,
+    } from "$lib/driver";
 
     interface Buffer {
         path: string;
@@ -60,6 +65,15 @@ fun main(): Unit =
 
     let buffers = $state<Buffer[]>(STARTER);
     let active = $state(FIRST);
+
+    /**
+     * The files of the standard library of the language.
+     *
+     * The library is part of the compiler: the driver holds it and hands it over, and the
+     * editor shows it as it shows a buffer a person wrote. What it is not is a place to write:
+     * a file of it is read, and nothing is made beside it.
+     */
+    let library = $state<StdFile[]>([]);
 
     /** The buffers open in the editor, in the order of their tabs: opening is not reading. */
     let open = $state<string[]>(STARTER.map((it) => it.path));
@@ -146,11 +160,34 @@ fun main(): Unit =
             // A driver knows nothing until a host says what it holds: every buffer goes in first.
             for (const it of buffers) push(it.path);
 
+            // The library of the language goes in beside them, and is shown beside them: it is
+            // the compiler's, so the editor reads it where the compiler put it.
+            library = driver.useStd();
+            buffers = [
+                ...buffers,
+                ...library.map((it) => ({ path: it.path, text: it.text })),
+            ];
+
             check();
         } catch (error) {
             say("error", `the driver did not load: ${String(error)}`);
         }
     });
+
+    /** The directory a path sits in, which is everything up to its last separator. */
+    function directoryOf(path: string): string {
+        return path.slice(0, path.lastIndexOf("/") + 1);
+    }
+
+    /**
+     * Whether a person may write at a path.
+     *
+     * The standard library is the compiler's, and so is the directory it sits in: a file of it
+     * is read rather than written, and a buffer made in its directory would be a file of it.
+     */
+    function writable(path: string): boolean {
+        return !library.some((it) => path.startsWith(directoryOf(it.path)));
+    }
 
     /** Says one line to the console. */
     function say(level: Line["level"], text: string) {
@@ -167,6 +204,10 @@ fun main(): Unit =
         const it = find(path);
 
         if (!driver || !it) return;
+
+        // A file of the library is the driver's own: what the editor shows of it came from
+        // there, and pushing it back would only let a copy overwrite what the compiler holds.
+        if (!writable(path)) return;
 
         try {
             driver.push(it.path, it.text);
@@ -204,6 +245,10 @@ fun main(): Unit =
         const it = find(path);
 
         if (!it) return;
+
+        // A file of the library is not a person's to change, and the editor takes no keystrokes
+        // from one: a change that arrives by some other way is dropped rather than kept.
+        if (!writable(path)) return;
 
         it.text = text;
 
@@ -254,6 +299,11 @@ fun main(): Unit =
     function create(path: string) {
         if (find(path)) return;
 
+        if (!writable(path)) {
+            say("note", `refused ${name(path)}: the library is the compiler's`);
+            return;
+        }
+
         buffers = [...buffers, { path, text: "" }];
         open = [...open, path];
         active = path;
@@ -266,6 +316,9 @@ fun main(): Unit =
 
     /** Drops a buffer, and tells the driver the file is gone. */
     function remove(path: string) {
+        // Nothing of the library is a person's to drop, and the files do not offer it.
+        if (!writable(path)) return;
+
         const at = open.indexOf(path);
 
         buffers = buffers.filter((it) => it.path !== path);
@@ -385,6 +438,7 @@ fun main(): Unit =
         <FileList
             files={buffers.map((it) => it.path)}
             {active}
+            {writable}
             onSelect={edit}
             onCreate={create}
             onRemove={remove}
@@ -411,6 +465,7 @@ fun main(): Unit =
                 {hovered}
                 {resolved}
                 {reveals}
+                {writable}
                 onInput={onText}
                 onSelect={select}
                 onClose={closeTab}

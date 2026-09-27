@@ -17,6 +17,26 @@
     }
 
     /**
+     * Whether a directory holds nothing but files a person may not write.
+     *
+     * The standard library of the language is such a directory: the compiler's files are read,
+     * and nothing is made beside them. A directory is what says so --- once, on its own row ---
+     * and a file of the library says nothing of its own.
+     */
+    function lockedOf(
+        folder: Folder,
+        writable: (path: string) => boolean,
+    ): boolean {
+        const files = folder.files.every((file) => !writable(file));
+        const folders = folder.folders.every((child) =>
+            lockedOf(child, writable),
+        );
+        const holds = folder.files.length > 0 || folder.folders.length > 0;
+
+        return holds && files && folders;
+    }
+
+    /**
      * The directories a list of paths makes.
      *
      * A browser has no directories to read, so the paths of the buffers are the whole truth:
@@ -74,6 +94,12 @@
         /** The buffer the editor is editing. */
         active: string;
 
+        /** Whether a person may write at a path, which decides what a row of it offers. */
+        writable: (path: string) => boolean;
+
+        /** Whether the directory shown sits inside the library of the language. */
+        inside?: boolean;
+
         /** The buffer a person is being asked about, if any. */
         confirming: string | null;
 
@@ -87,11 +113,30 @@
         onRemove: (path: string) => void;
     }
 
-    let { folder, active, confirming, onSelect, onConfirm, onRemove }: Props =
-        $props();
+    let {
+        folder,
+        active,
+        writable,
+        inside = false,
+        confirming,
+        onSelect,
+        onConfirm,
+        onRemove,
+    }: Props = $props();
 
     /** Whether the directory shows what it holds: a person folds what they are not reading. */
     let open = $state(true);
+
+    /** Whether every file under this directory is one a person may not write. */
+    const locked = $derived(lockedOf(folder, writable));
+
+    /**
+     * Whether the library of the language is this directory or one above it.
+     *
+     * A directory of the library says what it is, and a directory inside one does not repeat it:
+     * the label belongs to the directory a person sees the library at.
+     */
+    const library = $derived(inside || locked);
 
     /** A buffer has a name, not a directory: only the last part of its path is shown. */
     const name = (path: string) => path.split("/").at(-1) ?? path;
@@ -102,6 +147,8 @@
         <FileTree
             folder={child}
             {active}
+            {writable}
+            inside={library}
             {confirming}
             {onSelect}
             {onConfirm}
@@ -127,12 +174,14 @@
                 <button class="pick" onclick={() => onSelect(file)}
                     >{name(file)}</button
                 >
-                <button
-                    class="drop"
-                    onclick={() => onConfirm(file)}
-                    title="Delete this buffer"
-                    aria-label="Delete {name(file)}">×</button
-                >
+                {#if writable(file)}
+                    <button
+                        class="drop"
+                        onclick={() => onConfirm(file)}
+                        title="Delete this buffer"
+                        aria-label="Delete {name(file)}">×</button
+                    >
+                {/if}
             </div>
         {/if}
     {/each}
@@ -149,6 +198,13 @@
     >
         <span class="caret">{open ? "▾" : "▸"}</span>
         <span class="name">{folder.name}</span>
+        {#if !inside && locked}
+            <!-- A directory of the library of the language is the compiler's, and it is the
+                 directory that says so: nothing under it repeats it. -->
+            <span class="locked" title="The standard library is read-only"
+                >read-only</span
+            >
+        {/if}
     </button>
 
     {#if open}
@@ -225,6 +281,15 @@
 
     .drop:hover {
         color: var(--error);
+    }
+
+    /* What a directory that is not a person's to write says for itself: the one label the
+       library of the language has, on the directory a person sees it at. */
+    .locked {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.03em;
     }
 
     .asking {

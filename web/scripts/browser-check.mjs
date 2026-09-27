@@ -81,6 +81,14 @@ const LONG =
     ) +
     "\n    x0\n";
 
+/**
+ * What is typed into a file of the standard library, which is not a file a person may write.
+ *
+ * The library is the compiler's: the editor shows a file of it as it shows a buffer, and a
+ * state that is read-only takes no text from it.
+ */
+const WRITTEN = "fun main(): Unit =\n    x\n";
+
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
@@ -388,6 +396,46 @@ const STEPS = {
     		shown: panel(),
     		lines: document.querySelector('[data-panel=console] .lines') !== null,
     		overflows: document.documentElement.scrollWidth > innerWidth
+    	})`,
+
+    // The standard library is in the files with everything else, and it is the compiler's:
+    // the directory of the library says so once, and a row of it offers nothing to drop.
+    library: `const row = document.querySelector('[data-file="/std/core.mlk"]');
+    	const folder = document.querySelector('[data-folder=std]');
+    	return JSON.stringify({
+    		files: [...document.querySelectorAll('[data-file]')].map((it) => it.dataset.file),
+    		drop: row === null ? null : row.querySelector('.drop') !== null,
+    		file: text(row?.querySelector('.locked')),
+    		locked: text(folder?.querySelector('.locked'))
+    	})`,
+
+    openLibrary: `document.querySelector('[data-file="/std/core.mlk"] .pick').click(); return true`,
+
+    // What the editor holds of the file in front, and whether it offers to take text at all.
+    readLibrary: `const content = document.querySelector('.cm-content');
+    	return JSON.stringify({
+    		editable: content.getAttribute('contenteditable'),
+    		text: text(content),
+    		tab: text(document.querySelector('[data-panel=editor] .tab.active .locked'))
+    	})`,
+
+    writeLibrary: `const content = document.querySelector('.cm-content');
+    	content.focus();
+    	content.textContent = ${JSON.stringify(WRITTEN)};
+    	content.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
+    // A buffer cannot be made in the directory of the library, and the form says so.
+    typeStdPath: `const field = document.querySelector('[data-panel=files] input');
+    	field.value = 'std/thing.mlk';
+    	field.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
+    submitStdPath: `document.querySelector('[data-panel=files] form').requestSubmit(); return true`,
+
+    refusedStdPath: `return JSON.stringify({
+    		problem: text(document.querySelector('[data-panel=files] .problem')),
+    		made: document.querySelector('[data-file="/std/thing.mlk"]') !== null
     	})`,
 
     pickCode: `document.querySelector('[data-pane=code]').click(); return true`,
@@ -703,6 +751,23 @@ async function main() {
         ...JSON.parse(await ask(STEPS.pickedToken)),
     };
 
+    // The standard library is in the files with everything else, and nothing of it is a
+    // person's to write in or to drop.
+    await ask(STEPS.pickFiles);
+    const library = JSON.parse(await ask(STEPS.library));
+
+    await ask(STEPS.openLibrary);
+    const readLibrary = JSON.parse(await ask(STEPS.readLibrary));
+    await ask(STEPS.writeLibrary);
+    const writtenLibrary = JSON.parse(await ask(STEPS.readLibrary));
+
+    // And a buffer cannot be made in the directory of the library: the form says why.
+    await ask(STEPS.pickFiles);
+    await ask(STEPS.open);
+    await ask(STEPS.typeStdPath);
+    await ask(STEPS.submitStdPath);
+    const refusedStdPath = JSON.parse(await ask(STEPS.refusedStdPath));
+
     return report(
         {
             status: state.file,
@@ -735,6 +800,10 @@ async function main() {
             phoneInspector,
             phoneConsole,
             phoneToken,
+            library,
+            readLibrary,
+            writtenLibrary,
+            refusedStdPath,
         },
         problems,
         warnings,
@@ -913,7 +982,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Files shows the files",
             page.phoneFiles.shown === "files" &&
-                page.phoneFiles.files === 2 &&
+                page.phoneFiles.files === 4 &&
                 !page.phoneFiles.overflows,
         ],
         [
@@ -947,6 +1016,31 @@ function report(page, problems, warnings, asked) {
             // and is asked for the mark alone.
             "picking a token brings the place it stands for into view",
             !page.phoneToken.scrolls || page.phoneToken.scrolled,
+        ],
+        [
+            // The library is the compiler's: it is in the files with everything else, and the
+            // directory of the library is what says so --- once, for everything under it.
+            "the standard library is in the files, and offers nothing to drop",
+            page.library.files.includes("/std/core.mlk") &&
+                page.library.files.includes("/std/prelude.mlk") &&
+                page.library.drop === false &&
+                page.library.file === "" &&
+                page.library.locked === "read-only",
+        ],
+        [
+            // What the editor shows of a file of the library is what the compiler holds: a
+            // state that is read-only takes no text, and the tab says what the file is.
+            "a file of the library is read, and not written in",
+            page.readLibrary.editable === "false" &&
+                page.readLibrary.tab === "r/o" &&
+                page.readLibrary.text.includes("module project::core") &&
+                page.writtenLibrary.text === page.readLibrary.text,
+        ],
+        [
+            "a buffer cannot be made in the directory of the library",
+            page.refusedStdPath.problem ===
+                "the standard library is read-only" &&
+                !page.refusedStdPath.made,
         ],
         ["the page said nothing it should not have", problems.length === 0],
     ];
@@ -990,6 +1084,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a phone at ${page.phone.width}px shows ${page.phone.shown}, and the switcher has ${page.phone.switches} panels to pick`,
+    );
+    console.log(
+        `the files hold ${page.library.files.length} buffers, and the editor ${page.writtenLibrary.text === page.readLibrary.text ? "did not take" : "TOOK"} what was typed into a file of the library`,
     );
     console.log(
         `a pick of ${JSON.stringify(page.phoneToken.says)} in a tree marks ${JSON.stringify(page.phoneToken.marked)}, which the editor ${page.phoneToken.scrolls ? (page.phoneToken.scrolled ? "is taken to" : "stays away from") : "has nothing to scroll to"}`,

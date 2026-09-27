@@ -28,8 +28,8 @@
 //! without writing them, which lowering declares into the module's item tree
 //! ([ADR-0011](../../docs/adr/0011-module-prelude.md)). A prelude belongs to a project ---
 //! `std` and a project of a host each have their own --- and the driver holds the module
-//! graph ([`ProjectGraph`]): which projects exist, what each of them starts from and depends
-//! on, and which project a module belongs to.
+//! graph ([`ProjectGraph`]): which projects exist, what each of them depends on, and which
+//! project a module belongs to.
 //!
 //! A host records them with [`Driver::set_project`], [`Driver::set_module_project`], and
 //! [`Driver::remove_project`], and a module that belongs to no project --- a file a host
@@ -42,10 +42,9 @@
 //! rather than a host's ([`mlkc_stdlib`]): a host records it with [`Driver::use_std`], and a
 //! host that shows it to a person --- the editor --- shows the files it was handed.
 //!
-//! A project also says where its modules stand: the path of a file under the directory the
-//! project is rooted at is the place the module is called by, unless the module declares a
-//! path of its own ([`Driver::module_path`]). A module no project claims stands in no tree,
-//! and is called by the name of its file.
+//! A project is a set of modules rather than a tree of them: no module of a project is the one
+//! it starts from, and a module is called by the place its file stands at, which the path a
+//! host pushed it under says.
 //!
 //! # The green nodes of a parse
 //!
@@ -424,16 +423,16 @@ impl Driver {
         self.vfs.set_file_text(path, text)
     }
 
-    /// Records a project: the module it starts from, what it depends on, and the prelude its
-    /// modules are given without writing them.
+    /// Records a project: what it depends on, and the prelude its modules are given without
+    /// writing them.
     ///
     /// Returns whether the graph changed. A project says what its modules are read under, so
     /// a change to one drops the HIR of the modules that belong to it ([ADR-0008]) --- today
     /// the prelude is the part of a project that lowering reads; the parses are kept, since a
     /// parse is a function of the text and of nothing else.
     ///
-    /// Recording a project records the module it starts from as a module of it; the rest of
-    /// its modules are recorded with [`Driver::set_module_project`].
+    /// A project holds no module it starts from: which modules are its own is recorded one by
+    /// one with [`Driver::set_module_project`].
     ///
     /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
     pub fn set_project(&mut self, project: ProjectId, data: ProjectData) -> bool {
@@ -451,8 +450,8 @@ impl Driver {
     /// project they are.
     ///
     /// The library is part of the compiler ([`mlkc_stdlib`]) and not of a host, so nothing here
-    /// is a host's to say: where the modules land, which module the project starts from, and the
-    /// imports the library gives its own modules are all decided by the compiler.
+    /// is a host's to say: where the modules land, which project they are, and the imports the
+    /// library gives its own modules are all decided by the compiler.
     ///
     /// A host says *when* the library goes in, and a driver whose host never calls this holds no
     /// library: the tests of this crate want that, and so does a host that compiles against
@@ -476,32 +475,19 @@ impl Driver {
             self.set_file_text(file.path.clone(), Some(file.text.to_owned()));
         }
 
-        // The project starts from one module, and the rest of the library belongs to it: a
-        // project records the module it starts from as one of its own, so only the others are
-        // recorded.
-        let root = mlkc_stdlib::modules()
-            .iter()
-            .position(|module| module.name == mlkc_stdlib::ROOT)
-            .expect("the library to name the module its project starts from");
-
-        let modules: Vec<ModuleId> = files
-            .iter()
-            .map(|file| {
-                ModuleId(
-                    self.file_id(&file.path)
-                        .expect("a file of the library to have an id once it is pushed"),
-                )
-            })
-            .collect();
-
         let id = ProjectId::new(mlkc_stdlib::PROJECT);
 
-        self.set_project(id.clone(), mlkc_stdlib::project(modules[root]));
+        self.set_project(id.clone(), mlkc_stdlib::project());
 
-        for (index, module) in modules.iter().enumerate() {
-            if index != root {
-                self.set_module_project(*module, id.clone());
-            }
+        // Every module of the library is one of the project: a project holds no module it
+        // starts from, so each of them is recorded.
+        for file in &files {
+            let module = ModuleId(
+                self.file_id(&file.path)
+                    .expect("a file of the library to have an id once it is pushed"),
+            );
+
+            self.set_module_project(module, id.clone());
         }
 
         files
@@ -644,40 +630,23 @@ impl Driver {
         })
     }
 
-    /// Where a module stands: the path of its file under the directory the file the project
-    /// starts from is written in, which is what the project is rooted at.
+    /// Where a module stands: the place of its file, which is what the module is called when it
+    /// declares no path of its own.
     ///
-    /// The module `lib/arith.mlk` of a project rooted at `main.mlk` is the module
-    /// `project::lib::arith`, and `main.mlk` itself is `project::main`: a module is called by
-    /// the place its file stands at, whether or not it declares a path of its own.
+    /// The place of a file is the path of it under the root of the file system it was pushed
+    /// into: the module `lib/arith.mlk` is the module `project::lib::arith`, and `main.mlk`
+    /// itself is `project::main`. A host lays a project out in that file system, so the paths
+    /// it pushes are what says where the modules of the project stand.
     ///
-    /// A module no project claims stands in no tree, and neither does a file that stands
-    /// outside the directory its project is rooted in: a module of either is called by the
-    /// name of its file, since the name of the file is all there is to say where it stands.
+    /// A file of the host's own file system is a path of the machine rather than a place in
+    /// the tree a host laid out, and a file written at the root of the file system has no name:
+    /// a module of either is called by the name of its file, the name being all there is to say
+    /// which module it is.
     fn module_path(&self, module: ModuleId) -> RelPathBuf {
         let file = self.vfs.file_path(module.0);
 
-        self.project_directory(module)
-            .and_then(|directory| file.strip_prefix(&directory))
+        file.strip_prefix(&root())
             .map_or_else(|| file_name(file), RelPath::to_path_buf)
-    }
-
-    /// The directory a project is rooted at: the directory the file it starts from is written
-    /// in, or nothing for a module no project claims.
-    ///
-    /// A project may be rooted where the file system is: the file it starts from may be
-    /// written at the root itself, which a virtual path spells as an empty path. What a path
-    /// under it is read from is the root, and a path is read relative to it.
-    fn project_directory(&self, module: ModuleId) -> Option<VfsPath> {
-        let project = self.projects.project_of(module)?;
-        let root = self.projects.project(project)?.root_module;
-        let directory = self.vfs.file_path(root.0).parent()?;
-
-        Some(if directory.to_string().is_empty() {
-            VfsPath::new_virtual_path("/".to_owned())
-        } else {
-            directory
-        })
     }
 
     /// The diagnostics of `file`, in the shape a host renders: what the parser reported,
@@ -789,12 +758,18 @@ impl Driver {
     }
 }
 
+/// The root of the file system: what the place of a file is read against
+/// ([`Driver::module_path`]).
+fn root() -> VfsPath {
+    VfsPath::new_virtual_path("/".to_owned())
+}
+
 /// The path of a file under the directory it is written in: the name of the file itself.
 ///
-/// This is what a module whose file stands in no tree is called by. The extension is kept ---
-/// it is what says that the file is a file of the language, and it is lowering that leaves it
-/// out of the name of the module --- and a path that names no file, such as the root of the
-/// file system, is read as naming no module at all.
+/// This is what a module is called by when the place of its file says nothing of it: a file of
+/// the host's own file system, and a file written at the root of the file system. The extension
+/// is kept --- it is what says that the file is a file of the language, and it is lowering that
+/// leaves it out of the name of the module --- and a path that names no file names no module.
 fn file_name(path: &VfsPath) -> RelPathBuf {
     let name = match path.name_and_extension() {
         Some((stem, Some(extension))) => format!("{stem}.{extension}"),
@@ -1088,7 +1063,7 @@ mod tests {
         // A prelude of the project replaces the one of the language.
         let data = ProjectData {
             prelude: prelude_of(&["project", "core", "Int"]),
-            ..ProjectData::new(ModuleId(file))
+            ..ProjectData::default()
         };
 
         assert!(driver.set_project(project(), data.clone()));
@@ -1096,6 +1071,7 @@ mod tests {
             !driver.set_project(project(), data),
             "the project did not change",
         );
+        assert!(driver.set_module_project(ModuleId(file), project()));
 
         let after = driver.lower(file).expect("the file to be lowered");
 
@@ -1110,8 +1086,7 @@ mod tests {
             "the prelude of the project replaced the one of the language",
         );
 
-        // The root module of a project is a module of it, and a parse is not what a project
-        // changes: the one the driver already holds stands.
+        // A parse is not what a project changes: the one the driver already holds stands.
         assert_eq!(
             driver.project_graph().project_of(ModuleId(file)),
             Some(&project()),
@@ -1128,10 +1103,10 @@ mod tests {
         driver.set_file_text(lib.clone(), Some("fun size(): Int =\n    1\n".to_string()));
         let lib = driver.file_id(&lib).expect("the file to have an id");
 
-        // A project is rooted where the file it starts from is written, and a file of it is
-        // a module of it: what is left of the place of a file after that directory is the path
-        // the module is called by.
-        assert!(driver.set_project(project(), ProjectData::new(ModuleId(main))));
+        // A module is called by the place of its file, and a project is a set of modules:
+        // recording a module as one of the project says nothing about where it stands.
+        assert!(driver.set_project(project(), ProjectData::default()));
+        assert!(driver.set_module_project(ModuleId(main), project()));
         assert!(driver.set_module_project(ModuleId(lib), project()));
 
         let root = driver.lower(main).expect("the file to be lowered");
@@ -1140,28 +1115,30 @@ mod tests {
         assert_eq!(called_by(&root), "project::main");
         assert_eq!(called_by(&module), "project::lib::arith");
 
-        // A file no project claims stands in no tree, and is called by the name of its file:
-        // a module a host pushes on its own is the module the file it is written in is called.
+        // A file written at the root of the file system has no place under it, and is called
+        // by the name of its file: a module a host pushes on its own is the module the file it
+        // is written in is called.
         let (mut driver, lone) = driver_with("lone.mlk", "fun main(): Int =\n    1\n");
         let lowered = driver.lower(lone).expect("the file to be lowered");
 
         assert_eq!(called_by(&lowered), "project::lone");
 
-        // A file that stands outside the directory its project is rooted in stands in no tree
-        // of it either, and is called the same way.
-        let (mut driver, root) = driver_with("lib/main.mlk", "fun main(): Int =\n    1\n");
-        let outside = path("main.mlk");
+        // A module of a project is called by its own place: the project holds the module, and
+        // says nothing about where it stands.
+        let (mut driver, first) = driver_with("lib/main.mlk", "fun main(): Int =\n    1\n");
+        let elsewhere = path("main.mlk");
 
         driver.set_file_text(
-            outside.clone(),
+            elsewhere.clone(),
             Some("fun size(): Int =\n    1\n".to_string()),
         );
-        let outside = driver.file_id(&outside).expect("the file to have an id");
+        let elsewhere = driver.file_id(&elsewhere).expect("the file to have an id");
 
-        assert!(driver.set_project(project(), ProjectData::new(ModuleId(root))));
-        assert!(driver.set_module_project(ModuleId(outside), project()));
+        assert!(driver.set_project(project(), ProjectData::default()));
+        assert!(driver.set_module_project(ModuleId(first), project()));
+        assert!(driver.set_module_project(ModuleId(elsewhere), project()));
 
-        let lowered = driver.lower(outside).expect("the file to be lowered");
+        let lowered = driver.lower(elsewhere).expect("the file to be lowered");
 
         assert_eq!(called_by(&lowered), "project::main");
     }
@@ -1191,9 +1168,11 @@ mod tests {
 
         assert!(driver.set_project(first.clone(), ProjectData {
             prelude: prelude_of(&["project", "core", "Int"]),
-            ..ProjectData::new(ModuleId(main))
+            ..ProjectData::default()
         }));
-        assert!(driver.set_project(second.clone(), ProjectData::new(ModuleId(lib))));
+        assert!(driver.set_project(second.clone(), ProjectData::default()));
+        assert!(driver.set_module_project(ModuleId(main), first.clone()));
+        assert!(driver.set_module_project(ModuleId(lib), second));
 
         let before_main = driver.lower(main).expect("the file to be lowered");
         let before_lib = driver.lower(lib).expect("the file to be lowered");
@@ -1204,7 +1183,7 @@ mod tests {
         // The prelude of one project changes, and the module of the other is left alone.
         assert!(driver.set_project(first, ProjectData {
             prelude: prelude_of(&["project", "other", "Int"]),
-            ..ProjectData::new(ModuleId(main))
+            ..ProjectData::default()
         }));
 
         let after_main = driver.lower(main).expect("the file to be lowered");
@@ -1220,16 +1199,16 @@ mod tests {
 
     #[test]
     fn a_module_that_changes_project_is_read_with_the_other_project() {
-        let (mut driver, file) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
+        let mut driver = Driver::new();
         let project = ProjectId::new("the-project");
 
         assert!(driver.set_project(project.clone(), ProjectData {
             prelude: prelude_of(&["project", "core", "Int"]),
-            ..ProjectData::new(ModuleId(file))
+            ..ProjectData::default()
         }));
 
-        // The root module of the project is recorded as one of it, so a module that changes
-        // project has to be one the graph does not know yet.
+        // A module the graph does not know is read with the prelude of the language, and one
+        // recorded as a module of a project is read with the prelude of it.
         driver.set_file_text(
             path("lib.mlk"),
             Some("fun size(): Int =\n    1\n".to_string()),
@@ -1257,8 +1236,9 @@ mod tests {
 
         driver.set_project(project.clone(), ProjectData {
             prelude: Prelude::none(),
-            ..ProjectData::new(ModuleId(file))
+            ..ProjectData::default()
         });
+        assert!(driver.set_module_project(ModuleId(file), project.clone()));
 
         let before = driver.lower(file).expect("the file to be lowered");
         assert_eq!(
@@ -1308,11 +1288,6 @@ mod tests {
             .project(&id)
             .expect("the library to be recorded");
 
-        assert_eq!(
-            project.root_module,
-            ModuleId(std_file(&driver, &files, mlkc_stdlib::ROOT)),
-        );
-
         for module in mlkc_stdlib::modules() {
             let module = ModuleId(std_file(&driver, &files, module.name));
 
@@ -1341,13 +1316,17 @@ mod tests {
     #[test]
     fn recording_the_standard_library_twice_changes_nothing() {
         let (mut driver, files) = with_std();
-        let root = std_file(&driver, &files, mlkc_stdlib::ROOT);
-        let before = driver.lower(root).expect("the root module to be lowered");
+        let core = std_file(&driver, &files, mlkc_stdlib::CORE);
+        let before = driver
+            .lower(core)
+            .expect("the module of the library to be lowered");
 
         let again = driver.use_std();
 
         assert_eq!(again, files, "the library lands where it landed");
-        let after = driver.lower(root).expect("the root module to be lowered");
+        let after = driver
+            .lower(core)
+            .expect("the module of the library to be lowered");
 
         assert!(
             Arc::ptr_eq(&before, &after),

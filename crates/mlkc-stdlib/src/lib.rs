@@ -4,15 +4,14 @@
 //! `library`, one directory per project of it: a person reads and reviews it there, and this
 //! crate is the compiler's copy of it, taken when the compiler is built ([`modules`]).
 //!
-//! What the library *is* --- the project it forms, the module that project starts from, the
-//! imports it gives its own modules without them writing them, and the path the compiler keeps
-//! a module under --- is written here once.
+//! What the library *is* --- the project it forms, the imports it gives its own modules without
+//! them writing them, and the path the compiler keeps a module under --- is written here once.
 //!
 //! Nothing here drives a compiler: the driver depends on this crate, records the library when
 //! its host asks for it, and hands the files over. A host of the compiler reads none of what is
 //! written here, and cannot spell the library another way.
 
-use mlkc_hir_def::{ModuleId, Name, PlainPath, Prelude, ProjectData};
+use mlkc_hir_def::{Name, PlainPath, Prelude, ProjectData};
 use mlkc_vfs::VfsPath;
 
 /// The name of the project the standard library is.
@@ -22,8 +21,11 @@ use mlkc_vfs::VfsPath;
 /// keyword `project`, the one a module knows of itself without a manifest ([`PlainPath`]).
 pub const PROJECT: &str = "std";
 
-/// The name of the module the project of the library starts from.
-pub const ROOT: &str = "core";
+/// The name of the module that declares the names of the language.
+///
+/// The other module of the library re-exports what this one declares, and the prelude of the
+/// language names it: `std::prelude::Int` is a name of this module, re-exported ([`prelude`]).
+pub const CORE: &str = "core";
 
 /// One module of the standard library.
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +45,7 @@ pub struct Module {
 pub fn modules() -> &'static [Module] {
     &[
         Module {
-            name: ROOT,
+            name: CORE,
             source: include_str!("../../../library/std/core.mlk"),
         },
         Module {
@@ -65,16 +67,16 @@ pub fn modules() -> &'static [Module] {
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
 pub fn prelude() -> Prelude {
     Prelude::from_paths([
-        PlainPath::from_segments([Name::new("project"), Name::new(ROOT), Name::new("Int")]),
-        PlainPath::from_segments([Name::new("project"), Name::new(ROOT), Name::new("Unit")]),
+        PlainPath::from_segments([Name::new("project"), Name::new(CORE), Name::new("Int")]),
+        PlainPath::from_segments([Name::new("project"), Name::new(CORE), Name::new("Unit")]),
     ])
 }
 
-/// What the library is as a project, given the module its project starts from.
-pub fn project(root: ModuleId) -> ProjectData {
+/// What the library is as a project.
+pub fn project() -> ProjectData {
     ProjectData {
         prelude: prelude(),
-        ..ProjectData::new(root)
+        ..ProjectData::default()
     }
 }
 

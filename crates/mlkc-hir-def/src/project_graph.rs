@@ -99,12 +99,29 @@ pub enum ModuleLocator {
     },
 }
 
-/// What a project is: the module it starts from, what it depends on, and the imports every
-/// module of it is given without writing them.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What a project is: what it depends on, and the imports every module of it is given without
+/// writing them.
+///
+/// A project is a set of modules rather than a tree of them: no module of a project is the one
+/// it starts from, and which modules they are is what the graph is told
+/// ([`ProjectGraph::set_module_project`]). A module is called by the place its file stands at,
+/// which the paths a host pushed say.
+///
+/// A project that says nothing of its own is [`ProjectData::default`]: it depends on nothing,
+/// and its modules are given the prelude of the language.
+///
+/// A caller that has more to say replaces the fields it has something to say about:
+///
+/// ```
+/// use mlkc_hir_def::{Prelude, ProjectData};
+///
+/// let project = ProjectData {
+///     prelude: Prelude::none(),
+///     ..ProjectData::default()
+/// };
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectData {
-    /// The module the project starts from.
-    pub root_module: ModuleId,
     /// The dependencies, by the name each of them is declared under.
     pub dependencies: IndexMap<Name, ProjectId>,
     /// The prelude of the project: what every module of it is given without writing it
@@ -112,29 +129,6 @@ pub struct ProjectData {
     ///
     /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
     pub prelude: Prelude,
-}
-
-impl ProjectData {
-    /// A project of one module, which depends on nothing and gives its modules the prelude of
-    /// the language.
-    ///
-    /// A caller that has more to say replaces the fields it has something to say about:
-    ///
-    /// ```
-    /// use mlkc_hir_def::{ModuleId, Prelude, ProjectData};
-    ///
-    /// let project = ProjectData {
-    ///     prelude: Prelude::none(),
-    ///     ..ProjectData::new(ModuleId(mlkc_vfs::FileId::from_raw(0)))
-    /// };
-    /// ```
-    pub fn new(root_module: ModuleId) -> Self {
-        Self {
-            root_module,
-            dependencies: IndexMap::new(),
-            prelude: Prelude::default(),
-        }
-    }
 }
 
 /// The projects the compiler knows, and the project each module belongs to.
@@ -155,10 +149,9 @@ impl ProjectGraph {
 
     /// Records a project, returning the one it replaces.
     ///
-    /// The root module of a project is a module of it, so recording the project records the
-    /// mapping of the module it starts from.
+    /// A project holds no module it starts from: which modules are its own is what the graph is
+    /// told one by one ([`ProjectGraph::set_module_project`]).
     pub fn insert(&mut self, id: ProjectId, data: ProjectData) -> Option<ProjectData> {
-        self.module_project.insert(data.root_module, id.clone());
         self.projects.insert(id, data)
     }
 
@@ -226,14 +219,11 @@ mod tests {
     #[test]
     fn a_project_is_found_by_its_name_and_by_its_modules() {
         let mut graph = ProjectGraph::default();
-        graph.insert(project(), ProjectData::new(module(0)));
+        graph.insert(project(), ProjectData::default());
+        graph.set_module_project(module(0), project());
         graph.set_module_project(module(1), project());
 
-        assert_eq!(
-            graph.project(&project()).map(|data| data.root_module),
-            Some(module(0))
-        );
-        // The module a project starts from is a module of it.
+        assert_eq!(graph.project(&project()), Some(&ProjectData::default()));
         assert_eq!(graph.project_of(module(0)), Some(&project()));
         assert_eq!(graph.project_of(module(1)), Some(&project()));
         assert_eq!(graph.project_of(module(2)), None);
@@ -242,7 +232,8 @@ mod tests {
     #[test]
     fn dropping_a_project_drops_the_mapping_of_its_modules() {
         let mut graph = ProjectGraph::default();
-        graph.insert(project(), ProjectData::new(module(0)));
+        graph.insert(project(), ProjectData::default());
+        graph.set_module_project(module(0), project());
         graph.set_module_project(module(1), project());
 
         assert!(graph.remove(&project()).is_some());
@@ -261,8 +252,9 @@ mod tests {
 
         graph.insert(project(), ProjectData {
             prelude: prelude.clone(),
-            ..ProjectData::new(module(0))
+            ..ProjectData::default()
         });
+        graph.set_module_project(module(0), project());
 
         assert_eq!(graph.prelude_of(module(0)), &prelude);
         // A module no project claims is compiled with the prelude of the language.

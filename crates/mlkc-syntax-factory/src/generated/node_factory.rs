@@ -301,6 +301,18 @@ pub fn path_type(path: Path) -> PathType {
         SyntaxElement::Node(path.into_syntax()),
     )]))
 }
+pub fn pipe_expr(lhs: Expr, pipe_token: SyntaxToken, step: Expr) -> PipeExpr {
+    PipeExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PIPE_EXPR, [
+        Some(SyntaxElement::Node(lhs.into_syntax())),
+        Some(SyntaxElement::Token(pipe_token)),
+        Some(SyntaxElement::Node(step.into_syntax())),
+    ]))
+}
+pub fn placeholder_expr(underscore_token: SyntaxToken) -> PlaceholderExpr {
+    PlaceholderExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PLACEHOLDER_EXPR, [
+        Some(SyntaxElement::Token(underscore_token)),
+    ]))
+}
 pub fn project(project_token: SyntaxToken) -> Project {
     Project::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PROJECT, [Some(
         SyntaxElement::Token(project_token),

@@ -161,6 +161,10 @@ enum Tok {
     And2,
     #[token("||")]
     Or2,
+    // What a pipeline is written with: `x |> f(a, _)`. It is longer than nothing the
+    // language has, so it is read whole.
+    #[token("|>")]
+    Pipe,
 }
 
 impl Tok {
@@ -213,6 +217,7 @@ impl Tok {
             Self::GtEq => GT_EQ,
             Self::And2 => AND2,
             Self::Or2 => OR2,
+            Self::Pipe => PIPE,
         }
     }
 }

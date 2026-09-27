@@ -190,6 +190,8 @@ Expr =
     | FieldExpr
     | UnaryExpr
     | BinExpr
+    | PipeExpr
+    | PlaceholderExpr
     | LetExpr
     | ParenExpr
     | BogusExpr
@@ -238,6 +240,28 @@ FieldExpr =
     field: Name
 
 ArgumentList = (Expr (',' Expr)* ','?)
+
+// A pipeline: a value, and the call it goes into: `x |> f(a, _)`.
+//
+// What the pipeline means is `let v = x in f(a, v)`: the value is bound before the call,
+// and every `_` among the arguments of the call is the binding. The value is bound first
+// whatever the call writes, so the left side is what runs first, and the chain reads in
+// one direction.
+//
+// The step is a call, and it is one call: the callee is a name, a path, or a receiver
+// written with the dot, whose receiver is a name or a path as well. A step ends with the
+// argument list of its call: a dot, a `|>`, or a binary operator written after it is
+// written after the value the pipeline is.
+PipeExpr =
+    lhs: Expr
+    '|>'
+    step: Expr
+
+// A place for the value a pipeline passes: `x |> f(_)`.
+//
+// A place is a leaf of the expression grammar, and it is read only among the arguments of
+// the call the step of a pipeline is: anywhere else a `_` is not a value.
+PlaceholderExpr = '_'
 
 BinExpr =
     lhs: Expr

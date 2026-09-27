@@ -14,8 +14,8 @@ use mlkc_rowan::AstNode;
 use mlkc_span::Span;
 use mlkc_syntax::{
     BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, LetExpr, Literal as LiteralSyntax,
-    Pat as PatSyntax, Path as PathSyntax, PathExpr, SyntaxKind, SyntaxToken, TextRange, TextSize,
-    UfcsCall, UnaryExpr, inner_string_text,
+    Pat as PatSyntax, Path as PathSyntax, PathExpr, PipeExpr, PlaceholderExpr, SyntaxKind,
+    SyntaxToken, TextRange, TextSize, UfcsCall, UnaryExpr, inner_string_text,
 };
 use mlkc_vfs::FileId;
 
@@ -37,6 +37,8 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
         tree,
         builder: BodyBuilder::new(),
         bindings: Vec::new(),
+        pipes: 0,
+        pipe: None,
         diagnostics: Vec::new(),
         source_map: BodySourceMap::default(),
     };
@@ -69,6 +71,12 @@ struct BodyLowering<'a> {
     builder: BodyBuilder,
     /// The names the body binds, the innermost last, with the pattern that binds each of them.
     bindings: Vec<(Name, PatId)>,
+    /// How many pipelines the body has lowered, which is what numbers the bindings of them.
+    pipes: usize,
+    /// The value the innermost pipeline passes, if one is being read: the name the binding of
+    /// it is under, and the pattern that binds it. A `_` among the arguments of a step is that
+    /// binding, and a `_` written anywhere else is not a value.
+    pipe: Option<(Name, PatId)>,
     diagnostics: Vec<LoweringDiag>,
     /// Where each node of the body is written, read as the node is made.
     source_map: BodySourceMap,
@@ -111,6 +119,8 @@ impl BodyLowering<'_> {
             ExprSyntax::FieldExpr(field) => self.field_expr(field),
             ExprSyntax::UnaryExpr(unary) => self.unary_expr(unary),
             ExprSyntax::BinExpr(binary) => self.binary(binary),
+            ExprSyntax::PipeExpr(pipe) => self.pipe_expr(pipe),
+            ExprSyntax::PlaceholderExpr(place) => self.placeholder(place),
             ExprSyntax::LetExpr(let_expr) => self.let_expr(let_expr),
             // A parenthesized expression is the expression it holds: how the source is
             // grouped is the parser's business, and what it hands over is a tree already.
@@ -295,6 +305,74 @@ impl BodyLowering<'_> {
         let field = name(expr.field());
 
         self.builder.alloc_expr(Expr::Field { receiver, field })
+    }
+
+    /// Lowers a pipeline: the value, the binding the lowering makes up for it, and the call
+    /// the step is.
+    ///
+    /// What the spelling means is `let v = x in f(a, v)`: the value is bound before the call,
+    /// and every `_` among the arguments of the call is the binding. The binding is a node the
+    /// lowering makes up --- under a name no module can write --- and what it binds is the
+    /// value, which is written on the left, so that is the piece of the text it reads as.
+    fn pipe_expr(&mut self, pipe: &PipeExpr) -> ExprId {
+        let value = self.optional(pipe.lhs().ok());
+
+        let name = self.pipeline_name();
+        let pat = self.builder.alloc_pat(Pat::Bind(name.clone()));
+
+        if let Some(written) = self.source_map.expr(value) {
+            self.source_map.set_pat(pat, written);
+        }
+
+        // The step is read with the binding in scope: a `_` among the arguments of its call is
+        // the value the pipeline passes, and a step written inside the arguments of another
+        // one binds its own value.
+        let outer = self.pipe.replace((name, pat));
+        let step = self.optional(pipe.step().ok());
+        self.pipe = outer;
+
+        self.builder.alloc_expr(Expr::Let {
+            pat,
+            expr: value,
+            body: step,
+        })
+    }
+
+    /// The name of the binding of the next pipeline: a name no module can write.
+    ///
+    /// A binding the lowering makes up is not a name a reader wrote, and a name a module could
+    /// write is a name it could also use. The binding of a pipe is under the namespace of the
+    /// compiler instead --- `<mlkc@pipeline-0>` --- and what a name is made of is letters,
+    /// digits, `_` and `-`: the brackets, the `@` and the number are what say that the lowering
+    /// wrote the name, and which pipeline of the body the binding belongs to.
+    fn pipeline_name(&mut self) -> Name {
+        let name = Name::new(&format!("<mlkc@pipeline-{}>", self.pipes));
+
+        self.pipes += 1;
+
+        name
+    }
+
+    /// Lowers a `_`: a reference to the value the innermost pipeline passes.
+    ///
+    /// A place is where that value goes, and what it is is the binding the step bound: a path
+    /// of one name --- the name the lowering gave the binding --- anchored to the pattern that
+    /// binds it. It reads as the `_` it stands for, which is what a host marks for it.
+    fn placeholder(&mut self, place: &PlaceholderExpr) -> ExprId {
+        // A `_` is a value only among the arguments of a step, and one written anywhere else
+        // is what the parser reported: a tree that holds one has no binding for it to be.
+        let Some((name, pat)) = self.pipe.clone() else {
+            return self.missing();
+        };
+
+        let path = self
+            .builder
+            .alloc_path(PathData::ident(name, PathAnchor::Binding(pat)));
+
+        self.source_map
+            .set_path(path, place.syntax().text_trimmed_range());
+
+        self.builder.alloc_expr(Expr::Path(path))
     }
 
     /// Lowers a sign written in front of an expression.

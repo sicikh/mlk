@@ -7,6 +7,10 @@
 //! therefore stops at an operator of the same precedence, which is what makes the operators
 //! left-associative: `1 - 2 - 3` is `(1 - 2) - 3`.
 //!
+//! The pipeline is the loosest operator of an expression, and what stands on its right is not
+//! an expression: a step is a call, with a place for the value among its arguments, and the
+//! climb reads one with [`parse_step`].
+//!
 //! The left-hand side a binary operator is applied to is read by [`parse_unary_expr`], which
 //! is where a sign in front of an expression belongs: the ladder of the rules is
 //! [`parse_binary_expr`], [`parse_unary_expr`], [`parse_postfix_expr`],
@@ -18,6 +22,7 @@ use mlkc_parser_core::{
     parsed_syntax::ParsedSyntax::Present,
     prelude::*,
 };
+use mlkc_rowan::TextRange;
 use mlkc_syntax::{
     SyntaxKind::{self, *},
     T,
@@ -27,19 +32,70 @@ use crate::{
     parser::MlkParser,
     syntax::{
         auxiliary::parse_name,
-        parse_error::{expected_expr, expected_name, expected_path_after_the_dot},
+        parse_error::{
+            expected_call_after_a_pipe, expected_expr, expected_name, expected_path,
+            expected_path_after_the_dot, expected_place, place_outside_a_step,
+        },
         pat::parse_pat_or_recover,
         ty::parse_path,
     },
 };
 
-/// The precedence the operators of the outermost expression start with.
-const MIN_PRECEDENCE: u8 = 0;
+/// The precedence of the pipeline operator, which is the loosest operator of an expression.
+///
+/// A step takes what stands before it, `a + b` and all: `a + b |> f(_)` is a step of `f` on
+/// the sum. What is written after a step, a binary operator included, is written after the
+/// value the pipeline is: `x |> f(_) + 1` is a sum of what the step produced. A sequence,
+/// when the language has one, is looser still ([ADR-0014]).
+///
+/// [ADR-0014]: ../../docs/adr/0014-syntactic-sugar.md
+const PIPE_PRECEDENCE: u8 = 0;
+
+/// The precedence the operators of the outermost expression start with: the loosest operator
+/// the language has, which is the pipeline.
+const MIN_PRECEDENCE: u8 = PIPE_PRECEDENCE;
 
 /// The tokens a broken expression is recovered at: whatever ends the expression and starts
 /// something else where it is written.
 const EXPR_RECOVERY_SET: TokenSet<SyntaxKind> =
     token_set![T![,], T![')'], T![']'], T![=], T![in], T![let]];
+
+/// The tokens a broken step is recovered at: what stands after a step, and what ends the
+/// expression the pipeline is written in.
+///
+/// A step ends with the argument list of its call, so a dot, a `|>`, or a binary operator
+/// written where a step belongs is written after the value the pipeline is. What starts the
+/// next item of the module ends it as well, which is what keeps a broken step from reading
+/// the declaration that follows it.
+///
+/// What the mistake costs is the step: the pipeline around it is read whole, and so is the
+/// module.
+const STEP_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![
+    T![,],
+    T![')'],
+    T![']'],
+    T![=],
+    T![in],
+    T![let],
+    T![|>],
+    T![+],
+    T![-],
+    T![*],
+    T![/],
+    T![==],
+    T![!=],
+    T![<],
+    T![<=],
+    T![>],
+    T![>=],
+    T![&&],
+    T![||],
+    T![#],
+    T![pub],
+    T![fun],
+    T![type],
+    T![use]
+];
 
 /// Parses an expression.
 pub(crate) fn parse_expr(p: &mut MlkParser) -> ParsedSyntax {
@@ -77,6 +133,11 @@ fn binary_precedence(kind: SyntaxKind) -> Option<u8> {
 }
 
 /// Parses a binary expression whose operators bind at least as tightly as `min_precedence`.
+///
+/// The pipeline is one of the operators read here, and it is the loosest one: a step takes
+/// what stands before it, so `a + b |> f(_)` is read as a step of the sum rather than as a sum
+/// of a step, and what is written after the step --- another `|>`, a binary operator --- is
+/// read as written after the value the pipeline is.
 fn parse_binary_expr(p: &mut MlkParser, min_precedence: u8) -> ParsedSyntax {
     let lhs = parse_unary_expr(p);
 
@@ -84,7 +145,33 @@ fn parse_binary_expr(p: &mut MlkParser, min_precedence: u8) -> ParsedSyntax {
         return ParsedSyntax::Absent;
     };
 
-    while let Some(precedence) = binary_precedence(p.cur()) {
+    loop {
+        if p.at(T![|>]) {
+            if PIPE_PRECEDENCE < min_precedence {
+                break;
+            }
+
+            let m = lhs.precede(p);
+
+            // Where the `|>` is written: a step that is not there at all is reported there,
+            // because the next declaration is very often what stands where the step belongs.
+            let written = p.cur_range();
+            p.bump(T![|>]);
+            parse_step_or_recover(p, written);
+
+            // What is written after a step is written after the value the pipeline is:
+            // `.prepare()` after one calls `prepare` on what the step produced. The chain is
+            // applied to a value that is there, so it hands one back.
+            let piped = m.complete(p, PIPE_EXPR);
+            lhs = parse_postfixes(p, Present(piped)).unwrap();
+
+            continue;
+        }
+
+        let Some(precedence) = binary_precedence(p.cur()) else {
+            break;
+        };
+
         if precedence < min_precedence {
             break;
         }
@@ -132,10 +219,6 @@ fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
 
 /// Parses an expression that may be applied to arguments and to the operators of a chain:
 /// `f(a, b)(c)`, `value.function(a)`, `data@field`.
-///
-/// Every form is postfix: what stands before the operator is what it applies to, and the
-/// forms chain left to right, so `config.load().validate()` calls `validate` on the value of
-/// the call of `load`, and `config@server@port` reads a field of a field.
 // test mlk calls_take_arguments_and_are_applied_to_the_result
 // fun calls(): Int =
 //     f(g(1), h(2, 3))(4)
@@ -152,16 +235,34 @@ fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
 // fun field(): Int =
 //     data@field
 fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
-    let mut expr = parse_primary_expr(p);
+    let expr = parse_primary_expr(p);
 
-    while expr.is_present() {
+    parse_postfixes(p, expr)
+}
+
+/// Parses what may be written after a value, applied to `expr`: a call, a call with the
+/// receiver written before the callee, a field read.
+///
+/// Every form is postfix: what stands before the operator is what it applies to, and the
+/// forms chain left to right, so `config.load().validate()` calls `validate` on the value of
+/// the call of `load`, and `config@server@port` reads a field of a field.
+///
+/// A rule that reads a value of its own applies the chain itself: what is written after the
+/// step of a pipeline is written after the value the pipeline is, so a dot after a step is
+/// a dot called on what the step produced.
+fn parse_postfixes(p: &mut MlkParser, expr: ParsedSyntax) -> ParsedSyntax {
+    let ParsedSyntax::Present(mut expr) = expr else {
+        return ParsedSyntax::Absent;
+    };
+
+    loop {
         if p.at(T!['(']) {
             // A call: the arguments, applied to what stands before them.
             let m = expr.precede(p);
 
             parse_call_arguments(p);
 
-            expr = Present(m.complete(p, CALL_EXPR));
+            expr = m.complete(p, CALL_EXPR);
         } else if p.at(T![.]) {
             // A call with the receiver written before the callee: `value.function(a)` is
             // `function(value, a)`. What stands after the dot is the callee the call means,
@@ -182,7 +283,7 @@ fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
                 parse_missing_arguments(p);
             }
 
-            expr = Present(m.complete(p, UFCS_CALL));
+            expr = m.complete(p, UFCS_CALL);
         } else if p.at(T![@]) {
             // A field read: the value, and the name of the field.
             let m = expr.precede(p);
@@ -190,13 +291,103 @@ fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
             p.bump(T![@]);
             parse_name(p).or_add_diagnostic(p, expected_name);
 
-            expr = Present(m.complete(p, FIELD_EXPR));
+            expr = m.complete(p, FIELD_EXPR);
         } else {
             break;
         }
     }
 
-    expr
+    Present(expr)
+}
+
+/// Parses the step of a pipeline: the call the value goes into, and the place it goes in.
+///
+/// A step is a call: a callee, and an argument list with a `_` among its arguments. The callee
+/// is a name the module holds, a path, or --- a call written with the dot --- the callee of a
+/// call whose receiver is a name or a path as well: `data |> map.insert("k", _)` is a step of
+/// `insert`, with `map` and `"k"` before the value. The receiver is passed first, as the
+/// receiver of any call written with the dot is.
+///
+/// A step is one call, and it ends with the argument list of it: a dot, another `|>`, or
+/// a binary operator written after the step is written after the value the pipeline is, and
+/// a call on the result of another call goes inside the arguments instead.
+// test mlk a_pipeline_passes_its_value_to_a_call
+// fun passed(): Int =
+//     data |> f(1, _)
+//
+// test mlk a_step_may_be_written_with_the_dot
+// fun inserted(): Int =
+//     data |> map.insert("k", _)
+fn parse_step(p: &mut MlkParser) -> ParsedSyntax {
+    // What the step calls, or the receiver of the call it is written with.
+    let receiver = parse_path_expr(p);
+
+    // A step is a call, and what stands where one belongs and is not a call is not a step:
+    // the caller recovers from the tokens as from a step that is not there.
+    let ParsedSyntax::Present(receiver) = receiver else {
+        return ParsedSyntax::Absent;
+    };
+
+    let called = receiver.precede(p);
+
+    // A step written with the dot calls the callee after it, and passes the receiver first;
+    // any other step is the callee and the arguments of one call.
+    let with_the_dot = p.at(T![.]);
+
+    if with_the_dot {
+        p.bump(T![.]);
+        parse_path(p).or_add_diagnostic(p, expected_path);
+    }
+
+    // Whether the call writes the arguments a step needs: a call that writes none has no
+    // place either, and what is wrong with it has been reported already.
+    let arguments_written = p.at(T!['(']);
+    let places = parse_step_arguments(p);
+
+    let kind = if with_the_dot { UFCS_CALL } else { CALL_EXPR };
+    let step = called.complete(p, kind);
+
+    // A step from which the place is missing has nowhere to put the value, and the call is
+    // what a reader is told about: `x |> f(a)` is a step only as `x |> f(a, _)`.
+    if arguments_written && places == 0 {
+        p.error(expected_place(step.range(p)));
+    }
+
+    Present(step)
+}
+
+/// Reads the step of a pipeline, or what stands where one belongs and is not one.
+///
+/// A caller has nothing in its hands when the rule is done: the step is a child of the
+/// pipeline the caller reads, and the tokens that are not a step are kept in a bogus
+/// expression where the step would be, so that what the mistake costs is the step.
+fn parse_step_or_recover(p: &mut MlkParser, written: TextRange) {
+    if parse_step(p).is_present() {
+        return;
+    }
+
+    let recovery = ParseRecoveryTokenSet::new(BOGUS_EXPR, STEP_RECOVERY_SET);
+
+    // What is written where the step belongs is what a reader is pointed at, and where there
+    // is nothing of a step at all --- the next declaration is not one --- the mistake is the
+    // `|>` that names a step and holds none.
+    let range = match recovery.recover(p) {
+        Ok(step) => step.range(p),
+        Err(_) => written,
+    };
+
+    p.error(expected_call_after_a_pipe(range));
+}
+
+/// Parses the arguments of a step's call, parens included: `(a, _)`, and tells how many places
+/// the step wrote.
+///
+/// The arguments are read as the arguments of any call are, and one thing is read among them
+/// alone: a `_`, which is where the value the pipeline passes goes.
+fn parse_step_arguments(p: &mut MlkParser) -> usize {
+    let (_, places) = p.in_step(parse_call_arguments);
+
+    places
 }
 
 /// Parses the arguments of a call, parens included: `(a, b)`.
@@ -205,15 +396,15 @@ fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
 /// callee a dot names. A dot commits the parser to a call, so a `(` that is not there is
 /// a mistake rather than a reason not to read a call, while a plain call is only read where
 /// the `(` already stands.
-fn parse_call_arguments(p: &mut MlkParser) {
+fn parse_call_arguments(p: &mut MlkParser) -> CompletedMarker {
     if !p.expect(T!['(']) {
-        parse_missing_arguments(p);
-
-        return;
+        return parse_missing_arguments(p);
     }
 
-    ArgumentListParse.parse_list(p);
+    let arguments = ArgumentListParse.parse_list(p);
     p.expect(T![')']);
+
+    arguments
 }
 
 /// Completes a call that has no arguments written: `value.` and `value.function`.
@@ -222,9 +413,9 @@ fn parse_call_arguments(p: &mut MlkParser) {
 /// one by everything that reads the tree, so the empty list is created even when the parens
 /// are not written. Nothing is reported here: the caller has reported the mistake the call is
 /// broken by, if there is one.
-fn parse_missing_arguments(p: &mut MlkParser) {
+fn parse_missing_arguments(p: &mut MlkParser) -> CompletedMarker {
     let m = p.start();
-    m.complete(p, ARGUMENT_LIST);
+    m.complete(p, ARGUMENT_LIST)
 }
 
 /// Parses an expression that cannot take part in a binary expression itself.
@@ -236,6 +427,7 @@ fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
         IDENT | PROJECT_KW => parse_path_expr(p),
         LET_KW => parse_let_expr(p),
         L_PAREN => parse_paren_expr(p),
+        UNDERSCORE => parse_placeholder_expr(p),
         _ => ParsedSyntax::Absent,
     }
 }
@@ -257,6 +449,34 @@ fn parse_literal(p: &mut MlkParser) -> ParsedSyntax {
     p.bump(kind);
 
     Present(m.complete(p, kind))
+}
+
+/// Parses a `_` written where a value belongs: `x |> f(_)`.
+///
+/// A `_` is a place for the value a pipeline passes, and the parser reads one only among the
+/// arguments of the call the step of a pipeline is: anywhere else a `_` is not a value, and
+/// what stands where one belongs is read as an expression that is not there.
+// test mlk a_place_is_written_among_the_arguments_of_a_step
+// fun passed(): Int =
+//     data |> f(_, 1)
+fn parse_placeholder_expr(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(UNDERSCORE) {
+        return ParsedSyntax::Absent;
+    }
+
+    if !p.reads_places() {
+        p.error(place_outside_a_step(p, p.cur_range()));
+
+        return ParsedSyntax::Absent;
+    }
+
+    p.count_place();
+
+    let m = p.start();
+
+    p.bump(UNDERSCORE);
+
+    Present(m.complete(p, PLACEHOLDER_EXPR))
 }
 
 /// Parses an expression that is a path: a name the body refers to, or a name the module or

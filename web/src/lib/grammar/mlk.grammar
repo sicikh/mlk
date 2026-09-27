@@ -28,7 +28,8 @@
 	comparison @left,
 	equality @left,
 	and @left,
-	or @left
+	or @left,
+	pipe @left
 }
 
 @skip { space | Comment }
@@ -100,7 +101,11 @@ Expr { BinaryExpr | UnaryExpr | PostfixExpr }
 //
 // The three forms of what a value may be followed by: a call, a call with the value passed
 // as its first argument, and a field read. Each is postfix, and they chain left to right.
-PostfixExpr { PrimaryExpr | CallExpr | UfcsCall | FieldExpr }
+//
+// The pipeline is what a value may be followed by as well, and what is written after it is
+// written after the value it is: a dot after a step calls the callee on what the step
+// produced, which is what reading the pipeline as one of the forms says.
+PostfixExpr { PrimaryExpr | CallExpr | UfcsCall | FieldExpr | PipeExpr }
 
 CallExpr { PostfixExpr !call "(" (Expr ("," Expr)* ","?)? ")" }
 
@@ -115,7 +120,12 @@ FieldExpr { PostfixExpr !call "@" Name }
 // `-1 + 2` is `(-1) + 2`, and `-f(x)` is the negation of the call.
 UnaryExpr { !call ("-" | "+") Expr }
 
-PrimaryExpr { LetExpr | Literal | PathExpr | ParenExpr }
+PrimaryExpr { LetExpr | Placeholder | Literal | PathExpr | ParenExpr }
+
+// A place for the value a pipeline passes: `x |> f(_)`. A place is a leaf of the expression
+// grammar, and the parser of the compiler reads one only among the arguments of the call on
+// the right of a `|>`.
+Placeholder { kw<"_"> }
 
 LetExpr { kw<"let"> Pat "=" Expr kw<"in"> Expr }
 
@@ -135,6 +145,15 @@ BinaryExpr {
 }
 
 ParenExpr { "(" Expr ")" }
+
+// A pipeline: a value, and the call the value goes into, with a place among the arguments of
+// that call for it. The operator is the loosest one an expression has, and a step is one call
+// that ends with its argument list.
+PipeExpr { Expr !pipe "|>" Step }
+
+// What stands on the right of a `|>`: a call, whose callee is a path or a call written with
+// the dot, and among whose arguments a place is written.
+Step { PathExpr ("." Path)? "(" (Expr ("," Expr)* ","?)? ")" }
 
 Literal { IntLiteral | StringLiteral }
 

@@ -24,6 +24,9 @@ use crate::{lexer::Lexer, token_source::TokenSource};
 pub(crate) struct Parser<'src> {
     context: ParserContext<SyntaxKind>,
     source: TokenSource<'src>,
+    /// How many places the step being read has written, if the arguments of one are being
+    /// read: a `_` is a value there and nowhere else, and a step has to write one.
+    places: Option<usize>,
 }
 
 /// The parser the parse rules are written for.
@@ -35,6 +38,7 @@ impl<'src> Parser<'src> {
         Self {
             context: ParserContext::default(),
             source: TokenSource::from_str(source),
+            places: None,
         }
     }
 
@@ -80,6 +84,36 @@ impl<'src> Parser<'src> {
     /// Whether the `n`th token after the current one is of kind `kind`.
     pub(crate) fn nth_at(&mut self, n: usize, kind: SyntaxKind) -> bool {
         <Self as ParserTrait>::nth_at::<Lexer<'src>>(self, n, kind)
+    }
+
+    /// Reads the arguments of a step: a `_` written among them is a value, and is counted.
+    ///
+    /// A place is where the value a pipeline passes goes, and it is what the arguments of
+    /// a step may write and nothing else may. How many places the step wrote is handed back
+    /// --- a step with none has nowhere to put the value, which the caller reports --- and
+    /// a step read inside the arguments of another one counts the places of its own.
+    pub(crate) fn in_step<T>(&mut self, arguments: impl FnOnce(&mut Self) -> T) -> (T, usize) {
+        let outer = self.places.replace(0);
+
+        let read = arguments(self);
+        let places = self.places.take().unwrap_or_default();
+
+        self.places = outer;
+
+        (read, places)
+    }
+
+    /// Whether a `_` written where a value belongs is a value here: it is only among the
+    /// arguments of a step.
+    pub(crate) fn reads_places(&self) -> bool {
+        self.places.is_some()
+    }
+
+    /// Counts a place the step being read has written.
+    pub(crate) fn count_place(&mut self) {
+        if let Some(places) = &mut self.places {
+            *places += 1;
+        }
     }
 }
 

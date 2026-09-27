@@ -1,0 +1,23 @@
+// What is wrong with a step as syntax: a call with no place among its arguments, a right side
+// that is not a call, and a `_` where no pipeline passes a value.
+//
+// The tokens around the mistakes are kept, and the pipeline a step is not there in is read
+// whole: what a mistake costs is the step.
+
+fun no_place(): Int =
+    data |> f(1)
+
+fun not_a_call(): Int =
+    data |> 1
+
+fun no_arguments(): Int =
+    data |> f
+
+fun a_place_outside_a_step(): Int =
+    f(_)
+
+// The step is `f(_)`, and what is written after it is written after the value the pipeline is:
+// the place belongs to the step, and this `_` is written in the call of a value that is not
+// one.
+fun a_place_after_the_step(): Int =
+    data |> f(_).g(_)

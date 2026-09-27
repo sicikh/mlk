@@ -1,0 +1,38 @@
+// The spelling of a pipeline stops at lowering: what the HIR holds is a `let`, which binds
+// the value, and the call the step is. Every `_` is a path to that binding, under a name no
+// module can write.
+
+#[builtin]
+type Int
+
+fun consume(left: Int, right: Int): Int =
+    left
+
+fun passed(data: Int): Int =
+    data |> consume(_, 1)
+
+fun twice(data: Int): Int =
+    data |> consume(_, _)
+
+// A step written with the dot passes its receiver first, as any call written with the dot
+// does.
+fun inserted(data: Int): Int =
+    data |> data.consume(1, _)
+
+// Two pipelines of a body are two bindings, and a step inside the arguments of another one
+// binds its own value: the place of the outer step is the outer value.
+fun chained(data: Int, other: Int): Int =
+    data |> consume(other |> consume(_, 1), _) |> consume(_, 2)
+
+// The chain the record is written about: the dot where it can write the step, and the pipe
+// where the value is not the first argument of the call.
+fun configured(config: Config, defaults: Config): Config =
+    config.load()
+    |> merge(defaults, _)
+    .validate()
+    |> write("out.toml", _)
+
+// The step of a pipeline is a call as any other call is, and the value is bound before it:
+// the sum is what the step is applied to.
+fun summed(left: Int, right: Int): Int =
+    left + right |> consume(1, _)

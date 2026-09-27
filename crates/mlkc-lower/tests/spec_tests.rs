@@ -79,6 +79,10 @@ spec_tests! {
     // and a path, which is how a step that a name does not name is written.
     chains: "valid/chains.mlk",
 
+    // The pipeline, which lowers to a `let` and a call: the value is bound before the call,
+    // and every `_` is a path to that binding.
+    pipelines: "valid/pipelines.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",

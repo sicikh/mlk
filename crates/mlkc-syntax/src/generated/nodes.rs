@@ -1033,6 +1033,92 @@ pub struct PathTypeFields {
     pub path: SyntaxResult<Path>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct PipeExpr {
+    pub(crate) syntax: SyntaxNode,
+}
+impl PipeExpr {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> PipeExprFields {
+        PipeExprFields {
+            lhs: self.lhs(),
+            pipe_token: self.pipe_token(),
+            step: self.step(),
+        }
+    }
+    pub fn lhs(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 0usize)
+    }
+    pub fn pipe_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+    pub fn step(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 2usize)
+    }
+}
+impl Serialize for PipeExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "PipeExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct PipeExprFields {
+    pub lhs: SyntaxResult<Expr>,
+    pub pipe_token: SyntaxResult<SyntaxToken>,
+    pub step: SyntaxResult<Expr>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct PlaceholderExpr {
+    pub(crate) syntax: SyntaxNode,
+}
+impl PlaceholderExpr {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> PlaceholderExprFields {
+        PlaceholderExprFields {
+            underscore_token: self.underscore_token(),
+        }
+    }
+    pub fn underscore_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+}
+impl Serialize for PlaceholderExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "PlaceholderExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct PlaceholderExprFields {
+    pub underscore_token: SyntaxResult<SyntaxToken>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Project {
     pub(crate) syntax: SyntaxNode,
 }
@@ -1532,6 +1618,8 @@ pub enum Expr {
     Literal(Literal),
     ParenExpr(ParenExpr),
     PathExpr(PathExpr),
+    PipeExpr(PipeExpr),
+    PlaceholderExpr(PlaceholderExpr),
     UfcsCall(UfcsCall),
     UnaryExpr(UnaryExpr),
 }
@@ -1549,6 +1637,8 @@ impl Serialize for Expr {
             Self::Literal(it) => it.serialize(serializer),
             Self::ParenExpr(it) => it.serialize(serializer),
             Self::PathExpr(it) => it.serialize(serializer),
+            Self::PipeExpr(it) => it.serialize(serializer),
+            Self::PlaceholderExpr(it) => it.serialize(serializer),
             Self::UfcsCall(it) => it.serialize(serializer),
             Self::UnaryExpr(it) => it.serialize(serializer),
         }
@@ -1600,6 +1690,18 @@ impl Expr {
     pub fn as_path_expr(&self) -> Option<&PathExpr> {
         match &self {
             Self::PathExpr(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_pipe_expr(&self) -> Option<&PipeExpr> {
+        match &self {
+            Self::PipeExpr(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_placeholder_expr(&self) -> Option<&PlaceholderExpr> {
+        match &self {
+            Self::PlaceholderExpr(item) => Some(item),
             _ => None,
         }
     }
@@ -2932,6 +3034,105 @@ impl From<PathType> for SyntaxElement {
         n.syntax.into()
     }
 }
+impl AstNode for PipeExpr {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(PIPE_EXPR as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PIPE_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for PipeExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("PipeExpr")
+                .field("lhs", &support::DebugSyntaxResult(self.lhs()))
+                .field("pipe_token", &support::DebugSyntaxResult(self.pipe_token()))
+                .field("step", &support::DebugSyntaxResult(self.step()))
+                .finish()
+        } else {
+            f.debug_struct("PipeExpr").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<PipeExpr> for SyntaxNode {
+    fn from(n: PipeExpr) -> Self {
+        n.syntax
+    }
+}
+impl From<PipeExpr> for SyntaxElement {
+    fn from(n: PipeExpr) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for PlaceholderExpr {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(PLACEHOLDER_EXPR as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == PLACEHOLDER_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for PlaceholderExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("PlaceholderExpr")
+                .field(
+                    "underscore_token",
+                    &support::DebugSyntaxResult(self.underscore_token()),
+                )
+                .finish()
+        } else {
+            f.debug_struct("PlaceholderExpr").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<PlaceholderExpr> for SyntaxNode {
+    fn from(n: PlaceholderExpr) -> Self {
+        n.syntax
+    }
+}
+impl From<PlaceholderExpr> for SyntaxElement {
+    fn from(n: PlaceholderExpr) -> Self {
+        n.syntax.into()
+    }
+}
 impl AstNode for Project {
     type Language = Language;
     const KIND_SET: SyntaxKindSet<Language> =
@@ -3545,6 +3746,16 @@ impl From<PathExpr> for Expr {
         Self::PathExpr(node)
     }
 }
+impl From<PipeExpr> for Expr {
+    fn from(node: PipeExpr) -> Self {
+        Self::PipeExpr(node)
+    }
+}
+impl From<PlaceholderExpr> for Expr {
+    fn from(node: PlaceholderExpr) -> Self {
+        Self::PlaceholderExpr(node)
+    }
+}
 impl From<UfcsCall> for Expr {
     fn from(node: UfcsCall) -> Self {
         Self::UfcsCall(node)
@@ -3565,12 +3776,14 @@ impl AstNode for Expr {
         .union(Literal::KIND_SET)
         .union(ParenExpr::KIND_SET)
         .union(PathExpr::KIND_SET)
+        .union(PipeExpr::KIND_SET)
+        .union(PlaceholderExpr::KIND_SET)
         .union(UfcsCall::KIND_SET)
         .union(UnaryExpr::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
             BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | LET_EXPR | PAREN_EXPR | PATH_EXPR
-            | UFCS_CALL | UNARY_EXPR => true,
+            | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL | UNARY_EXPR => true,
             k if Literal::can_cast(k) => true,
             _ => false,
         }
@@ -3584,6 +3797,8 @@ impl AstNode for Expr {
             LET_EXPR => Self::LetExpr(LetExpr { syntax }),
             PAREN_EXPR => Self::ParenExpr(ParenExpr { syntax }),
             PATH_EXPR => Self::PathExpr(PathExpr { syntax }),
+            PIPE_EXPR => Self::PipeExpr(PipeExpr { syntax }),
+            PLACEHOLDER_EXPR => Self::PlaceholderExpr(PlaceholderExpr { syntax }),
             UFCS_CALL => Self::UfcsCall(UfcsCall { syntax }),
             UNARY_EXPR => Self::UnaryExpr(UnaryExpr { syntax }),
             _ => {
@@ -3604,6 +3819,8 @@ impl AstNode for Expr {
             Self::LetExpr(it) => it.syntax(),
             Self::ParenExpr(it) => it.syntax(),
             Self::PathExpr(it) => it.syntax(),
+            Self::PipeExpr(it) => it.syntax(),
+            Self::PlaceholderExpr(it) => it.syntax(),
             Self::UfcsCall(it) => it.syntax(),
             Self::UnaryExpr(it) => it.syntax(),
             Self::Literal(it) => it.syntax(),
@@ -3618,6 +3835,8 @@ impl AstNode for Expr {
             Self::LetExpr(it) => it.into_syntax(),
             Self::ParenExpr(it) => it.into_syntax(),
             Self::PathExpr(it) => it.into_syntax(),
+            Self::PipeExpr(it) => it.into_syntax(),
+            Self::PlaceholderExpr(it) => it.into_syntax(),
             Self::UfcsCall(it) => it.into_syntax(),
             Self::UnaryExpr(it) => it.into_syntax(),
             Self::Literal(it) => it.into_syntax(),
@@ -3635,6 +3854,8 @@ impl std::fmt::Debug for Expr {
             Self::Literal(it) => std::fmt::Debug::fmt(it, f),
             Self::ParenExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::PathExpr(it) => std::fmt::Debug::fmt(it, f),
+            Self::PipeExpr(it) => std::fmt::Debug::fmt(it, f),
+            Self::PlaceholderExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::UfcsCall(it) => std::fmt::Debug::fmt(it, f),
             Self::UnaryExpr(it) => std::fmt::Debug::fmt(it, f),
         }
@@ -3651,6 +3872,8 @@ impl From<Expr> for SyntaxNode {
             Expr::Literal(it) => it.into_syntax(),
             Expr::ParenExpr(it) => it.into_syntax(),
             Expr::PathExpr(it) => it.into_syntax(),
+            Expr::PipeExpr(it) => it.into_syntax(),
+            Expr::PlaceholderExpr(it) => it.into_syntax(),
             Expr::UfcsCall(it) => it.into_syntax(),
             Expr::UnaryExpr(it) => it.into_syntax(),
         }
@@ -4145,6 +4368,16 @@ impl std::fmt::Display for PathSegment {
     }
 }
 impl std::fmt::Display for PathType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for PipeExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for PlaceholderExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }

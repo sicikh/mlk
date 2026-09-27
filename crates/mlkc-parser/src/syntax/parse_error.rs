@@ -80,3 +80,50 @@ pub(crate) fn expected_path_after_the_dot(range: TextRange) -> ParseDiagnostic {
 pub(crate) fn expected_pattern(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("pattern", range, p)
 }
+
+/// The parser expected the call a step is, and found what is not one.
+///
+/// What stands on the right of a `|>` is a step: a call, with a `_` among its arguments for
+/// the value the pipeline passes. A value, a sign, a parenthesis --- anything that is not
+/// a call --- has nowhere to put the value, and the tokens are read as a step that is not
+/// there rather than as a step of something else.
+///
+/// The message quotes no piece of the text, because what it is reported at is not always a piece
+/// of a step: where the tokens are not one, the `|>` is what the reader is pointed at.
+pub(crate) fn expected_call_after_a_pipe(range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        "Expected a call after the `|>`: a step is a call, and a `_` among its arguments is \
+         where the value the pipeline passes goes.",
+        range,
+    )
+}
+
+/// The parser expected a place for the value a pipeline passes, and the call it read writes
+/// none.
+///
+/// A step that writes no `_` is a call the value cannot reach, and the call is what the reader
+/// is told about: `x |> f(a)` is a step only as `x |> f(a, _)`.
+pub(crate) fn expected_place(range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        "Expected a `_` among the arguments: a step passes the value the pipeline gives it \
+         into the call it is, and a `_` is where that value goes.",
+        range,
+    )
+}
+
+/// The parser found a `_` where no pipeline passes a value.
+///
+/// A `_` is a place for the value a pipeline passes, and it is read only among the arguments
+/// of the call on the right of a `|>`: anywhere else it is not a value, and what stands where
+/// one belongs is read as an expression that is not there.
+pub(crate) fn place_outside_a_step(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        format!(
+            "Expected a value but instead found '{}': a `_` is the place a pipeline passes its \
+             value into, and it is written among the arguments of the call on the right of \
+             a `|>`.",
+            p.text(range)
+        ),
+        range,
+    )
+}

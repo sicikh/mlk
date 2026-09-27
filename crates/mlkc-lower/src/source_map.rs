@@ -61,7 +61,7 @@ impl BodySourceMap {
 
 #[cfg(test)]
 mod tests {
-    use mlkc_hir_def::{Expr, ModuleId, Pat, Prelude};
+    use mlkc_hir_def::{Expr, ModuleId, Pat, PathAnchor, Prelude};
     use mlkc_syntax::{ModuleRoot, TextRange, TextSize};
     use mlkc_vfs::FileId;
 
@@ -208,6 +208,84 @@ mod tests {
             Some(at(source, "data@field")),
         );
         assert_eq!(lowered.source_map.expr(*receiver), Some(at(source, "data")));
+    }
+
+    #[test]
+    fn a_pipeline_is_the_value_it_binds_and_the_call_it_is() {
+        let source = "fun main(): Int =\n    data |> consume(1, _)\n";
+        let lowered = body_of(source);
+        let body = &lowered.body;
+
+        let Expr::Let {
+            pat,
+            expr,
+            body: step,
+        } = &body[body.root()]
+        else {
+            panic!("the `let` a pipeline lowers to is the root of the body");
+        };
+
+        // The `let` is about the spelling as a whole, the value is what stands on the left,
+        // and the step is the call written on the right.
+        assert_eq!(
+            lowered.source_map.expr(body.root()),
+            Some(at(source, "data |> consume(1, _)")),
+        );
+        assert_eq!(lowered.source_map.expr(*expr), Some(at(source, "data")));
+        assert_eq!(
+            lowered.source_map.expr(*step),
+            Some(at(source, "consume(1, _)")),
+        );
+
+        // The binding is a node the lowering made up, and what it binds is the value: what
+        // stands on the left is the piece of the text it reads as.
+        assert_eq!(lowered.source_map.pat(*pat), Some(at(source, "data")));
+
+        let Expr::Call { callee, args } = &body[*step] else {
+            panic!("a step is a call");
+        };
+
+        assert_eq!(
+            lowered.source_map.expr(*callee),
+            Some(at(source, "consume")),
+        );
+
+        // Every `_` is a reference to the binding, and reads as the `_` it stands for.
+        let place = *args.last().expect("the call to take arguments");
+        let Expr::Path(path) = &body[place] else {
+            panic!("a place is a reference to the binding");
+        };
+
+        assert_eq!(lowered.source_map.expr(place), Some(at(source, "_")));
+        assert_eq!(lowered.source_map.path(*path), Some(at(source, "_")));
+        assert_eq!(body[*path].anchor, PathAnchor::Binding(*pat));
+    }
+
+    #[test]
+    fn a_step_written_with_the_dot_passes_its_receiver_first() {
+        let source = "fun main(): Int =\n    data |> map.insert(\"k\", _)\n";
+        let lowered = body_of(source);
+        let body = &lowered.body;
+
+        let Expr::Let { body: step, .. } = &body[body.root()] else {
+            panic!("the `let` a pipeline lowers to is the root of the body");
+        };
+
+        assert_eq!(
+            lowered.source_map.expr(*step),
+            Some(at(source, "map.insert(\"k\", _)")),
+        );
+
+        let Expr::Call { callee, args } = &body[*step] else {
+            panic!("a step is a call");
+        };
+
+        // The step is a call of `insert`, and the receiver is what it is passed first: `map`,
+        // then `"k"`, and the value the pipeline passes last.
+        assert_eq!(lowered.source_map.expr(*callee), Some(at(source, "insert")));
+        assert_eq!(lowered.source_map.expr(args[0]), Some(at(source, "map")));
+        assert_eq!(lowered.source_map.expr(args[1]), Some(at(source, "\"k\"")));
+        assert_eq!(lowered.source_map.expr(args[2]), Some(at(source, "_")));
     }
 
     #[test]

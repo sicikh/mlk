@@ -1,0 +1,43 @@
+// A pipeline: a value, the call it goes into, and a place among the arguments of that call
+// for the value. The value is bound before the call, so the left side runs first.
+
+fun passed(): Int =
+    data |> f(_)
+
+fun placed(): Int =
+    data |> f(1, _)
+
+fun twice(): Int =
+    data |> f(_, _)
+
+// A step written with the dot is a call as any other is, and the receiver is passed first:
+// this one passes `map`, `"k"` and the value.
+fun inserted(): Int =
+    data |> map.insert("k", _)
+
+// The pipeline is the loosest operator: the sum is what the first step takes. What is written
+// after a step is written after the value the pipeline is, so `prepare` is called on what
+// `make-data` produced, and the `|>` after it is a step of that value.
+fun chained(): Int =
+    a + b
+    |> make-data(_)
+    .prepare()
+    |> map.insert("k", _)
+
+// A step is one call: a call on the result of another call goes inside the arguments.
+fun nested(): Int =
+    data |> g(f(1), _)
+
+// A step written inside the arguments of another one binds its own value, and a place of the
+// outer step is the outer value.
+fun inner(): Int =
+    data |> f(other |> g(_), _)
+
+// A field read is what may follow a pipeline as well: the name is read on the value the step
+// produced.
+fun field(): Int =
+    data |> f(_)@field
+
+// A pipeline is an expression like any other: it is what a call passes where a value belongs.
+fun argument(): Int =
+    h(data |> f(_))

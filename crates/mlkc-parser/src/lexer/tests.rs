@@ -261,6 +261,14 @@ fn punctuators() {
         ARROW:2
     }
 
+    // A pipe is read whole as well, and a `|` alone is what the language does not have:
+    // the operators it holds are `||` and `|>`.
+    assert_lex! {
+        "|>||",
+        PIPE:2,
+        OR2:2
+    }
+
     // Two colons together are one token, and a colon is what a lone one is: the longest
     // match wins, so `::` is never read as two of them.
     assert_lex! {

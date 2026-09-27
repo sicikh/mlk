@@ -63,6 +63,11 @@ spec_tests! {
     // argument, a field read, and a chain of them.
     chains: "valid/chains.mlk",
 
+    // The pipeline: a value, the call it goes into, and a place among the arguments of that
+    // call for the value. What is written after a step is written after the pipeline, and the
+    // step is one call.
+    pipelines: "valid/pipelines.mlk",
+
     // A `let` without its `in`: the binding expression is parsed and the diagnostic points
     // at the place where the body was supposed to start.
     missing_in: "invalid/missing_in.mlk",
@@ -89,6 +94,10 @@ spec_tests! {
     // A dot that is not followed by a call: a step is a callee and an argument list, and what
     // is written of it around the mistake is kept.
     dot_without_a_call: "invalid/dot_without_a_call.mlk",
+
+    // What is wrong with a pipeline as syntax: a step that writes no place for the value,
+    // a right side that is not a call, and a `_` written where no pipeline passes a value.
+    broken_pipelines: "invalid/pipelines.mlk",
 
     // The keyword written where a name belongs all over a module: the preamble, the items and
     // the `in` of a `let` are read whole around it.

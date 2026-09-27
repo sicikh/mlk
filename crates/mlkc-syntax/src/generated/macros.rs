@@ -106,6 +106,14 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::PathType::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::PIPE_EXPR => {
+                        let $pattern = unsafe { $crate::PipeExpr::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::PLACEHOLDER_EXPR => {
+                        let $pattern = unsafe { $crate::PlaceholderExpr::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::PROJECT => {
                         let $pattern = unsafe { $crate::Project::new_unchecked(node) };
                         $body

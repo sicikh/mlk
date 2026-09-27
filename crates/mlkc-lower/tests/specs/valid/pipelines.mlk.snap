@@ -1,0 +1,298 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// The spelling of a pipeline stops at lowering: what the HIR holds is a `let`, which binds
+// the value, and the call the step is. Every `_` is a path to that binding, under a name no
+// module can write.
+
+#[builtin]
+type Int
+
+fun consume(left: Int, right: Int): Int =
+    left
+
+fun passed(data: Int): Int =
+    data |> consume(_, 1)
+
+fun twice(data: Int): Int =
+    data |> consume(_, _)
+
+// A step written with the dot passes its receiver first, as any call written with the dot
+// does.
+fun inserted(data: Int): Int =
+    data |> data.consume(1, _)
+
+// Two pipelines of a body are two bindings, and a step inside the arguments of another one
+// binds its own value: the place of the outer step is the outer value.
+fun chained(data: Int, other: Int): Int =
+    data |> consume(other |> consume(_, 1), _) |> consume(_, 2)
+
+// The chain the record is written about: the dot where it can write the step, and the pipe
+// where the value is not the first argument of the call.
+fun configured(config: Config, defaults: Config): Config =
+    config.load()
+    |> merge(defaults, _)
+    .validate()
+    |> write("out.toml", _)
+
+// The step of a pipeline is a call as any other call is, and the value is bound before it:
+// the sum is what the step is applied to.
+fun summed(left: Int, right: Int): Int =
+    left + right |> consume(1, _)
+
+```
+
+## Item Tree
+
+```
+MODULE #0
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  fun consume  @2.1
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun passed  @2.2
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun twice  @2.3
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun inserted  @2.4
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun chained  @2.5
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun configured  @2.6
+    visibility: private
+    param: Config -> unresolved
+    param: Config -> unresolved
+    ret: Config -> unresolved
+  fun summed  @2.7
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun consume in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+```
+
+```
+BODY fun passed in module #0
+
+root expr#5
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  literal 1
+  expr#4  call expr#1 (expr#2, expr#3)
+  expr#5  let pat#1 = expr#0 in expr#4
+pats
+  pat#0  bind data
+  pat#1  bind <mlkc@pipeline-0>
+paths
+  path#0  data -> binding pat#0
+  path#1  consume -> fun consume
+  path#2  <mlkc@pipeline-0> -> binding pat#1
+```
+
+```
+BODY fun twice in module #0
+
+root expr#5
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  path path#3
+  expr#4  call expr#1 (expr#2, expr#3)
+  expr#5  let pat#1 = expr#0 in expr#4
+pats
+  pat#0  bind data
+  pat#1  bind <mlkc@pipeline-0>
+paths
+  path#0  data -> binding pat#0
+  path#1  consume -> fun consume
+  path#2  <mlkc@pipeline-0> -> binding pat#1
+  path#3  <mlkc@pipeline-0> -> binding pat#1
+```
+
+```
+BODY fun inserted in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  literal 1
+  expr#4  path path#3
+  expr#5  call expr#2 (expr#1, expr#3, expr#4)
+  expr#6  let pat#1 = expr#0 in expr#5
+pats
+  pat#0  bind data
+  pat#1  bind <mlkc@pipeline-0>
+paths
+  path#0  data -> binding pat#0
+  path#1  data -> binding pat#0
+  path#2  consume -> fun consume
+  path#3  <mlkc@pipeline-0> -> binding pat#1
+```
+
+```
+BODY fun chained in module #0
+
+root expr#15
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  path path#3
+  expr#4  path path#4
+  expr#5  literal 1
+  expr#6  call expr#3 (expr#4, expr#5)
+  expr#7  let pat#3 = expr#2 in expr#6
+  expr#8  path path#5
+  expr#9  call expr#1 (expr#7, expr#8)
+  expr#10  let pat#2 = expr#0 in expr#9
+  expr#11  path path#6
+  expr#12  path path#7
+  expr#13  literal 2
+  expr#14  call expr#11 (expr#12, expr#13)
+  expr#15  let pat#4 = expr#10 in expr#14
+pats
+  pat#0  bind data
+  pat#1  bind other
+  pat#2  bind <mlkc@pipeline-0>
+  pat#3  bind <mlkc@pipeline-1>
+  pat#4  bind <mlkc@pipeline-2>
+paths
+  path#0  data -> binding pat#0
+  path#1  consume -> fun consume
+  path#2  other -> binding pat#1
+  path#3  consume -> fun consume
+  path#4  <mlkc@pipeline-1> -> binding pat#3
+  path#5  <mlkc@pipeline-0> -> binding pat#2
+  path#6  consume -> fun consume
+  path#7  <mlkc@pipeline-2> -> binding pat#4
+```
+
+```
+BODY fun configured in module #0
+
+root expr#14
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#1 (expr#0)
+  expr#3  path path#2
+  expr#4  path path#3
+  expr#5  path path#4
+  expr#6  call expr#3 (expr#4, expr#5)
+  expr#7  let pat#2 = expr#2 in expr#6
+  expr#8  path path#5
+  expr#9  call expr#8 (expr#7)
+  expr#10  path path#6
+  expr#11  literal "out.toml"
+  expr#12  path path#7
+  expr#13  call expr#10 (expr#11, expr#12)
+  expr#14  let pat#3 = expr#9 in expr#13
+pats
+  pat#0  bind config
+  pat#1  bind defaults
+  pat#2  bind <mlkc@pipeline-0>
+  pat#3  bind <mlkc@pipeline-1>
+paths
+  path#0  config -> binding pat#0
+  path#1  load -> unresolved
+  path#2  merge -> unresolved
+  path#3  defaults -> binding pat#1
+  path#4  <mlkc@pipeline-0> -> binding pat#2
+  path#5  validate -> unresolved
+  path#6  write -> unresolved
+  path#7  <mlkc@pipeline-1> -> binding pat#3
+```
+
+```
+BODY fun summed in module #0
+
+root expr#7
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#2
+  expr#4  literal 1
+  expr#5  path path#3
+  expr#6  call expr#3 (expr#4, expr#5)
+  expr#7  let pat#2 = expr#2 in expr#6
+pats
+  pat#0  bind left
+  pat#1  bind right
+  pat#2  bind <mlkc@pipeline-0>
+paths
+  path#0  left -> binding pat#0
+  path#1  right -> binding pat#1
+  path#2  consume -> fun consume
+  path#3  <mlkc@pipeline-0> -> binding pat#2
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

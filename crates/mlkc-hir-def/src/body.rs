@@ -69,6 +69,11 @@ pub enum Expr {
         operand: ExprId,
     },
     /// A `let`: a pattern, the expression it is bound to, and the body it is visible in.
+    ///
+    /// A spelling that binds a value is lowered to one: the value of a pipeline is bound by
+    /// a `let` under a name no module can write ([ADR-0014]).
+    ///
+    /// [ADR-0014]: ../../docs/adr/0014-syntactic-sugar.md
     Let {
         /// The pattern the binding introduces.
         pat: PatId,

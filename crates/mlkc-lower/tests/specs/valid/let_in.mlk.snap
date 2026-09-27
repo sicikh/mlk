@@ -103,7 +103,7 @@ exprs
   expr#2  call expr#0 (expr#1)
   expr#3  path path#1
   expr#4  path path#2
-  expr#5  path path#3
+  expr#5  path path#2
   expr#6  call expr#3 (expr#4, expr#5)
   expr#7  let pat#0 = expr#2 in expr#6
 pats
@@ -112,7 +112,6 @@ paths
   path#0  f -> unresolved
   path#1  g -> unresolved
   path#2  x -> binding pat#0
-  path#3  x -> binding pat#0
 ```
 
 ```

@@ -10,6 +10,7 @@ use std::{fmt, ops::Index};
 
 use mlkc_intern::Interned;
 use mlkc_la_arena::{Arena, ArenaMap, Idx};
+use rustc_hash::FxHashMap;
 
 use crate::{
     id::{LocalConstId, LocalFunctionId},
@@ -237,7 +238,7 @@ impl Body {
         &self.pats
     }
 
-    /// The paths of the body, in the order they were allocated.
+    /// The paths of the body, in the order they were first written.
     pub fn paths(&self) -> &Arena<PathData> {
         &self.paths
     }
@@ -314,6 +315,8 @@ pub struct BodyBuilder {
     exprs: Arena<Expr>,
     pats: Arena<Pat>,
     paths: Arena<PathData>,
+    /// The paths the body holds, by value, so that a path written twice is one entry.
+    path_ids: FxHashMap<PathData, PathId>,
     local_functions: Arena<LocalFunctionData>,
     local_consts: Arena<LocalConstData>,
     local_function_roots: ArenaMap<LocalFunctionId, ExprId>,
@@ -337,9 +340,22 @@ impl BodyBuilder {
         self.pats.alloc(pat)
     }
 
-    /// Allocates a path.
-    pub fn alloc_path(&mut self, path: PathData) -> PathId {
-        self.paths.alloc(path)
+    /// Interns a path: the body holds one entry per path, however many places the path is
+    /// written in.
+    ///
+    /// A path is a value rather than a place: two paths written the same way that denote the
+    /// same thing are one path, and what tells the places apart is the expression that holds
+    /// each of them. A place no module wrote --- the binding of a pipeline is one --- is
+    /// interned by the same rule.
+    pub fn intern_path(&mut self, path: PathData) -> PathId {
+        if let Some(id) = self.path_ids.get(&path) {
+            return *id;
+        }
+
+        let id = self.paths.alloc(path.clone());
+        self.path_ids.insert(path, id);
+
+        id
     }
 
     /// Declares a function inside the body, and returns its id.
@@ -432,14 +448,15 @@ mod tests {
     /// A body of one function: `let x = 1 in g(x)`.
     fn body_with_a_call() -> Body {
         let mut builder = BodyBuilder::new();
-        let name = builder.alloc_path(PathData::ident(
+        let name = builder.intern_path(PathData::ident(
             Name::new("g"),
             PathAnchor::Item(entity("g")),
         ));
         let callee = builder.alloc_expr(Expr::Path(name));
         let literal = builder.alloc_expr(Expr::Literal(Literal::Int(1)));
         let pat = builder.alloc_pat(Pat::Bind(Name::new("x")));
-        let binding = builder.alloc_path(PathData::ident(Name::new("x"), PathAnchor::Binding(pat)));
+        let binding =
+            builder.intern_path(PathData::ident(Name::new("x"), PathAnchor::Binding(pat)));
         let bound = builder.alloc_expr(Expr::Path(binding));
         let call = builder.alloc_expr(Expr::Call {
             callee,

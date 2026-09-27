@@ -62,7 +62,7 @@ const STRAY = "fun main(): Unit =\n    x\nabc\n";
  * and `as` are asked to be the colour of `fun` (see `src/lib/highlight.ts`).
  */
 const VISIBLE =
-    "use project.data.core as data\n\npub fun main(): Unit =\n    data.start()\n";
+    "use project::data::core as data\n\npub fun main(): Unit =\n    data.start()\n";
 
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
@@ -307,7 +307,7 @@ const STEPS = {
     		number: colour('42'),
     		type: colour('Unit'),
     		name: colour('main'),
-    		attribute: colour('@extern'),
+    		attribute: colour('#[extern]'),
     		green,
     		marks: document.querySelectorAll('.cm-content [class*=cm-lintRange], .cm-content [class*=cm-lintPoint]').length
     	})`,
@@ -693,7 +693,7 @@ function report(page, problems, warnings, asked) {
         [
             "and marks what the path resolved to",
             // The declaration of a function is written with the attributes it carries:
-            // what a path leads to is the declaration, `@extern` and all.
+            // what a path leads to is the declaration, `#[extern]` and all.
             page.pathHover.names.endsWith("fun println-int(x: Int): Unit"),
         ],
         [

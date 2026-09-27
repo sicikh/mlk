@@ -10,9 +10,9 @@ use crate::{
 ///
 /// The value owns what it names: a local target of a path is an [`EntityLoc`] of the
 /// module that wrote the type, and a target in another module is the path itself,
-/// unresolved. A type reference is therefore comparable, retainable, and serializable
-/// on its own, without the item tree it came from.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// unresolved. A type reference is therefore comparable, hashable, retainable, and
+/// serializable on its own, without the item tree it came from.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeRef {
     /// A path to a type.
     Path(PathData),

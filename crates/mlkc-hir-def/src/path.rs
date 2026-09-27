@@ -130,7 +130,12 @@ pub type PlainPathId = Interned<PlainPath>;
 
 /// A path in a type or an expression: where it starts, what is written at it, and what the
 /// root of the path denotes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// A path is a value rather than a place: two paths written the same way that denote the same
+/// thing are one path, and a body holds one of each. The value is what a body interns a path by,
+/// and hashing it is canonical because a name hashes by its text and not by its address
+/// ([`Name`]).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PathData {
     /// Where the path starts, as it is written.
     ///
@@ -199,7 +204,7 @@ impl PathData {
 }
 
 /// One segment of a path: a name, and the type arguments written at it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PathSegmentData {
     /// The name of the segment.
     pub name: Name,
@@ -214,7 +219,7 @@ pub struct PathSegmentData {
 /// and a name that belongs to one is kept as the path the module wrote ([ADR-0010]).
 ///
 /// [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PathAnchor {
     /// An entity the module declares.
     Item(EntityLoc),

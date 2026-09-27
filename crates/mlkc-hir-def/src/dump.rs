@@ -59,8 +59,6 @@ pub enum Target {
     Expr(ExprId),
     /// A pattern of a body.
     Pat(PatId),
-    /// A path of a body.
-    Path(PathId),
 }
 
 /// A type a declaration writes, named by where the declaration writes it.
@@ -456,7 +454,10 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
 
     match &body[id] {
         Expr::Missing | Expr::Literal(_) => {},
-        Expr::Path(path) => children.push(path_node(body, module, *path)),
+        // The line under an expression that is a name is about the expression: a path is a value
+        // a body holds once however many places it is written in, and what a host marks for
+        // a name is the place the expression writes it at.
+        Expr::Path(path) => children.push(path_node(body, module, id, *path)),
         Expr::Call { callee, args } => {
             children.push(expr_node(body, module, *callee));
             children.extend(args.iter().map(|arg| expr_node(body, module, *arg)));
@@ -497,12 +498,17 @@ fn pat_node(body: &Body, id: PatId) -> Node {
     )
 }
 
-/// One path of a body: the path, what its root denotes, and what the path names.
-fn path_node(body: &Body, module: ModuleId, id: PathId) -> Node {
+/// One path of a body, under the expression that writes it: the path, what its root denotes,
+/// and what the path names.
+///
+/// The line says what the path is and what it names, and it stands for the expression that
+/// writes it: a body holds one entry per path however many places the path is written in, so
+/// where a name is is the expression, and the path is the value the expression names.
+fn path_node(body: &Body, module: ModuleId, expr: ExprId, id: PathId) -> Node {
     let mut node = Node::marked(
         format!("{}  {}", path_ref(id), path_resolved(&body[id], module)),
         NodeKind::Path,
-        Target::Path(id),
+        Target::Expr(expr),
     );
     node.resolves = path_target(body, id);
 
@@ -1125,13 +1131,13 @@ ITEM TREE
         let mut builder = BodyBuilder::new();
 
         // `let _ = g(42, unknown) in g(42, unknown)`.
-        let callee = builder.alloc_path(PathData::ident(
+        let callee = builder.intern_path(PathData::ident(
             Name::new("g"),
             PathAnchor::Item(entity("g", ItemKind::Function)),
         ));
         let callee = builder.alloc_expr(Expr::Path(callee));
         let value = builder.alloc_expr(Expr::Literal(Literal::Int(42)));
-        let unknown = builder.alloc_path(PathData::ident(
+        let unknown = builder.intern_path(PathData::ident(
             Name::new("unknown"),
             PathAnchor::Unresolved,
         ));
@@ -1407,40 +1413,72 @@ BODY fun f in module #0
             item: ItemLoc::new(ItemKind::Function, Some(Name::new("f")), 0),
         };
         let pat = builder.alloc_pat(Pat::Bind(Name::new("x")));
-        let bound = builder.alloc_path(PathData::ident(Name::new("x"), PathAnchor::Binding(pat)));
-        let named = builder.alloc_path(PathData::ident(
+        let bound = builder.intern_path(PathData::ident(Name::new("x"), PathAnchor::Binding(pat)));
+        let named = builder.intern_path(PathData::ident(
             Name::new("f"),
             PathAnchor::Item(entity.clone()),
         ));
 
-        let callee = builder.alloc_expr(Expr::Path(named));
-        let argument = builder.alloc_expr(Expr::Path(bound));
+        let callee_expr = builder.alloc_expr(Expr::Path(named));
+        let argument_expr = builder.alloc_expr(Expr::Path(bound));
         let call = builder.alloc_expr(Expr::Call {
-            callee,
-            args: vec![argument],
+            callee: callee_expr,
+            args: vec![argument_expr],
         });
         builder.set_root(call);
 
         let node = crate::dump::body_nodes(&owner("f"), &builder.finish());
         let call = &node.children[0].children[0];
         // An expression reads one level above the path it is written as: the line of the
-        // expression says which expression it is, and the line of the path below it says
-        // what the path names.
+        // expression says which expression it is, and the line of the path below it says what
+        // the path names. The line of a path stands for the expression that writes it, which is
+        // the place the name is at.
         let callee = &call.children[0].children[0];
         let argument = &call.children[1].children[0];
 
-        assert_eq!(callee.target, Some(Target::Path(named)));
+        assert_eq!(callee.target, Some(Target::Expr(callee_expr)));
         assert_eq!(
             callee.resolves,
             Some(Target::Item(entity.item)),
             "a path that names an entity of the module points at the entity"
         );
-        assert_eq!(argument.target, Some(Target::Path(bound)));
+        assert_eq!(argument.target, Some(Target::Expr(argument_expr)));
         assert_eq!(
             argument.resolves,
             Some(Target::Pat(pat)),
             "a path that names a binding points at the binding"
         );
+    }
+
+    #[test]
+    fn a_path_written_twice_reads_as_the_expression_that_writes_it() {
+        let mut builder = BodyBuilder::new();
+
+        // `x + x`: one path, written twice.
+        let pat = builder.alloc_pat(Pat::Bind(Name::new("x")));
+        let bound = builder.intern_path(PathData::ident(Name::new("x"), PathAnchor::Binding(pat)));
+        let first = builder.alloc_expr(Expr::Path(bound));
+        let second = builder.alloc_expr(Expr::Path(bound));
+        let sum = builder.alloc_expr(Expr::Binary {
+            lhs: first,
+            rhs: second,
+            op: BinaryOp::Add,
+        });
+        builder.set_root(sum);
+
+        let node = crate::dump::body_nodes(&owner("f"), &builder.finish());
+        let sum = &node.children[0].children[0];
+
+        // Both names are one path of the body, and each line says so: what tells the lines apart
+        // is the expression each of them stands for.
+        let first_line = &sum.children[0].children[0];
+        let second_line = &sum.children[1].children[0];
+
+        assert_eq!(first_line.text(), second_line.text());
+        assert_eq!(first_line.target, Some(Target::Expr(first)));
+        assert_eq!(second_line.target, Some(Target::Expr(second)));
+        assert_eq!(first_line.resolves, Some(Target::Pat(pat)));
+        assert_eq!(second_line.resolves, Some(Target::Pat(pat)));
     }
 
     /// The lines of a tree of a reading, indented by what they are under.

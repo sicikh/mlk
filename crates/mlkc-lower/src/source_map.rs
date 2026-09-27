@@ -8,8 +8,12 @@
 //! out. A node the lowering made up rather than read --- an expression the parser did not find
 //! --- has no range at all, and a parenthesized expression reads as the expression it holds,
 //! parentheses included.
+//!
+//! A path is not one of the nodes the map holds: a path is a value a body holds once however
+//! many places it is written in, and the places are the expressions that write it, each of which
+//! reads as itself.
 
-use mlkc_hir_def::{ExprId, PatId, PathId};
+use mlkc_hir_def::{ExprId, PatId};
 use mlkc_la_arena::ArenaMap;
 use mlkc_syntax::TextRange;
 
@@ -21,7 +25,6 @@ use mlkc_syntax::TextRange;
 pub struct BodySourceMap {
     exprs: ArenaMap<ExprId, TextRange>,
     pats: ArenaMap<PatId, TextRange>,
-    paths: ArenaMap<PathId, TextRange>,
 }
 
 impl BodySourceMap {
@@ -35,11 +38,6 @@ impl BodySourceMap {
         self.pats.get(id).copied()
     }
 
-    /// Where the path with this id is written, if the lowering read it from the source.
-    pub fn path(&self, id: PathId) -> Option<TextRange> {
-        self.paths.get(id).copied()
-    }
-
     /// Records where an expression is written.
     ///
     /// A range written twice is the last one: a parenthesized expression is the expression it
@@ -51,11 +49,6 @@ impl BodySourceMap {
     /// Records where a pattern is written.
     pub(crate) fn set_pat(&mut self, id: PatId, range: TextRange) {
         self.pats.insert(id, range);
-    }
-
-    /// Records where a path is written.
-    pub(crate) fn set_path(&mut self, id: PathId, range: TextRange) {
-        self.paths.insert(id, range);
     }
 }
 
@@ -110,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn a_path_is_the_name_it_was_written_as() {
+    fn a_name_reads_as_the_expression_that_writes_it() {
         let source = "fun main(): Int =\n    println-int(1)\n";
         let lowered = body_of(source);
         let body = &lowered.body;
@@ -119,16 +112,15 @@ mod tests {
             panic!("a call is the root of the body");
         };
 
-        let Expr::Path(path) = &body[*callee] else {
-            panic!("the callee is a path");
-        };
+        assert!(
+            matches!(&body[*callee], Expr::Path(_)),
+            "the callee is the name of the call"
+        );
 
+        // The name is a path of the body, and where the map says it is is the expression that
+        // writes it: a path is a value, and a body holds one of each.
         assert_eq!(
             lowered.source_map.expr(*callee),
-            Some(at(source, "println-int"))
-        );
-        assert_eq!(
-            lowered.source_map.path(*path),
             Some(at(source, "println-int"))
         );
         assert_eq!(
@@ -257,7 +249,6 @@ mod tests {
         };
 
         assert_eq!(lowered.source_map.expr(place), Some(at(source, "_")));
-        assert_eq!(lowered.source_map.path(*path), Some(at(source, "_")));
         assert_eq!(body[*path].anchor, PathAnchor::Binding(*pat));
     }
 
@@ -286,6 +277,45 @@ mod tests {
         assert_eq!(lowered.source_map.expr(args[0]), Some(at(source, "map")));
         assert_eq!(lowered.source_map.expr(args[1]), Some(at(source, "\"k\"")));
         assert_eq!(lowered.source_map.expr(args[2]), Some(at(source, "_")));
+    }
+
+    #[test]
+    fn a_path_written_twice_is_one_path_of_the_body() {
+        let source = "fun main(): Int =\n    let x = 42 in\n    x + x\n";
+        let lowered = body_of(source);
+        let body = &lowered.body;
+
+        let Expr::Let { body: inner, .. } = &body[body.root()] else {
+            panic!("a `let` is the root of the body");
+        };
+
+        let Expr::Binary { lhs, rhs, .. } = &body[*inner] else {
+            panic!("a sum is the body of the `let`");
+        };
+
+        let (Expr::Path(left), Expr::Path(right)) = (&body[*lhs], &body[*rhs]) else {
+            panic!("both operands are paths");
+        };
+
+        let first = lowered
+            .source_map
+            .expr(*lhs)
+            .expect("the first name to be written");
+        let second = lowered
+            .source_map
+            .expr(*rhs)
+            .expect("the second name to be written");
+
+        // The two names are one path of the body: what tells them apart is the expression each
+        // of them is written as.
+        assert_eq!(left, right);
+        assert_ne!(lhs, rhs);
+
+        // And each of them is written where it is: the place of a name is the expression, not
+        // the path, which the body holds once.
+        assert_eq!(&source[first], "x");
+        assert_eq!(&source[second], "x");
+        assert_ne!(first, second);
     }
 
     #[test]

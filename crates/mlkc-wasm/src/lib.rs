@@ -158,7 +158,6 @@ impl Hir {
                 match target {
                     dump::Target::Expr(expr) => places.expr(*expr),
                     dump::Target::Pat(pat) => places.pat(*pat),
-                    dump::Target::Path(path) => places.path(*path),
                     // What a body names can be a place outside it: the entity of the module.
                     dump::Target::Item(item) => lowered.item_range(item),
                     // A body writes no type: its annotations are the ones of the signature it is
@@ -531,6 +530,56 @@ mod tests {
             path["range"], path["resolves"],
             "the path and the binding it names are two places in the source"
         );
+    }
+
+    #[test]
+    fn a_name_written_twice_marks_each_place_it_is_written_at() {
+        /// The part of the source a serialized range covers.
+        fn covered<'a>(source: &'a str, range: &serde_json::Value) -> &'a str {
+            let at = range.as_array().expect("a range to be a pair");
+            let from = at[0].as_u64().expect("a start") as usize;
+            let to = at[1].as_u64().expect("an end") as usize;
+
+            &source[from..to]
+        }
+
+        let source = "fun main(): Int =\n    let x = 42 in\n    x + x\n";
+        let mut driver = WasmDriver::new();
+
+        driver.set_text("/main.mlk", Some(source.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let nodes = json["hir"]["nodes"]
+            .as_array()
+            .expect("the HIR to hold lines");
+
+        let declaration = &nodes[2]["children"][0]["children"][0];
+
+        assert_eq!(declaration["text"], "expr#4  let pat#0 = expr#0 in expr#3");
+
+        let sum = &declaration["children"][2];
+
+        assert_eq!(sum["text"], "expr#3  binary expr#1 + expr#2");
+
+        // Both names are one path of the body — the body holds the path once — and the line under
+        // each of them marks the name it is written as: what a reader points at is the place
+        // they are reading, and not the place the path happens to be written first.
+        let left = &sum["children"][0]["children"][0];
+        let right = &sum["children"][1]["children"][0];
+
+        assert_eq!(left["text"], "path#0  x -> binding pat#0");
+        assert_eq!(right["text"], left["text"]);
+        assert_eq!(left["range"], sum["children"][0]["range"]);
+        assert_eq!(right["range"], sum["children"][1]["range"]);
+        assert_eq!(covered(source, &left["range"]), "x");
+        assert_eq!(
+            right["range"][0].as_u64().unwrap() as usize,
+            source.rfind('x').expect("a second name in the sum"),
+            "the second name is marked where it is written"
+        );
+        // And both of them name the binding the `let` introduced.
+        assert_eq!(covered(source, &left["resolves"]), "x");
+        assert_eq!(left["resolves"], right["resolves"]);
     }
 
     #[test]

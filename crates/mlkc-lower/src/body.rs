@@ -166,9 +166,7 @@ impl BodyLowering<'_> {
     fn path_of(&mut self, path: &PathSyntax) -> ExprId {
         let written = path.syntax().text_trimmed_range();
         let data = self.path_data(path);
-        let id = self.builder.alloc_path(data);
-
-        self.source_map.set_path(id, written);
+        let id = self.builder.intern_path(data);
 
         let expr = self.builder.alloc_expr(Expr::Path(id));
         self.source_map.set_expr(expr, written);
@@ -357,8 +355,9 @@ impl BodyLowering<'_> {
     ///
     /// A place is where that value goes, and what it is is the binding the step bound: a path
     /// of one name --- the name the lowering gave the binding --- anchored to the pattern that
-    /// binds it. It reads as the `_` it stands for, which is what a host marks for it.
-    fn placeholder(&mut self, place: &PlaceholderExpr) -> ExprId {
+    /// binds it. The place itself says nothing else, and the expression it becomes reads as the
+    /// `_` it stands for, which is what a host marks for it.
+    fn placeholder(&mut self, _place: &PlaceholderExpr) -> ExprId {
         // A `_` is a value only among the arguments of a step, and one written anywhere else
         // is what the parser reported: a tree that holds one has no binding for it to be.
         let Some((name, pat)) = self.pipe.clone() else {
@@ -367,10 +366,7 @@ impl BodyLowering<'_> {
 
         let path = self
             .builder
-            .alloc_path(PathData::ident(name, PathAnchor::Binding(pat)));
-
-        self.source_map
-            .set_path(path, place.syntax().text_trimmed_range());
+            .intern_path(PathData::ident(name, PathAnchor::Binding(pat)));
 
         self.builder.alloc_expr(Expr::Path(path))
     }

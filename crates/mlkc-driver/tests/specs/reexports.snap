@@ -1,0 +1,112 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### Item Tree
+
+```
+MODULE #2 project::a
+
+ITEM TREE
+  use Point  @2.0
+    path: project::b::Point
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+### Resolution
+
+```
+SCOPE
+  Point
+    ty: type Point in module #3 (public)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+```
+
+### Diagnostics
+
+No diagnostics.
+
+## `project::b`
+
+### Item Tree
+
+```
+MODULE #3 project::b
+
+ITEM TREE
+  type Point  @2.0
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+### Resolution
+
+```
+SCOPE
+  Point
+    ty: type Point in module #3 (public)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+```
+
+### Diagnostics
+
+No diagnostics.
+
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #4 project::main
+
+ITEM TREE
+  use Point  @2.0
+    path: project::a::Point
+    visibility: private
+  fun get  @2.1
+    visibility: private
+    ret: Point -> use Point
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+### Resolution
+
+```
+SCOPE
+  Point
+    ty: type Point in module #3 (private)
+  get
+    value: fun get in module #4 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+```
+
+### Diagnostics
+
+No diagnostics.

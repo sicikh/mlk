@@ -1,5 +1,5 @@
 [package]
-name = "mlkc-driver"
+name = "mlkc-resolve"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -10,22 +10,14 @@ publish.workspace = true
 [dependencies]
 mlkc-diagnostics.workspace = true
 mlkc-hir-def.workspace = true
-mlkc-line-index.workspace = true
+mlkc-span.workspace = true
+
+[dev-dependencies]
 mlkc-lower.workspace = true
 mlkc-parser.workspace = true
-mlkc-parser-core.workspace = true
-mlkc-resolve.workspace = true
-mlkc-rowan.workspace = true
-mlkc-span.workspace = true
 mlkc-stdlib.workspace = true
 mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true
-rustc-hash.workspace = true
-
-[dev-dependencies]
-insta.workspace = true
-mlkc-fixture.workspace = true
-mlkc-text-size.workspace = true
 
 [lints]
 workspace = true

@@ -180,14 +180,15 @@ impl BodyLowering<'_> {
     /// a `let` is what a bare name denotes --- and otherwise a name of the module, read where
     /// a value belongs. A path of several names is a path of the module: what its root denotes
     /// is what the names after it are names inside, and nothing a body binds has names inside
-    /// it. A path rooted at the project is none of a body's business either: what it names is
-    /// read inside the project.
+    /// it. A path rooted at a project is none of a body's business either: what the keyword
+    /// names is the project the module is written in, and a name is read against what the
+    /// module may name, which is the scope of the module as much as the body's own bindings.
     fn path_data(&mut self, path: &PathSyntax) -> PathData {
         let mut data = path::data(path, self.file(), &mut self.diagnostics);
 
         // What the root of the path denotes is already decided when it is the project, and a
         // root that is not a name is what a broken path is read with.
-        if matches!(data.anchor, PathAnchor::Project) {
+        if matches!(data.anchor, PathAnchor::Project(_)) {
             return data;
         }
 
@@ -620,6 +621,7 @@ fun main(): Int = 1
             ModuleId(FileId::from_raw(0)),
             &root,
             &Prelude::none(),
+            &[],
             relative().as_path(),
         );
 

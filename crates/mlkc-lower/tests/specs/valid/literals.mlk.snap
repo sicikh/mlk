@@ -11,6 +11,9 @@ expression: snapshot
 #[builtin]
 type Int
 
+#[builtin]
+type String
+
 fun positive(): Int =
     42
 
@@ -34,16 +37,19 @@ ITEM TREE
   type Int  @2.0
     attributes: #[builtin]
     visibility: private
-  fun positive  @2.1
+  type String  @2.1
+    attributes: #[builtin]
+    visibility: private
+  fun positive  @2.2
     visibility: private
     ret: Int -> type Int
-  fun text  @2.2
+  fun text  @2.3
     visibility: private
-    ret: String -> unresolved
-  fun escaped  @2.3
+    ret: String -> type String
+  fun escaped  @2.4
     visibility: private
-    ret: String -> unresolved
-  fun subtracted  @2.4
+    ret: String -> type String
+  fun subtracted  @2.5
     visibility: private
     ret: Int -> type Int
   use Int  prelude

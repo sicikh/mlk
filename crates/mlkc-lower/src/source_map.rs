@@ -79,6 +79,10 @@ mod tests {
     }
 
     /// The lowering of the body of the first function of `source`.
+    ///
+    /// The module is lowered without a prelude, so a name it writes that nothing knows --- the
+    /// `Int` of these sources, which no import brings in --- is a mistake it reports: what an
+    /// error of the module is is not what a test of a body is about.
     fn body_of(source: &str) -> LoweredBody {
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
@@ -86,6 +90,7 @@ mod tests {
             ModuleId(FILE),
             &root,
             &Prelude::none(),
+            &[],
             relative().as_path(),
         );
         let decl = module.bodies.first().expect("a function with a body");

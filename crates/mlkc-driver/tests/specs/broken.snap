@@ -1,0 +1,96 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+### Item Tree
+
+```
+MODULE #2 project::data
+
+ITEM TREE
+  type Hidden  @2.0
+    visibility: private
+  type Point  @2.1
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+### Resolution
+
+```
+SCOPE
+  Hidden
+    ty: type Hidden in module #2 (private)
+  Point
+    ty: type Point in module #2 (public)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+```
+
+### Diagnostics
+
+No diagnostics.
+
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  use Hidden  @2.0
+    path: project::data::Hidden
+    visibility: private
+  use X  @2.1
+    path: project::missing::X
+    visibility: private
+  fun get  @2.2
+    visibility: private
+    ret: Nope -> unresolved
+  fun size  @2.3
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun wrong  @2.4
+    visibility: private
+    ret: size -> unresolved
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+### Resolution
+
+```
+SCOPE
+  get
+    value: fun get in module #3 (private)
+  size
+    value: fun size in module #3 (private)
+  wrong
+    value: fun wrong in module #3 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+```
+
+### Diagnostics
+
+lowering[15]: the name `Nope` is not a name of this module, and names no project  @63..67
+resolver[08]: the module `project::data` holds the name `Hidden` and does not show it  @0..25
+resolver[03]: the project `app` holds no module `missing`  @27..50
+resolver[07]: the name `size` is a value of this module, and a type belongs here  @133..137

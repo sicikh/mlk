@@ -1,0 +1,9 @@
+// A module that refuses the prelude of its project: what it does not declare itself is a name
+// nothing knows --- neither an entity of the module, nor an import of it, nor the name of a
+// project --- and the module itself is where a reader is told about it.
+
+#[no-prelude]
+module project::main-module
+
+fun main(): Int =
+    1

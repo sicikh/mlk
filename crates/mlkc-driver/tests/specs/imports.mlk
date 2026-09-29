@@ -1,0 +1,30 @@
+// What a module takes from the rest of the project: the name of a module, the name of a module
+// that stands under a prefix of module paths, and a path rooted at the project.
+
+//- /data.mlk
+// The module `project::data`: it declares a class of its own, and modules stand under its name.
+
+pub type Point
+
+pub fun origin(): Point =
+    origin()
+
+//- /data/utils.mlk
+// The module `project::data::utils`, which is one of the modules the prefix `project::data`
+// stands on.
+
+pub type Point
+
+pub fun make(): Point =
+    make()
+
+//- /main.mlk
+use project::data
+
+use project::data::utils::Point as Other
+
+fun handle(value: data::Point, other: Other): Int =
+    1
+
+fun read(value: project::data::utils::Point): Int =
+    1

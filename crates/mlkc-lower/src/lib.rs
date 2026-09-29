@@ -23,15 +23,20 @@
 //!   the binding: only the body knows its own names;
 //! - it says where every node of a body is written ([`BodySourceMap`]), since it is the only
 //!   stage that knows which syntax a node was read from;
+//! - it reports a name the surface of the module is written with that is neither a name of the
+//!   module --- an entity of it, or an import of it --- nor the name of a project the module may
+//!   name: the module alone decides it, and the module is where a reader is told about it
+//!   ([ADR-0004], [ADR-0016]);
 //! - it reports what the HIR cannot hold, and nothing else: an attribute that the language
 //!   has no meaning for is the one thing a module can say that has nowhere to go.
 //!
 //! [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+//! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 //!
 //! # What lowering does not do
 //!
-//! - it does not resolve a name beyond the module it is in. A path that names a project, a
-//!   module of another project, or a name that is not there stays
+//! - it does not resolve a name beyond the module it is in. A path that names a module of
+//!   another project, or a name that is not there, stays
 //!   [`PathAnchor::Unresolved`](mlkc_hir_def::PathAnchor::Unresolved), and the stage that
 //!   holds the scopes of the project resolves it ([ADR-0004]);
 //! - it does not check a type, a value, or a name. The HIR is what a module says, not what
@@ -46,7 +51,7 @@
 //! # Lowering one module
 //!
 //! ```
-//! use mlkc_hir_def::{Namespace, PathAnchor, Prelude};
+//! use mlkc_hir_def::{Name, Namespace, PathAnchor, Prelude, ProjectId};
 //! use mlkc_lower::{ModuleId, lower_body, lower_module};
 //! use mlkc_vfs::{FileId, RelPathBuf};
 //!
@@ -59,6 +64,7 @@
 //!     ModuleId(FileId::from_raw(0)),
 //!     &root,
 //!     Prelude::standard(),
+//!     &[ProjectId::new("std")],
 //!     relative.as_path(),
 //! );
 //! assert!(lowered.diagnostics.is_empty());
@@ -108,7 +114,9 @@ mod ty;
 
 use std::fmt;
 
-pub use mlkc_hir_def::{Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId, Prelude};
+pub use mlkc_hir_def::{
+    Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId, Name, Prelude, ProjectId,
+};
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{FunDecl, ModuleRoot};
 use mlkc_vfs::RelPath;
@@ -181,6 +189,12 @@ pub struct LoweredBody {
 /// project is a module of it, and the place the file stands at is the canonical path of the
 /// module (`project::lib::arith`).
 ///
+/// `projects` is the projects the module may name: the projects the project it belongs to depends
+/// on, or every project of the world for a module that belongs to no project ([ADR-0016]). What a
+/// module calls its own project by is the keyword `project`, and not a name. A name written where
+/// a type belongs that is neither a name of the module nor one of those projects is what the
+/// lowering reports.
+///
 /// # Panics
 ///
 /// Panics if the place names no file --- the root of a file system, pushed as if it were a
@@ -188,20 +202,22 @@ pub struct LoweredBody {
 /// The driver keeps such files out of the lowering, so a caller that hands one over is a bug.
 ///
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 pub fn lower_module(
     module: ModuleId,
     root: &ModuleRoot,
     prelude: &Prelude,
+    projects: &[ProjectId],
     relative: &RelPath,
 ) -> LoweredModule {
-    item::lower(module, root, prelude, relative)
+    item::lower(module, root, prelude, projects, relative)
 }
 
 /// Lowers the body of a function, or nothing if the declaration declares no body.
 ///
 /// `tree` is the item tree of the module the function is declared in: a path of the body
-/// that names nothing inside the body is anchored against the names that module declares,
-/// where a value belongs.
+/// that names nothing inside the body is anchored against the names that module declares and
+/// the projects it may name, where a value belongs.
 ///
 /// A declaration that declares no body --- a function of a prelude, or an external one --- has
 /// none here: there is no body to hold, and [`LoweredModule::bodies`] is the list of the

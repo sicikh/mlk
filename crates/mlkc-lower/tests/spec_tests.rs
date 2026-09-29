@@ -61,8 +61,8 @@ spec_tests! {
     prelude: "valid/prelude.mlk",
 
     // A module that refuses the prelude of its project: the names it does not declare are names
-    // nothing knows.
-    no_prelude: "valid/no_prelude.mlk",
+    // nothing knows, and the module that knows nothing about a name is the one that reports it.
+    unresolved_name: "invalid/unresolved_name.mlk",
 
     // How far a declaration is visible, and the attributes it carries next to it.
     visibility: "valid/visibility.mlk",

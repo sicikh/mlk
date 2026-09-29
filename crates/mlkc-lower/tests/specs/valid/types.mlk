@@ -1,5 +1,12 @@
 // Paths of types, qualified and applied to type arguments, and the types a module leaves to
-// be inferred.
+// be inferred. A name a type is rooted at is a name of the module, so the types the paths
+// name are declared here.
+
+#[builtin]
+type Map
+
+#[builtin]
+type String
 
 fun qualified(value: std::core::Int): Unit =
     value

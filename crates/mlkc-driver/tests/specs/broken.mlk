@@ -1,0 +1,24 @@
+// What a module is told about when a path names nothing: a name another module keeps to itself,
+// a module that is not there, a name the module itself knows nothing about, and a name of the
+// module written where a type belongs.
+
+//- /data.mlk
+// The module `project::data`: it keeps the name `Hidden` to itself.
+
+type Hidden
+
+pub type Point
+
+//- /main.mlk
+use project::data::Hidden
+
+use project::missing::X
+
+fun get(): Nope =
+    get()
+
+fun size(value: Int): Int =
+    value
+
+fun wrong(): size =
+    size(1)

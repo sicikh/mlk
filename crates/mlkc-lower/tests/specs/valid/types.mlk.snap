@@ -6,7 +6,14 @@ expression: snapshot
 
 ```mlk
 // Paths of types, qualified and applied to type arguments, and the types a module leaves to
-// be inferred.
+// be inferred. A name a type is rooted at is a name of the module, so the types the paths
+// name are declared here.
+
+#[builtin]
+type Map
+
+#[builtin]
+type String
 
 fun qualified(value: std::core::Int): Unit =
     value
@@ -36,27 +43,33 @@ fun inferred(value: _): _ =
 MODULE #0 project::types
 
 ITEM TREE
-  fun qualified  @2.0
+  type Map  @2.0
+    attributes: #[builtin]
     visibility: private
-    param: std::core::Int -> unresolved
-    ret: Unit -> use Unit
-  fun applied  @2.1
+  type String  @2.1
+    attributes: #[builtin]
     visibility: private
-    param: Map[Int -> use Int, String -> unresolved] -> unresolved
-    ret: Unit -> use Unit
-  fun applied_and_qualified  @2.2
+  fun qualified  @2.2
     visibility: private
-    param: std::Map[Int -> use Int, String -> unresolved] -> unresolved
+    param: std::core::Int -> the project std
     ret: Unit -> use Unit
-  fun applied_to_a_qualified_path  @2.3
+  fun applied  @2.3
     visibility: private
-    param: std::core::Map[Int -> use Int, String -> unresolved] -> unresolved
+    param: Map[Int -> use Int, String -> type String] -> type Map
     ret: Unit -> use Unit
-  fun applied_and_read_inside  @2.4
+  fun applied_and_qualified  @2.4
     visibility: private
-    param: Map[Int -> use Int]::Entry -> unresolved
+    param: std::Map[Int -> use Int, String -> type String] -> the project std
     ret: Unit -> use Unit
-  fun inferred  @2.5
+  fun applied_to_a_qualified_path  @2.5
+    visibility: private
+    param: std::core::Map[Int -> use Int, String -> type String] -> the project std
+    ret: Unit -> use Unit
+  fun applied_and_read_inside  @2.6
+    visibility: private
+    param: Map[Int -> use Int]::Entry -> type Map
+    ret: Unit -> use Unit
+  fun inferred  @2.7
     visibility: private
     param: _
     ret: _

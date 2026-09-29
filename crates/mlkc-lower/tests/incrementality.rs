@@ -70,11 +70,14 @@ fn lower(source: &str) -> LoweredModule {
     let parsed = parse(source);
     let root = parsed.tree::<ModuleRoot>();
 
-    // A prelude is not what this is about: the modules here are lowered without one.
+    // A prelude is not what this is about: the modules here are lowered without one, and the
+    // types they write --- the `Int` of most of them --- are names nothing knows, which is an
+    // error of the module rather than of what a test of an edit is about.
     lower_module(
         ModuleId(FileId::from_raw(0)),
         &root,
         &Prelude::none(),
+        &[],
         relative().as_path(),
     )
 }

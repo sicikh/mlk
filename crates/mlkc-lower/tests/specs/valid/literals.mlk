@@ -4,6 +4,9 @@
 #[builtin]
 type Int
 
+#[builtin]
+type String
+
 fun positive(): Int =
     42
 

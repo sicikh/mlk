@@ -6,7 +6,8 @@ expression: snapshot
 
 ```mlk
 // A module that refuses the prelude of its project: what it does not declare itself is a name
-// nothing knows, and no import of the prelude is brought in.
+// nothing knows --- neither an entity of the module, nor an import of it, nor the name of a
+// project --- and the module itself is where a reader is told about it.
 
 #[no-prelude]
 module project::main-module
@@ -39,7 +40,7 @@ exprs
 
 ## Lowering Diagnostics
 
-No diagnostics.
+317..320: the name `Int` is not a name of this module, and names no project
 
 ## Parse Diagnostics
 

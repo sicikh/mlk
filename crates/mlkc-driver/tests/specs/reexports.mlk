@@ -1,0 +1,18 @@
+// A name a module re-exports is the path the module wrote: the walk continues in the module
+// that reads it, and the name it ends at is one of another module.
+
+//- /a.mlk
+// The module `project::a`: it shows a name of `project::b` as a name of its own.
+
+pub use project::b::Point
+
+//- /b.mlk
+// The module `project::b`: where the name the chain ends at is declared.
+
+pub type Point
+
+//- /main.mlk
+use project::a::Point
+
+fun get(): Point =
+    get()

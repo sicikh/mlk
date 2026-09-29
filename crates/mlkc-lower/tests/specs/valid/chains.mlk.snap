@@ -11,6 +11,18 @@ expression: snapshot
 #[builtin]
 type Int
 
+#[builtin]
+type Config
+
+#[builtin]
+type Persons
+
+#[builtin]
+type Name
+
+#[builtin]
+type Data
+
 fun load(config: Config): Config =
     config
 
@@ -50,41 +62,53 @@ ITEM TREE
   type Int  @2.0
     attributes: #[builtin]
     visibility: private
-  fun load  @2.1
+  type Config  @2.1
+    attributes: #[builtin]
     visibility: private
-    param: Config -> unresolved
-    ret: Config -> unresolved
-  fun validate  @2.2
+  type Persons  @2.2
+    attributes: #[builtin]
     visibility: private
-    param: Config -> unresolved
-    ret: Config -> unresolved
-  fun start  @2.3
+  type Name  @2.3
+    attributes: #[builtin]
     visibility: private
-    param: Config -> unresolved
+  type Data  @2.4
+    attributes: #[builtin]
+    visibility: private
+  fun load  @2.5
+    visibility: private
+    param: Config -> type Config
+    ret: Config -> type Config
+  fun validate  @2.6
+    visibility: private
+    param: Config -> type Config
+    ret: Config -> type Config
+  fun start  @2.7
+    visibility: private
+    param: Config -> type Config
     ret: Int -> type Int
-  fun chained  @2.4
+  fun chained  @2.8
     visibility: private
-    param: Config -> unresolved
+    param: Config -> type Config
     ret: Int -> type Int
-  fun insert  @2.5
+  fun insert  @2.9
     visibility: private
-    param: Persons -> unresolved
-    param: Name -> unresolved
-    param: Data -> unresolved
-    ret: Persons -> unresolved
-  fun add  @2.6
+    param: Persons -> type Persons
+    param: Name -> type Name
+    param: Data -> type Data
+    ret: Persons -> type Persons
+  fun add  @2.10
     visibility: private
-    param: Persons -> unresolved
-    param: Name -> unresolved
-    param: Data -> unresolved
-    ret: Persons -> unresolved
-  fun port  @2.7
+    param: Persons -> type Persons
+    param: Name -> type Name
+    param: Data -> type Data
+    ret: Persons -> type Persons
+  fun port  @2.11
     visibility: private
-    param: Config -> unresolved
+    param: Config -> type Config
     ret: Int -> type Int
-  fun loaded_port  @2.8
+  fun loaded_port  @2.12
     visibility: private
-    param: Config -> unresolved
+    param: Config -> type Config
     ret: Int -> type Int
   use Int  prelude
     path: std::prelude::Int

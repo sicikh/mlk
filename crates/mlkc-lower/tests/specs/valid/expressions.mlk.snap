@@ -218,7 +218,7 @@ exprs
   expr#1  literal 1
   expr#2  call expr#0 (expr#1)
 paths
-  path#0  std::core::size -> unresolved
+  path#0  std::core::size -> the project std
 ```
 
 ## Lowering Diagnostics

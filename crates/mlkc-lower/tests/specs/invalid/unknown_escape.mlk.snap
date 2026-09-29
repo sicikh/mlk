@@ -42,6 +42,7 @@ exprs
 
 ## Lowering Diagnostics
 
+162..168: the name `String` is not a name of this module, and names no project
 183..185: the language has no escape `\q`
 196..198: the language has no escape `\z`
 

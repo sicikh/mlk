@@ -128,6 +128,18 @@ pub enum LoweringError {
         /// The declaration the name denotes.
         declaration: EntityLoc,
     },
+    /// A name the surface of the module is written with is not a name the module may name.
+    ///
+    /// A name written where a type belongs is a name of the module --- an entity of it, or an
+    /// import of it --- or the name of a project the module may name. A name that is neither is
+    /// a name nothing resolves, and that the module alone decides: the module is where a reader
+    /// is told about it ([ADR-0004][adr-0004]).
+    ///
+    /// [adr-0004]: ../../docs/adr/0004-module-system.md
+    UnresolvedName {
+        /// The name the path is rooted at.
+        name: Name,
+    },
 }
 
 impl LoweringError {
@@ -155,6 +167,9 @@ impl LoweringError {
             },
             Self::UnknownAttribute { name } => {
                 format!("the language has no attribute `{name:?}`")
+            },
+            Self::UnresolvedName { name } => {
+                format!("the name `{name:?}` is not a name of this module, and names no project")
             },
             Self::RepeatedAttribute { name } => {
                 format!("the attribute `#[{name:?}]` is written more than once on one declaration")
@@ -266,6 +281,7 @@ impl DiagKind for LoweringError {
             Self::DuplicateParameterName { .. } => "12",
             Self::UnknownEscape { .. } => "13",
             Self::ProjectWithTypeArguments { .. } => "14",
+            Self::UnresolvedName { .. } => "15",
         }
     }
 }

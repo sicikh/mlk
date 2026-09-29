@@ -5,6 +5,9 @@
 #[builtin]
 type Int
 
+#[builtin]
+type Config
+
 fun consume(left: Int, right: Int): Int =
     left
 

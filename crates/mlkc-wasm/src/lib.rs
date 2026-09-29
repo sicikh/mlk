@@ -469,6 +469,10 @@ mod tests {
     fn a_pushed_buffer_analyzes_into_trees_and_diagnostics() {
         let mut driver = WasmDriver::new();
 
+        // The names of the language are names the library declares: without it, `Unit` is a
+        // name the module cannot resolve.
+        driver.register_library();
+
         assert!(driver.set_text("/main.mlk", Some("fun main(): Unit =\n    x\n".to_string())));
         let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
         let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
@@ -741,6 +745,7 @@ mod tests {
     #[test]
     fn a_lowering_mistake_crosses_the_boundary_as_a_diagnostic() {
         let mut driver = WasmDriver::new();
+        driver.register_library();
 
         driver.set_text(
             "/main.mlk",
@@ -785,7 +790,13 @@ mod tests {
             .driver
             .line_index(file)
             .expect("the file to have lines");
-        let diagnostic = Diagnostic::of(&diagnostics[0], &index);
+        let diagnostic = Diagnostic::of(
+            diagnostics
+                .iter()
+                .next()
+                .expect("the parse to report something"),
+            &index,
+        );
 
         assert_eq!(diagnostic.level, "error");
         assert_eq!(diagnostic.category, "parser");

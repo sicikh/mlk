@@ -4,6 +4,18 @@
 #[builtin]
 type Int
 
+#[builtin]
+type Config
+
+#[builtin]
+type Persons
+
+#[builtin]
+type Name
+
+#[builtin]
+type Data
+
 fun load(config: Config): Config =
     config
 

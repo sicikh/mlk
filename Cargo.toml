@@ -21,6 +21,7 @@ mlkc-lower = { path = "crates/mlkc-lower", version = "0.1.0" }
 mlkc-parser = { path = "crates/mlkc-parser", version = "0.1.0" }
 mlkc-parser-core = { path = "crates/mlkc-parser-core", version = "0.1.0" }
 mlkc-paths = { path = "crates/mlkc-paths", version = "0.1.0" }
+mlkc-resolve = { path = "crates/mlkc-resolve", version = "0.1.0" }
 mlkc-rowan = { path = "crates/mlkc-rowan", version = "0.1.0" }
 mlkc-span = { path = "crates/mlkc-span", version = "0.1.0" }
 mlkc-stdlib = { path = "crates/mlkc-stdlib", version = "0.1.0" }

@@ -27,7 +27,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use mlkc_hir_def::{ItemLoc, ModuleId, Prelude};
+use mlkc_hir_def::{ItemLoc, ModuleId, Prelude, ProjectId};
 use mlkc_lower::{LoweredBody, LoweredModule, lower_body, lower_module, syntax_at};
 use mlkc_parser_core::AnyParse;
 use mlkc_rowan::AstNode;
@@ -87,6 +87,7 @@ pub(crate) fn run(fixture: &str) {
         ModuleId(FIXTURE_FILE),
         &root,
         Prelude::standard(),
+        &[ProjectId::new("std")],
         relative.as_path(),
     );
     let bodies = bodies(&lowered);

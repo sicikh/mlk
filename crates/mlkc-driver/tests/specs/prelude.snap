@@ -1,0 +1,43 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #2 project::main
+
+ITEM TREE
+  fun main  @2.0
+    visibility: private
+    ret: Unit -> use Unit
+  fun make  @2.1
+    visibility: private
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+### Resolution
+
+```
+SCOPE
+  main
+    value: fun main in module #2 (private)
+  make
+    value: fun make in module #2 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+```
+
+### Diagnostics
+
+No diagnostics.

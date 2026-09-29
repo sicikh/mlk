@@ -4,19 +4,78 @@ use mlkc_hir_def::{
     Name, PathAnchor, PathData, PathRoot, PlainPath, TypeRef, path::PathSegmentData,
 };
 use mlkc_rowan::AstNode;
-use mlkc_syntax::{Path, PathRoot as PathRootSyntax, PathSegment, Type as TypeSyntax, TypeArgs};
+use mlkc_syntax::{
+    Path, PathRoot as PathRootSyntax, PathSegment, PathType, SyntaxNode, Type as TypeSyntax,
+    TypeArgs,
+};
 use mlkc_vfs::FileId;
 
 use crate::{LoweringDiag, LoweringError, syntax, ty};
+
+/// A name a type is written with at the root of a path, and where it is written.
+///
+/// A name written where a type belongs is a name of the module --- an entity of it, or an
+/// import of it --- or the name of a project the module may name, and what a name is is not
+/// something the type says: what a caller does with one is check it against the module and the
+/// projects it may name once the module is whole ([`crate::item`]).
+#[derive(Debug, Clone)]
+pub(crate) struct WrittenName {
+    /// The name the path is rooted at.
+    pub(crate) name: Name,
+    /// The name as the module wrote it, which is where a diagnostic points.
+    pub(crate) node: SyntaxNode,
+}
+
+/// Collects the names a type is written with, each of them with where it is written.
+///
+/// A type is a tree of paths --- what a path applies an argument to is a type of its own --- and
+/// a path is rooted at a name or at the project keyword: what is collected is the name of every
+/// path of the type, in the order the paths are written.
+pub(crate) fn written_names(ty: &TypeSyntax, names: &mut Vec<WrittenName>) {
+    for node in ty.syntax().descendants() {
+        let Some(path_type) = PathType::cast(node) else {
+            continue;
+        };
+
+        // A path the parser could not read is a type that is missing: it is no name at all, and
+        // the parse is what reported it.
+        let Ok(path) = path_type.path() else {
+            continue;
+        };
+
+        let Some(name) = root_name(&path) else {
+            continue;
+        };
+
+        names.push(name);
+    }
+}
+
+/// The name a path is rooted at, if it is rooted at one.
+///
+/// A path rooted at the project keyword is rooted at no name: what it names is the project the
+/// module is written in, which no module decides.
+fn root_name(path: &Path) -> Option<WrittenName> {
+    let name = match first_segment(path)?.root().ok()? {
+        PathRootSyntax::Name(name) => name,
+        PathRootSyntax::Project(_) => return None,
+    };
+
+    Some(WrittenName {
+        name: syntax::name_of(&name),
+        node: name.syntax().clone(),
+    })
+}
 
 /// A path as it was written, with no resolution of its root.
 ///
 /// What the root of a path denotes is decided by the caller that knows more than the syntax
 /// does: a body anchors a path to the binding it names, and the item tree's builder anchors
-/// what is left against the names the module declares. A path that neither of them knows
-/// stays [`PathAnchor::Unresolved`], and the stage that holds the scopes of the project
-/// resolves it --- unless it is rooted at the project, which is what the module knows of
-/// itself without a manifest.
+/// what is left against the names the module declares and the projects it may name. A path that
+/// neither of them knows stays [`PathAnchor::Unresolved`]. The one root the syntax decides is
+/// the keyword `project`, which names the project the module is written in --- what a module
+/// knows of itself without a manifest --- and which no list of projects and no scope of the
+/// module has a say about.
 pub(crate) fn data(path: &Path, file: FileId, diagnostics: &mut Vec<LoweringDiag>) -> PathData {
     let root = root(path);
     let args = first_segment(path).and_then(|segment| segment.type_args());
@@ -36,7 +95,7 @@ pub(crate) fn data(path: &Path, file: FileId, diagnostics: &mut Vec<LoweringDiag
 
     PathData {
         anchor: match root {
-            PathRoot::Project => PathAnchor::Project,
+            PathRoot::Project => PathAnchor::Project(None),
             PathRoot::Named(_) => PathAnchor::Unresolved,
         },
         root,

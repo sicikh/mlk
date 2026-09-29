@@ -12,6 +12,9 @@ expression: snapshot
 #[builtin]
 type Int
 
+#[builtin]
+type Config
+
 fun consume(left: Int, right: Int): Int =
     left
 
@@ -55,34 +58,37 @@ ITEM TREE
   type Int  @2.0
     attributes: #[builtin]
     visibility: private
-  fun consume  @2.1
+  type Config  @2.1
+    attributes: #[builtin]
+    visibility: private
+  fun consume  @2.2
     visibility: private
     param: Int -> type Int
     param: Int -> type Int
     ret: Int -> type Int
-  fun passed  @2.2
+  fun passed  @2.3
     visibility: private
     param: Int -> type Int
     ret: Int -> type Int
-  fun twice  @2.3
+  fun twice  @2.4
     visibility: private
     param: Int -> type Int
     ret: Int -> type Int
-  fun inserted  @2.4
+  fun inserted  @2.5
     visibility: private
     param: Int -> type Int
     ret: Int -> type Int
-  fun chained  @2.5
+  fun chained  @2.6
     visibility: private
     param: Int -> type Int
     param: Int -> type Int
     ret: Int -> type Int
-  fun configured  @2.6
+  fun configured  @2.7
     visibility: private
-    param: Config -> unresolved
-    param: Config -> unresolved
-    ret: Config -> unresolved
-  fun summed  @2.7
+    param: Config -> type Config
+    param: Config -> type Config
+    ret: Config -> type Config
+  fun summed  @2.8
     visibility: private
     param: Int -> type Int
     param: Int -> type Int

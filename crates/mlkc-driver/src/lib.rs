@@ -3,10 +3,13 @@
 //! The driver is the component that owns the inputs and the memoized passes,
 //! and the only one that decides what has to be recomputed.
 //! The pipeline it drives is the compiler pipeline;
-//! today that pipeline is the parser and the lowering of a module into the HIR,
+//! today that pipeline is the parser, the lowering of a module into the HIR,
+//! and the resolution of a module against the interfaces of the modules its paths name,
 //! so the table holds the values that are derived from the text of a file:
-//! the parse, the HIR, the diagnostics a host renders, and the line index positions are read
-//! with. The units that follow — the interface, the checked bodies —
+//! the parse, the HIR, the interface of the module it is,
+//! the resolution of its names and the diagnostics of all three,
+//! and the line index positions are read with --- and, per project,
+//! the module index and the def map. The units that follow --- the checked bodies ---
 //! are more slots in the same table rather than a different design.
 //!
 //! Three rules are visible in the code.
@@ -15,12 +18,27 @@
 //!   The driver never opens a file, never reads a clock, never writes anywhere:
 //!   a host hands it bytes, and asks it for values.
 //! - **The key of a slot is the identity of what the pass read**.
-//!   Everything here is a function of the text of one file --- and, for the HIR, of the
-//!   prelude the file is compiled with --- so the identity of that text, its [`FileVersion`],
-//!   is almost the whole key, while the text itself is handed to the pass by reference.
+//!   Everything here is a function of the text of one file --- and, for the HIR, of the prelude
+//!   the file is compiled with and the projects it may name --- so the identity of that text,
+//!   its [`FileVersion`], is almost the whole key, while the text itself is handed to the pass
+//!   by reference.
 //! - **A pass is a function of its input**.
 //!   [`Parse`] is what [`mlkc_parser::parse`] returned, and nothing more:
 //!   the value and the diagnostics of the pass, stored as they came.
+//!
+//! # The diagnostics of a file
+//!
+//! Every stage reports its own, and what a host reads is the [`Diagnostics`] of a file: what
+//! the parser reported, what the lowering of the module reported, and what the resolution of
+//! it found, each of them the value the stage left. No stage's diagnostics are copied into
+//! another stage's, and a mistake one stage reports is not a reason to render what the stages
+//! around it reported again.
+//!
+//! The one rendering that is the driver's is the resolution's: a resolution reports places in
+//! the HIR --- an entity, and the type among its types --- and where a place is written is what
+//! the driver holds. That rendering is a value of its own, keyed by what it read, and what it
+//! read is a module's HIR only for a name a walk could not find ([`mlkc_resolve::hidden_name`]):
+//! a module that resolved cleanly reads no HIR beside its own.
 //!
 //! # The prelude, and the projects it belongs to
 //!
@@ -37,6 +55,14 @@
 //! language. What a project says decides what its modules' text means, so the HIR of a module
 //! is dropped when the module changes project or the project's prelude changes; a parse is
 //! not, because a parse does not read the prelude.
+//!
+//! A project is what a module may name, and the list of the ones it may name is what the
+//! lowering of the module is handed: a project says what another project is called
+//! ([`ProjectData::dependencies`]), those are the projects a path of a module of it is rooted
+//! at, and a module of no project names every project of the graph, which is all there is to
+//! declare a dependency on ([ADR-0016]).
+//!
+//! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 //!
 //! The library the language's own prelude names is one such project, and it is the compiler's
 //! rather than a host's ([`mlkc_stdlib`]): a host records it with [`Driver::use_std`], and a
@@ -75,17 +101,24 @@
 //! which is what a host that owns the driver on a thread of its own relies on.
 //! The assertion at the end of this file is what keeps that true.
 
-use std::sync::Arc;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, OnceLock},
+};
 
 use mlkc_diagnostics::Diagnostic;
 use mlkc_hir_def::{
-    BodyEntityLoc, ItemLoc, ItemTree, ModuleId, Prelude, ProjectData, ProjectGraph, ProjectId,
-    dump::TypePlace,
+    BodyEntityLoc, Interface, ItemLoc, ItemTree, ModuleId, ModuleIndex, Prelude, ProjectData,
+    ProjectDefMap, ProjectGraph, ProjectId, dump::TypePlace,
 };
 use mlkc_line_index::LineIndex;
 use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at};
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
+use mlkc_resolve::{
+    Closure, Resolution, ResolveDeps, ResolveDiag, ResolveError, hidden_name, resolve_module,
+};
 use mlkc_rowan::{AstNode, NodeCache};
+use mlkc_span::Span;
 use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, RelPath, RelPathBuf, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
@@ -111,14 +144,26 @@ pub struct Driver {
     /// The projects the compiler knows, and the project each module belongs to.
     ///
     /// The graph is configuration rather than an input of a file: it is not pushed, it is set,
-    /// and what a project says of its modules decides how their text is read.
-    projects: ProjectGraph,
+    /// and what a project says of its modules decides how their text is read. It is shared
+    /// rather than owned so that a resolution can be handed the graph it was resolved against
+    /// without copying it.
+    projects: Arc<ProjectGraph>,
     /// The parse of every file that has been parsed, with the green nodes it was built through.
     parses: FxHashMap<FileId, ParseSlot>,
     /// The HIR of every file that has been lowered.
     lowered: FxHashMap<FileId, TextSlot<Lowered>>,
-    /// The diagnostics of every file that has been asked for them.
-    diagnostics: FxHashMap<FileId, TextSlot<[Diagnostic]>>,
+    /// The interface of every module that has been asked for one.
+    interfaces: FxHashMap<ModuleId, InterfaceSlot>,
+    /// The module index of every project that has been asked for one.
+    module_indexes: FxHashMap<ProjectId, ModuleIndexSlot>,
+    /// The resolution of every module that has been resolved.
+    resolutions: FxHashMap<ModuleId, ResolutionSlot>,
+    /// The def map of every project that has been asked for one.
+    def_maps: FxHashMap<ProjectId, DefMapSlot>,
+    /// The rendered diagnostics of the parse of every file that has been asked for them.
+    parse_diagnostics: FxHashMap<FileId, TextSlot<[Diagnostic]>>,
+    /// The rendered diagnostics of the resolution of every module that has been asked for them.
+    resolution_diagnostics: FxHashMap<ModuleId, ResolutionDiagnosticsSlot>,
     /// The line index of every file whose positions have been read.
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
 }
@@ -150,6 +195,77 @@ struct ParseSlot {
     value: Arc<Parse>,
     /// The green nodes of the parse, which the next parse of this file shares.
     cache: NodeCache,
+}
+
+/// The interface of one module, and the HIR it was cut from ([ADR-0016]).
+///
+/// An interface is a function of the module's own text, which is the item tree the driver
+/// holds: the slot is keyed by that value, so an edit that leaves the item tree equal --- one
+/// inside a body, or one that touches a private name --- leaves the interface where it was.
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+struct InterfaceSlot {
+    /// The HIR the interface was cut from.
+    lowered: Arc<Lowered>,
+    /// The value, retained so that a recomputation that ends up equal keeps it.
+    value: Arc<Interface>,
+}
+
+/// The module index of one project, and the interfaces it was built from ([ADR-0016]).
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+struct ModuleIndexSlot {
+    /// The interface of every module of the project, by module, as the index was built.
+    interfaces: BTreeMap<ModuleId, Arc<Interface>>,
+    /// The value, retained so that a recomputation that ends up equal keeps it.
+    value: Arc<ModuleIndex>,
+}
+
+/// The resolution of one module, and what it was made from ([ADR-0016]).
+///
+/// The key of a resolution is what its walk read: the module's own HIR, the interfaces it
+/// reached, and the entries it read of the module indexes. The two of the three that belong to
+/// other units are what the [`Closure`] holds.
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+struct ResolutionSlot {
+    /// The HIR the resolution was made from.
+    lowered: Arc<Lowered>,
+    /// The interfaces the walk reached, and the entries of the indexes it read.
+    closure: Closure,
+    /// The value, retained so that a recomputation that ends up equal keeps it.
+    value: Arc<Resolution>,
+}
+
+/// The def map of one project, and the resolutions it was built from ([ADR-0016]).
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+struct DefMapSlot {
+    /// The resolution of every module of the project, by module, as the map was built.
+    resolutions: BTreeMap<ModuleId, Arc<Resolution>>,
+    /// The value, retained so that a recomputation that ends up equal keeps it.
+    value: Arc<ProjectDefMap>,
+}
+
+/// The rendered diagnostics of the resolution of one module, and what rendering them read
+/// ([ADR-0016]).
+///
+/// A resolution reports places in the HIR, and where a place is written is what the driver
+/// holds, so the rendering is the driver's. It is a value of its own, keyed by the resolution,
+/// by the HIR it was made from, and by the HIR of the modules it looked at --- which is nothing
+/// on the way a resolution usually goes, and a module per name a walk could not find
+/// ([`hidden_name`]).
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+struct ResolutionDiagnosticsSlot {
+    /// The resolution the diagnostics were rendered from.
+    resolution: Arc<Resolution>,
+    /// The HIR the places of the diagnostics are read in.
+    lowered: Arc<Lowered>,
+    /// The HIR of the modules a diagnostic looked at, by module.
+    looked: BTreeMap<ModuleId, Arc<Lowered>>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<[Diagnostic]>,
 }
 
 /// The value of the parse slot: what the parser returned, whole.
@@ -233,8 +349,14 @@ impl Lowered {
     ///
     /// `relative` is where the file of the module stands, which is what the module is called
     /// when it declares no path of its own: see [`Driver::module_path`].
-    fn of(module: ModuleId, root: &ModuleRoot, prelude: &Prelude, relative: &RelPath) -> Self {
-        let lowered = lower_module(module, root, prelude, relative);
+    fn of(
+        module: ModuleId,
+        root: &ModuleRoot,
+        prelude: &Prelude,
+        projects: &[ProjectId],
+        relative: &RelPath,
+    ) -> Self {
+        let lowered = lower_module(module, root, prelude, projects, relative);
 
         // An entity the module did not write --- a prelude import --- is written nowhere, and
         // a host is given no range for it.
@@ -324,7 +446,7 @@ impl Lowered {
     }
 
     /// What lowering reported, as a host renders it.
-    pub fn diagnostics(&self) -> &[Diagnostic] {
+    pub fn diagnostics(&self) -> &Arc<[Diagnostic]> {
         &self.diagnostics
     }
 }
@@ -440,7 +562,7 @@ impl Driver {
             return false;
         }
 
-        self.projects.insert(project.clone(), data);
+        Arc::make_mut(&mut self.projects).insert(project.clone(), data);
         self.invalidate_project(&project);
 
         true
@@ -501,7 +623,7 @@ impl Driver {
         self.projects.project(project)?;
         self.invalidate_project(project);
 
-        self.projects.remove(project)
+        Arc::make_mut(&mut self.projects).remove(project)
     }
 
     /// Records which project a module belongs to, and returns whether the graph changed.
@@ -514,7 +636,7 @@ impl Driver {
             return false;
         }
 
-        self.projects.set_module_project(module, project);
+        Arc::make_mut(&mut self.projects).set_module_project(module, project);
         self.invalidate_module(module);
 
         true
@@ -551,7 +673,6 @@ impl Driver {
     pub fn project_graph(&self) -> &ProjectGraph {
         &self.projects
     }
-
     // Pulls: they may compute, and they never answer from an invalid slot.
 
     /// The parse of `file`, computed when the slot is missing or stale.
@@ -617,10 +738,16 @@ impl Driver {
         };
 
         let version = self.file_version(file);
+        let module = ModuleId(file);
+
+        // The projects the module may name, which the lowering reads the name a type is rooted
+        // at against ([ADR-0016]).
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        let projects: Vec<ProjectId> = self.named_projects(module);
 
         Self::text_derived(&mut self.lowered, file, version, || {
             let root = parse.module_root()?;
-            let module = ModuleId(file);
 
             // What the module is read with is the prelude of its project, which is the
             // prelude of the language for a module no project claims.
@@ -630,9 +757,285 @@ impl Driver {
                 module,
                 &root,
                 prelude,
+                &projects,
                 relative.as_path(),
             )))
         })
+    }
+
+    /// The interface of `module`: what it shows to the modules that name it.
+    ///
+    /// The interface is a function of the module's own text, which is the HIR the driver
+    /// holds ([ADR-0016]): a module that changed its surface is described again, and one whose
+    /// item tree stayed the same --- a body edited, a private name changed --- is the value the
+    /// driver already holds.
+    ///
+    /// `None` when there is nothing to cut an interface from: see [`Driver::lower`].
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn interface(&mut self, module: ModuleId) -> Option<Arc<Interface>> {
+        let lowered = self.lower(module.0)?;
+        let held = self.interfaces.get(&module);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &lowered)
+        {
+            return Some(slot.value.clone());
+        }
+
+        let value = Arc::new(Interface::of(lowered.item_tree()));
+
+        // An interface equal to the one the driver holds is the value it holds: everything
+        // keyed by the interface stays where it was ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let value = match held {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.interfaces.insert(module, InterfaceSlot {
+            lowered,
+            value: value.clone(),
+        });
+
+        Some(value)
+    }
+
+    /// The module index of `project`: which path of it names which module.
+    ///
+    /// The index is built from the interfaces of the modules the graph assigns to the project,
+    /// entry by entry ([ADR-0016]): a module that changed its surface replaces one entry, and
+    /// an index whose entries are the ones it was built from is the value the driver holds.
+    ///
+    /// `None` when the graph holds no such project.
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn module_index(&mut self, project: &ProjectId) -> Option<Arc<ModuleIndex>> {
+        self.projects.project(project)?;
+
+        let modules: Vec<ModuleId> = self.projects.modules_of(project).collect();
+        let mut interfaces: BTreeMap<ModuleId, Arc<Interface>> = BTreeMap::new();
+
+        for module in modules {
+            if let Some(interface) = self.interface(module) {
+                interfaces.insert(module, interface);
+            }
+        }
+
+        let held = self.module_indexes.get(project);
+
+        if let Some(slot) = held
+            && entries_are_the_same(&slot.interfaces, &interfaces)
+        {
+            return Some(slot.value.clone());
+        }
+
+        let mut index = ModuleIndex::new(project.clone());
+
+        for (module, interface) in &interfaces {
+            index.insert(*module, interface.path());
+        }
+
+        let value = Arc::new(index);
+        let value = match held {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.module_indexes
+            .insert(project.clone(), ModuleIndexSlot {
+                interfaces,
+                value: value.clone(),
+            });
+
+        Some(value)
+    }
+
+    /// The resolution of `module`: what its names denote, and what its walk found wrong.
+    ///
+    /// The input of the resolution is the closure of the modules its paths name ([ADR-0009]),
+    /// gathered here by making the walk once: what the walk reaches --- the interfaces, and the
+    /// entries it read of the module indexes --- is what the pass that follows is handed, and
+    /// what the slot is keyed by ([ADR-0016]).
+    ///
+    /// `None` when there is nothing to resolve: see [`Driver::lower`].
+    ///
+    /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn resolution(&mut self, module: ModuleId) -> Option<Arc<Resolution>> {
+        let lowered = self.lower(module.0)?;
+        let graph = Arc::clone(&self.projects);
+        let indexes = self.indexes_of(module);
+
+        let closure = Closure::of(
+            module,
+            lowered.item_tree(),
+            &graph,
+            &indexes,
+            &mut |module| self.interface(module),
+        );
+
+        let held = self.resolutions.get(&module);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &lowered)
+            && slot.closure.reads_the_same_as(&closure)
+        {
+            return Some(slot.value.clone());
+        }
+
+        let (scope, diagnostics) = resolve_module(module, lowered.item_tree(), &ResolveDeps {
+            graph,
+            closure: closure.clone(),
+        });
+
+        let value = Arc::new(Resolution::new(Arc::new(scope), Arc::from(diagnostics)));
+
+        // A resolution equal to the one the driver holds is the value it holds: a reader that
+        // came to the same entities came to nothing new ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let value = match held {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.resolutions.insert(module, ResolutionSlot {
+            lowered,
+            closure,
+            value: value.clone(),
+        });
+
+        Some(value)
+    }
+
+    /// The def map of `project`: the scopes of its modules.
+    ///
+    /// The map is the index of the resolutions of the project's modules ([ADR-0016]): it holds
+    /// the scope of a module, and it is keyed by the resolutions it was built from, entry by
+    /// entry. A project the graph holds no modules of has an empty map.
+    ///
+    /// `None` when the graph holds no such project.
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn def_map(&mut self, project: &ProjectId) -> Option<Arc<ProjectDefMap>> {
+        self.projects.project(project)?;
+
+        let modules: Vec<ModuleId> = self.projects.modules_of(project).collect();
+        let mut resolutions: BTreeMap<ModuleId, Arc<Resolution>> = BTreeMap::new();
+
+        for module in modules {
+            if let Some(resolution) = self.resolution(module) {
+                resolutions.insert(module, resolution);
+            }
+        }
+
+        let held = self.def_maps.get(project);
+
+        if let Some(slot) = held
+            && entries_are_the_same(&slot.resolutions, &resolutions)
+        {
+            return Some(slot.value.clone());
+        }
+
+        let mut map = ProjectDefMap::default();
+
+        for (module, resolution) in &resolutions {
+            map.set(*module, Arc::clone(resolution.scope()));
+        }
+
+        let value = Arc::new(map);
+        let value = match held {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.def_maps.insert(project.clone(), DefMapSlot {
+            resolutions,
+            value: value.clone(),
+        });
+
+        Some(value)
+    }
+
+    /// The module indexes a path of `module` may be read in.
+    ///
+    /// A path is read inside a project: the names of the project a module belongs to are read in
+    /// the index of that project --- the module calls it by the keyword --- and the names of the
+    /// projects it depends on are read in theirs ([`Driver::read_projects`]).
+    fn indexes_of(&mut self, module: ModuleId) -> BTreeMap<ProjectId, Arc<ModuleIndex>> {
+        let mut indexes = BTreeMap::new();
+
+        for project in self.read_projects(module) {
+            if let Some(index) = self.module_index(&project) {
+                indexes.insert(project, index);
+            }
+        }
+
+        indexes
+    }
+
+    /// The projects a path of a module is read in: the project the module belongs to, and the
+    /// projects that project depends on.
+    ///
+    /// A module names the project it belongs to by the keyword `project`, so what the names
+    /// after the keyword are read against is the index of that project, and the names of the
+    /// projects it depends on are read against their indexes. A module that belongs to no
+    /// project is read in every project of the graph, which is all there is to declare a
+    /// dependency on ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    fn read_projects(&self, module: ModuleId) -> Vec<ProjectId> {
+        match self.projects.project_of(module) {
+            Some(project) => {
+                match self.projects.project(project) {
+                    Some(data) => {
+                        std::iter::once(project.clone())
+                            .chain(data.dependencies.values().cloned())
+                            .collect()
+                    },
+                    None => Vec::new(),
+                }
+            },
+            None => {
+                self.projects
+                    .projects()
+                    .map(|(project, _)| project.clone())
+                    .collect()
+            },
+        }
+    }
+
+    /// The projects a module may name.
+    ///
+    /// A module names the projects that the project it belongs to depends on; what it calls its
+    /// own project by is the keyword `project`, and not a name ([ADR-0016]). A module that
+    /// belongs to no project names the projects of the graph, each of them by its own name,
+    /// which is all there is to declare a dependency on.
+    ///
+    /// The lowering is keyed by the list, so it is sorted: the same projects are the same input
+    /// however a host declared them.
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    fn named_projects(&self, module: ModuleId) -> Vec<ProjectId> {
+        let mut projects: Vec<ProjectId> = match self.projects.project_of(module) {
+            Some(project) => {
+                match self.projects.project(project) {
+                    Some(data) => data.dependencies.values().cloned().collect(),
+                    None => Vec::new(),
+                }
+            },
+            None => {
+                self.projects
+                    .projects()
+                    .map(|(project, _)| project.clone())
+                    .collect()
+            },
+        };
+
+        projects.sort();
+        projects
     }
 
     /// Where a module stands: the place of its file, which is what the module is called when it
@@ -664,35 +1067,159 @@ impl Driver {
         }
     }
 
-    /// The diagnostics of `file`, in the shape a host renders: what the parser reported,
-    /// and then what lowering reported about the HIR the parse became.
+    /// The diagnostics of `file`: what the parser reported, what the lowering of the module
+    /// reported, and what the resolution of it found ([ADR-0016]).
     ///
-    /// The conversion is a value of its own, not work done per call:
-    /// it is computed once per version of the file and shared as an `Arc`.
+    /// Each stage's diagnostics are a value of their own, computed once per what their stage
+    /// read and shared as an `Arc`: a mistake the parser reported is not a reason to render
+    /// what the lowering and the resolution reported again.
     ///
     /// `None` when the file has no parse: see [`Driver::parse`].
-    pub fn diagnostics(&mut self, file: FileId) -> Option<Arc<[Diagnostic]>> {
-        let Some(parse) = self.parse(file) else {
-            self.diagnostics.remove(&file);
-            return None;
-        };
-
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn diagnostics(&mut self, file: FileId) -> Option<Diagnostics> {
+        let parse = self.parse_diagnostics(file)?;
         let lowered = self.lower(file);
+
+        let lowering = lowered
+            .as_ref()
+            .map_or_else(none, |lowered| lowered.diagnostics().clone());
+        let resolution = lowered
+            .as_ref()
+            .and_then(|_| self.resolution_diagnostics(ModuleId(file)))
+            .unwrap_or_else(none);
+
+        Some(Diagnostics {
+            parse,
+            lowering,
+            resolution,
+        })
+    }
+
+    /// The diagnostics of the parse of `file`, in the shape a host renders.
+    ///
+    /// The rendering is a function of the parse, so it is keyed by the text of the file like
+    /// the parse itself: what a parser reported is rendered once per text it read.
+    fn parse_diagnostics(&mut self, file: FileId) -> Option<Arc<[Diagnostic]>> {
+        let parse = self.parse(file)?;
         let version = self.file_version(file);
 
-        Self::text_derived(&mut self.diagnostics, file, version, || {
-            let mut rendered = parse
+        Self::text_derived(&mut self.parse_diagnostics, file, version, || {
+            let rendered = parse
                 .diagnostics()
                 .iter()
                 .map(|diagnostic| diagnostic.to_diagnostic(file))
                 .collect::<Vec<_>>();
 
-            if let Some(lowered) = &lowered {
-                rendered.extend(lowered.diagnostics().iter().cloned());
-            }
-
             Some(Arc::from(rendered))
         })
+    }
+
+    /// The diagnostics of the resolution of `module`, in the shape a host renders.
+    ///
+    /// A resolution reports places in the HIR, and where a place is written is what the driver
+    /// holds, so the rendering is the driver's. It is a value of its own, and a resolution or
+    /// an HIR that did not change is a value the driver already holds.
+    fn resolution_diagnostics(&mut self, module: ModuleId) -> Option<Arc<[Diagnostic]>> {
+        let lowered = self.lower(module.0)?;
+        let resolution = self.resolution(module)?;
+
+        let held = self.resolution_diagnostics.get(&module).filter(|slot| {
+            Arc::ptr_eq(&slot.resolution, &resolution) && Arc::ptr_eq(&slot.lowered, &lowered)
+        });
+
+        if let Some(slot) = held {
+            // What the rendering looked at is the HIR of the modules a name the walk could not
+            // find may belong to: a look that names the same HIR is a look that read the same
+            // thing, and the value that was rendered from it is the value the driver holds.
+            let looked: Vec<(ModuleId, Arc<Lowered>)> = slot
+                .looked
+                .iter()
+                .map(|(module, lowered)| (*module, lowered.clone()))
+                .collect();
+
+            if looked.iter().all(|(module, held)| {
+                self.lower(module.0)
+                    .is_some_and(|current| Arc::ptr_eq(held, &current))
+            }) {
+                return Some(self.resolution_diagnostics[&module].value.clone());
+            }
+        }
+
+        let mut looked = BTreeMap::new();
+        let mut rendered = Vec::with_capacity(resolution.diagnostics().len());
+
+        for diagnostic in resolution.diagnostics().iter() {
+            rendered.push(self.rendered(diagnostic, module, &lowered, &mut looked));
+        }
+
+        let value: Arc<[Diagnostic]> = Arc::from(rendered);
+
+        self.resolution_diagnostics
+            .insert(module, ResolutionDiagnosticsSlot {
+                resolution,
+                lowered,
+                looked,
+                value: value.clone(),
+            });
+
+        Some(value)
+    }
+
+    /// The diagnostic a host renders of what a resolution found.
+    ///
+    /// A name the walk could not find may be a name the module at the end of the path holds and
+    /// does not show, and telling that is a look at the module itself: what the look read is
+    /// recorded, since it is what the rendering is keyed by ([`hidden_name`]).
+    fn rendered(
+        &mut self,
+        diagnostic: &ResolveDiag,
+        file: ModuleId,
+        lowered: &Lowered,
+        looked: &mut BTreeMap<ModuleId, Arc<Lowered>>,
+    ) -> Diagnostic {
+        let place = diagnostic.place();
+        let range = match place.type_place() {
+            Some(type_place) => lowered.type_range(place.item(), type_place),
+            None => lowered.item_range(place.item()),
+        };
+
+        // A place the driver wrote no range for has nowhere to point at: what the resolution
+        // found is still what a host is told about, and it is told without a place.
+        let Some(range) = range else {
+            return Diagnostic::from_kind(diagnostic.error(), diagnostic.error().message());
+        };
+
+        let span = Span::new(file.0, range);
+        let error = self.hidden(diagnostic.error(), looked);
+
+        match error {
+            Some(hidden) => Diagnostic::from_kind(&hidden, hidden.message()).with_primary(span, ""),
+            None => diagnostic.to_diagnostic(span),
+        }
+    }
+
+    /// The error a resolution should have reported instead, when the name it could not find is
+    /// a name a module keeps to itself ([`hidden_name`]).
+    ///
+    /// The look is taken only for a name a walk could not find, and what it read is what
+    /// a caller keys the rendered diagnostics by: a module that resolved cleanly reads no item
+    /// tree of another module, and the key of its diagnostics is not widened by this.
+    fn hidden(
+        &mut self,
+        error: &ResolveError,
+        looked: &mut BTreeMap<ModuleId, Arc<Lowered>>,
+    ) -> Option<ResolveError> {
+        let ResolveError::UnknownName { path, module, name } = error else {
+            return None;
+        };
+
+        let lowered = self.lower(module.0)?;
+        let hidden = hidden_name(path, *module, name, lowered.item_tree());
+
+        looked.insert(*module, lowered);
+
+        hidden
     }
 
     /// The line index of `file`: where its lines start and end.
@@ -753,24 +1280,117 @@ impl Driver {
         Some(value)
     }
 
-    /// Drops the HIR of every module that belongs to `project`.
+    /// Drops what belongs to `project`: the HIR of its modules, their interfaces and
+    /// resolutions, its module index and its def map.
     ///
     /// What a project says is what its modules are read under, and the prelude is the part of
     /// it that lowering reads: a module of another project, or one of no project, is not
-    /// affected by a change to this one. The parses stay, since a parse reads no project.
+    /// affected by a change to this one --- and neither are the modules that read the interfaces
+    /// of this one's modules, which see the new values when their own resolutions are read
+    /// again. The parses stay, since a parse reads no project.
     fn invalidate_project(&mut self, project: &ProjectId) {
-        let projects = &self.projects;
-        let belongs = |file: &FileId| projects.project_of(ModuleId(*file)) == Some(project);
+        let modules: Vec<ModuleId> = self.projects.modules_of(project).collect();
 
-        self.lowered.retain(|file, _| !belongs(file));
-        self.diagnostics.retain(|file, _| !belongs(file));
+        for module in modules {
+            self.invalidate_module(module);
+        }
+
+        self.module_indexes.remove(project);
+        self.def_maps.remove(project);
     }
 
-    /// Drops the HIR of one module, and the diagnostics derived from it.
+    /// Drops the values derived from one module: its HIR, its interface, its resolution, and
+    /// the diagnostics that were rendered from them.
+    ///
+    /// A module that changed project or text is read again; what reads this module is not
+    /// dropped with it, and sees the new value when it is read again.
     fn invalidate_module(&mut self, module: ModuleId) {
         self.lowered.remove(&module.0);
-        self.diagnostics.remove(&module.0);
+        self.interfaces.remove(&module);
+        self.resolutions.remove(&module);
+        self.resolution_diagnostics.remove(&module);
     }
+}
+
+/// Whether two maps hold the same value for every module, value by value.
+///
+/// What a consumer of a project is keyed by is the contributions of its modules, entry by
+/// entry ([ADR-0008]): a value the driver already holds --- the same `Arc` --- is the same
+/// contribution, and a value that is new is one the consumer has not read.
+///
+/// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+fn entries_are_the_same<T>(
+    held: &BTreeMap<ModuleId, Arc<T>>,
+    current: &BTreeMap<ModuleId, Arc<T>>,
+) -> bool {
+    held.len() == current.len()
+        && held.iter().all(|(module, value)| {
+            current
+                .get(module)
+                .is_some_and(|current| Arc::ptr_eq(value, current))
+        })
+}
+
+/// The diagnostics of one file, in the order the stages of the pipeline reported them.
+///
+/// The parts are the values the stages left: what the parser reported, what the lowering of the
+/// module reported, and what the resolution of it found. A part that did not change is the
+/// value the driver already held, and no part is copied into another: what a host reads is the
+/// parts in order ([`Diagnostics::iter`]).
+#[derive(Debug, Clone)]
+pub struct Diagnostics {
+    /// What the parser reported.
+    parse: Arc<[Diagnostic]>,
+    /// What the lowering of the module reported.
+    lowering: Arc<[Diagnostic]>,
+    /// What the resolution of the module reported.
+    resolution: Arc<[Diagnostic]>,
+}
+
+impl Diagnostics {
+    /// What the parser reported, as the stage left it.
+    pub fn parse(&self) -> &Arc<[Diagnostic]> {
+        &self.parse
+    }
+
+    /// What the lowering of the module reported, as the stage left it.
+    pub fn lowering(&self) -> &Arc<[Diagnostic]> {
+        &self.lowering
+    }
+
+    /// What the resolution of the module reported, as the stage left it.
+    pub fn resolution(&self) -> &Arc<[Diagnostic]> {
+        &self.resolution
+    }
+
+    /// The diagnostics of the file, in the order the stages reported them.
+    pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.parse
+            .iter()
+            .chain(self.lowering.iter())
+            .chain(self.resolution.iter())
+    }
+
+    /// How many diagnostics the file has.
+    pub fn len(&self) -> usize {
+        self.parse.len() + self.lowering.len() + self.resolution.len()
+    }
+
+    /// Whether the file has no diagnostics at all.
+    pub fn is_empty(&self) -> bool {
+        self.parse.is_empty() && self.lowering.is_empty() && self.resolution.is_empty()
+    }
+}
+
+/// What a stage that reported nothing is handed: one empty list for every stage and file.
+///
+/// An empty list is one value whatever it is a list of, and a caller that compares what it was
+/// handed --- which is what a driver is for --- compares the value that is there rather than a
+/// new one that is equal to it.
+fn none() -> Arc<[Diagnostic]> {
+    static NONE: OnceLock<Arc<[Diagnostic]>> = OnceLock::new();
+
+    NONE.get_or_init(|| Arc::from(Vec::new())).clone()
 }
 
 /// The root of the file system: what the place of a file is read against
@@ -827,6 +1447,40 @@ mod tests {
     /// The same module with the `in` of the `let` missing.
     const BROKEN: &str = "fun main(): Unit =\n    let x = 1\n";
 
+    /// A module of a project: it shows a class, and has a body no other module reads.
+    const DATA: &str = "\
+pub type Point
+
+pub fun origin(): Point = origin()
+
+fun helper() = 1
+";
+
+    /// The same module with the body of the private function edited.
+    const DATA_EDITED: &str = "\
+pub type Point
+
+pub fun origin(): Point = origin()
+
+fun helper() = 2
+";
+
+    /// The same module with another name shown.
+    const DATA_EXTENDED: &str = "\
+pub type Point
+
+pub type Extra
+
+pub fun origin(): Point = origin()
+";
+
+    /// A module of the same project that reads what `DATA` shows.
+    const READER: &str = "\
+use project::data::Point
+
+fun get(): Point = get()
+";
+
     /// A path in the virtual file system: a test has no file system.
     fn path(name: &str) -> VfsPath {
         VfsPath::new_virtual_path(format!("/{name}"))
@@ -842,6 +1496,93 @@ mod tests {
         let file = driver.file_id(&path).expect("the file to have an id");
 
         (driver, file)
+    }
+
+    /// A driver that holds one file of a project that depends on the standard library.
+    ///
+    /// The names of the language are names the library declares ([ADR-0011]): a module that
+    /// writes `Unit` is a module whose project is one that depends on `std`, and whose prelude
+    /// reaches the name through the re-export the library writes.
+    ///
+    /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+    fn driver_with_std(name: &str, text: &str) -> (Driver, FileId) {
+        let mut driver = Driver::new();
+        driver.use_std();
+
+        let mut data = ProjectData::default();
+        data.dependencies.insert(
+            Name::new(mlkc_stdlib::PROJECT),
+            ProjectId::new(mlkc_stdlib::PROJECT),
+        );
+        driver.set_project(project(), data);
+
+        let path = path(name);
+        driver.set_file_text(path.clone(), Some(text.to_string()));
+
+        let file = driver.file_id(&path).expect("the file to have an id");
+        driver.set_module_project(ModuleId(file), project());
+
+        (driver, file)
+    }
+
+    /// A driver that holds the project a fixture writes, one module per file.
+    ///
+    /// A fixture holds a project in one value ([`mlkc_fixture`]): every module of it is headed
+    /// by the place it stands at, and what follows is its source.
+    ///
+    /// The project depends on nothing and gives its modules no prelude: what a test writes is
+    /// what its modules resolve against.
+    fn project_of(fixture: &str) -> Driver {
+        let mut driver = Driver::new();
+
+        let data = ProjectData {
+            prelude: Prelude::none(),
+            ..ProjectData::default()
+        };
+        driver.set_project(project(), data);
+
+        for module in mlkc_fixture::modules(fixture) {
+            let path = VfsPath::new_virtual_path(module.place.clone());
+            driver.set_file_text(path.clone(), Some(module.source.clone()));
+
+            let file = driver.file_id(&path).expect("the file to have an id");
+            driver.set_module_project(ModuleId(file), project());
+        }
+
+        driver
+    }
+
+    /// The id of the file a fixture wrote at `place`.
+    fn file(driver: &Driver, place: &str) -> FileId {
+        driver
+            .file_id(&path(place))
+            .unwrap_or_else(|| panic!("a fixture to write a module at `{place}`"))
+    }
+
+    /// A driver that holds a project of two modules: the one of `data`, and the one that reads
+    /// it. Both stand at the root of the file system, which is what names them.
+    fn reader_and_data(data: &str, reader: &str) -> (Driver, FileId, FileId) {
+        let fixture = format!("//- /data.mlk\n{data}\n//- /main.mlk\n{reader}");
+        let driver = project_of(&fixture);
+
+        let data = file(&driver, "data.mlk");
+        let main = file(&driver, "main.mlk");
+
+        (driver, main, data)
+    }
+
+    /// The module of the standard library the driver holds, by the name the library gives it.
+    fn std_module(driver: &Driver, name: &str) -> ModuleId {
+        let module = mlkc_stdlib::modules()
+            .iter()
+            .find(|module| module.name == name)
+            .expect("a module the library has");
+
+        ModuleId(
+            driver
+                .file_id(&mlkc_stdlib::path(module))
+                .expect("a module of the library to be pushed"),
+        )
     }
 
     #[test]
@@ -978,17 +1719,20 @@ mod tests {
     fn a_lowering_mistake_travels_with_the_diagnostics_of_the_file() {
         // One name declared twice is a mistake the parser has nothing to say about:
         // a module says it, and the HIR cannot hold it.
-        let (mut driver, file) = driver_with(
+        let (mut driver, file) = driver_with_std(
             "main.mlk",
             "fun f(): Unit =\n    1\n\nfun f(): Unit =\n    2\n",
         );
 
         let diagnostics = driver.diagnostics(file).expect("the file to be diagnosed");
 
-        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0].category, Category::Lowering);
-        assert_eq!(diagnostics[0].level, Level::Error);
-        assert_eq!(diagnostics[0].code, "01");
+        assert_eq!(diagnostics.lowering().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.lowering()[0];
+
+        assert_eq!(diagnostic.category, Category::Lowering);
+        assert_eq!(diagnostic.level, Level::Error);
+        assert_eq!(diagnostic.code, "01");
     }
 
     #[test]
@@ -1375,6 +2119,279 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_name_of_another_module_resolves_in_the_middle_of_a_project() {
+        let (mut driver, main, data) = reader_and_data(DATA, READER);
+
+        let resolution = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+
+        assert!(
+            resolution.diagnostics().is_empty(),
+            "{:?}",
+            resolution.diagnostics(),
+        );
+
+        let point = resolution
+            .scope()
+            .get(&Name::new("Point"))
+            .expect("`Point` to be a name of the reader");
+        let (entity, _) = point.ty.clone().expect("`Point` to be a type");
+
+        assert_eq!(entity.module, ModuleId(data));
+    }
+
+    #[test]
+    fn a_body_edit_leaves_the_interface_of_a_module_where_it_was() {
+        let (mut driver, _, data) = reader_and_data(DATA, READER);
+
+        let module = ModuleId(data);
+        let before = driver
+            .interface(module)
+            .expect("the module to have an interface");
+
+        driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+        let after = driver
+            .interface(module)
+            .expect("the module to have an interface");
+
+        // What a module shows is a function of its own text, and a body is not what it shows:
+        // the interface a person reads is the value the driver already held.
+        assert!(
+            Arc::ptr_eq(&before, &after),
+            "a body edit changed the interface"
+        );
+    }
+
+    #[test]
+    fn a_body_edit_of_a_module_leaves_the_modules_that_read_it_where_they_were() {
+        let (mut driver, main, _) = reader_and_data(DATA, READER);
+
+        let before = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+
+        driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+
+        let after = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+
+        // The interface of `data` is the value the driver holds, so the walk of `main` reaches
+        // it again: what `main` resolved to is what it had, and nothing of it was paid for.
+        assert!(
+            Arc::ptr_eq(&before, &after),
+            "a body edit re-resolved a reader"
+        );
+    }
+
+    #[test]
+    fn a_name_added_to_a_module_does_not_move_what_its_readers_resolved_to() {
+        let (mut driver, main, data) = reader_and_data(DATA, READER);
+
+        let module = ModuleId(data);
+        let before = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+        let interface = driver
+            .interface(module)
+            .expect("the module to have an interface");
+
+        driver.set_file_text(path("data.mlk"), Some(DATA_EXTENDED.to_owned()));
+
+        let after = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+        let current = driver
+            .interface(module)
+            .expect("the module to have an interface");
+
+        // A name added is a different interface, so the readers of `data` walk again --- and
+        // the walk ends at the same entity, so the resolution it came to is the one it had.
+        assert!(
+            !Arc::ptr_eq(&interface, &current),
+            "the interface to change"
+        );
+        assert!(
+            Arc::ptr_eq(&before, &after),
+            "a name added re-resolved a reader to something else",
+        );
+    }
+
+    #[test]
+    fn the_index_of_a_project_holds_the_modules_its_files_are() {
+        let (mut driver, main, data) = reader_and_data(DATA, READER);
+
+        let index = driver
+            .module_index(&project())
+            .expect("the project to have an index");
+
+        assert_eq!(index.get(&[Name::new("data")]), Some(ModuleId(data)));
+        assert_eq!(index.get(&[Name::new("main")]), Some(ModuleId(main)));
+        assert_eq!(index.len(), 2);
+    }
+
+    #[test]
+    fn the_def_map_of_a_project_holds_the_scopes_of_its_modules() {
+        let (mut driver, main, _) = reader_and_data(DATA, READER);
+
+        let map = driver
+            .def_map(&project())
+            .expect("the project to have a def map");
+        let resolution = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+
+        assert_eq!(map.len(), 2);
+        assert!(
+            Arc::ptr_eq(
+                map.get(ModuleId(main))
+                    .expect("the reader to be in the map"),
+                resolution.scope(),
+            ),
+            "the map to hold the scope of the resolution",
+        );
+    }
+
+    #[test]
+    fn a_name_a_module_keeps_to_itself_is_told_about_as_kept() {
+        let mut driver = project_of(
+            "\
+//- /data.mlk
+type Hidden
+
+//- /main.mlk
+use project::data::Hidden
+
+fun get() = 1
+",
+        );
+        let main = file(&driver, "main.mlk");
+
+        let diagnostics = driver.diagnostics(main).expect("the file to be diagnosed");
+
+        // The walk of the reader finds no name where it ends, and telling a reader why is a
+        // look at the module the name belongs to --- which is read only for such a name.
+        assert_eq!(diagnostics.resolution().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.resolution()[0];
+
+        assert_eq!(diagnostic.category, Category::Resolver);
+        assert_eq!(diagnostic.code, "08");
+        assert_eq!(
+            diagnostic.message,
+            "the module `project::data` holds the name `Hidden` and does not show it",
+        );
+    }
+
+    #[test]
+    fn what_a_resolution_found_travels_with_the_diagnostics_of_the_file() {
+        const SOURCE: &str = "use project::data::Nope\n\nfun get() = 1\n";
+
+        let (mut driver, main, _) = reader_and_data(DATA, SOURCE);
+
+        let diagnostics = driver.diagnostics(main).expect("the file to be diagnosed");
+
+        assert_eq!(diagnostics.resolution().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.resolution()[0];
+        let label = diagnostic.labels.first().expect("a label");
+
+        // A resolution reports a place in the HIR, and the driver turns it into the span of the
+        // text the place is written at.
+        assert_eq!(diagnostic.category, Category::Resolver);
+        assert_eq!(diagnostic.code, "04");
+        assert_eq!(
+            diagnostic.message,
+            "the module `project::data` exports no name `Nope`"
+        );
+        assert_eq!(
+            covered(SOURCE, Some(label.span.range)),
+            Some("use project::data::Nope")
+        );
+    }
+
+    #[test]
+    fn a_module_added_under_a_prefix_makes_the_module_that_named_it_resolve_again() {
+        let mut driver = project_of(
+            "\
+//- /main.mlk
+use project::data
+
+use project::data::utils::Point
+
+fun get(): Point = get()
+",
+        );
+        let main = file(&driver, "main.mlk");
+
+        let before = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+
+        // No module of `data` is there yet, so the paths that read it name nothing.
+        assert!(!before.diagnostics().is_empty());
+        assert!(before.scope().get(&Name::new("Point")).is_none());
+
+        let path = path("data/utils.mlk");
+        driver.set_file_text(path.clone(), Some("pub type Point\n".to_owned()));
+
+        let utils = driver.file_id(&path).expect("the file to have an id");
+        driver.set_module_project(ModuleId(utils), project());
+
+        let after = driver
+            .resolution(ModuleId(main))
+            .expect("the module to resolve");
+
+        // A module that appeared under the prefix is a module the walk reads: the resolution of
+        // a module that named the prefix is read again ([ADR-0016]).
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        assert!(after.diagnostics().is_empty(), "{:?}", after.diagnostics());
+        assert_eq!(
+            after
+                .scope()
+                .get(&Name::new("Point"))
+                .and_then(|per_ns| per_ns.ty.clone())
+                .map(|(entity, _)| entity.module),
+            Some(ModuleId(utils)),
+        );
+    }
+
+    #[test]
+    fn the_names_of_the_language_resolve_through_the_library() {
+        let (mut driver, file) = driver_with_std("main.mlk", MODULE);
+
+        let resolution = driver
+            .resolution(ModuleId(file))
+            .expect("the module to resolve");
+
+        assert!(
+            resolution.diagnostics().is_empty(),
+            "{:?}",
+            resolution.diagnostics(),
+        );
+
+        let unit = resolution
+            .scope()
+            .get(&Name::new("Unit"))
+            .expect("`Unit` to be a name of the module");
+        let (entity, _) = unit.ty.clone().expect("`Unit` to be a type");
+
+        // The name is the one the library declares: the prelude of the language names a path of
+        // `std::prelude`, and the walk follows the re-export it wrote ([ADR-0011]).
+        //
+        // [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+        assert_eq!(entity.module, std_module(&driver, mlkc_stdlib::CORE));
+        assert!(
+            driver
+                .diagnostics(file)
+                .expect("the file to be diagnosed")
+                .is_empty()
+        );
+    }
+
     /// A path in a prelude, as the paths of a project are written.
     fn prelude_of(path: &[&str]) -> Prelude {
         Prelude::from_paths([PlainPath::from_segments(
@@ -1520,7 +2537,10 @@ mod tests {
         );
 
         let diagnostics = driver.diagnostics(file).expect("the file to be parsed");
-        let diagnostic = diagnostics.first().expect("the parse to report something");
+        let diagnostic = diagnostics
+            .iter()
+            .next()
+            .expect("the parse to report something");
 
         assert_eq!(diagnostic.level, Level::Error);
         assert_eq!(diagnostic.category, Category::Parser);
@@ -1534,12 +2554,18 @@ mod tests {
         let first = driver.diagnostics(file).expect("the file to be parsed");
         let second = driver.diagnostics(file).expect("the file to be parsed");
 
-        assert!(Arc::ptr_eq(&first, &second), "the conversion ran twice");
+        // Nothing is rendered again: a part of the diagnostics is the value the stage left.
+        assert!(
+            Arc::ptr_eq(first.parse(), second.parse())
+                && Arc::ptr_eq(first.lowering(), second.lowering())
+                && Arc::ptr_eq(first.resolution(), second.resolution()),
+            "the conversion ran twice",
+        );
     }
 
     #[test]
     fn the_diagnostics_follow_the_text_and_the_old_ones_stay_as_they_were() {
-        let (mut driver, file) = driver_with("main.mlk", BROKEN);
+        let (mut driver, file) = driver_with_std("main.mlk", BROKEN);
         let broken = driver.diagnostics(file).expect("the file to be parsed");
 
         assert!(!broken.is_empty());

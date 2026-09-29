@@ -647,13 +647,17 @@ dependencies = [
 name = "mlkc-driver"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "mlkc-diagnostics",
+ "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-line-index",
  "mlkc-lower",
  "mlkc-parser",
  "mlkc-parser-core",
+ "mlkc-resolve",
  "mlkc-rowan",
+ "mlkc-span",
  "mlkc-stdlib",
  "mlkc-syntax",
  "mlkc-text-size",
@@ -746,6 +750,20 @@ name = "mlkc-paths"
 version = "0.1.0"
 dependencies = [
  "camino",
+]
+
+[[package]]
+name = "mlkc-resolve"
+version = "0.1.0"
+dependencies = [
+ "mlkc-diagnostics",
+ "mlkc-hir-def",
+ "mlkc-lower",
+ "mlkc-parser",
+ "mlkc-span",
+ "mlkc-stdlib",
+ "mlkc-syntax",
+ "mlkc-vfs",
 ]
 
 [[package]]

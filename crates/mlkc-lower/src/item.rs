@@ -3,7 +3,8 @@
 use mlkc_hir_def::{
     Attributes, BodyEntityLoc, ClassData, ClassLoc, EntityData, EntityLoc, FunctionData,
     FunctionLoc, ItemLoc, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, LocalTarget, ModuleAttributes,
-    ModuleId, Name, PathRoot, PlainPath, PlainPathId, Prelude, UseData, UseLoc, Visibility,
+    ModuleId, Name, PathRoot, PlainPath, PlainPathId, Prelude, ProjectId, UseData, UseLoc,
+    Visibility,
 };
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl, UseDecl};
@@ -11,6 +12,7 @@ use mlkc_vfs::{FileId, RelPath};
 
 use crate::{
     BodyDecl, LoweredModule, LoweringDiag, LoweringError, decl, path,
+    path::WrittenName,
     syntax::{self, item_position, syntax_at},
 };
 
@@ -20,6 +22,12 @@ use crate::{
 /// declared after the items of the module, so that what the module says of itself is what its
 /// names denote ([ADR-0011][adr-0011]).
 ///
+/// `projects` is the projects the module may name: the projects the project it belongs to depends
+/// on, or every project of the world for a module that belongs to no project ([ADR-0016]). What a
+/// module calls its own project by is the keyword `project`, and not a name. A name written where
+/// a type belongs that is neither a name of the module nor one of those projects is what the
+/// module is told about ([`unresolved`]).
+///
 /// `relative` is where the file of the module stands: the path of the file under the root of
 /// the project it is in, or the name of the file itself when it stands in none. It is what the
 /// module is called when it declares no path of its own, and it names a file: a caller that
@@ -28,19 +36,30 @@ use crate::{
 /// before it lowers anything.
 ///
 /// [adr-0011]: ../../docs/adr/0011-module-prelude.md
+/// [adr-0016]: ../../docs/adr/0016-inter-module-resolution.md
 pub(crate) fn lower(
     module: ModuleId,
     root: &ModuleRoot,
     prelude: &Prelude,
+    projects: &[ProjectId],
     relative: &RelPath,
 ) -> LoweredModule {
     let file = module.0;
+    let mut builder = ItemTreeBuilder::new(module, PlainPathId::new(module_path(relative)));
+
+    // The projects the module may name are recorded before the items are read: a path rooted at
+    // one of them is anchored to it as the path is built ([ADR-0016]).
+    //
+    // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    builder.set_projects(projects);
+
     let mut lowering = ItemLowering {
         root,
         file,
-        builder: ItemTreeBuilder::new(module, PlainPathId::new(module_path(relative))),
+        builder,
         diagnostics: Vec::new(),
         bodies: Vec::new(),
+        names: Vec::new(),
     };
 
     let attributes = lowering.preamble();
@@ -53,6 +72,7 @@ pub(crate) fn lower(
     // whether an import repeats a declaration is not a question about the order the two were
     // written in, and the two of them are in the tree by now.
     let mut diagnostics = lowering.diagnostics;
+    diagnostics.extend(unresolved(&lowering.names, &item_tree, file));
     diagnostics.extend(imports_of_declared_names(&item_tree, root, file));
 
     // A reader reads a module from its top, and what lowering found is read the same way: the
@@ -111,6 +131,37 @@ fn module_path(relative: &RelPath) -> PlainPath {
     names.reverse();
 
     PlainPath::from_root(PathRoot::Project, names)
+}
+
+/// The names the surface of a module writes that neither the module nor a project holds.
+///
+/// A name written where a type belongs is a name of the module --- an entity of it, or an import
+/// of it --- or the name of a project the module may name. A name that is neither is a name that
+/// resolves to nothing wherever it is read, and the module alone decides it: the module is where
+/// a reader is told about it ([ADR-0004]).
+///
+/// [adr-0004]: ../../docs/adr/0004-module-system.md
+fn unresolved(names: &[WrittenName], tree: &ItemTree, file: FileId) -> Vec<LoweringDiag> {
+    names
+        .iter()
+        .filter(|written| !names_a_name(tree, &written.name))
+        .map(|written| {
+            let error = LoweringError::UnresolvedName {
+                name: written.name.clone(),
+            };
+
+            LoweringDiag::new(error, syntax::span(file, &written.node))
+        })
+        .collect()
+}
+
+/// Whether a module may name a name: it is a name of the module, or of a project it may name.
+fn names_a_name(tree: &ItemTree, name: &Name) -> bool {
+    if tree.scope().get(name).is_some_and(|entry| !entry.is_none()) {
+        return true;
+    }
+
+    tree.scope().project_named(name).is_some()
 }
 
 /// The names that an import brings in and the module declares.
@@ -204,6 +255,11 @@ struct ItemLowering<'a> {
     builder: ItemTreeBuilder,
     diagnostics: Vec<LoweringDiag>,
     bodies: Vec<BodyDecl>,
+    /// The names the types of the module are written with, in the order they are written.
+    ///
+    /// What the module knows of them is read once the module is whole ([`unresolved`]), since
+    /// a name declared after the type that writes it is a name of the module all the same.
+    names: Vec<WrittenName>,
 }
 
 impl ItemLowering<'_> {
@@ -283,6 +339,8 @@ impl ItemLowering<'_> {
         let visibility = decl::visibility(decl.visibility_token());
         let signature = decl::signature(decl, self.file, &mut self.diagnostics);
 
+        self.written_names(decl);
+
         let data = EntityData::Function(FunctionData {
             attributes,
             visibility,
@@ -308,6 +366,31 @@ impl ItemLowering<'_> {
                 owner,
                 decl: decl.clone(),
             });
+        }
+    }
+
+    /// Remembers the names the signature of a function is written with.
+    ///
+    /// The types of a signature are the surface the module shows, and the names they are rooted
+    /// at are what the module has to know: what it knows of them is read once the module is
+    /// whole ([`unresolved`]).
+    fn written_names(&mut self, decl: &FunDecl) {
+        for parameter in decl::parameters(decl).into_iter().flatten() {
+            let Some(ty) = parameter
+                .type_annotation()
+                .and_then(|annotation| annotation.ty().ok())
+            else {
+                continue;
+            };
+
+            path::written_names(&ty, &mut self.names);
+        }
+
+        if let Some(ty) = decl
+            .return_type_annotation()
+            .and_then(|annotation| annotation.return_type().ok())
+        {
+            path::written_names(&ty, &mut self.names);
         }
     }
 
@@ -617,7 +700,27 @@ fun same(left: Int, left: Int): Int =
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
 
-        crate::lower_module(module(), &root, prelude, relative("main.mlk").as_path())
+        crate::lower_module(
+            module(),
+            &root,
+            prelude,
+            &[],
+            relative("main.mlk").as_path(),
+        )
+    }
+
+    /// The lowering of a module that may name the projects `projects`.
+    fn lower_projects(source: &str, projects: &[ProjectId]) -> LoweredModule {
+        let parsed = mlkc_parser::parse(source);
+        let root = parsed.tree::<ModuleRoot>();
+
+        crate::lower_module(
+            module(),
+            &root,
+            &Prelude::none(),
+            projects,
+            relative("main.mlk").as_path(),
+        )
     }
 
     /// The lowering of a module whose file stands at `place`.
@@ -625,7 +728,13 @@ fun same(left: Int, left: Int): Int =
         let parsed = mlkc_parser::parse(source);
         let root = parsed.tree::<ModuleRoot>();
 
-        crate::lower_module(module(), &root, &Prelude::none(), relative(place).as_path())
+        crate::lower_module(
+            module(),
+            &root,
+            &Prelude::none(),
+            &[],
+            relative(place).as_path(),
+        )
     }
 
     /// The path of a file, as the lowering is given it: relative to the root of the project the
@@ -749,6 +858,60 @@ fun same(left: Int, left: Int): Int =
     }
 
     #[test]
+    fn a_name_the_module_knows_nothing_about_is_a_mistake() {
+        let lowered = lower("fun main(): Nope = 1\n\nfun both(value: Nope): Nope = value\n");
+
+        let messages: Vec<String> = lowered
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.error().message())
+            .collect();
+
+        // Every place the name is written is a place a reader is told about.
+        assert_eq!(messages, [
+            "the name `Nope` is not a name of this module, and names no project",
+            "the name `Nope` is not a name of this module, and names no project",
+            "the name `Nope` is not a name of this module, and names no project",
+        ],);
+    }
+
+    #[test]
+    fn a_name_of_a_project_is_a_name_the_module_may_name() {
+        let lowered = lower_projects(
+            "fun read(value: std::core::Int): std::core::Int = value\n",
+            &[ProjectId::new("std")],
+        );
+
+        assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
+
+        // What the root of the path names is the project the module may name, which the
+        // lowering resolved as the path was built ([ADR-0016]).
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        let signature = lowered
+            .item_tree
+            .entities()
+            .find_map(|(loc, id)| {
+                match lowered.item_tree.entity(id).data() {
+                    EntityData::Function(data) if loc.name() == Some(&Name::new("read")) => {
+                        Some(&data.signature)
+                    },
+                    _ => None,
+                }
+            })
+            .expect("the function the module declares");
+
+        let Some(TypeRef::Path(path)) = &signature.params[0].ty else {
+            panic!("the parameter to write a type");
+        };
+
+        assert_eq!(
+            path.anchor,
+            PathAnchor::Project(Some(ProjectId::new("std")))
+        );
+    }
+
+    #[test]
     fn an_error_of_a_kind_has_one_code_and_one_category() {
         let lowered = lower(SOURCE);
 
@@ -839,15 +1002,24 @@ fun same(left: Int, left: Int): Int =
         );
         let tree = &lowered.item_tree;
 
-        assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
         assert!(tree.attributes().no_prelude);
         // A name the module did not declare is a name nothing knows: the prelude is not there
-        // to answer for it.
+        // to answer for it, and the module says so where the name is written.
         assert_eq!(
             tree.scope().anchor(&Name::new("Int"), Namespace::Ty),
             PathAnchor::Unresolved,
         );
         assert_eq!(tree.scope().len(), 1, "`main`, and nothing else");
+        assert_eq!(
+            lowered
+                .diagnostics
+                .iter()
+                .map(LoweringDiag::error)
+                .collect::<Vec<_>>(),
+            [&LoweringError::UnresolvedName {
+                name: Name::new("Int"),
+            }],
+        );
     }
 
     #[test]
@@ -895,8 +1067,10 @@ fun same(left: Int, left: Int): Int =
             &LoweringError::RepeatedAttribute {
                 name: Name::new("no-prelude"),
             },
+            // The name of the result of `main`, which no prelude brings in.
+            &LoweringError::UnresolvedName {
+                name: Name::new("Int"),
+            },
         ]);
-        // What the module said stands: a mistake about one attribute does not undo the other.
-        assert!(lowered.item_tree.attributes().no_prelude);
     }
 }

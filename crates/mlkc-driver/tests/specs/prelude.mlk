@@ -1,0 +1,10 @@
+// The names of the language are names the standard library declares: the prelude of the project
+// names a path of `std::prelude`, the module it names re-exports the names of `std::core`, and
+// the walk follows the path the re-export wrote.
+
+//- /main.mlk
+fun main(): Unit =
+    main()
+
+fun make(): Int =
+    make()

@@ -72,6 +72,8 @@
 //! - [`type_ref`] — a reference to a type, and a type variable.
 //! - [`item_data`] — the observable data of each kind of entity.
 //! - [`item_tree`] — the surface of one module.
+//! - [`interface`] — what a module shows to the modules that read it.
+//! - [`module_index`] — which module of a project a path names.
 //! - [`body`] — the inside of one function.
 //! - [`def_map`] — what names denote, and the index of the whole project.
 //! - [`prelude`] — the imports a project gives every module.
@@ -84,8 +86,10 @@ pub mod body;
 pub mod def_map;
 pub mod dump;
 pub mod id;
+pub mod interface;
 pub mod item_data;
 pub mod item_tree;
+pub mod module_index;
 pub mod name;
 pub mod path;
 pub mod prelude;
@@ -100,11 +104,13 @@ pub use crate::{
         ItemLoc, ItemLocData, ItemLocLike, LocalConstId, LocalDefId, LocalFunctionId, ModuleDefId,
         ModuleDefWithBodyId, ModuleId, UseLoc, ValueLoc, WrongKind,
     },
+    interface::{Export, Interface},
     item_data::{
         Attributes, ClassData, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes,
         ParamData, Signature, UseData, ValueData, Visibility,
     },
     item_tree::{Declared, Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
+    module_index::ModuleIndex,
     name::Name,
     path::{PathAnchor, PathData, PathId, PathRoot, PlainPath, PlainPathId},
     prelude::{Prelude, PreludeImport},

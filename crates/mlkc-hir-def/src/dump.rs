@@ -24,10 +24,13 @@ use std::fmt::{self, Write as _};
 
 use crate::{
     body::{Body, Expr, ExprId, Literal, Pat, PatId},
+    def_map::{ModuleScope, PerNs, ProjectDefMap},
     id::{BodyEntityLoc, EntityLoc, ItemLoc, LocalConstId, LocalFunctionId, ModuleId, arena_index},
     item_data::{Attributes, EntityData, ModuleAttributes, Signature, Visibility},
     item_tree::{Entity, ItemTree},
+    name::Name,
     path::{PathAnchor, PathData, PathId, PathSegmentData},
+    project_graph::ModuleLocator,
     type_ref::TypeRef,
 };
 
@@ -319,6 +322,118 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
     dump.render()
 }
 
+/// A reading of the resolution of a module: what each of its names denotes ([ADR-0016]).
+///
+/// The names follow in the order the module declares them, which is the order the scope holds
+/// them, and under a name are the namespaces it denotes something in: an entity, with the
+/// reach the name has in the module that holds it, or a module. A name that resolved to
+/// nothing has no entry, and so has no line: what a reader is told about it is the diagnostic
+/// of the resolution.
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+pub fn resolution(scope: &ModuleScope) -> String {
+    let mut dump = Dump::new();
+
+    dump.section("SCOPE", |dump| {
+        dump.tree(&resolution_nodes(scope));
+    });
+
+    dump.render()
+}
+
+/// The lines of a resolution, as a tree a host reads.
+///
+/// This is the reading [`resolution`] prints: a line per name, and the namespaces of the name
+/// under it.
+pub fn resolution_nodes(scope: &ModuleScope) -> Vec<Node> {
+    scope
+        .iter()
+        .map(|(name, per_ns)| scope_node(name, per_ns))
+        .collect()
+}
+
+/// A reading of the def map of a project: the resolution of every module of it.
+///
+/// A def map is the scopes of the modules of one project ([ADR-0016]), and each of them reads
+/// the way the resolution of one module reads, headed by the module it is the scope of.
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+pub fn def_map(map: &ProjectDefMap) -> String {
+    let mut dump = Dump::new();
+
+    dump.section("DEF MAP", |dump| {
+        for (module, scope) in map.iter() {
+            dump.line(format!("MODULE #{}", module_index(module)));
+
+            dump.depth += 1;
+            dump.tree(&resolution_nodes(scope));
+            dump.depth -= 1;
+        }
+    });
+
+    dump.render()
+}
+
+/// The line of one name of a resolved scope, and what the name denotes under it.
+fn scope_node(name: &Name, per_ns: &PerNs) -> Node {
+    let mut node = Node::line(name.as_str(), NodeKind::Item);
+
+    if let Some((entity, reach)) = &per_ns.ty {
+        node.children.push(Node::line(
+            format!("ty: {}", entity_text(entity, *reach)),
+            NodeKind::Field,
+        ));
+    }
+
+    if let Some((entity, reach)) = &per_ns.value {
+        node.children.push(Node::line(
+            format!("value: {}", entity_text(entity, *reach)),
+            NodeKind::Field,
+        ));
+    }
+
+    if let Some((locator, reach)) = &per_ns.module {
+        node.children.push(Node::line(
+            format!("module: {}", locator_text(locator, *reach)),
+            NodeKind::Field,
+        ));
+    }
+
+    node
+}
+
+/// An entity a name of a scope denotes: the entity itself, the module it is in, and how far the
+/// name reaches in the module that holds it.
+fn entity_text(entity: &EntityLoc, reach: Visibility) -> String {
+    format!(
+        "{:?} in module #{} ({})",
+        entity.item,
+        module_index(entity.module),
+        reach_text(reach),
+    )
+}
+
+/// What a name that denotes a module, or a prefix of module paths, points at.
+fn locator_text(locator: &ModuleLocator, reach: Visibility) -> String {
+    match locator {
+        ModuleLocator::Module(module) => {
+            format!("module #{} ({})", module_index(*module), reach_text(reach))
+        },
+        ModuleLocator::Prefix { path, .. } => {
+            format!("prefix {path} ({})", reach_text(reach))
+        },
+    }
+}
+
+/// How far a name reaches in the module that holds it, as the scope records it.
+fn reach_text(reach: Visibility) -> &'static str {
+    if reach.is_public() {
+        "public"
+    } else {
+        "private"
+    }
+}
+
 /// The lines of the item tree of a module, as a tree a host reads.
 ///
 /// This is the reading [`item_tree`] prints, with what an entity is made of under the entity
@@ -538,7 +653,7 @@ fn anchor_target(anchor: &PathAnchor) -> Option<Target> {
         PathAnchor::Binding(pat) => Some(Target::Pat(*pat)),
         PathAnchor::Local(_)
         | PathAnchor::TypeVar(_)
-        | PathAnchor::Project
+        | PathAnchor::Project(_)
         | PathAnchor::Unresolved => None,
     }
 }
@@ -768,8 +883,10 @@ fn anchor_text(anchor: &PathAnchor, module: ModuleId) -> String {
             format!("typevar {}[{}]", item_text(&var.owner, module), var.index)
         },
         PathAnchor::Binding(pat) => format!("binding {}", pat_ref(*pat)),
-        // A meaning rather than a name: what the keyword names is this very project.
-        PathAnchor::Project => "the project".to_owned(),
+        // The keyword names this very project, which the anchor holds no name of; a name at the
+        // root is the name of the project it names.
+        PathAnchor::Project(None) => "the project".to_owned(),
+        PathAnchor::Project(Some(project)) => format!("the project {project}"),
         PathAnchor::Unresolved => "unresolved".to_owned(),
     }
 }
@@ -889,6 +1006,21 @@ impl Dump {
         }
     }
 
+    /// Lines of a reading, and the lines under them, one level deeper each.
+    fn tree(&mut self, lines: &[Node]) {
+        for line in lines {
+            self.line(line.text());
+
+            if line.children.is_empty() {
+                continue;
+            }
+
+            self.depth += 1;
+            self.tree(&line.children);
+            self.depth -= 1;
+        }
+    }
+
     /// An empty line, which separates the parts of a dump.
     fn blank(&mut self) {
         self.lines.push(String::new());
@@ -937,6 +1069,8 @@ impl Dump {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use mlkc_intern::Interned;
     use mlkc_vfs::FileId;
 
@@ -948,6 +1082,7 @@ mod tests {
         item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
         path::{PathRoot, PlainPath, PlainPathId},
+        project_graph::ProjectId,
     };
 
     fn module() -> ModuleId {
@@ -1486,6 +1621,53 @@ BODY fun f in module #0
         assert_eq!(second_line.target, Some(Target::Expr(second)));
         assert_eq!(first_line.resolves, Some(Target::Pat(pat)));
         assert_eq!(second_line.resolves, Some(Target::Pat(pat)));
+    }
+
+    #[test]
+    fn a_resolution_reads_as_a_line_per_name() {
+        let mut scope = ModuleScope::default();
+
+        scope.insert(Name::new("Point"), PerNs {
+            ty: Some((entity("Point", ItemKind::Class), Visibility::Public)),
+            value: Some((entity("Point", ItemKind::Function), Visibility::Private)),
+            module: None,
+        });
+        scope.insert(Name::new("data"), PerNs {
+            module: Some((
+                ModuleLocator::Prefix {
+                    project: ProjectId::new("the-project"),
+                    path: PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new(
+                        "data",
+                    )])),
+                },
+                Visibility::Private,
+            )),
+            ..PerNs::default()
+        });
+
+        assert_eq!(
+            crate::dump::resolution(&scope),
+            "\
+SCOPE
+  Point
+    ty: type Point in module #0 (public)
+    value: fun Point in module #0 (private)
+  data
+    module: prefix project::data (private)
+",
+        );
+    }
+
+    #[test]
+    fn a_def_map_reads_as_the_resolution_of_every_module() {
+        let mut map = ProjectDefMap::default();
+
+        map.set(
+            ModuleId(FileId::from_raw(1)),
+            Arc::new(ModuleScope::default()),
+        );
+
+        assert_eq!(crate::dump::def_map(&map), "DEF MAP\n  MODULE #1\n");
     }
 
     /// The lines of a tree of a reading, indented by what they are under.

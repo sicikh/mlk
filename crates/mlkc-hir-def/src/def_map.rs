@@ -1,7 +1,7 @@
 //! What names denote: the names of one module, the resolved scope of one module,
 //! and the index of the whole project.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use indexmap::IndexMap;
 
@@ -10,7 +10,7 @@ use crate::{
     item_data::Visibility,
     name::Name,
     path::PathAnchor,
-    project_graph::ModuleLocator,
+    project_graph::{ModuleLocator, ProjectId},
 };
 
 /// A namespace of a name: where a name is looked for, and what it denotes there.
@@ -136,10 +136,11 @@ impl LocalEntry {
     }
 }
 
-/// The names a module declares, and what each of them denotes.
+/// The names a module may write, and what each of them denotes.
 ///
-/// It is what the module's own text alone can say: a name resolves to an entity of the module
-/// or to an entry of its import table, and no other module is read ([ADR-0004]).
+/// It is what the module's own text and the projects it is read with say: a name resolves to an
+/// entity of the module, to an entry of its import table, or to a project the module may name,
+/// and no other module is read ([ADR-0004]).
 /// The targets of imports appear when a [`ModuleScope`] resolves them.
 ///
 /// The namespaces of a name are separate ([`Namespace`]), which is what keeps a name of one of
@@ -151,6 +152,11 @@ impl LocalEntry {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalScope {
     entries: IndexMap<Name, LocalEntry>,
+    /// The projects the module may name, which is what a name at the root of a path is read
+    /// against when it is no name of the module ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    projects: Vec<ProjectId>,
 }
 
 impl LocalScope {
@@ -207,31 +213,59 @@ impl LocalScope {
         self.entries.get(name)
     }
 
-    /// The anchor a name resolves to against the names of this module alone.
+    /// The anchor a name resolves to against the names of this module and the projects it may
+    /// name.
     ///
     /// The rule lives here, once, so that the item tree's builder and the lowering of a body
     /// resolve a name the same way. A name the module declares is what it denotes in a
     /// namespace it is declared in; in a namespace the module declares nothing in, an import
     /// of the name is what it denotes, since which namespace an import lands in is what the
-    /// import resolves to. A name the module says nothing about is unresolved, and so is a
-    /// name it declares in another namespace, which only the scope of the whole project can
-    /// tell apart from a name of another module.
+    /// import resolves to. A name that is no name of the module may be the name of a project
+    /// the module may name, which a path is rooted at in every namespace --- a project is what
+    /// the names after the root are read inside --- and a name that is neither is unresolved,
+    /// which only the scope of the whole project can tell apart from a name of another module.
     ///
     /// A caller that also knows the bindings and the type variables of the body it lowers
     /// checks those first, and falls back to this.
     pub fn anchor(&self, name: &Name, namespace: Namespace) -> PathAnchor {
-        let Some(entry) = self.entries.get(name) else {
-            return PathAnchor::Unresolved;
-        };
+        if let Some(entry) = self.entries.get(name) {
+            if let Some(target) = entry.get(namespace) {
+                return target.anchor();
+            }
 
-        if let Some(target) = entry.get(namespace) {
-            return target.anchor();
+            if let Some(import) = &entry.import {
+                return PathAnchor::Use(import.clone());
+            }
         }
 
-        match &entry.import {
-            Some(import) => PathAnchor::Use(import.clone()),
+        match self.project_named(name) {
+            Some(project) => PathAnchor::Project(Some(project.clone())),
             None => PathAnchor::Unresolved,
         }
+    }
+
+    /// Records the projects the module may name, replacing the ones that are there.
+    ///
+    /// A module calls the project it is written in by the keyword `project` and by nothing
+    /// else, so what is recorded here are the projects a name at the root of a path names: the
+    /// projects the module's project depends on, or every project of the graph for a module no
+    /// project claims ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn set_projects(&mut self, projects: &[ProjectId]) {
+        self.projects = projects.to_vec();
+    }
+
+    /// The project `name` names, if the module may name one by it.
+    ///
+    /// A project is named by its own name ([`ProjectId`]), which is the name a module writes
+    /// for it ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn project_named(&self, name: &Name) -> Option<&ProjectId> {
+        self.projects
+            .iter()
+            .find(|project| project.as_str() == name.as_str())
     }
 
     /// The names of the module, in the order it declares them.
@@ -327,32 +361,34 @@ impl ModuleScope {
 ///
 /// An index and not a value: a change to one module's surface replaces one entry,
 /// and a consumer of the index is keyed by the entries it read, not by the index ([ADR-0008]).
+/// An entry is the scope of a resolution, so the index shares it with whoever holds the
+/// resolution rather than holding a copy of it.
 /// The module ids order the entries, so the index reads the same way in every process.
 ///
 /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectDefMap {
-    modules: BTreeMap<ModuleId, ModuleScope>,
+    modules: BTreeMap<ModuleId, Arc<ModuleScope>>,
 }
 
 impl ProjectDefMap {
     /// The scope of a module, if the index holds one.
-    pub fn get(&self, module: ModuleId) -> Option<&ModuleScope> {
+    pub fn get(&self, module: ModuleId) -> Option<&Arc<ModuleScope>> {
         self.modules.get(&module)
     }
 
     /// Replaces the scope of a module, returning the scope it had.
-    pub fn set(&mut self, module: ModuleId, scope: ModuleScope) -> Option<ModuleScope> {
+    pub fn set(&mut self, module: ModuleId, scope: Arc<ModuleScope>) -> Option<Arc<ModuleScope>> {
         self.modules.insert(module, scope)
     }
 
     /// Drops the scope of a module, returning it.
-    pub fn remove(&mut self, module: ModuleId) -> Option<ModuleScope> {
+    pub fn remove(&mut self, module: ModuleId) -> Option<Arc<ModuleScope>> {
         self.modules.remove(&module)
     }
 
     /// The modules of the index, in the order of their ids.
-    pub fn iter(&self) -> impl Iterator<Item = (ModuleId, &ModuleScope)> {
+    pub fn iter(&self) -> impl Iterator<Item = (ModuleId, &Arc<ModuleScope>)> {
         self.modules.iter().map(|(module, scope)| (*module, scope))
     }
 
@@ -513,6 +549,56 @@ mod tests {
     }
 
     #[test]
+    fn a_name_a_project_is_named_by_is_what_a_path_may_be_rooted_at() {
+        let mut scope = LocalScope::default();
+        scope.declare(Name::new("other"), function("other"));
+        scope.set_projects(&[ProjectId::new("std")]);
+
+        // A name the module declares is what it denotes in the namespaces its kind takes...
+        assert_eq!(
+            scope.anchor(&Name::new("other"), Namespace::Value),
+            function("other").anchor(),
+        );
+
+        // ...and what is left is a project the module may name, which a path is rooted at in
+        // every namespace, since a project is what the names after the root are read inside.
+        assert_eq!(
+            scope.anchor(&Name::new("std"), Namespace::Ty),
+            PathAnchor::Project(Some(ProjectId::new("std"))),
+        );
+        assert_eq!(
+            scope.anchor(&Name::new("std"), Namespace::Module),
+            PathAnchor::Project(Some(ProjectId::new("std"))),
+        );
+
+        // A name that is neither is unresolved, which the stage that holds the scopes reads.
+        assert_eq!(
+            scope.anchor(&Name::new("nope"), Namespace::Ty),
+            PathAnchor::Unresolved,
+        );
+    }
+
+    #[test]
+    fn a_name_of_the_module_is_no_answer_in_a_namespace_it_is_not_declared_in() {
+        let mut scope = LocalScope::default();
+        scope.declare(Name::new("std"), class("std"));
+        scope.set_projects(&[ProjectId::new("std")]);
+
+        // A class is a type and not a value: where a value belongs the name is not the class
+        // but the project of that name, which every namespace answers for ([ADR-0016]).
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        assert_eq!(
+            scope.anchor(&Name::new("std"), Namespace::Ty),
+            class("std").anchor(),
+        );
+        assert_eq!(
+            scope.anchor(&Name::new("std"), Namespace::Value),
+            PathAnchor::Project(Some(ProjectId::new("std"))),
+        );
+    }
+
+    #[test]
     fn a_name_that_only_denotes_a_module_is_not_empty() {
         let mut per_ns = PerNs::default();
         assert!(per_ns.is_none());
@@ -556,11 +642,14 @@ mod tests {
     #[test]
     fn a_project_def_map_replaces_and_drops_scopes() {
         let mut map = ProjectDefMap::default();
-        let first = ModuleScope::default();
-        let second = ModuleScope::default();
+        let first = Arc::new(ModuleScope::default());
+        let second = Arc::new(ModuleScope::default());
 
         assert_eq!(map.set(module(0), first), None);
-        assert_eq!(map.set(module(0), second), Some(ModuleScope::default()));
+        assert_eq!(
+            map.set(module(0), second),
+            Some(Arc::new(ModuleScope::default()))
+        );
         assert_eq!(map.len(), 1);
         assert!(map.remove(module(0)).is_some());
         assert!(map.is_empty());
@@ -569,8 +658,8 @@ mod tests {
     #[test]
     fn the_index_reads_in_the_order_of_the_modules() {
         let mut map = ProjectDefMap::default();
-        map.set(module(1), ModuleScope::default());
-        map.set(module(0), ModuleScope::default());
+        map.set(module(1), Arc::new(ModuleScope::default()));
+        map.set(module(0), Arc::new(ModuleScope::default()));
 
         let order: Vec<_> = map.iter().map(|(module, _)| module).collect();
         assert_eq!(order, [module(0), module(1)]);

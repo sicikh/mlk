@@ -81,10 +81,10 @@ impl fmt::Display for ProjectId {
 ///
 /// The root of a path says which project the names after it are read in. The keyword `project`
 /// is the project the module is written in --- what a module knows of itself without a manifest,
-/// which is what makes it steadier than the name the project is declared under --- and the name
-/// of another project is one the module depends on, as in `std::core`, the prefix `core` of the
-/// project `std`. A module may name its own project the way the manifest does all the same, and
-/// the two spellings of one prefix are for the stage that builds the entries to merge.
+/// and the only way it calls it: the name the project is declared under is not one a module of
+/// it may write. The name of another project is one the module depends on, as in `std::core`,
+/// the module `core` of the project `std` (the name a module of a project of no manifest names
+/// every project there is by).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleLocator {
     /// A module that is a file of a project.
@@ -93,8 +93,8 @@ pub enum ModuleLocator {
     Prefix {
         /// The project whose module paths the prefix belongs to.
         project: ProjectId,
-        /// The prefix as it is written, rooted at the keyword `project` or at the name of
-        /// the project, so that it can be interned and compared like any other path.
+        /// The prefix as it is written, rooted at the keyword `project`: a project is the
+        /// outermost name of a path, so a prefix inside one is written without it.
         path: PlainPathId,
     },
 }
@@ -191,6 +191,18 @@ impl ProjectGraph {
     /// The projects of the graph, in the order of their names.
     pub fn projects(&self) -> impl Iterator<Item = (&ProjectId, &ProjectData)> {
         self.projects.iter()
+    }
+
+    /// The modules of a project, in the order of their ids.
+    ///
+    /// A project is a set of modules ([ADR-0011]), and which modules are its own is what the
+    /// graph was told one by one: a module the graph does not hold belongs to no project.
+    ///
+    /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+    pub fn modules_of<'a>(&'a self, project: &'a ProjectId) -> impl Iterator<Item = ModuleId> + 'a {
+        self.module_project
+            .iter()
+            .filter_map(move |(module, held)| (held == project).then_some(*module))
     }
 }
 

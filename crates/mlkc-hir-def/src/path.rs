@@ -10,6 +10,7 @@ use crate::{
     def_map::{LocalScope, Namespace},
     id::{EntityLoc, LocalDefId, UseLoc},
     name::Name,
+    project_graph::ProjectId,
     type_ref::{TypeRef, TypeVarId},
 };
 
@@ -25,8 +26,12 @@ pub enum PathRoot {
     /// means without the name the project is declared under: what a manifest calls the
     /// project is a name no module depends on, and renaming it is not a change to them.
     Project,
-    /// A name the module wrote: the name of a project, or a name of the project the module is
-    /// in. Which of the two the name is is what the scopes of the whole project decide.
+    /// A name the module wrote: the name of a project the module may name, or a name of the
+    /// project the module is in. Which of the two the name is is what the module is read with
+    /// decides --- the projects its lowering is handed, and the names the module declares
+    /// ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     Named(Name),
 }
 
@@ -165,7 +170,8 @@ impl PathData {
         }
     }
 
-    /// Resolves the base of the path against the names of one module, and its arguments.
+    /// Resolves the base of the path against the names of one module and the projects it may
+    /// name, and its arguments.
     ///
     /// This is a step of building and not an API of a later stage:
     /// the HIR is born with the anchors the module alone can give a path,
@@ -174,14 +180,16 @@ impl PathData {
     ///
     /// `namespace` is where the name is looked for: the root of a path written where a type
     /// belongs is read in the type namespace of the module, and the root of one written where a
-    /// value belongs in its value namespace.
+    /// value belongs in its value namespace. A name that is no name of the module may be the
+    /// name of a project the module may name, which is read in every namespace ([ADR-0016]).
     ///
     /// A path that is rooted at the project has no name to look up: what its root is is the
     /// project the module is in, which no scope of the module decides.
     ///
-    /// An anchor a caller already resolved is left alone,
-    /// because a caller that knows about a binding or a type variable
-    /// knows more than a module scope does.
+    /// A caller that knows about a binding or a type variable resolves the path itself before
+    /// this, because such a caller knows more than a module scope does.
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     pub(crate) fn resolve(&mut self, scope: &LocalScope, namespace: Namespace) {
         if matches!(self.anchor, PathAnchor::Unresolved)
             && let Some(name) = self.root.name()
@@ -231,18 +239,23 @@ pub enum PathAnchor {
     TypeVar(TypeVarId),
     /// A binding of the enclosing body: a parameter or a `let`.
     Binding(PatId),
-    /// The project the module is written in, which is what `project` names at the root of a
-    /// path.
+    /// The names after the root are names inside a project.
     ///
-    /// Nothing of the path is resolved here: the module is of a project, and the names after
-    /// the keyword are names inside that project, which is what the stage that holds the
-    /// module paths of the project reads.
-    Project,
-    /// A name that the module alone could not resolve:
-    /// a path that starts with a project name, or a name that is not there at all.
+    /// A name at the root names a project the module may name, which is what the lowering of
+    /// the module resolves it to (`Some`); the keyword `project` names the project the module
+    /// is written in, which a module knows without naming it and which no list of projects
+    /// decides (`None`) --- what that project is is the graph's to say, and a module no project
+    /// claims has none ([ADR-0016]).
     ///
-    /// A stage that holds the scopes and the module paths of the project decides which of the two
-    /// it is; the HIR does not.
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    Project(Option<ProjectId>),
+    /// A name that neither the module nor the projects it may name holds.
+    ///
+    /// The module is told about such a name where it is written, and a stage that resolves a
+    /// path reads it as a name the module declares in another namespace --- a value where a type
+    /// belongs --- or as nothing at all ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     Unresolved,
 }
 
@@ -363,11 +376,34 @@ mod tests {
                 name: Name::new("foo"),
                 args: Vec::new(),
             }],
-            anchor: PathAnchor::Project,
+            anchor: PathAnchor::Project(None),
         };
         path.resolve(&scope_with("foo"), Namespace::Ty);
 
-        assert_eq!(path.anchor, PathAnchor::Project);
+        assert_eq!(path.anchor, PathAnchor::Project(None));
+    }
+
+    #[test]
+    fn a_name_no_scope_knows_may_be_the_name_of_a_project() {
+        // The projects a module may name are recorded with the names of the module, and a name
+        // that is no name of it is read against them: what a path rooted at one is read in is
+        // that project ([ADR-0016]).
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        let mut scope = scope_with("foo");
+        scope.set_projects(&[ProjectId::new("std")]);
+
+        let mut project = path_of("std");
+        project.resolve(&scope, Namespace::Ty);
+        assert_eq!(
+            project.anchor,
+            PathAnchor::Project(Some(ProjectId::new("std")))
+        );
+
+        // A name of the module is what it was, and the projects are what is left over.
+        let mut known = path_of("foo");
+        known.resolve(&scope, Namespace::Ty);
+        assert_eq!(known.anchor, PathAnchor::Item(class("foo")));
     }
 
     #[test]

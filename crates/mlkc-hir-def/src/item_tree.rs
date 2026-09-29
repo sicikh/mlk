@@ -20,6 +20,7 @@ use crate::{
     name::Name,
     path::PlainPathId,
     prelude::PreludeImport,
+    project_graph::ProjectId,
 };
 
 /// Where an entity is in the module's syntax.
@@ -299,7 +300,7 @@ pub struct Declared {
 ///
 /// The builder is the only thing that mints names: it owns the counter that disambiguates
 /// entities declared under one name, and it is what resolves the anchors a caller left
-/// unresolved, against the names the module declared.
+/// unresolved, against the names the module declared and the projects it may name.
 ///
 /// The order of the declarations is the order of the module's items:
 /// it is the order the entities are numbered in, iterated in,
@@ -347,6 +348,18 @@ impl ItemTreeBuilder {
     /// replaces the first.
     pub fn set_attributes(&mut self, attributes: ModuleAttributes) {
         self.attributes = attributes;
+    }
+
+    /// Records the projects the module may name, which is what a name at the root of a path is
+    /// read against when it is no name of the module ([ADR-0016]).
+    ///
+    /// A module calls the project it is written in by the keyword `project` and by nothing
+    /// else, so what a caller records here are the projects a name at the root of a path names:
+    /// a caller that records a second list replaces the first.
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    pub fn set_projects(&mut self, projects: &[ProjectId]) {
+        self.scope.set_projects(projects);
     }
 
     /// Declares one entity of the module, and returns what declaring it produced.

@@ -12,6 +12,7 @@ publish = false
 [workspace.dependencies]
 mlkc-diagnostics = { path = "crates/mlkc-diagnostics", version = "0.1.0" }
 mlkc-driver = { path = "crates/mlkc-driver", version = "0.1.0" }
+mlkc-fixture = { path = "crates/mlkc-fixture", version = "0.1.0" }
 mlkc-hir-def = { path = "crates/mlkc-hir-def", version = "0.1.0" }
 mlkc-intern = { path = "crates/mlkc-intern", version = "0.1.0" }
 mlkc-la-arena = { path = "crates/mlkc-la-arena", version = "0.1.0" }

@@ -662,6 +662,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlkc-fixture"
+version = "0.1.0"
+
+[[package]]
 name = "mlkc-hir-def"
 version = "0.1.0"
 dependencies = [

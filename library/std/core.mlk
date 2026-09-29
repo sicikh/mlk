@@ -2,7 +2,7 @@
 module project::core
 
 #[builtin]
-type Int
+pub type Int
 
 #[builtin]
-type Unit
+pub type Unit

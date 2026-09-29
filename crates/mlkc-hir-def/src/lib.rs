@@ -31,8 +31,8 @@
 //! # The item tree is a module's surface
 //!
 //! [`ItemTree`] holds what the module's text alone determines:
-//! its entities and their observable data, the names of the entities, where each of them
-//! is in the module's syntax, and the names the module declares.
+//! the path the module is called by, its entities and their observable data, the names of the
+//! entities, where each of them is in the module's syntax, and the names the module declares.
 //! It holds no body and nothing that an edit inside a body can shift,
 //! so a body edit leaves its value equal and no dependent of the module is invalidated.
 //!

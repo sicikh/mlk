@@ -135,8 +135,9 @@ impl Entity {
 #[derive(Debug, PartialEq, Eq)]
 pub struct ItemTree {
     module: ModuleId,
-    /// The path the module declares itself as, if its preamble writes one.
-    path: Option<PlainPathId>,
+    /// The path the module is called by in its project: what its preamble declares,
+    /// or the place of its file when it declares none.
+    path: PlainPathId,
     /// What the module says about itself as a whole, which its preamble writes.
     attributes: ModuleAttributes,
     /// The entities, in the order the module declares them.
@@ -160,13 +161,14 @@ impl ItemTree {
         self.attributes
     }
 
-    /// The path the module is called by, if it is called by one.
+    /// The path the module is called by in its project.
     ///
-    /// It is a claim about the file rather than an item of it: the module is named by its file
-    /// ([`ModuleId`]), the path is what the project knows it by --- `project::main-module` ---
-    /// and a module that declares no path of its own is called by where its file stands in its
-    /// project. What checks that the two agree is the project.
-    pub fn path(&self) -> Option<PlainPathId> {
+    /// Every module has one: what its preamble declares, or the place of its file
+    /// when the module declares none. It is a claim about the file rather than an item of it:
+    /// the module is named by its file ([`ModuleId`]), the path is what the project knows it by
+    /// --- `project::main-module` --- and a module of no project is called by the name of its
+    /// file. What checks that a declared path and the place of the file agree is the project.
+    pub fn path(&self) -> PlainPathId {
         self.path.clone()
     }
 
@@ -305,7 +307,7 @@ pub struct Declared {
 #[derive(Debug)]
 pub struct ItemTreeBuilder {
     module: ModuleId,
-    path: Option<PlainPathId>,
+    path: PlainPathId,
     attributes: ModuleAttributes,
     entities: Arena<Entity>,
     names: FxHashMap<ItemLoc, ModuleDefId>,
@@ -315,11 +317,14 @@ pub struct ItemTreeBuilder {
 }
 
 impl ItemTreeBuilder {
-    /// A builder for the item tree of `module`.
-    pub fn new(module: ModuleId) -> Self {
+    /// A builder for the item tree of `module`, called by `path` where its file stands.
+    ///
+    /// `path` is the place of the module's file, which is what the module is called by
+    /// when its preamble declares no path of its own ([`ItemTreeBuilder::set_path`]).
+    pub fn new(module: ModuleId, path: PlainPathId) -> Self {
         Self {
             module,
-            path: None,
+            path,
             attributes: ModuleAttributes::default(),
             entities: Arena::new(),
             names: FxHashMap::default(),
@@ -330,9 +335,10 @@ impl ItemTreeBuilder {
 
     /// Records the path the module declares itself as, which is what its preamble writes.
     ///
-    /// A module declares one path: a caller that records a second one replaces the first.
+    /// A module declares one path: a caller that records one replaces the place of the file
+    /// the builder was given, and a caller that records a second one replaces the first.
     pub fn set_path(&mut self, path: PlainPathId) {
-        self.path = Some(path);
+        self.path = path;
     }
 
     /// Records what the module says about itself as a whole, which its preamble writes.
@@ -463,12 +469,22 @@ mod tests {
         def_map::{LocalEntry, LocalTarget, Namespace},
         id::{FunctionLoc, UseLoc, WrongKind},
         item_data::{Attributes, ModuleAttributes, ParamData, Signature, Visibility},
-        path::{PathAnchor, PathData, PlainPath, PlainPathId},
+        path::{PathAnchor, PathData, PathRoot, PlainPath, PlainPathId},
         type_ref::TypeRef,
     };
 
     fn module() -> ModuleId {
         ModuleId(FileId::from_raw(0))
+    }
+
+    /// The path the test module is called by where a test says nothing else.
+    fn main_path() -> PlainPathId {
+        PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new("main")]))
+    }
+
+    /// A builder for the tree of the test module, called by where its file stands.
+    fn builder() -> ItemTreeBuilder {
+        ItemTreeBuilder::new(module(), main_path())
     }
 
     fn syntax(slot: u32) -> ItemSyntaxLoc {
@@ -515,7 +531,7 @@ mod tests {
     }
 
     fn tree(items: &[(&str, EntityData)]) -> ItemTree {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         for (slot, (name, data)) in items.iter().enumerate() {
             builder.declare(Some(Name::new(name)), data.clone(), syntax(slot as u32));
         }
@@ -603,7 +619,7 @@ mod tests {
 
     #[test]
     fn an_entity_with_no_name_of_its_own_is_in_no_scope() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         let declared = builder.declare(None, anonymous_impl(), syntax(0));
         let tree = builder.finish();
 
@@ -619,7 +635,7 @@ mod tests {
 
     #[test]
     fn an_entity_whose_name_is_not_there_is_in_no_scope() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         let first = builder.declare(Some(Name::missing()), function("f"), syntax(0));
         let second = builder.declare(Some(Name::missing()), function("f"), syntax(1));
         let tree = builder.finish();
@@ -637,7 +653,7 @@ mod tests {
 
     #[test]
     fn a_class_and_a_function_may_share_a_name() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         let class = builder.declare(Some(Name::new("Box")), class("Box"), syntax(0));
         let function = builder.declare(Some(Name::new("Box")), function("Box"), syntax(1));
         let tree = builder.finish();
@@ -693,7 +709,7 @@ mod tests {
 
     #[test]
     fn a_prelude_import_is_an_entity_the_module_did_not_write() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         builder.declare(Some(Name::new("f")), function("f"), syntax(0));
         let import = builder
             .declare_prelude(&prelude_import(&["std", "prelude", "Int"]))
@@ -723,7 +739,7 @@ mod tests {
 
     #[test]
     fn a_name_the_module_declares_is_what_it_denotes() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         let declaration = builder.declare(Some(Name::new("Int")), class("Int"), syntax(0));
         builder.declare_prelude(&prelude_import(&["std", "prelude", "Int"]));
         let tree = builder.finish();
@@ -738,7 +754,7 @@ mod tests {
 
     #[test]
     fn a_name_the_module_imports_itself_shadows_the_prelude() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         let written = builder.declare(Some(Name::new("Int")), import("Int"), syntax(0));
         builder.declare_prelude(&prelude_import(&["std", "prelude", "Int"]));
         let tree = builder.finish();
@@ -751,7 +767,7 @@ mod tests {
 
     #[test]
     fn a_prelude_import_that_brings_in_no_name_is_not_declared() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         // A path of one name is a root and nothing else: there is no name for the import to
         // bring in, and nothing is declared.
         let import = builder.declare_prelude(&prelude_import(&["Int"]));
@@ -764,14 +780,9 @@ mod tests {
 
     #[test]
     fn a_module_remembers_what_it_says_about_itself() {
-        assert!(
-            ItemTreeBuilder::new(module())
-                .finish()
-                .attributes()
-                .is_none()
-        );
+        assert!(builder().finish().attributes().is_none());
 
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         let mut attributes = ModuleAttributes::default();
         attributes.insert(&Name::new("no-prelude"));
         builder.set_attributes(attributes);
@@ -783,7 +794,7 @@ mod tests {
 
     #[test]
     fn a_signature_resolves_a_local_anchor() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         builder.declare(Some(Name::new("T")), class("T"), syntax(0));
         builder.declare(
             Some(Name::new("f")),
@@ -822,7 +833,7 @@ mod tests {
 
     #[test]
     fn a_name_of_another_module_stays_unresolved() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         builder.declare(
             Some(Name::new("f")),
             EntityData::Function(FunctionData {

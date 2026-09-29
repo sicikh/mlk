@@ -178,7 +178,7 @@ impl Node {
 
 /// A reading of the item tree of a module.
 ///
-/// The module is headed by the file it is read from and by the path it declares itself as,
+/// The module is headed by the file it is read from and by the path it is called by,
 /// and the entities follow in the order the module declares them, each of them headed by its
 /// name and by the position it is at in the syntax, which is what a reader compares between
 /// revisions.
@@ -203,13 +203,10 @@ pub fn item_tree(tree: &ItemTree) -> String {
     dump.render()
 }
 
-/// The line a reading of a module is headed by: the module, the path it declares itself as,
+/// The line a reading of a module is headed by: the module, the path it is called by,
 /// and what it says about itself as a whole.
 fn module_line(tree: &ItemTree, module: ModuleId) -> String {
-    let head = match tree.path() {
-        Some(path) => format!("MODULE #{} {path}", module_index(module)),
-        None => format!("MODULE #{}", module_index(module)),
-    };
+    let head = format!("MODULE #{} {}", module_index(module), tree.path());
 
     match module_attributes_text(tree.attributes()) {
         Some(attributes) => format!("{head}  {attributes}"),
@@ -957,6 +954,16 @@ mod tests {
         ModuleId(FileId::from_raw(0))
     }
 
+    /// The path the test module is called by where a test says nothing else.
+    fn main_path() -> PlainPathId {
+        PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new("main")]))
+    }
+
+    /// A builder for the tree of the test module, called by where its file stands.
+    fn builder() -> ItemTreeBuilder {
+        ItemTreeBuilder::new(module(), main_path())
+    }
+
     fn entity(name: &str, kind: ItemKind) -> EntityLoc {
         EntityLoc {
             module: module(),
@@ -981,7 +988,7 @@ mod tests {
 
     #[test]
     fn an_item_tree_reads_as_the_module_declares_it() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
 
         builder.declare(
             Some(Name::new("Int")),
@@ -1013,7 +1020,7 @@ mod tests {
         assert_eq!(
             crate::dump::item_tree(&tree),
             "\
-MODULE #0
+MODULE #0 project::main
 
 ITEM TREE
   type Int  @0
@@ -1028,7 +1035,7 @@ ITEM TREE
 
     #[test]
     fn a_module_reads_as_the_path_it_declares_and_what_its_entities_carry() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         builder.set_path(PlainPathId::new(PlainPath::from_root(PathRoot::Project, [
             Name::new("main-module"),
         ])));
@@ -1084,7 +1091,7 @@ ITEM TREE
 
     #[test]
     fn a_name_that_is_not_there_is_read_as_a_word() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
 
         // An entity with no name of its own, and two whose names the syntax does not have:
         // the second of the two is not the same entity as the first, and a dump says so.
@@ -1114,7 +1121,7 @@ ITEM TREE
         assert_eq!(
             crate::dump::item_tree(&tree),
             "\
-MODULE #0
+MODULE #0 project::main
 
 ITEM TREE
   impl <anon>#0  @0
@@ -1269,7 +1276,7 @@ consts
 
     #[test]
     fn the_tree_of_an_item_tree_holds_what_an_entity_is() {
-        let mut builder = ItemTreeBuilder::new(module());
+        let mut builder = builder();
         builder.set_path(PlainPathId::new(PlainPath::from_root(PathRoot::Project, [
             Name::new("main-module"),
         ])));

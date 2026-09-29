@@ -22,7 +22,10 @@ use crate::{
 ///
 /// `relative` is where the file of the module stands: the path of the file under the root of
 /// the project it is in, or the name of the file itself when it stands in none. It is what the
-/// module is called when it declares no path of its own.
+/// module is called when it declares no path of its own, and it names a file: a caller that
+/// holds a place that names none has no module to lower, and is told so loudly rather than
+/// handed a module called by a name that is not there. The driver filters such files out
+/// before it lowers anything.
 ///
 /// [adr-0011]: ../../docs/adr/0011-module-prelude.md
 pub(crate) fn lower(
@@ -35,12 +38,12 @@ pub(crate) fn lower(
     let mut lowering = ItemLowering {
         root,
         file,
-        builder: ItemTreeBuilder::new(module),
+        builder: ItemTreeBuilder::new(module, PlainPathId::new(module_path(relative))),
         diagnostics: Vec::new(),
         bodies: Vec::new(),
     };
 
-    let attributes = lowering.preamble(relative);
+    let attributes = lowering.preamble();
     lowering.items();
     lowering.prelude(prelude, attributes);
 
@@ -72,12 +75,21 @@ pub(crate) fn lower(
 /// the file itself: the file `lib/arith.mlk` of a project is the module `project::lib::arith`.
 /// The path is rooted at the project, which is what the file stands in, and the extension of
 /// the file is not a name of the module: it is what says that the file is a file of the
-/// language. A path that names no file names no module.
-fn module_path(relative: &RelPath) -> Option<PlainPath> {
+/// language.
+///
+/// # Panics
+///
+/// Panics if the place names no file --- the root of a file system, pushed as if it were a
+/// file --- since a module is a file, and a path that names no file names no module. The
+/// driver keeps such files out of the lowering, so a caller that hands one over is a bug.
+fn module_path(relative: &RelPath) -> PlainPath {
     let file = relative.as_utf8_path();
 
     // The name of the file, without the extension of it, is the last name of the module.
-    let mut names = vec![Name::new(file.file_stem()?)];
+    let stem = file
+        .file_stem()
+        .expect("the place of a module to name a file");
+    let mut names = vec![Name::new(stem)];
 
     // And the names before it are the names of the directories the file is under, from the
     // innermost outwards, which is the order the path is walked in.
@@ -98,7 +110,7 @@ fn module_path(relative: &RelPath) -> Option<PlainPath> {
     // A path is written outermost first, and the names were read the other way round.
     names.reverse();
 
-    Some(PlainPath::from_root(PathRoot::Project, names))
+    PlainPath::from_root(PathRoot::Project, names)
 }
 
 /// The names that an import brings in and the module declares.
@@ -199,9 +211,9 @@ impl ItemLowering<'_> {
     /// as a whole, which is what the caller gets back.
     ///
     /// A module that declares no path --- one with no preamble, or one whose path the parser
-    /// could not read --- is called what its file is called: where a file stands is the
-    /// canonical path of the module, and `relative` is that place.
-    fn preamble(&mut self, relative: &RelPath) -> ModuleAttributes {
+    /// could not read --- keeps the place of its file for a name: the builder was given it,
+    /// and where a file stands is the canonical path of the module.
+    fn preamble(&mut self) -> ModuleAttributes {
         // What the module says about itself is read whether or not the path is there: a
         // preamble whose path could not be read still says what it says of the module.
         let (attributes, declared) = match self.root.preamble() {
@@ -222,7 +234,9 @@ impl ItemLowering<'_> {
             None => (ModuleAttributes::default(), None),
         };
 
-        if let Some(path) = declared.or_else(|| module_path(relative)) {
+        // What the module declares is what it is called: the place of the file was the name
+        // until now, and a declared path replaces it.
+        if let Some(path) = declared {
             self.builder.set_path(PlainPathId::new(path));
         }
 
@@ -666,22 +680,21 @@ fun same(left: Int, left: Int): Int =
 
         assert_eq!(called_by(&lowered), "project::other");
 
-        // A file that stands in no project is called by the name of its file, and a path that
-        // names no file at all names no module either.
+        // A file that stands in no project is called by the name of its file. A place that
+        // names no file is not a place a module stands at, and the driver keeps a file pushed
+        // at one out of the lowering.
         assert_eq!(called_by(&lower("fun main(): Unit = 1\n")), "project::main");
-        assert_eq!(
-            lower_at("fun main(): Unit = 1\n", "").item_tree.path(),
-            None
-        );
+    }
+
+    #[test]
+    #[should_panic(expected = "the place of a module to name a file")]
+    fn a_place_that_names_no_file_is_not_a_place_a_module_stands_at() {
+        lower_at("fun main(): Unit = 1\n", "");
     }
 
     /// The path a lowered module is called by.
     fn called_by(lowered: &LoweredModule) -> String {
-        lowered
-            .item_tree
-            .path()
-            .expect("the module to be called by a path")
-            .to_string()
+        lowered.item_tree.path().to_string()
     }
 
     #[test]

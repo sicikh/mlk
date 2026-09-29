@@ -599,19 +599,24 @@ impl Driver {
     /// The HIR of `file`, computed when the slot is missing or stale.
     ///
     /// `None` means there is nothing to lower: the file has no text, it was never parsed,
-    /// or the parse did not find a module in it.
+    /// the parse did not find a module in it, or the place of the file names no module.
     pub fn lower(&mut self, file: FileId) -> Option<Arc<Lowered>> {
         let Some(parse) = self.parse(file) else {
             self.lowered.remove(&file);
             return None;
         };
 
-        let version = self.file_version(file);
-
         // Where the module stands, which is what it is called when it declares no path of its
         // own. It is read before the slot is taken: the lowering holds the slot of the HIR
         // while it runs.
-        let relative = self.module_path(ModuleId(file));
+        let Some(relative) = self.module_path(ModuleId(file)) else {
+            // The place names no file, and a place that names no file names no module: there
+            // is no path to call one by, and nothing to lower it to.
+            self.lowered.remove(&file);
+            return None;
+        };
+
+        let version = self.file_version(file);
 
         Self::text_derived(&mut self.lowered, file, version, || {
             let root = parse.module_root()?;
@@ -638,15 +643,25 @@ impl Driver {
     /// itself is `project::main`. A host lays a project out in that file system, so the paths
     /// it pushes are what says where the modules of the project stand.
     ///
-    /// A file of the host's own file system is a path of the machine rather than a place in
-    /// the tree a host laid out, and a file written at the root of the file system has no name:
-    /// a module of either is called by the name of its file, the name being all there is to say
-    /// which module it is.
-    fn module_path(&self, module: ModuleId) -> RelPathBuf {
+    /// A file of the host's own file system is a path of the machine rather than a place in the
+    /// tree a host laid out, and a module of either is called by the name of its file, the name
+    /// being all there is to say which module it is.
+    ///
+    /// `None` for a file whose place names no file --- the root of the file system, pushed as
+    /// if it were a file --- since a module is a file, and a place that names no file names no
+    /// module: there is nothing to lower such a file to.
+    fn module_path(&self, module: ModuleId) -> Option<RelPathBuf> {
         let file = self.vfs.file_path(module.0);
 
-        file.strip_prefix(&root())
-            .map_or_else(|| file_name(file), RelPath::to_path_buf)
+        match file.strip_prefix(&root()) {
+            // What stands under the root is the place of the module; the root itself is a place
+            // that names no file.
+            Some(relative) if relative.as_utf8_path().file_name().is_some() => {
+                Some(relative.to_path_buf())
+            },
+            Some(_) => None,
+            None => file_name(file),
+        }
     }
 
     /// The diagnostics of `file`, in the shape a host renders: what the parser reported,
@@ -770,14 +785,14 @@ fn root() -> VfsPath {
 /// the host's own file system, and a file written at the root of the file system. The extension
 /// is kept --- it is what says that the file is a file of the language, and it is lowering that
 /// leaves it out of the name of the module --- and a path that names no file names no module.
-fn file_name(path: &VfsPath) -> RelPathBuf {
+fn file_name(path: &VfsPath) -> Option<RelPathBuf> {
     let name = match path.name_and_extension() {
         Some((stem, Some(extension))) => format!("{stem}.{extension}"),
         Some((stem, None)) => stem.to_owned(),
-        None => String::new(),
+        None => return None,
     };
 
-    RelPathBuf::try_from(name.as_str()).expect("the name of a file to be a relative path")
+    Some(RelPathBuf::try_from(name.as_str()).expect("the name of a file to be a relative path"))
 }
 
 /// The driver, and the trees it hands out, cross threads.
@@ -1141,15 +1156,17 @@ mod tests {
         let lowered = driver.lower(elsewhere).expect("the file to be lowered");
 
         assert_eq!(called_by(&lowered), "project::main");
+
+        // A file pushed at the root of the file system stands at a place that names no file,
+        // and a place that names no file names no module: there is nothing to lower.
+        let (mut driver, root) = driver_with("", "fun main(): Int =\n    1\n");
+
+        assert!(driver.lower(root).is_none());
     }
 
     /// The path a lowered module is called by.
     fn called_by(lowered: &Lowered) -> String {
-        lowered
-            .item_tree()
-            .path()
-            .expect("the module to be called by a path")
-            .to_string()
+        lowered.item_tree().path().to_string()
     }
 
     #[test]

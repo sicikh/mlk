@@ -181,6 +181,12 @@ pub struct LoweredBody {
 /// project is a module of it, and the place the file stands at is the canonical path of the
 /// module (`project::lib::arith`).
 ///
+/// # Panics
+///
+/// Panics if the place names no file --- the root of a file system, pushed as if it were a
+/// file --- since a module is a file, and a place that names no file is not where one stands.
+/// The driver keeps such files out of the lowering, so a caller that hands one over is a bug.
+///
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
 pub fn lower_module(
     module: ModuleId,

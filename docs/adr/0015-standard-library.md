@@ -5,7 +5,7 @@
 
 ## Context and Problem Statement
 
-The names of the language --- `Int`, `Unit`, and the many that will follow ---
+The names of the language — `Int`, `Unit`, and the many that will follow —
 are declared by a library written in MLK itself,
 and every module of every project is given them without writing the imports
 ([ADR-0011][0011-module-prelude.md]).
@@ -20,7 +20,7 @@ Writing it raises three questions that outlive the two files it starts as.
 - **How does a host tell the driver about it?**
   The driver never opens a file ([ADR-0008][0008-compiler-driver.md]),
   so somebody has to hand the library over,
-  and the hosts --- the CLI, the editor, and the language server to come ---
+  and the hosts — the CLI, the editor, and the language server to come —
   must not each invent their own answer to what `std` is.
 - **What may a person do with it?**
   An editor that shows the library as it shows a buffer invites an edit that cannot be kept:
@@ -50,18 +50,18 @@ and what keeps an editor from treating it as a file of a person's own?
 
 ## Considered Options
 
-- **Sources in the repository, built into the compiler** --- the files a person reads are the
+- **Sources in the repository, built into the compiler** — the files a person reads are the
   files the compiler holds, taken when it is built.
-- **Sources in the repository, read by every host at run time** --- the CLI reads the directory
+- **Sources in the repository, read by every host at run time** — the CLI reads the directory
   of the repository it was invoked from, the browser fetches the files over HTTP.
-- **Sources written into a generated Rust file** --- `xtask` reads `library` and writes a file
+- **Sources written into a generated Rust file** — `xtask` reads `library` and writes a file
   the compiler includes, as it already does for the grammar of the editor.
-- **The library as strings of a crate** --- the sources are literals, and there are no files
+- **The library as strings of a crate** — the sources are literals, and there are no files
   a person reads and reviews.
-- **The library as a crate that drives the driver** --- the sources and what they say of
+- **The library as a crate that drives the driver** — the sources and what they say of
   a project live in a crate of their own, which registers the library in a driver and depends
   on the driver to do it.
-- **Every host records the library itself** --- what `std` is, and which file each of its
+- **Every host records the library itself** — what `std` is, and which file each of its
   modules is, is written out by the CLI, by the editor, and by every host that follows.
 
 ## Decision Outcome
@@ -115,7 +115,7 @@ because the compiler is the side that already knows the library:
 the prelude every module is compiled with is the library's list of names,
 so a crate that drives the driver would be the compiler's knowledge spelled outside the compiler.
 
-A host calls [`mlkc-driver`]'s `use_std` and is handed the files of the library ---
+A host calls [`mlkc-driver`]'s `use_std` and is handed the files of the library —
 where each of them lands in the driver, and its source.
 The host says _when_ the library goes in, and nothing else: it does not know the project,
 the prelude, the paths, or even the names of the modules,
@@ -145,8 +145,8 @@ so what a host did first keeps the file ids it had.
 ### The driver takes what it is pushed; immutability is the host's
 
 A read-only buffer is not a property of the compiler: the driver has no policy about who may
-push what, and a host with a reason to push a library --- a test, a tool that answers
-"what if `Int` were different" --- is not forbidden from doing so.
+push what, and a host with a reason to push a library — a test, a tool that answers
+"what if `Int` were different" — is not forbidden from doing so.
 What the editor owes a person is that _it_ does not write the library, and does not offer to:
 a file of the library is opened with a state that takes no text and a view that is not editable,
 its rows offer no way to drop it, and the directory it sits in is not a place to make a buffer.
@@ -157,7 +157,7 @@ so it never has to know the path of a library by itself.
 
 - Two files in the repository are the library: the compiler, the editor, and a person reading
   the repository all have the same text.
-- A host that begins to exist later --- a language server, a test harness --- asks the driver
+- A host that begins to exist later — a language server, a test harness — asks the driver
   for the library and cannot spell its project differently from the others: it does not know
   enough about the library to have an opinion.
 - The compiler is the side that carries the library, which is where the knowledge already was:
@@ -173,12 +173,12 @@ so it never has to know the path of a library by itself.
 - The library is compiled in whatever form it was in at build time,
   and a compiler cannot be pointed at another one: overriding `std` waits for a sysroot
   and a loader, which the pipeline does not have.
-- The sources of the library are in the binary of every host that links the driver --- including
+- The sources of the library are in the binary of every host that links the driver — including
   a test that never asks for it. The library is small today; a standard library that grows
   will have to be measured, and maybe fetched rather than embedded.
 - A crate of its own for two files is machinery ahead of its contents;
-  it is the crate's _shape_ --- the sources, the project, and the prelude of the library in
-  one place, below the compiler --- that the decision is about.
+  it is the crate's _shape_ — the sources, the project, and the prelude of the library in
+  one place, below the compiler — that the decision is about.
 
 ## Pros and Cons of the Options
 
@@ -189,7 +189,7 @@ so it never has to know the path of a library by itself.
   which is a different library from the one the compiler was built with,
   and a different one again for a build from another checkout.
 - Bad, because the browser cannot read the repository: it would fetch the files from the site,
-  which puts a copy of the library in the build of the editor --- a copy that can be stale,
+  which puts a copy of the library in the build of the editor — a copy that can be stale,
   and one more thing that has to be kept in step.
 - Bad, because a host that has no file system has nothing to read at all,
   and the "read at run time" answer becomes two answers.

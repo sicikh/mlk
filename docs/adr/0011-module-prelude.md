@@ -5,7 +5,7 @@
 
 ## Context and Problem Statement
 
-The names of the standard library --- `Int`, `Unit`, and the many that will follow ---
+The names of the standard library — `Int`, `Unit`, and the many that will follow —
 are declared in `std` and are used by almost every module of every project.
 Writing `use std.prelude.Int` in each of them is boilerplate,
 and the language is expected to give those names to a module without the module asking,
@@ -39,7 +39,7 @@ and what does it mean for a name the module declares itself?
 
 - The prelude must be invisible to every stage but the one that injects it:
   name resolution, interfaces, and checking already have a notion for
-  "a name the module uses and did not declare" --- an import.
+  "a name the module uses and did not declare" — an import.
 - A name the module declares or imports itself must win over the prelude,
   and it must win silently: the prelude is a convenience, not a declaration the module made,
   so shadowing it is not a mistake to report.
@@ -53,11 +53,11 @@ and what does it mean for a name the module declares itself?
 
 ## Considered Options
 
-- **Text before parsing** --- prepend `use std.prelude.Int` to the file's text and parse that.
-- **CST nodes after parsing** --- parse the module, then splice synthetic `use` items into the tree.
-- **A fallback table in name resolution** --- the local scope keeps the prelude as a list of
+- **Text before parsing** — prepend `use std.prelude.Int` to the file's text and parse that.
+- **CST nodes after parsing** — parse the module, then splice synthetic `use` items into the tree.
+- **A fallback table in name resolution** — the local scope keeps the prelude as a list of
   names to paths, and an unresolved name becomes an anchor that names that path.
-- **Implicit imports in the item tree** --- lowering declares the prelude's imports
+- **Implicit imports in the item tree** — lowering declares the prelude's imports
   into the item tree and its scope, as if the module had written them.
 
 ## Decision Outcome
@@ -71,8 +71,8 @@ what an interface already carries, and what a check already reads.
 ### The prelude is a list of imports, and lowering is what reads it
 
 A `Prelude` is an ordered list of imports, each a name and the path it is the name of.
-The language has a standard one --- `use std.prelude.Int` and `use std.prelude.Unit` today,
-more later --- and a project may replace it with its own,
+The language has a standard one — `use std.prelude.Int` and `use std.prelude.Unit` today,
+more later — and a project may replace it with its own,
 which is how `std` compiles with `use project.core.Int` and the like.
 
 The prelude is an argument of `lower_module`:
@@ -89,8 +89,8 @@ so a prelude entry that finds a name already taken is not recorded and nothing i
 A module that declares `type Int` keeps meaning its own `Int`;
 a module that writes `use std.core.Int` keeps meaning that import;
 and in both cases the prelude's entry is quietly not what the name denotes.
-The prelude entity still exists in the item tree ---
-a path that names it is anchored to its `UseLoc`, and a name has to exist to be named ---
+The prelude entity still exists in the item tree —
+a path that names it is anchored to its `UseLoc`, and a name has to exist to be named —
 but the scope of the module does not hold it.
 
 A module refuses the prelude as a whole when its preamble carries the attribute:
@@ -145,8 +145,8 @@ prelude, and the driver holds the graph of projects together with the mapping of
 its project.
 
 Lowering reads the prelude of the project the module belongs to,
-and a module that belongs to no project --- a file a host pushed on its own,
-which no manifest claimed --- is compiled with the prelude of the language ([`Prelude::standard`]).
+and a module that belongs to no project — a file a host pushed on its own,
+which no manifest claimed — is compiled with the prelude of the language ([`Prelude::standard`]).
 
 Changing what a project says invalidates what its modules were lowered to, and nothing else:
 crossing a project boundary is crossing a configuration boundary,
@@ -176,7 +176,7 @@ because the loader that reads one is a stage the pipeline does not have.
 - A prelude entry that no module uses still appears in every item tree of the project,
   so adding a name to a prelude invalidates the item trees of every module,
   used or not. Prelude edits are configuration edits and rare, and the parse is not invalidated;
-  the alternative --- recording in the item tree only the entries a module read ---
+  the alternative — recording in the item tree only the entries a module read —
   is deferred until the cost is measured.
 - An entity with no syntax is a shape everything that walks an item tree has to consider,
   starting with the driver's ranges and the dump.
@@ -196,7 +196,7 @@ Prepend the text of the prelude's imports to the source and parse that.
 
 - Good, because it is trivial to implement.
 - Bad, because the parse would no longer be a function of the file's text,
-  which is what its key --- the `FileVersion` --- claims ([ADR-0007][0007-vfs-file-state.md]).
+  which is what its key — the `FileVersion` — claims ([ADR-0007][0007-vfs-file-state.md]).
 - Bad, because every range, every diagnostic, and every node of the tree
   would move by the length of the injected text, and a lossless tree
   would hold text the file does not ([ADR-0002][0002-lossless-syntax-tree.md]).
@@ -226,8 +226,8 @@ a name the module does not declare resolves to an anchor that names the path dir
 - Bad, because every consumer of an anchor learns a new case,
   and the case is not an import: it is a path that has to be resolved on the spot.
 - Bad for incrementality: a signature that mentions a prelude name
-  would have to carry either the resolved entity --- foreign data,
-  which [ADR-0010][0010-stable-entity-identity.md] forbids an interface to hold ---
+  would have to carry either the resolved entity — foreign data,
+  which [ADR-0010][0010-stable-entity-identity.md] forbids an interface to hold —
   or the defining module's prelude configuration,
   which puts another module's configuration into every dependent's key
   ([ADR-0008][0008-compiler-driver.md]'s locality).

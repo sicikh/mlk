@@ -38,12 +38,12 @@ and it produces no tree at all when parsing fails.
 
 ## Considered Options
 
-- **Typed AST built directly by the parser** --- the classic compiler design:
+- **Typed AST built directly by the parser** — the classic compiler design:
   the parser emits AST nodes and drops trivia.
-- **Lossless CST on the original rowan** --- the library behind rust-analyzer:
+- **Lossless CST on the original rowan** — the library behind rust-analyzer:
   trivia is stored as separate tokens
   interleaved with the children of a node.
-- **Lossless CST on the biome-rowan fork** --- biome's fork:
+- **Lossless CST on the biome-rowan fork** — biome's fork:
   trivia is attached to tokens,
   and the children of a node have a static structure.
 

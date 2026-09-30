@@ -1,0 +1,19 @@
+[package]
+name = "mlkc-hir-ty"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+mlkc-hir-def.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+mlkc-vfs.workspace = true
+
+[lints]
+workspace = true

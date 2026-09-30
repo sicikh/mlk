@@ -48,4 +48,5 @@ pub use crate::{
     closure::{Closure, Read},
     diagnostic::{ResolveDiag, ResolveError, ResolvePlace},
     resolve::{Resolution, ResolveDeps, hidden_name, resolve_module},
+    walk::{Target, Walk},
 };

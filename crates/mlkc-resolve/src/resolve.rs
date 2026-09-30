@@ -3,9 +3,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    EntityData, EntityLoc, ItemLoc, ItemLocLike, ItemTree, LocalTarget, ModuleId, ModuleScope,
-    Name, Namespace, PathAnchor, PathData, PerNs, PlainPathId, ProjectGraph, ProjectId, TypeRef,
-    UseData, UseLoc, Visibility, dump::TypePlace, path::PathSegmentData,
+    Body, EntityData, EntityLoc, ItemLoc, ItemLocLike, ItemTree, LocalTarget, ModuleId,
+    ModuleScope, Name, Namespace, PathAnchor, PathData, PerNs, PlainPathId, ProjectGraph,
+    ProjectId, TypeRef, UseData, UseLoc, Visibility, dump::TypePlace, path::PathSegmentData,
 };
 
 use crate::{
@@ -62,29 +62,53 @@ pub fn hidden_name(
     })
 }
 
-/// What resolving a module produced: the names of the module, and what the walk found wrong.
+/// What resolving a module produced: the names of the module, what each import denotes, and what
+/// the walk found wrong.
 ///
-/// The pass answers with the two parts ([`resolve_module`]); this is the two of them as one
+/// The pass answers with the three parts ([`resolve_module`]); this is the three of them as one
 /// value, which is what a driver keeps per module and compares with the one it held ([ADR-0008]).
+/// The imports are what a later stage that resolves a path of a body reads: a name an import
+/// brought in is either an entity or a place a path goes on from ([ADR-0017]).
 ///
 /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resolution {
     /// What each name of the module denotes: a declaration of it, or what an import resolved to.
     scope: Arc<ModuleScope>,
+    /// What each import of the module resolved to, by the import.
+    imports: BTreeMap<UseLoc, Target>,
     /// What the walk found, in the order of the module.
     diagnostics: Arc<[ResolveDiag]>,
 }
 
 impl Resolution {
     /// A resolution of the scope a module resolved to, with what its walk found wrong.
-    pub fn new(scope: Arc<ModuleScope>, diagnostics: Arc<[ResolveDiag]>) -> Self {
-        Self { scope, diagnostics }
+    pub fn new(
+        scope: Arc<ModuleScope>,
+        imports: BTreeMap<UseLoc, Target>,
+        diagnostics: Arc<[ResolveDiag]>,
+    ) -> Self {
+        Self {
+            scope,
+            imports,
+            diagnostics,
+        }
     }
 
     /// What each name of the module denotes.
     pub fn scope(&self) -> &Arc<ModuleScope> {
         &self.scope
+    }
+
+    /// What each import of the module resolved to, by the import.
+    ///
+    /// A name a body writes is anchored at the entry of the import table it came from, so a
+    /// stage that resolves the paths of a body reads what the import denotes here ([ADR-0017]).
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    pub fn imports(&self) -> &BTreeMap<UseLoc, Target> {
+        &self.imports
     }
 
     /// What the walk found, in the order of the module.
@@ -101,16 +125,12 @@ impl Resolution {
 ///
 /// [ADR-0005]: ../../docs/adr/0005-compiler-pipeline.md
 /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
-pub fn resolve_module(
-    module: ModuleId,
-    tree: &ItemTree,
-    deps: &ResolveDeps,
-) -> (ModuleScope, Vec<ResolveDiag>) {
+pub fn resolve_module(module: ModuleId, tree: &ItemTree, deps: &ResolveDeps) -> Resolution {
     let mut walk = Walk::of(&deps.graph, &deps.closure);
     let mut resolver = Resolver::new(module, tree, &mut walk);
     resolver.run();
 
-    (resolver.scope(), resolver.diagnostics)
+    resolver.into_resolution()
 }
 
 /// Walks every path of a module, gathering what the walk reads.
@@ -125,8 +145,30 @@ pub(crate) fn walk_all<'a>(module: ModuleId, tree: &'a ItemTree, walk: &mut Walk
     resolver.run();
 }
 
+/// Walks the paths of a module and of its bodies, gathering what the walk reads.
+///
+/// The closure of a check is wider than the closure of a resolution: a path of a body may name a
+/// module that no signature of the module names, and the check reads the interfaces of every
+/// module its paths reach ([ADR-0009], [ADR-0017]).
+///
+/// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+pub(crate) fn walk_check<'a>(
+    module: ModuleId,
+    tree: &'a ItemTree,
+    bodies: impl IntoIterator<Item = &'a Body>,
+    walk: &mut Walk<'a>,
+) {
+    let mut resolver = Resolver::new(module, tree, walk);
+    resolver.run();
+
+    for body in bodies {
+        resolver.gather_body(body);
+    }
+}
+
 /// One module, as it is resolved.
-struct Resolver<'w, 'a> {
+pub(crate) struct Resolver<'w, 'a> {
     /// The module being resolved.
     module: ModuleId,
     /// The surface of that module.
@@ -155,6 +197,96 @@ impl<'w, 'a> Resolver<'w, 'a> {
     fn run(&mut self) {
         self.imports();
         self.surface();
+    }
+
+    /// The resolution the walk produced.
+    fn into_resolution(self) -> Resolution {
+        let scope = Arc::new(self.scope());
+
+        Resolution::new(scope, self.imports, Arc::from(self.diagnostics))
+    }
+
+    /// Walks the paths of one body, gathering what the walk reads ([`walk_check`]).
+    fn gather_body(&mut self, body: &Body) {
+        for (_, path) in body.paths().iter() {
+            self.gather_path(path);
+        }
+    }
+
+    /// Walks a path a body writes, without reporting what it finds: what a check reads of the
+    /// rest of the project is gathered before the check runs ([ADR-0009]).
+    ///
+    /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+    fn gather_path(&mut self, path: &PathData) {
+        for arg in &path.root_args {
+            self.gather_type(arg);
+        }
+
+        for segment in &path.segments {
+            for arg in &segment.args {
+                self.gather_type(arg);
+            }
+        }
+
+        match &path.anchor {
+            // A name of the module, a binding of a body, or a type variable: nothing of another
+            // module is read.
+            PathAnchor::Item(_)
+            | PathAnchor::Local(_)
+            | PathAnchor::TypeVar(_)
+            | PathAnchor::Binding(_)
+            | PathAnchor::Unresolved => {},
+            // The base is an entry of the import table: the names after it are read where the
+            // import resolved to.
+            PathAnchor::Use(import) => {
+                let target = self.imports.get(import).cloned().unwrap_or_default();
+
+                if !target.is_empty() && !path.segments.is_empty() {
+                    self.gather_under(&target, &path.segments);
+                }
+            },
+            // The names after the root are read among the modules of the project.
+            PathAnchor::Project(project) => {
+                let project = project
+                    .clone()
+                    .or_else(|| self.walk.project_of(self.module));
+
+                if let Some(project) = project {
+                    let names = segment_names(&path.segments);
+                    let mut seen = Vec::new();
+
+                    let _ = self.walk.walk_in(&project, &names, &mut seen);
+                }
+            },
+        }
+    }
+
+    /// Walks the types a written type carries.
+    fn gather_type(&mut self, ty: &TypeRef) {
+        match ty {
+            TypeRef::Path(path) => self.gather_path(path),
+            TypeRef::Infer | TypeRef::Missing => {},
+        }
+    }
+
+    /// Walks the names a body writes after a base an import resolved to.
+    fn gather_under(&mut self, target: &Target, segments: &[PathSegmentData]) {
+        // Reaching an entity is the end of a walk: the names after it are the names of its
+        // members, and the language has no members yet.
+        if target.ty.is_some() || target.value.is_some() {
+            return;
+        }
+
+        let (Some((project, base)), Some(locator)) = (&target.place, &target.module) else {
+            return;
+        };
+
+        let names = segment_names(segments);
+        let mut seen = Vec::new();
+
+        let _ = self
+            .walk
+            .walk_after(project, base, locator, &names, &mut seen);
     }
 
     /// Resolves the imports of the module, and reports the ones that name nothing.

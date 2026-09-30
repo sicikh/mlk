@@ -14,6 +14,7 @@ mlkc-diagnostics = { path = "crates/mlkc-diagnostics", version = "0.1.0" }
 mlkc-driver = { path = "crates/mlkc-driver", version = "0.1.0" }
 mlkc-fixture = { path = "crates/mlkc-fixture", version = "0.1.0" }
 mlkc-hir-def = { path = "crates/mlkc-hir-def", version = "0.1.0" }
+mlkc-hir-ty = { path = "crates/mlkc-hir-ty", version = "0.1.0" }
 mlkc-intern = { path = "crates/mlkc-intern", version = "0.1.0" }
 mlkc-la-arena = { path = "crates/mlkc-la-arena", version = "0.1.0" }
 mlkc-line-index = { path = "crates/mlkc-line-index", version = "0.1.0" }
@@ -30,6 +31,7 @@ mlkc-syntax = { path = "crates/mlkc-syntax", version = "0.1.0" }
 mlkc-syntax-factory = { path = "crates/mlkc-syntax-factory", version = "0.1.0" }
 mlkc-text-edit = { path = "crates/mlkc-text-edit", version = "0.1.0" }
 mlkc-text-size = { path = "crates/mlkc-text-size", version = "0.1.0" }
+mlkc-typeck = { path = "crates/mlkc-typeck", version = "0.1.0" }
 mlkc-ungrammar = { path = "crates/mlkc-ungrammar", version = "0.1.0" }
 mlkc-vfs = { path = "crates/mlkc-vfs", version = "0.1.0" }
 mlkc-wasm = { path = "crates/mlkc-wasm", version = "0.1.0" }

@@ -1,0 +1,26 @@
+[package]
+name = "mlkc-typeck"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+mlkc-diagnostics.workspace = true
+mlkc-hir-def.workspace = true
+mlkc-hir-ty.workspace = true
+mlkc-resolve.workspace = true
+mlkc-span.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+mlkc-lower.workspace = true
+mlkc-parser.workspace = true
+mlkc-stdlib.workspace = true
+mlkc-syntax.workspace = true
+mlkc-vfs.workspace = true
+
+[lints]
+workspace = true

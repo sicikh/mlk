@@ -74,6 +74,12 @@ ITEM TREE
   use Unit  prelude
     path: std::prelude::Unit
     visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
 ```
 
 ## Bodies

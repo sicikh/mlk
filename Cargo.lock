@@ -681,6 +681,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlkc-hir-ty"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "mlkc-hir-def",
+ "mlkc-vfs",
+ "rustc-hash",
+]
+
+[[package]]
 name = "mlkc-intern"
 version = "0.1.0"
 dependencies = [
@@ -839,6 +849,23 @@ dependencies = [
  "serde",
  "serde_test",
  "static_assertions",
+]
+
+[[package]]
+name = "mlkc-typeck"
+version = "0.1.0"
+dependencies = [
+ "mlkc-diagnostics",
+ "mlkc-hir-def",
+ "mlkc-hir-ty",
+ "mlkc-lower",
+ "mlkc-parser",
+ "mlkc-resolve",
+ "mlkc-span",
+ "mlkc-stdlib",
+ "mlkc-syntax",
+ "mlkc-vfs",
+ "rustc-hash",
 ]
 
 [[package]]

@@ -1,0 +1,295 @@
+//! What a check found, and where it is.
+//!
+//! An error is a value, not a sentence: the facts are the types and the names the HIR knows, and
+//! where the error is is a place in the HIR --- an expression, a pattern, or a type a declaration
+//! writes. The driver turns that into a span with the ranges it holds for a host ([ADR-0009]).
+//!
+//! [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+
+use std::fmt;
+
+use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Level};
+use mlkc_hir_def::{ExprId, FunctionLoc, ItemLoc, Name, PatId, dump::TypePlace as DeclaredType};
+use mlkc_hir_ty::Ty;
+use mlkc_resolve::ResolveError;
+use mlkc_span::Span;
+
+/// What a check could not do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeError {
+    /// A top-level declaration does not write a type the first check needs.
+    ///
+    /// Every signature of a top-level declaration is written while a body is checked on its own:
+    /// inferring a signature from a body would need an order between the bodies of a module
+    /// ([ADR-0017]).
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    MissingType {
+        /// The function whose signature is incomplete.
+        function: FunctionLoc,
+        /// Which parameter is not written, or `None` for the result.
+        parameter: Option<usize>,
+    },
+    /// A name written where a type belongs denotes something else.
+    NotAType {
+        /// The name written where a type belongs.
+        name: Name,
+    },
+    /// A name written where a value belongs denotes something else.
+    NotAValue {
+        /// The name written where a value belongs.
+        name: Name,
+    },
+    /// A name is applied to type arguments, and the language has no generics yet.
+    TypeArguments {
+        /// The name the arguments are applied to.
+        name: Name,
+    },
+    /// A name is written inside a type or a value, and the language has no members yet.
+    NestedName {
+        /// The name that is written inside something.
+        name: Name,
+    },
+    /// A value is called, and it is not a function.
+    NotCallable {
+        /// The type of the value the call calls.
+        found: Ty,
+    },
+    /// A call passes a number of arguments the function does not take.
+    ArgumentCount {
+        /// How many arguments the function takes.
+        expected: usize,
+        /// How many the call passes.
+        found: usize,
+    },
+    /// A body binds a number of parameters other than the declaration takes.
+    ParameterCount {
+        /// How many parameters the declaration takes.
+        expected: usize,
+        /// How many the body binds.
+        found: usize,
+    },
+    /// Two types that have to be one are two.
+    TypeMismatch {
+        /// The type a place expects.
+        expected: Ty,
+        /// The type of what is written there.
+        found: Ty,
+    },
+    /// A type would contain itself.
+    RecursiveType,
+    /// A path of a body does not resolve: the module it names holds no such name, no module of
+    /// the project is named by it, or a chain of re-exports returns to itself.
+    ///
+    /// The paths of the surface of a module are walked by its resolution, which reports what it
+    /// finds; this is the check telling about a path a resolution does not read ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    Unresolved {
+        /// What the walk found wrong.
+        error: ResolveError,
+    },
+    /// The check of a body found no type for the declaration that owns it.
+    ///
+    /// This is a bug of the input the driver assembled, and not of the module: the types of a
+    /// module are resolved before its bodies are checked ([ADR-0017]).
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    MissingSignature,
+}
+
+impl TypeError {
+    /// The message of the error, in one line.
+    pub fn message(&self) -> String {
+        match self {
+            Self::MissingType {
+                function,
+                parameter: Some(index),
+            } => {
+                format!(
+                    "`{function:?}` does not declare the type of its parameter #{index}, and the \
+                     first check does not infer the signature of a top-level function",
+                )
+            },
+            Self::MissingType {
+                function,
+                parameter: None,
+            } => {
+                format!(
+                    "`{function:?}` does not declare the type of its result, and the first check \
+                     does not infer the signature of a top-level function",
+                )
+            },
+            Self::NotAType { name } => {
+                format!("the name `{name:?}` does not denote a type, and a type belongs here")
+            },
+            Self::NotAValue { name } => {
+                format!("the name `{name:?}` does not denote a value, and a value belongs here")
+            },
+            Self::TypeArguments { name } => {
+                format!(
+                    "the name `{name:?}` is applied to type arguments, and the language has no generics yet"
+                )
+            },
+            Self::NestedName { name } => {
+                format!(
+                    "`{name:?}` is a name inside something, and the language has no members yet"
+                )
+            },
+            Self::NotCallable { found } => {
+                format!("a value of type `{found}` is called, and a function is what a call calls")
+            },
+            Self::ArgumentCount { expected, found } => {
+                format!("the function takes {expected} arguments, and the call passes {found}")
+            },
+            Self::ParameterCount { expected, found } => {
+                format!("the declaration takes {expected} parameters, and the body binds {found}")
+            },
+            Self::TypeMismatch { expected, found } => {
+                format!("a value of type `{found}` is where a value of type `{expected}` belongs")
+            },
+            Self::RecursiveType => "the type of the value would contain itself".to_owned(),
+            Self::Unresolved { error } => error.message(),
+            Self::MissingSignature => {
+                "the body was checked without the type of the declaration that owns it, and the \
+                 types of a module are resolved before its bodies are checked"
+                    .to_owned()
+            },
+        }
+    }
+}
+
+impl DiagKind for TypeError {
+    fn level(&self) -> Level {
+        Level::Error
+    }
+
+    /// Checking types is the stage after name resolution ([ADR-0005]).
+    ///
+    /// [ADR-0005]: ../../docs/adr/0005-compiler-pipeline.md
+    fn category(&self) -> Category {
+        Category::TypeChecker
+    }
+
+    /// Two digits of the kind of the error, which stay the same however a message is worded.
+    fn code(&self) -> &'static str {
+        match self {
+            Self::MissingType { .. } => "01",
+            Self::NotAType { .. } => "02",
+            Self::NotAValue { .. } => "03",
+            Self::TypeArguments { .. } => "04",
+            Self::NestedName { .. } => "05",
+            Self::NotCallable { .. } => "06",
+            Self::ArgumentCount { .. } => "07",
+            Self::ParameterCount { .. } => "08",
+            Self::TypeMismatch { .. } => "09",
+            Self::RecursiveType => "10",
+            Self::Unresolved { .. } => "11",
+            Self::MissingSignature => "12",
+        }
+    }
+}
+
+/// Where a check error is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypePlace {
+    /// An expression of a body.
+    Expr(ExprId),
+    /// A pattern of a body.
+    Pat(PatId),
+    /// An entity of a module as a whole, such as the body of a declaration.
+    Entity(ItemLoc),
+    /// A type a declaration writes: the entity, and which type of it.
+    Declared {
+        /// The declaration the type is written in.
+        item: ItemLoc,
+        /// Which type of the declaration it is.
+        place: DeclaredType,
+    },
+}
+
+impl TypePlace {
+    /// The expression the place is, if it is one.
+    pub fn expr(&self) -> Option<ExprId> {
+        match self {
+            Self::Expr(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// The pattern the place is, if it is one.
+    pub fn pat(&self) -> Option<PatId> {
+        match self {
+            Self::Pat(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// The entity the place is in, if it is in one.
+    pub fn item(&self) -> Option<&ItemLoc> {
+        match self {
+            Self::Expr(_) | Self::Pat(_) => None,
+            Self::Entity(item) | Self::Declared { item, .. } => Some(item),
+        }
+    }
+
+    /// Which type of the entity the place is, if it is a type a declaration writes.
+    pub fn declared(&self) -> Option<DeclaredType> {
+        match self {
+            Self::Declared { place, .. } => Some(*place),
+            _ => None,
+        }
+    }
+}
+
+/// A check error, and where it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeDiag {
+    error: TypeError,
+    place: TypePlace,
+}
+
+impl TypeDiag {
+    /// An error at `place`.
+    pub(crate) fn new(error: TypeError, place: TypePlace) -> Self {
+        Self { error, place }
+    }
+
+    /// What the check found.
+    pub fn error(&self) -> &TypeError {
+        &self.error
+    }
+
+    /// Where it is.
+    pub fn place(&self) -> &TypePlace {
+        &self.place
+    }
+
+    /// The diagnostic a host renders: the error, its kind, and the span of the place.
+    ///
+    /// The span is the driver's: a pass knows the HIR and not the file, and where a node of the
+    /// HIR is written is what the driver holds ([ADR-0009]).
+    ///
+    /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+    pub fn to_diagnostic(&self, span: Span) -> Diagnostic {
+        Diagnostic::from_kind(&self.error, self.error.message()).with_primary(span, "")
+    }
+}
+
+impl fmt::Display for TypeDiag {
+    /// The message of the error, headed by where it is.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.place {
+            TypePlace::Expr(id) => {
+                write!(f, "expr #{}: {}", id.into_raw(), self.error.message())
+            },
+            TypePlace::Pat(id) => {
+                write!(f, "pat #{}: {}", id.into_raw(), self.error.message())
+            },
+            TypePlace::Entity(item) => write!(f, "{item:?}: {}", self.error.message()),
+            TypePlace::Declared { item, place } => {
+                write!(f, "{item:?} [{place:?}]: {}", self.error.message())
+            },
+        }
+    }
+}

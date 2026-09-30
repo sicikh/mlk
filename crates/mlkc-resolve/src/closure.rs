@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    Interface, ItemTree, ModuleId, ModuleIndex, PlainPathId, ProjectGraph, ProjectId,
+    Body, Interface, ItemTree, ModuleId, ModuleIndex, PlainPathId, ProjectGraph, ProjectId,
 };
 
 use crate::walk::Walk;
@@ -41,7 +41,7 @@ pub enum Read {
 ///
 /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Closure {
     /// The module indexes of the projects a path of the module may name.
     indexes: BTreeMap<ProjectId, Arc<ModuleIndex>>,
@@ -68,6 +68,30 @@ impl Closure {
     ) -> Self {
         let mut walk = Walk::gathering(graph, indexes, fetch);
         crate::resolve::walk_all(module, tree, &mut walk);
+
+        walk.into_closure()
+    }
+
+    /// The closure of a module whose bodies a check reads: the modules the check of a body
+    /// reaches.
+    ///
+    /// It is wider than the closure of a resolution: a path of a body may name a module that no
+    /// signature of the module names, so the walk of the surface is followed by the walk of every
+    /// body ([ADR-0017]). The driver gathers this closure for a check, and the check walks the
+    /// same paths over the value it is handed ([ADR-0009]).
+    ///
+    /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    pub fn of_check<'a>(
+        module: ModuleId,
+        tree: &'a ItemTree,
+        bodies: impl IntoIterator<Item = &'a Body>,
+        graph: &'a ProjectGraph,
+        indexes: &'a BTreeMap<ProjectId, Arc<ModuleIndex>>,
+        fetch: &'a mut dyn FnMut(ModuleId) -> Option<Arc<Interface>>,
+    ) -> Self {
+        let mut walk = Walk::gathering(graph, indexes, fetch);
+        crate::resolve::walk_check(module, tree, bodies, &mut walk);
 
         walk.into_closure()
     }

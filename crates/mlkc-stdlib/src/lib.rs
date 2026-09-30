@@ -69,6 +69,8 @@ pub fn prelude() -> Prelude {
     Prelude::from_paths([
         PlainPath::from_segments([Name::new("project"), Name::new(CORE), Name::new("Int")]),
         PlainPath::from_segments([Name::new("project"), Name::new(CORE), Name::new("Unit")]),
+        PlainPath::from_segments([Name::new("project"), Name::new(CORE), Name::new("String")]),
+        PlainPath::from_segments([Name::new("project"), Name::new(CORE), Name::new("Bool")]),
     ])
 }
 
@@ -146,8 +148,10 @@ mod tests {
             .map(|import| import.name().as_str().to_owned())
             .collect();
 
-        assert_eq!(named, ["Int", "Unit"]);
+        assert_eq!(named, ["Int", "Unit", "String", "Bool"]);
         assert_eq!(imports[0].path().to_string(), "project::core::Int");
         assert_eq!(imports[1].path().to_string(), "project::core::Unit");
+        assert_eq!(imports[2].path().to_string(), "project::core::String");
+        assert_eq!(imports[3].path().to_string(), "project::core::Bool");
     }
 }

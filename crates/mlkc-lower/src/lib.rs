@@ -74,8 +74,8 @@
 //! let tree = &lowered.item_tree;
 //! assert_eq!(
 //!     tree.scope().len(),
-//!     3,
-//!     "`main`, and the two names of the prelude"
+//!     5,
+//!     "`main`, and the four names of the prelude"
 //! );
 //!
 //! // The names of the prelude are names of the module like any other: `Int` is what the

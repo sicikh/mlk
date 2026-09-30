@@ -97,6 +97,16 @@ impl Prelude {
                     Name::new("prelude"),
                     Name::new("Unit"),
                 ]),
+                PlainPath::from_segments([
+                    Name::new("std"),
+                    Name::new("prelude"),
+                    Name::new("String"),
+                ]),
+                PlainPath::from_segments([
+                    Name::new("std"),
+                    Name::new("prelude"),
+                    Name::new("Bool"),
+                ]),
             ])
         })
     }
@@ -159,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn the_standard_prelude_is_the_two_names_of_the_language() {
+    fn the_standard_prelude_is_the_names_of_the_language() {
         let prelude = Prelude::standard();
         let names: Vec<_> = prelude
             .imports()
@@ -167,7 +177,7 @@ mod tests {
             .map(|import| import.name().as_str().to_owned())
             .collect();
 
-        assert_eq!(names, ["Int", "Unit"]);
+        assert_eq!(names, ["Int", "Unit", "String", "Bool"]);
         assert_eq!(prelude.imports()[0].path().to_string(), "std::prelude::Int");
     }
 

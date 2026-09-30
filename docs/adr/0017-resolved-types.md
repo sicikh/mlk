@@ -203,31 +203,33 @@ What the surface is, and what it is not:
 ### How a check reads the rest of the project
 
 The check of a body resolves the paths of that body itself,
-over the scope the resolution of [ADR-0016][0016-inter-module-resolution.md] produced,
-and reads what those paths name:
+over the scope and the imports the resolution of
+[ADR-0016][0016-inter-module-resolution.md] produced:
 
 ```rust
 /// What checking a body reads of the rest of the project ([ADR-0009]).
 pub struct CheckDeps {
-    /// What the walk read of the modules it reached: their interfaces, and the indexes of their
-    /// projects --- the closure a resolution gathers ([ADR-0016]).
+    /// The projects, what each of them depends on, and the project of every module.
+    pub graph: Arc<ProjectGraph>,
+    /// The modules the check walks, and the interfaces of them,
+    /// gathered over the surface of the module and over its bodies ([`Closure::of_check`]).
     pub closure: Closure,
     /// The type surface of the module the body belongs to, and of every module its paths name.
     pub types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
-    /// The projects, what each of them depends on, and the project of every module.
-    pub graph: Arc<ProjectGraph>,
+    /// The classes of the language, which the literals and the operators are typed by.
+    pub builtins: Builtins,
 }
 ```
 
 Two properties of this value matter.
 
-- **It is a closure of what was read**, gathered as a resolution gathers its own
-  ([ADR-0009][0009-pass-contract.md]):
+- **It is a closure of what was read** ([ADR-0009][0009-pass-contract.md]):
   a path of a body may name a module that no signature of the module names,
-  and a re-export chain reaches a module that is written nowhere in the reading body,
-  so the closure of a check is wider than the closure of the module's own surface.
-  The surface of the module the body belongs to is in it too:
-  a body may call any function of its module, public or not.
+  so the closure of a check is wider than the closure of a resolution,
+  and the check walks its paths --- a module of the project, a module of another project,
+  a name a module re-exports --- over the value it was handed.
+  The surfaces of the modules the walk reaches are in the input too,
+  its own module's among them --- a body may call any function of its module, public or not.
 - **A foreign type is read by name and by value, never by id.**
   Nothing in `CheckDeps` hands out an arena of another module:
   the only foreign handles are `EntityLoc`s and the self-contained `Ty`s they map to,
@@ -262,7 +264,8 @@ The first checker is one pass per body:
 pub fn check_body(
     owner: BodyEntityLoc,
     tree: &ItemTree,
-    body: &LoweredBody,
+    body: &Body,
+    resolution: &Resolution,
     deps: &CheckDeps,
 ) -> (CheckedBody, Vec<TypeDiag>);
 ```
@@ -292,12 +295,14 @@ it returns when there is an order to check the bodies in,
 and what it changes then is the rules of the checker, never the shape of a `Ty`.
 
 **Signatures are resolved before any body is checked.**
-The types a module's declarations write are resolved by a pass of their own over the item tree,
-which reads names and never a body;
+The types a module's declarations write are resolved by a pass of their own over the item tree
+(`resolve_module_types`),
+which reads the names the resolution produced and never a body;
 `ModuleTypes` is that pass's value, and it is what both the module's readers
 and the module's own body checks read.
 The pass is not inference:
-every type is written, and resolving one is following the path to its class and its arguments.
+every type is written, and resolving one is following the path to its class and its arguments,
+walking the modules it names over the closure like any other path.
 
 **Bidirectional, with one unification.**
 `infer(expr) -> Ty` computes a type where nothing fixes it;
@@ -555,8 +560,8 @@ Wait until the language settles, then write the real one.
 - Rémy's technical report: <http://gallium.inria.fr/~remy/ftp/eq-theory-on-types.pdf>
 - Bidirectional typing: <https://arxiv.org/abs/1908.05839>
 - rust-analyzer's resolved types: <https://github.com/rust-lang/rust-analyzer/tree/master/crates/hir-ty>
-- Implementation, to come: `mlkc-hir-ty` (the values), `mlkc-typeck` (the temporary pass),
-  and new slots of [mlkc-driver]
+- Implementation: `mlkc-hir-ty` (the values), `mlkc-typeck` (the temporary pass),
+  and, to come, new slots of [mlkc-driver]
 
 [0003-id-based-ir.md]: 0003-id-based-ir.md
 [0004-module-system.md]: 0004-module-system.md

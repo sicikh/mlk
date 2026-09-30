@@ -3,3 +3,5 @@ module project::prelude
 
 pub use project::core::Int
 pub use project::core::Unit
+pub use project::core::String
+pub use project::core::Bool

@@ -13,8 +13,13 @@ use crate::{
 };
 
 /// What a path denotes, in the terms a scope is written in.
+///
+/// A walk answers with a target; a caller that resolves a written path reads what it denotes
+/// here, and continues from where the target stands when the path goes on ([ADR-0017]).
+///
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Target {
+pub struct Target {
     /// The entity the path denotes, where a type belongs.
     pub(crate) ty: Option<EntityLoc>,
     /// The entity the path denotes, where a value belongs.
@@ -24,6 +29,45 @@ pub(crate) struct Target {
     /// Where a module the path names stands: the project, and the segments it is called by.
     /// A path that goes on after the name is read from here.
     pub(crate) place: Option<(ProjectId, Vec<Name>)>,
+}
+
+impl Target {
+    /// The entity the path denotes, where a type belongs.
+    pub fn ty(&self) -> Option<&EntityLoc> {
+        self.ty.as_ref()
+    }
+
+    /// The entity the path denotes, where a value belongs.
+    pub fn value(&self) -> Option<&EntityLoc> {
+        self.value.as_ref()
+    }
+
+    /// A target that denotes an entity, in the namespaces it denotes it in.
+    ///
+    /// A walk builds targets of its own; this is the constructor a caller needs when it builds
+    /// a target by hand --- a test, or a host that answers a walk with what it holds.
+    pub fn entity(ty: Option<EntityLoc>, value: Option<EntityLoc>) -> Self {
+        Self {
+            ty,
+            value,
+            ..Self::default()
+        }
+    }
+
+    /// The module, or the prefix of a module path, the path denotes.
+    pub fn module(&self) -> Option<&ModuleLocator> {
+        self.module.as_ref()
+    }
+
+    /// Where the module the path names stands: the project, and the segments it is called by.
+    pub fn place(&self) -> Option<&(ProjectId, Vec<Name>)> {
+        self.place.as_ref()
+    }
+
+    /// Whether the path denotes nothing at all.
+    pub fn is_empty(&self) -> bool {
+        self.ty.is_none() && self.value.is_none() && self.module.is_none()
+    }
 }
 
 impl Target {
@@ -37,7 +81,7 @@ impl Target {
     }
 
     /// The target of a module a path names.
-    pub(crate) fn module(project: ProjectId, segments: Vec<Name>, module: ModuleId) -> Self {
+    pub(crate) fn of_module(project: ProjectId, segments: Vec<Name>, module: ModuleId) -> Self {
         Self {
             module: Some(ModuleLocator::Module(module)),
             place: Some((project, segments)),
@@ -58,11 +102,6 @@ impl Target {
             place: Some((project, segments)),
             ..Self::default()
         }
-    }
-
-    /// Whether the path denotes nothing at all.
-    pub(crate) fn is_empty(&self) -> bool {
-        self.ty.is_none() && self.value.is_none() && self.module.is_none()
     }
 
     /// Fills what this target leaves out with what a name a re-export denotes.
@@ -96,7 +135,15 @@ enum Place {
 
 /// The tables a walk reads: the module indexes of the projects a path may name, and the
 /// interfaces of the modules the walk reaches.
-pub(crate) struct Walk<'a> {
+///
+/// A walk is the shared machinery of every stage that resolves a path: the resolution of a
+/// module walks the paths of its surface ([ADR-0016]), a check walks the paths of its bodies
+/// ([ADR-0017]), and both walk over the closure the driver gathered for them ([ADR-0009]).
+///
+/// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+pub struct Walk<'a> {
     /// The projects, what each of them depends on, and the project of every module.
     graph: &'a ProjectGraph,
     /// The module indexes of the projects a path of the module may name.
@@ -127,7 +174,7 @@ impl<'a> Walk<'a> {
     }
 
     /// A walk over the closure a resolution was handed.
-    pub(crate) fn of(graph: &'a ProjectGraph, closure: &'a Closure) -> Self {
+    pub fn of(graph: &'a ProjectGraph, closure: &'a Closure) -> Self {
         Self {
             graph,
             indexes: closure.indexes(),
@@ -147,7 +194,7 @@ impl<'a> Walk<'a> {
     /// A module the graph does not hold a project for --- a file a host pushed, which no
     /// manifest claimed --- is a module of no project, and so is a module whose project the
     /// graph no longer has.
-    pub(crate) fn project_of(&self, module: ModuleId) -> Option<ProjectId> {
+    pub fn project_of(&self, module: ModuleId) -> Option<ProjectId> {
         let project = self.graph.project_of(module)?;
 
         self.graph.project(project).map(|_| project.clone())
@@ -213,7 +260,7 @@ impl<'a> Walk<'a> {
     /// of the module.
     ///
     /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
-    pub(crate) fn walk_plain(
+    pub fn walk_plain(
         &mut self,
         context: Option<&ProjectId>,
         path: &PlainPath,
@@ -254,7 +301,10 @@ impl<'a> Walk<'a> {
     }
 
     /// Walks the names after a root, inside `project`.
-    pub(crate) fn walk_in(
+    ///
+    /// A path written with the keyword `project` or rooted at the name of a project is walked
+    /// this way: the anchor the lowering gave the root already says which project it is.
+    pub fn walk_in(
         &mut self,
         project: &ProjectId,
         segments: &[Name],
@@ -268,7 +318,7 @@ impl<'a> Walk<'a> {
     ///
     /// The place a name denotes is where the names after it are read: a module holds names, and
     /// a prefix is what the modules under it stand on.
-    pub(crate) fn walk_after(
+    pub fn walk_after(
         &mut self,
         project: &ProjectId,
         base: &[Name],
@@ -321,7 +371,7 @@ impl<'a> Walk<'a> {
                             name: Name::missing(),
                         })
                     },
-                    Place::Module(module) => Ok(Target::module(project, base, module)),
+                    Place::Module(module) => Ok(Target::of_module(project, base, module)),
                     Place::Prefix => Ok(Target::prefix(project, base)),
                 };
             };
@@ -345,7 +395,7 @@ impl<'a> Walk<'a> {
 
             if let Some((end, module)) = found {
                 if end == segments.len() {
-                    return Ok(Target::module(project, names, module));
+                    return Ok(Target::of_module(project, names, module));
                 }
 
                 if let Some(target) = self.name_in_module(module, &segments[end], seen)? {

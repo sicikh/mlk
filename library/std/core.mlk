@@ -6,3 +6,9 @@ pub type Int
 
 #[builtin]
 pub type Unit
+
+#[builtin]
+pub type String
+
+#[builtin]
+pub type Bool

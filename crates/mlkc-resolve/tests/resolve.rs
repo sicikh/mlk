@@ -90,7 +90,13 @@ impl World {
             closure: self.closure(module),
         };
 
-        resolve_module(module, self.tree(module), &deps)
+        // A test reads the parts a resolution is made of; the driver keeps the whole value.
+        let resolution = resolve_module(module, self.tree(module), &deps);
+
+        (
+            ModuleScope::clone(resolution.scope()),
+            resolution.diagnostics().to_vec(),
+        )
     }
 }
 

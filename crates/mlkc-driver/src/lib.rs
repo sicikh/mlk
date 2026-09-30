@@ -885,12 +885,10 @@ impl Driver {
             return Some(slot.value.clone());
         }
 
-        let (scope, diagnostics) = resolve_module(module, lowered.item_tree(), &ResolveDeps {
+        let value = Arc::new(resolve_module(module, lowered.item_tree(), &ResolveDeps {
             graph,
             closure: closure.clone(),
-        });
-
-        let value = Arc::new(Resolution::new(Arc::new(scope), Arc::from(diagnostics)));
+        }));
 
         // A resolution equal to the one the driver holds is the value it holds: a reader that
         // came to the same entities came to nothing new ([ADR-0008]).
@@ -1659,11 +1657,11 @@ fun get(): Point = get()
         let lowered = driver.lower(file).expect("the file to be lowered");
 
         // The module declares `println-int` and `main`, and the prelude of the language brings
-        // in two more names.
+        // in four more names.
         assert_eq!(
             lowered.item_tree().scope().len(),
-            4,
-            "four names are declared"
+            6,
+            "six names are declared"
         );
         assert_eq!(lowered.bodies().len(), 1, "one entity owns a body");
 
@@ -1778,10 +1776,10 @@ fun get(): Point = get()
         let after = driver.lower(file).expect("the file to be lowered");
 
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
-        assert_eq!(before.item_tree().scope().len(), 4, "the old value stands");
+        assert_eq!(before.item_tree().scope().len(), 6, "the old value stands");
         assert_eq!(
             after.item_tree().scope().len(),
-            3,
+            5,
             "a function without an `in` is still a function"
         );
     }

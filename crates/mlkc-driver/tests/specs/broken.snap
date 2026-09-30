@@ -20,6 +20,12 @@ ITEM TREE
   use Unit  prelude
     path: std::prelude::Unit
     visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
 ```
 
 ### Resolution
@@ -34,6 +40,10 @@ SCOPE
     ty: type Int in module #0 (private)
   Unit
     ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
 ```
 
 ### Diagnostics
@@ -70,6 +80,12 @@ ITEM TREE
   use Unit  prelude
     path: std::prelude::Unit
     visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
 ```
 
 ### Resolution
@@ -86,6 +102,10 @@ SCOPE
     ty: type Int in module #0 (private)
   Unit
     ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
 ```
 
 ### Diagnostics

@@ -20,7 +20,8 @@
 //! and no conversion here decides what a tree is.
 
 use mlkc_driver::{Driver, Lowered};
-use mlkc_hir_def::dump;
+use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, dump};
+use mlkc_hir_ty::Ty;
 use mlkc_line_index::LineIndex;
 use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::VfsPath;
@@ -72,7 +73,8 @@ impl WasmDriver {
     }
 
     /// Everything a host reads from the parse of one file:
-    /// the concrete syntax tree, the typed view over it, the HIR, and the diagnostics.
+    /// the concrete syntax tree, the typed view over it, the HIR, the types its nodes were
+    /// checked to, and the diagnostics.
     ///
     /// The trees are values a host navigates, not text it re-parses:
     /// a node is its kind, its range and its children, a token is its kind, its range and its text.
@@ -107,6 +109,9 @@ impl WasmDriver {
             .parse(file)
             .ok_or_else(|| failure(&format!("{path} is not text the driver can parse")))?;
         let lowered = self.driver.lower(file);
+        let types = lowered
+            .as_ref()
+            .and_then(|lowered| Types::of(&mut self.driver, ModuleId(file), lowered));
         let diagnostics = self
             .driver
             .diagnostics(file)
@@ -120,6 +125,7 @@ impl WasmDriver {
             cst: parse.syntax(),
             ast: parse.module_root(),
             hir: lowered.map(|lowered| Hir::of(&lowered)),
+            types,
             diagnostics: diagnostics
                 .iter()
                 .map(|it| Diagnostic::of(it, &index))
@@ -167,6 +173,9 @@ struct Analysis {
 
     /// The HIR of the module, or `null` when there is nothing to lower.
     hir: Option<Hir>,
+
+    /// What checking the types of the module left, or `null` when there is nothing to check.
+    types: Option<Types>,
 
     /// What the stages of the pipeline reported, in the shape an editor marks the buffer with.
     diagnostics: Vec<Diagnostic>,
@@ -313,6 +322,150 @@ fn kind_of(kind: dump::NodeKind) -> &'static str {
 /// The part of a buffer a range covers, in the bytes a host counts.
 fn covered(range: TextRange) -> [u32; 2] {
     [u32::from(range.start()), u32::from(range.end())]
+}
+
+/// What checking the types of a module left, as a host reads it.
+///
+/// Types are values of the compiler, and what a host shows of them is what a person reads at
+/// a place: the type an entity of the module was resolved to, and the type every node of every
+/// body was checked to.
+#[derive(Serialize)]
+struct Types {
+    /// The types of the entities of the module, in the order it declares them.
+    surface: Vec<SurfaceType>,
+
+    /// The checked bodies, in the order the module declares them.
+    bodies: Vec<BodyTypes>,
+}
+
+/// One entity of the surface of a module and the type it was resolved to.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SurfaceType {
+    /// What the entity is: `fun main`, `type Point`.
+    name: String,
+
+    /// The type it was resolved to, as it reads: `() -> Int`.
+    ty: String,
+
+    /// Where the declaration is written, in bytes, or nothing where it is written nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// The types of the nodes of one body.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BodyTypes {
+    /// The entity the body belongs to: `fun main`.
+    owner: String,
+
+    /// Where the declaration that owns the body is written, in bytes.
+    range: Option<[u32; 2]>,
+
+    /// The types of the nodes of the body, in the order they are written in.
+    nodes: Vec<TypedNode>,
+}
+
+/// One node of a body and the type it was checked to.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TypedNode {
+    /// What the node is: `expr` or `pat`.
+    kind: &'static str,
+
+    /// What a node that is written nowhere is called by: `expr #3`.
+    label: String,
+
+    /// The part of the buffer the node covers, in bytes, or nothing when nothing was written.
+    range: Option<[u32; 2]>,
+
+    /// The type, as it reads: `Int`, `(Int) -> Bool`, `{error}`.
+    ty: String,
+
+    /// Whether the type is the type of a mistake, which a host paints as one.
+    error: bool,
+}
+
+impl Types {
+    /// Reads the types of a module and of its bodies the way a host reads them.
+    ///
+    /// The driver is what resolved the surface and checked the bodies; what the reading adds is
+    /// where each of them was written, which is what the HIR of the module holds --- the range
+    /// of an entity, and the source map of a body.
+    fn of(driver: &mut Driver, module: ModuleId, lowered: &Lowered) -> Option<Self> {
+        let types = driver.module_types(module)?;
+        let mut surface = Vec::new();
+
+        for (entity, ty) in types.iter() {
+            surface.push(SurfaceType {
+                name: entity_name(&entity.item),
+                ty: ty.to_string(),
+                range: lowered.item_range(&entity.item).map(covered),
+            });
+        }
+
+        let mut bodies = Vec::new();
+
+        for body in lowered.bodies() {
+            let Some(checked) = driver.check(body.owner()) else {
+                continue;
+            };
+
+            let places = &body.body().source_map;
+            let mut nodes: Vec<(u32, u32, TypedNode)> = Vec::new();
+
+            for (id, ty) in checked.expr_types() {
+                nodes.push(node("expr", id.into_raw().into_u32(), places.expr(id), ty));
+            }
+
+            for (id, ty) in checked.pat_types() {
+                nodes.push(node("pat", id.into_raw().into_u32(), places.pat(id), ty));
+            }
+
+            // The nodes are read in the order they are written in: a node nothing was read
+            // from has no place, and is read after the ones that have one.
+            nodes.sort_by_key(|(at, id, _)| (*at, *id));
+
+            let owner = ItemLoc::from(body.owner().item.clone());
+
+            bodies.push(BodyTypes {
+                owner: entity_name(&owner),
+                range: lowered.item_range(&owner).map(covered),
+                nodes: nodes.into_iter().map(|(_, _, node)| node).collect(),
+            });
+        }
+
+        Some(Self { surface, bodies })
+    }
+}
+
+/// One node of a body, as a host reads it.
+///
+/// `at` is where the node is written, and the two numbers a host sorts it by are its place in
+/// the buffer --- or the end of it, for a node nothing was read from --- and the position of
+/// the node in the body of the compiler, which tells two nodes in one place apart.
+fn node(kind: &'static str, id: u32, range: Option<TextRange>, ty: &Ty) -> (u32, u32, TypedNode) {
+    let at = range.map_or(u32::MAX, |range| u32::from(range.start()));
+
+    (at, id, TypedNode {
+        kind,
+        label: format!("{kind} #{}", id - 1),
+        range: range.map(covered),
+        ty: ty.to_string(),
+        error: ty.is_error(),
+    })
+}
+
+/// The name of an entity of the surface of a module, as a host reads it: `fun main`.
+///
+/// The name is the one the entity was declared under, and the kind is what the language
+/// declares it with. An entity with no name of its own is read by its place among its kind,
+/// which is what the HIR dump reads it by as well.
+fn entity_name(item: &ItemLoc) -> String {
+    match item.name() {
+        Some(name) => format!("{} {name}", item.kind().keyword()),
+        None => format!("{item:?}"),
+    }
 }
 
 /// A diagnostic as an editor reads it: what to say, and where to point.
@@ -805,6 +958,65 @@ mod tests {
         assert_eq!(label["start"], start);
         assert_eq!(label["end"], start + "\"text\"".len() as u64);
         assert_eq!(label["message"], "expected `Unit`, found `String`");
+    }
+
+    #[test]
+    fn the_types_of_a_buffer_cross_the_boundary_as_places_and_types() {
+        const SOURCE: &str = "fun main(): Int =\n    let x = 1 in\n    x\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let types = &json["types"];
+
+        // The surface of the module: what its readers read of it.
+        assert_eq!(types["surface"][0]["name"], "fun main");
+        assert_eq!(types["surface"][0]["ty"], "() -> Int");
+
+        let body = &types["bodies"][0];
+        assert_eq!(body["owner"], "fun main");
+        let (from, to) = range(body);
+        assert_eq!(
+            &SOURCE[from..to],
+            SOURCE.trim_end(),
+            "the declaration of the body is the whole function it was read from",
+        );
+
+        // Every node of the body, in the order it is written in: the `let`, the pattern it
+        // binds, the value, and the name the body gives back.
+        let nodes = body["nodes"].as_array().expect("the nodes of the body");
+        let rows: Vec<(&str, &str, &str)> = nodes
+            .iter()
+            .map(|it| {
+                let (from, to) = range(it);
+
+                (
+                    it["kind"].as_str().expect("a kind"),
+                    it["ty"].as_str().expect("a type"),
+                    &SOURCE[from..to],
+                )
+            })
+            .collect();
+
+        assert_eq!(rows.len(), 4, "{rows:?}");
+        assert!(rows.iter().all(|it| it.1 == "Int"), "{rows:?}");
+        assert_eq!(rows[0].0, "expr");
+        assert!(rows[0].2.starts_with("let x = 1"), "{:?}", rows[0]);
+        assert_eq!(rows[1].0, "pat");
+        assert_eq!(rows[3], ("expr", "Int", "x"));
+    }
+
+    /// The place a serialized row points at, in the bytes a host counts.
+    fn range(row: &serde_json::Value) -> (usize, usize) {
+        let at = row["range"].as_array().expect("a range to be a pair");
+
+        (
+            at[0].as_u64().expect("a start") as usize,
+            at[1].as_u64().expect("an end") as usize,
+        )
     }
 
     /// The text of the first token of a kind, wherever in a serialized tree it sits.

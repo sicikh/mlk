@@ -182,6 +182,37 @@ const STEPS = {
 
     showHir: `show('hir'); return true`,
 
+    showTc: `show('tc'); return true`,
+
+    // What the tab reads of the buffer: the surface of the module, and a row per node of every
+    // body, each of them a piece of the code and the type the checker gave it.
+    tc: `return JSON.stringify({
+    		surface: [...inspector().querySelectorAll('[data-tc=entity]')].map((it) => ({
+    			name: text(it.querySelector('.saying')),
+    			ty: text(it.querySelector('.ty'))
+    		})),
+    		bodies: inspector().querySelectorAll('[data-tc=body]').length,
+    		nodes: [...inspector().querySelectorAll('[data-tc=node]')].map((it) => ({
+    			kind: it.dataset.kind,
+    			code: text(it.querySelector('.saying')),
+    			ty: text(it.querySelector('.ty'))
+    		})),
+    		errors: inspector().querySelectorAll('[data-tc=node][data-error=true]').length
+    	})`,
+
+    // A row of the types stands for a node of a body the checker read, and a range of the
+    // compiler is a range of the editor: a pointer on the row marks the code it is a type of.
+    hoverTc: `const row = [...inspector().querySelectorAll('[data-tc=node]')]
+    		.find((it) => text(it.querySelector('.ty')) === 'Int');
+    	row.dispatchEvent(new MouseEvent('mouseenter'));
+    	return true`,
+
+    tcHovered: `const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
+    	return JSON.stringify({
+    		count: parts.length,
+    		marked: parts.map((it) => it.textContent).join('')
+    	})`,
+
     ast: `return JSON.stringify({
     		root: inspector().textContent.includes('ModuleRoot'),
     		decl: inspector().textContent.includes('FunDecl')
@@ -457,9 +488,12 @@ const STEPS = {
     	return JSON.stringify({ says: JSON.parse(text(row.querySelector('.text'))).trim() })`,
 
     pickedToken: `const scroller = document.querySelector('.cm-scroller');
+    	// A mark is a range of the source, and the highlighter splits it where the code reads
+    	// differently: the pieces together are what the row stands for.
+    	const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
     	return JSON.stringify({
     		shown: panel(),
-    		marked: text(document.querySelector('.cm-content .cm-hovered')).trim(),
+    		marked: parts.map((it) => it.textContent).join('').trim(),
     		scrolls: scroller.scrollHeight > scroller.clientHeight,
     		scrolled: scroller.scrollTop > 0
     	})`,
@@ -667,6 +701,14 @@ async function main() {
     };
     const typeColour = JSON.parse(await ask(STEPS.typeColour));
 
+    // The types of the buffer: what the checker resolved the surface to, and what it checked
+    // every node of every body to. A row of the tab stands for a node of the HIR, so a pointer
+    // on one marks the code the node was read from.
+    await ask(STEPS.showTc);
+    const tc = JSON.parse(await ask(STEPS.tc));
+    await ask(STEPS.hoverTc);
+    const tcHover = JSON.parse(await ask(STEPS.tcHovered));
+
     await ask(STEPS.open);
     await ask(STEPS.typePath);
     await ask(STEPS.submitPath);
@@ -786,6 +828,8 @@ async function main() {
             pathHover,
             typeHover,
             typeColour,
+            tc,
+            tcHover,
             program,
             width,
             made,
@@ -943,6 +987,33 @@ function report(page, problems, warnings, asked) {
             page.typeColour.part !== "" &&
                 page.typeColour.part === page.typeColour.path,
         ],
+        [
+            "the tc tab reads the surface of the module and the types of its bodies",
+            page.tc.surface.some(
+                (it) => it.name === "fun main" && it.ty === "() -> Unit",
+            ) &&
+                page.tc.surface.some(
+                    (it) =>
+                        it.name === "fun println-int" &&
+                        it.ty === "(Int) -> Unit",
+                ) &&
+                page.tc.bodies === 1 &&
+                page.tc.nodes.some(
+                    (it) =>
+                        it.kind === "pat" && it.code === "x" && it.ty === "Int",
+                ) &&
+                page.tc.nodes.some(
+                    (it) =>
+                        it.kind === "expr" &&
+                        it.code === "42" &&
+                        it.ty === "Int",
+                ) &&
+                page.tc.errors === 0,
+        ],
+        [
+            "a row of the types is a type of a piece of the code, and marks it in the editor",
+            page.tcHover.count === 1 && page.tcHover.marked !== "",
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 2],
@@ -1009,7 +1080,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Inspect shows the inspector",
             page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 4 &&
+                page.phoneInspector.tabs === 5 &&
                 !page.phoneInspector.overflows,
         ],
         [

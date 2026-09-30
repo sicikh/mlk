@@ -152,6 +152,63 @@ export interface Hir {
     nodes: HirNode[];
 }
 
+/** One entity of the surface of a module and the type it was resolved to. */
+export interface SurfaceType {
+    /** What the entity is: `fun main`, `type Point`. */
+    name: string;
+
+    /** The type it was resolved to, as it reads: `() -> Int`. */
+    ty: string;
+
+    /** Where the declaration is written, in bytes, or nothing where it is written nowhere. */
+    range: [number, number] | null;
+}
+
+/** One node of a body and the type it was checked to. */
+export interface TypedNode {
+    /** What the node is: `expr` or `pat`. */
+    kind: string;
+
+    /** What a node that is written nowhere is called by: `expr #3`. */
+    label: string;
+
+    /** The part of the buffer the node covers, in bytes, or nothing when nothing was written. */
+    range: [number, number] | null;
+
+    /** The type, as it reads: `Int`, `(Int) -> Bool`, `{error}`. */
+    ty: string;
+
+    /** Whether the type is the type of a mistake, which the view paints as one. */
+    error: boolean;
+}
+
+/** The types of the nodes of one checked body. */
+export interface BodyTypes {
+    /** The entity the body belongs to: `fun main`. */
+    owner: string;
+
+    /** Where the declaration that owns the body is written, in bytes. */
+    range: [number, number] | null;
+
+    /** The types of the nodes of the body, in the order they are written in. */
+    nodes: TypedNode[];
+}
+
+/**
+ * What checking the types of a module left, as a host reads it.
+ *
+ * The types are values of the compiler, and what a host shows of them is what a person reads
+ * at a place: the type an entity was resolved to, and the type every node of every body was
+ * checked to.
+ */
+export interface Types {
+    /** The types of the entities of the module, in the order it declares them. */
+    surface: SurfaceType[];
+
+    /** The checked bodies, in the order the module declares them. */
+    bodies: BodyTypes[];
+}
+
 /** Everything the editor shows about one buffer. */
 export interface Analysis {
     /** The concrete syntax tree: lossless, tokens and trivia included. */
@@ -169,7 +226,10 @@ export interface Analysis {
     /** The HIR of the module, or `null` when there is nothing to lower. */
     hir: Hir | null;
 
-    /** What the parser and the lowering reported, in the shape an editor marks the buffer with. */
+    /** What checking the types of the module left, or `null` when there is nothing to check. */
+    types: Types | null;
+
+    /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
     diagnostics: Diagnostic[];
 }
 

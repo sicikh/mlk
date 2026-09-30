@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 mlkc-diagnostics.workspace = true
 mlkc-driver.workspace = true
 mlkc-hir-def.workspace = true
+mlkc-hir-ty.workspace = true
 mlkc-line-index.workspace = true
 mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true

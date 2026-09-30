@@ -9,6 +9,7 @@
     import HirView from "$lib/components/HirView.svelte";
     import Splitter from "$lib/components/Splitter.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
+    import TypeView from "$lib/components/TypeView.svelte";
     import {
         loadDriver,
         type Analysis,
@@ -44,7 +45,7 @@ fun main(): Unit =
     const FIRST = STARTER[0].path;
 
     /** The views of what the compiler makes of the buffer on the right. */
-    type Tab = "diagnostics" | "cst" | "ast" | "hir";
+    type Tab = "diagnostics" | "cst" | "ast" | "hir" | "tc";
 
     /**
      * Which panel a narrow screen shows, where there is room for one at a time.
@@ -142,6 +143,19 @@ fun main(): Unit =
     const diagnostics = $derived(analysis?.diagnostics ?? []);
     const errors = $derived(
         diagnostics.filter((it) => it.level === "error").length,
+    );
+
+    /**
+     * How many nodes of the buffer were checked to the type of a mistake.
+     *
+     * A type of a mistake is a place the checker could not type, which is one thing to look at
+     * in the tab of the types and another to read in the diagnostics; this is the one that says
+     * how much of the tab is that.
+     */
+    const untyped = $derived(
+        (analysis?.types?.bodies ?? [])
+            .flatMap((it) => it.nodes)
+            .filter((it) => it.error).length,
     );
 
     onMount(async () => {
@@ -511,6 +525,16 @@ fun main(): Unit =
                 class:active={tab === "hir"}
                 onclick={() => (tab = "hir")}>HIR</button
             >
+            <button
+                data-tab="tc"
+                class:active={tab === "tc"}
+                onclick={() => (tab = "tc")}
+            >
+                TC
+                {#if untyped > 0}
+                    <span class="badge error">{untyped}</span>
+                {/if}
+            </button>
         </nav>
 
         <div class="view">
@@ -530,6 +554,17 @@ fun main(): Unit =
                 {:else}
                     <AstView
                         value={analysis.ast}
+                        onHover={pointed}
+                        onPick={picked}
+                    />
+                {/if}
+            {:else if tab === "tc"}
+                {#if analysis.types === null}
+                    <p class="empty">There is nothing to check.</p>
+                {:else}
+                    <TypeView
+                        types={analysis.types}
+                        text={find(active)?.text ?? ""}
                         onHover={pointed}
                         onPick={picked}
                     />

@@ -894,6 +894,7 @@ dependencies = [
  "mlkc-diagnostics",
  "mlkc-driver",
  "mlkc-hir-def",
+ "mlkc-hir-ty",
  "mlkc-line-index",
  "mlkc-syntax",
  "mlkc-vfs",

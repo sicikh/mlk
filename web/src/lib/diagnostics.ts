@@ -22,14 +22,14 @@ function letterOf(level: string): string {
 }
 
 /**
- * The code of a diagnostic, as a person reads it: `E0001`.
+ * The code of a diagnostic, as a person reads it: `E0201`.
  *
- * The compiler holds the kind of a diagnostic as a short code within its category,
+ * The compiler holds the category of a diagnostic as `02` and the kind within it as `01`,
  * which is what the CLI prints as `error[0201]`.
- * Here the level leads and the kind's number follows.
+ * Here the level leads and the two numbers follow.
  */
 export function codeOf(diagnostic: Diagnostic): string {
-	return `${letterOf(diagnostic.level)}${diagnostic.code.padStart(4, '0')}`;
+	return `${letterOf(diagnostic.level)}${diagnostic.categoryCode}${diagnostic.code}`;
 }
 
 /** How a level of the compiler is called in an editor. */

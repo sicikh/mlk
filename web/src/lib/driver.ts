@@ -40,6 +40,12 @@ export interface Diagnostic {
     /** `parser` for everything the parser reports. */
     category: string;
 
+    /**
+     * The two digits of the category, in the order the pipeline runs its stages: `02` for the
+     * parser. A code a person reads is these digits and then the kind's.
+     */
+    categoryCode: string;
+
     /** The code of the kind of mistake within its category. */
     code: string;
 

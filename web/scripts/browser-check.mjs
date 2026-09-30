@@ -971,7 +971,12 @@ function report(page, problems, warnings, asked) {
             "the diagnostic is an error",
             (diagnostic.classes ?? []).includes("error"),
         ],
-        ["the diagnostic has a code", /^E\d{4}$/.test(diagnostic.code ?? "")],
+        // The code a person reads leads with the level, then says the stage and the kind:
+        // this one is the parser's first, and the parser is the second stage of the pipeline.
+        [
+            "the code says the stage and the kind",
+            /^E0201$/.test(diagnostic.code ?? ""),
+        ],
         [
             "the diagnostic shows the line it is about",
             /^\d+$/.test(diagnostic.number ?? "") &&

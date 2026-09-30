@@ -325,6 +325,10 @@ struct Diagnostic {
     /// `parser` for everything the parser reports.
     category: String,
 
+    /// The two digits of the category, in the order the pipeline runs its stages: `02` for the
+    /// parser. A code a person reads is these digits and then the kind's.
+    category_code: String,
+
     /// The code of the kind of mistake within its category.
     code: String,
 
@@ -349,6 +353,7 @@ impl Diagnostic {
         Self {
             level: diagnostic.level.as_str().to_string(),
             category: diagnostic.category.as_str().to_string(),
+            category_code: diagnostic.category.as_code().to_string(),
             code: diagnostic.code.to_string(),
             message: diagnostic.message.clone(),
             labels: diagnostic
@@ -807,6 +812,11 @@ mod tests {
 
         assert_eq!(diagnostic.level, "error");
         assert_eq!(diagnostic.category, "parser");
+        assert_eq!(
+            diagnostic.category_code, "02",
+            "the parser is the second stage of the pipeline"
+        );
+        assert_eq!(diagnostic.code, "01");
 
         let label = diagnostic
             .labels

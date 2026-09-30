@@ -473,7 +473,10 @@ mod tests {
         // name the module cannot resolve.
         driver.register_library();
 
-        assert!(driver.set_text("/main.mlk", Some("fun main(): Unit =\n    x\n".to_string())));
+        assert!(driver.set_text(
+            "/main.mlk",
+            Some("fun main(): Unit =\n    let x = 1 in\n    x\n".to_string())
+        ));
         let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
         let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
 
@@ -513,7 +516,11 @@ mod tests {
             ast["fields"]["bom_token"].is_null(),
             "an optional field that is missing is null"
         );
-        assert!(analysis.diagnostics.is_empty(), "the module parses cleanly");
+        assert!(
+            analysis.diagnostics.is_empty(),
+            "the module is one the language accepts: {}",
+            serde_json::to_string(&analysis.diagnostics).unwrap_or_default(),
+        );
     }
 
     #[test]

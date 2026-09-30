@@ -1,7 +1,7 @@
 //! A path as a module wrote it: where it starts, and the names it is made of.
 
 use mlkc_hir_def::{
-    Name, PathAnchor, PathData, PathRoot, PlainPath, TypeRef, path::PathSegmentData,
+    ItemTree, Name, PathAnchor, PathData, PathRoot, PlainPath, TypeRef, path::PathSegmentData,
 };
 use mlkc_rowan::AstNode;
 use mlkc_syntax::{
@@ -26,13 +26,14 @@ pub(crate) struct WrittenName {
     pub(crate) node: SyntaxNode,
 }
 
-/// Collects the names a type is written with, each of them with where it is written.
+/// Collects the names the types written under `node` are rooted at, each with where it is
+/// written.
 ///
 /// A type is a tree of paths --- what a path applies an argument to is a type of its own --- and
-/// a path is rooted at a name or at the project keyword: what is collected is the name of every
-/// path of the type, in the order the paths are written.
-pub(crate) fn written_names(ty: &TypeSyntax, names: &mut Vec<WrittenName>) {
-    for node in ty.syntax().descendants() {
+/// a path is rooted at a name or at the project keyword: what is collected is the root of every
+/// path of every type under `node`, in the order the paths are written.
+pub(crate) fn written_names(node: &SyntaxNode, names: &mut Vec<WrittenName>) {
+    for node in node.descendants() {
         let Some(path_type) = PathType::cast(node) else {
             continue;
         };
@@ -55,7 +56,7 @@ pub(crate) fn written_names(ty: &TypeSyntax, names: &mut Vec<WrittenName>) {
 ///
 /// A path rooted at the project keyword is rooted at no name: what it names is the project the
 /// module is written in, which no module decides.
-fn root_name(path: &Path) -> Option<WrittenName> {
+pub(crate) fn root_name(path: &Path) -> Option<WrittenName> {
     let name = match first_segment(path)?.root().ok()? {
         PathRootSyntax::Name(name) => name,
         PathRootSyntax::Project(_) => return None,
@@ -65,6 +66,49 @@ fn root_name(path: &Path) -> Option<WrittenName> {
         name: syntax::name_of(&name),
         node: name.syntax().clone(),
     })
+}
+
+/// Whether a module may write `name` at the root of a path.
+///
+/// A name a path may be rooted at is a name of the module --- an entity of it, or an import of
+/// it --- or the name of a project the module may name. A name that is neither is a name nothing
+/// resolves, and the module alone decides it: the module is where a reader is told about it
+/// ([ADR-0004]).
+///
+/// [adr-0004]: ../../docs/adr/0004-module-system.md
+pub(crate) fn names_a_name(tree: &ItemTree, name: &Name) -> bool {
+    if tree.scope().get(name).is_some_and(|entry| !entry.is_none()) {
+        return true;
+    }
+
+    tree.scope().project_named(name).is_some()
+}
+
+/// The names a module writes that neither the module nor a project holds, reported where each of
+/// them is written.
+///
+/// A name written where a type belongs is a name of the module --- an entity of it, or an import
+/// of it --- or the name of a project the module may name. A name that is neither is a name that
+/// resolves to nothing wherever it is read, and the module alone decides it: the module is where
+/// a reader is told about it ([ADR-0004]).
+///
+/// [adr-0004]: ../../docs/adr/0004-module-system.md
+pub(crate) fn unresolved(
+    names: &[WrittenName],
+    tree: &ItemTree,
+    file: FileId,
+) -> Vec<LoweringDiag> {
+    names
+        .iter()
+        .filter(|written| !names_a_name(tree, &written.name))
+        .map(|written| {
+            let error = LoweringError::UnresolvedName {
+                name: written.name.clone(),
+            };
+
+            LoweringDiag::new(error, syntax::span(file, &written.node))
+        })
+        .collect()
 }
 
 /// A path as it was written, with no resolution of its root.

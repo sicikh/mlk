@@ -64,6 +64,10 @@ spec_tests! {
     // nothing knows, and the module that knows nothing about a name is the one that reports it.
     unresolved_name: "invalid/unresolved_name.mlk",
 
+    // A body that names something nothing declares: what an expression may be rooted at is
+    // a binding of the body, a name of the module, and a project the module may name.
+    unresolved_name_in_a_body: "invalid/unresolved_name_in_a_body.mlk",
+
     // How far a declaration is visible, and the attributes it carries next to it.
     visibility: "valid/visibility.mlk",
 

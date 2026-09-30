@@ -8,6 +8,23 @@ type Int
 #[builtin]
 type Config
 
+#[builtin]
+type String
+
+// The functions the steps of the pipelines call: a step is a call as any other one, and the
+// text says which function it is a call of.
+#[extern]
+fun load(config: Config): Config
+
+#[extern]
+fun merge(config: Config, defaults: Config): Config
+
+#[extern]
+fun validate(config: Config): Config
+
+#[extern]
+fun write(config: Config, path: String): Config
+
 fun consume(left: Int, right: Int): Int =
     left
 

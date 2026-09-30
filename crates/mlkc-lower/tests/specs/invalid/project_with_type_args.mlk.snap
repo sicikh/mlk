@@ -57,6 +57,7 @@ paths
 336..344: `project::Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
 337..343: the name `String` is not a name of this module, and names no project
 366..372: `project::data::start-app` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+367..371: the name `Bool` is not a name of this module, and names no project
 
 ## Parse Diagnostics
 

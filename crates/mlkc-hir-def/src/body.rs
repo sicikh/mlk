@@ -13,6 +13,7 @@ use mlkc_la_arena::{Arena, ArenaMap, Idx};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    def_map::LocalScope,
     id::{LocalConstId, LocalFunctionId},
     item_data::Signature,
     name::Name,
@@ -388,14 +389,32 @@ impl BodyBuilder {
         self.root = Some(root);
     }
 
-    /// Finishes the body.
+    /// Finishes the body, resolving the anchors the types it writes left unresolved.
+    ///
+    /// Which names the paths of a body are rooted at is what the lowering of the body decides
+    /// --- the bindings of the body are what only it knows --- and a name it left unresolved is
+    /// a name a later stage reads. A type is not such a name: a type is read where a type
+    /// belongs, so the names of it are looked for in the type namespace of the module, which is
+    /// what `scope` is.
     ///
     /// # Panics
     ///
     /// Panics if the body has no root expression.
     /// A body is the body of an entity, and an entity that owns one has a root;
     /// a lowering that forgets to set it is a bug, not an input to recover from.
-    pub fn finish(self) -> Body {
+    pub fn finish(mut self, scope: &LocalScope) -> Body {
+        for path in self.paths.values_mut() {
+            for arg in &mut path.root_args {
+                arg.resolve(scope);
+            }
+
+            for segment in &mut path.segments {
+                for arg in &mut segment.args {
+                    arg.resolve(scope);
+                }
+            }
+        }
+
         debug_assert_eq!(
             self.local_function_roots.iter().count(),
             self.local_functions.len(),
@@ -469,7 +488,7 @@ mod tests {
         });
         builder.set_root(root);
 
-        builder.finish()
+        builder.finish(&LocalScope::default())
     }
 
     #[test]
@@ -486,7 +505,7 @@ mod tests {
         let pat = builder.alloc_pat(Pat::Wildcard);
         builder.push_param(pat);
         builder.set_root(missing);
-        let body = builder.finish();
+        let body = builder.finish(&LocalScope::default());
 
         assert_eq!(body.root(), missing);
         assert_eq!(body.params(), [pat]);
@@ -504,7 +523,7 @@ mod tests {
         let root = builder.alloc_expr(Expr::Literal(Literal::Str(Interned::new_str("hi"))));
         builder.set_local_function_root(local, root);
         builder.set_root(root);
-        let body = builder.finish();
+        let body = builder.finish(&LocalScope::default());
 
         assert_eq!(body.local_function_root(local), Some(root));
         assert_eq!(body[local].name, Name::new("helper"));

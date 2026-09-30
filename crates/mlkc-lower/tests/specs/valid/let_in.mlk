@@ -3,6 +3,12 @@
 #[builtin]
 type Int
 
+#[extern]
+fun f(value: Int): Int
+
+#[extern]
+fun g(left: Int, right: Int): Int
+
 fun nested(): Int =
     let x = 1 in
     let y = 2 in

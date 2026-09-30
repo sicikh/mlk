@@ -15,6 +15,23 @@ type Int
 #[builtin]
 type Config
 
+#[builtin]
+type String
+
+// The functions the steps of the pipelines call: a step is a call as any other one, and the
+// text says which function it is a call of.
+#[extern]
+fun load(config: Config): Config
+
+#[extern]
+fun merge(config: Config, defaults: Config): Config
+
+#[extern]
+fun validate(config: Config): Config
+
+#[extern]
+fun write(config: Config, path: String): Config
+
 fun consume(left: Int, right: Int): Int =
     left
 
@@ -61,34 +78,59 @@ ITEM TREE
   type Config  @2.1
     attributes: #[builtin]
     visibility: private
-  fun consume  @2.2
+  type String  @2.2
+    attributes: #[builtin]
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
-  fun passed  @2.3
+  fun load  @2.3
+    attributes: #[extern]
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
-  fun twice  @2.4
-    visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
-  fun inserted  @2.5
-    visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
-  fun chained  @2.6
-    visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
-  fun configured  @2.7
+    param: Config -> type Config
+    ret: Config -> type Config
+  fun merge  @2.4
+    attributes: #[extern]
     visibility: private
     param: Config -> type Config
     param: Config -> type Config
     ret: Config -> type Config
-  fun summed  @2.8
+  fun validate  @2.5
+    attributes: #[extern]
+    visibility: private
+    param: Config -> type Config
+    ret: Config -> type Config
+  fun write  @2.6
+    attributes: #[extern]
+    visibility: private
+    param: Config -> type Config
+    param: String -> type String
+    ret: Config -> type Config
+  fun consume  @2.7
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun passed  @2.8
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun twice  @2.9
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun inserted  @2.10
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun chained  @2.11
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun configured  @2.12
+    visibility: private
+    param: Config -> type Config
+    param: Config -> type Config
+    ret: Config -> type Config
+  fun summed  @2.13
     visibility: private
     param: Int -> type Int
     param: Int -> type Int
@@ -255,12 +297,12 @@ pats
   pat#3  bind <mlkc@pipeline-1>
 paths
   path#0  config -> binding pat#0
-  path#1  load -> unresolved
-  path#2  merge -> unresolved
+  path#1  load -> fun load
+  path#2  merge -> fun merge
   path#3  defaults -> binding pat#1
   path#4  <mlkc@pipeline-0> -> binding pat#2
-  path#5  validate -> unresolved
-  path#6  write -> unresolved
+  path#5  validate -> fun validate
+  path#6  write -> fun write
   path#7  <mlkc@pipeline-1> -> binding pat#3
 ```
 

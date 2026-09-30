@@ -72,7 +72,7 @@ pub(crate) fn lower(
     // whether an import repeats a declaration is not a question about the order the two were
     // written in, and the two of them are in the tree by now.
     let mut diagnostics = lowering.diagnostics;
-    diagnostics.extend(unresolved(&lowering.names, &item_tree, file));
+    diagnostics.extend(path::unresolved(&lowering.names, &item_tree, file));
     diagnostics.extend(imports_of_declared_names(&item_tree, root, file));
 
     // A reader reads a module from its top, and what lowering found is read the same way: the
@@ -131,37 +131,6 @@ fn module_path(relative: &RelPath) -> PlainPath {
     names.reverse();
 
     PlainPath::from_root(PathRoot::Project, names)
-}
-
-/// The names the surface of a module writes that neither the module nor a project holds.
-///
-/// A name written where a type belongs is a name of the module --- an entity of it, or an import
-/// of it --- or the name of a project the module may name. A name that is neither is a name that
-/// resolves to nothing wherever it is read, and the module alone decides it: the module is where
-/// a reader is told about it ([ADR-0004]).
-///
-/// [adr-0004]: ../../docs/adr/0004-module-system.md
-fn unresolved(names: &[WrittenName], tree: &ItemTree, file: FileId) -> Vec<LoweringDiag> {
-    names
-        .iter()
-        .filter(|written| !names_a_name(tree, &written.name))
-        .map(|written| {
-            let error = LoweringError::UnresolvedName {
-                name: written.name.clone(),
-            };
-
-            LoweringDiag::new(error, syntax::span(file, &written.node))
-        })
-        .collect()
-}
-
-/// Whether a module may name a name: it is a name of the module, or of a project it may name.
-fn names_a_name(tree: &ItemTree, name: &Name) -> bool {
-    if tree.scope().get(name).is_some_and(|entry| !entry.is_none()) {
-        return true;
-    }
-
-    tree.scope().project_named(name).is_some()
 }
 
 /// The names that an import brings in and the module declares.
@@ -383,14 +352,14 @@ impl ItemLowering<'_> {
                 continue;
             };
 
-            path::written_names(&ty, &mut self.names);
+            path::written_names(ty.syntax(), &mut self.names);
         }
 
         if let Some(ty) = decl
             .return_type_annotation()
             .and_then(|annotation| annotation.return_type().ok())
         {
-            path::written_names(&ty, &mut self.names);
+            path::written_names(ty.syntax(), &mut self.names);
         }
     }
 

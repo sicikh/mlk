@@ -1078,6 +1078,7 @@ mod tests {
     use crate::{
         Name,
         body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData, Pat},
+        def_map::LocalScope,
         id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc, UseLoc},
         item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
@@ -1315,7 +1316,7 @@ ITEM TREE
         let literal = builder.alloc_expr(Expr::Literal(Literal::Int(7)));
         builder.set_local_function_root(helper, literal);
 
-        let body = builder.finish();
+        let body = builder.finish(&LocalScope::default());
 
         assert_eq!(
             crate::dump::body(&owner("main"), &body),
@@ -1363,7 +1364,7 @@ functions
         });
         builder.set_root(field);
 
-        let body = builder.finish();
+        let body = builder.finish(&LocalScope::default());
 
         assert_eq!(
             crate::dump::body(&owner("f"), &body),
@@ -1392,7 +1393,7 @@ exprs
         builder.set_local_const_root(constant, literal);
         builder.set_root(literal);
 
-        let body = builder.finish();
+        let body = builder.finish(&LocalScope::default());
 
         assert_eq!(
             crate::dump::body(&owner("pi"), &body),
@@ -1469,7 +1470,7 @@ consts
         builder.set_root(sum);
 
         let owner = owner("f");
-        let node = crate::dump::body_nodes(&owner, &builder.finish());
+        let node = crate::dump::body_nodes(&owner, &builder.finish(&LocalScope::default()));
 
         assert_eq!(node.text(), "BODY fun f in module #0");
         assert_eq!(node.kind, NodeKind::Body);
@@ -1569,7 +1570,7 @@ BODY fun f in module #0
         });
         builder.set_root(call);
 
-        let node = crate::dump::body_nodes(&owner("f"), &builder.finish());
+        let node = crate::dump::body_nodes(&owner("f"), &builder.finish(&LocalScope::default()));
         let call = &node.children[0].children[0];
         // An expression reads one level above the path it is written as: the line of the
         // expression says which expression it is, and the line of the path below it says what
@@ -1608,7 +1609,7 @@ BODY fun f in module #0
         });
         builder.set_root(sum);
 
-        let node = crate::dump::body_nodes(&owner("f"), &builder.finish());
+        let node = crate::dump::body_nodes(&owner("f"), &builder.finish(&LocalScope::default()));
         let sum = &node.children[0].children[0];
 
         // Both names are one path of the body, and each line says so: what tells the lines apart

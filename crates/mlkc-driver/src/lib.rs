@@ -1441,8 +1441,14 @@ mod tests {
     use super::*;
 
     /// A module of the language, written the way a person writes one.
-    const MODULE: &str =
-        "fun main(): Unit =\n    let x = 42 * 2 - 10 in\n    println-int(x + 20)\n";
+    const MODULE: &str = "\
+#[extern]
+fun println-int(value: Int): Unit
+
+fun main(): Unit =
+    let x = 42 * 2 - 10 in
+    println-int(x + 20)
+";
 
     /// The same module with the `in` of the `let` missing.
     const BROKEN: &str = "fun main(): Unit =\n    let x = 1\n";
@@ -1604,7 +1610,7 @@ fun get(): Point = get()
             .module_root()
             .expect("the root of a module to be a module");
 
-        assert_eq!(root.items().len(), 1);
+        assert_eq!(root.items().len(), 2);
     }
 
     #[test]
@@ -1652,11 +1658,12 @@ fun get(): Point = get()
 
         let lowered = driver.lower(file).expect("the file to be lowered");
 
-        // The module declares `main`, and the prelude of the language brings in two more names.
+        // The module declares `println-int` and `main`, and the prelude of the language brings
+        // in two more names.
         assert_eq!(
             lowered.item_tree().scope().len(),
-            3,
-            "three names are declared"
+            4,
+            "four names are declared"
         );
         assert_eq!(lowered.bodies().len(), 1, "one entity owns a body");
 
@@ -1736,6 +1743,24 @@ fun get(): Point = get()
     }
 
     #[test]
+    fn a_mistake_of_a_body_travels_with_the_diagnostics_of_the_file() {
+        // A body is lowered from the item tree of the module, and a name it is written with is
+        // lowered with it: what a body says wrong is a mistake of the module, and a host reads
+        // it for the file like any other.
+        let (mut driver, file) = driver_with_std("main.mlk", "fun main(): Unit =\n    nope(1)\n");
+
+        let diagnostics = driver.diagnostics(file).expect("the file to be diagnosed");
+
+        assert_eq!(diagnostics.lowering().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.lowering()[0];
+
+        assert_eq!(diagnostic.category, Category::Lowering);
+        assert_eq!(diagnostic.level, Level::Error);
+        assert_eq!(diagnostic.code, "15");
+    }
+
+    #[test]
     fn a_lowered_module_is_the_value_the_slot_holds() {
         let (mut driver, file) = driver_with("main.mlk", MODULE);
         let first = driver.lower(file).expect("the file to be lowered");
@@ -1753,7 +1778,7 @@ fun get(): Point = get()
         let after = driver.lower(file).expect("the file to be lowered");
 
         assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
-        assert_eq!(before.item_tree().scope().len(), 3, "the old value stands");
+        assert_eq!(before.item_tree().scope().len(), 4, "the old value stands");
         assert_eq!(
             after.item_tree().scope().len(),
             3,
@@ -2591,15 +2616,15 @@ fun get(): Point = get()
         ));
         assert_eq!(
             index.line_count(),
-            4,
-            "three lines of source and the line the trailing break makes"
+            7,
+            "six lines of source and the line the trailing break makes"
         );
         assert_eq!(
-            &MODULE[index.line_range(2).expect("a third line")],
+            &MODULE[index.line_range(5).expect("a sixth line")],
             "    println-int(x + 20)"
         );
         assert_eq!(index.line_col(MODULE.text_len()), LineCol {
-            line: 3,
+            line: 6,
             col: 0
         });
 

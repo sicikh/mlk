@@ -2,8 +2,19 @@
 // it; a sign in front of an expression reads the same way, and a path names a value the way
 // it names a type.
 
+use project::data
+
 #[builtin]
 type Int
+
+#[extern]
+fun f(left: Int, right: Int): Int
+
+#[extern]
+fun g(value: Int): Int
+
+#[extern]
+fun h(left: Int, right: Int): Int
 
 fun products(): Int =
     42 * 2 - 10

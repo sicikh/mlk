@@ -128,12 +128,13 @@ pub enum LoweringError {
         /// The declaration the name denotes.
         declaration: EntityLoc,
     },
-    /// A name the surface of the module is written with is not a name the module may name.
+    /// A name the module is written with is not a name the module may write.
     ///
     /// A name written where a type belongs is a name of the module --- an entity of it, or an
-    /// import of it --- or the name of a project the module may name. A name that is neither is
-    /// a name nothing resolves, and that the module alone decides: the module is where a reader
-    /// is told about it ([ADR-0004][adr-0004]).
+    /// import of it --- or the name of a project the module may name; a name written where
+    /// a value belongs is one of those, or a binding of the body it is written in. A name that
+    /// is none of them is a name nothing resolves, and that the module alone decides: the
+    /// module is where a reader is told about it ([ADR-0004][adr-0004]).
     ///
     /// [adr-0004]: ../../docs/adr/0004-module-system.md
     UnresolvedName {

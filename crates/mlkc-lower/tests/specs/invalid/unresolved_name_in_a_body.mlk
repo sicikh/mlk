@@ -1,0 +1,17 @@
+// A body that names something nothing declares: a name an expression is written with is
+// a binding of the body, a name of the module, or the name of a project the module may name,
+// and a name that is none of them is a name nothing denotes --- the module is told about the
+// name where it is written. A name a type of the body is rooted at is read the same way.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Point
+
+#[extern]
+fun declared(value: Point): Point
+
+fun main(): Point =
+    let bound = declared(1) in
+    bound + declared[Point](1) + declared[Missing](1)

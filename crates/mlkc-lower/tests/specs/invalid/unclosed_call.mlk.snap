@@ -8,6 +8,9 @@ expression: snapshot
 // A call that is never closed: the argument before the mistake is read, and the call is a
 // call of what the parser could read of it.
 
+#[extern]
+fun f(left: Int, right: Int): Int
+
 fun main(): Int =
     f(1, 2
 
@@ -19,7 +22,13 @@ fun main(): Int =
 MODULE #0 project::unclosed_call
 
 ITEM TREE
-  fun main  @2.0
+  fun f  @2.0
+    attributes: #[extern]
+    visibility: private
+    param: Int -> use Int
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun main  @2.1
     visibility: private
     ret: Int -> use Int
   use Int  prelude
@@ -42,7 +51,7 @@ exprs
   expr#2  literal 2
   expr#3  call expr#0 (expr#1, expr#2)
 paths
-  path#0  f -> unresolved
+  path#0  f -> fun f
 ```
 
 ## Lowering Diagnostics
@@ -51,4 +60,4 @@ No diagnostics.
 
 ## Parse Diagnostics
 
-166..166: expected `)` but instead the file ends
+211..211: expected `)` but instead the file ends

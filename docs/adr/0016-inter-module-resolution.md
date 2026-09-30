@@ -129,6 +129,11 @@ that it sees surfaces and never bodies — stands.
 The paths inside a _body_ are not resolved here.
 A body is a unit of its own, and the stage that reads it — the check —
 resolves its paths against the same values with the same function.
+What the lowering of a body does read is the names the paths of it are rooted at --- the paths of
+its expressions, and the types they are written with: a binding of the body, a name of the module,
+and the name of a project are what such a name may be, and a name that is none of them is
+a mistake that has nothing to do with another module, so it is reported where the body wrote it
+(_The diagnostics_ below).
 The split is the one the language already makes:
 a module's meaning is its surface, and a body of it cannot change what another module reads ([ADR-0004][0004-module-system.md]).
 
@@ -314,21 +319,23 @@ will enter: the name after a class is what a type decides, not what the text dec
 
 One family of errors, one place each ([ADR-0009][0009-pass-contract.md], [ADR-0012][0012-split-the-dot-operator.md]):
 
-| What went wrong                                                           | Where it is reported                            |
-| ------------------------------------------------------------------------- | ----------------------------------------------- |
-| a name of the surface is no name of the module and no project it may name | the name, in the type that writes it            |
-| a path starts with a name that is no project the module may name          | the path, in the module that wrote it           |
-| a path names no module of the project it is read in                       | the path                                        |
-| a module a path reaches does not export the name the path ends at         | the path                                        |
-| the name the path ends at is a name the module holds and does not show    | the path, and the look taken once a walk failed |
-| a name of another namespace of the module is written where a type belongs | the name, in the type that writes it            |
-| an import resolves to nothing and a name it brought in is used as a type  | the name, in the type that writes it            |
-| a re-export chain returns to where it started                             | the import that closes the cycle                |
-| two modules of one project declare one path                               | each module's preamble, or its file             |
+| What went wrong                                                                | Where it is reported                            |
+| ------------------------------------------------------------------------------ | ----------------------------------------------- |
+| a name written where a type or a value belongs is no name the module may write | the name, where the path is rooted              |
+| a path starts with a name that is no project the module may name               | the path, in the module that wrote it           |
+| a path names no module of the project it is read in                            | the path                                        |
+| a module a path reaches does not export the name the path ends at              | the path                                        |
+| the name the path ends at is a name the module holds and does not show         | the path, and the look taken once a walk failed |
+| a name of another namespace of the module is written where a type belongs      | the name, in the type that writes it            |
+| an import resolves to nothing and a name it brought in is used as a type       | the name, in the type that writes it            |
+| a re-export chain returns to where it started                                  | the import that closes the cycle                |
+| two modules of one project declare one path                                    | each module's preamble, or its file             |
 
 The first of the rows is the lowering's rather than the resolution's: whether a name is one the
 module may write at all is decided by the module and the names it is given with — nothing
 outside is read for it — so the module is where a reader is told ([ADR-0004][0004-module-system.md]).
+A name written where a value belongs is read against the bindings of the body it is written in,
+which only the body knows, so the lowering of the body is where such a name is reported.
 What a name the module knows denotes is the rest of the project's to decide.
 A name a module keeps to itself is the one thing told beyond the interfaces of other modules:
 the walk finds a name the module does not show as a name that is not there, and telling the two

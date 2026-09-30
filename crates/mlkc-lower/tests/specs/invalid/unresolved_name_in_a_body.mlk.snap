@@ -1,0 +1,91 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A body that names something nothing declares: a name an expression is written with is
+// a binding of the body, a name of the module, or the name of a project the module may name,
+// and a name that is none of them is a name nothing denotes --- the module is told about the
+// name where it is written. A name a type of the body is rooted at is read the same way.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Point
+
+#[extern]
+fun declared(value: Point): Point
+
+fun main(): Point =
+    let bound = declared(1) in
+    bound + declared[Point](1) + declared[Missing](1)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::unresolved_name_in_a_body
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  type Point  @2.1
+    attributes: #[builtin]
+    visibility: private
+  fun declared  @2.2
+    attributes: #[extern]
+    visibility: private
+    param: Point -> type Point
+    ret: Point -> type Point
+  fun main  @2.3
+    visibility: private
+    ret: Point -> type Point
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#12
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  literal 1
+  expr#6  call expr#4 (expr#5)
+  expr#7  binary expr#3 + expr#6
+  expr#8  path path#3
+  expr#9  literal 1
+  expr#10  call expr#8 (expr#9)
+  expr#11  binary expr#7 + expr#10
+  expr#12  let pat#0 = expr#2 in expr#11
+pats
+  pat#0  bind bound
+paths
+  path#0  declared -> fun declared
+  path#1  bound -> binding pat#0
+  path#2  declared[Point -> type Point] -> fun declared
+  path#3  declared[Missing -> unresolved] -> fun declared
+```
+
+## Lowering Diagnostics
+
+550..557: the name `Missing` is not a name of this module, and names no project
+
+## Parse Diagnostics
+
+No diagnostics.

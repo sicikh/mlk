@@ -1,5 +1,8 @@
 // A call that is never closed: the argument before the mistake is read, and the call is a
 // call of what the parser could read of it.
 
+#[extern]
+fun f(left: Int, right: Int): Int
+
 fun main(): Int =
     f(1, 2

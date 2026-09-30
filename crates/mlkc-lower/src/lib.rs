@@ -23,9 +23,10 @@
 //!   the binding: only the body knows its own names;
 //! - it says where every node of a body is written ([`BodySourceMap`]), since it is the only
 //!   stage that knows which syntax a node was read from;
-//! - it reports a name the surface of the module is written with that is neither a name of the
-//!   module --- an entity of it, or an import of it --- nor the name of a project the module may
-//!   name: the module alone decides it, and the module is where a reader is told about it
+//! - it reports a name the module is written with --- in its surface, or in a body, where
+//!   a binding of the body is a name as well --- that is neither a name of the module --- an
+//!   entity of it, or an import of it --- nor the name of a project the module may name: the
+//!   module alone decides it, and the module is where a reader is told about it
 //!   ([ADR-0004], [ADR-0016]);
 //! - it reports what the HIR cannot hold, and nothing else: an attribute that the language
 //!   has no meaning for is the one thing a module can say that has nowhere to go.

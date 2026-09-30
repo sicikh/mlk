@@ -52,13 +52,25 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
 
     let BodyLowering {
         builder,
-        diagnostics,
+        mut diagnostics,
         source_map,
         ..
     } = lowering;
 
+    // The names the types written in the body are rooted at: a type is read where a type belongs,
+    // so a name of the module, an import of it, or a project is what one may be rooted at, and
+    // a name that is none of them is what the module is told about ([`path::unresolved`]).
+    let mut names = Vec::new();
+    path::written_names(body.syntax(), &mut names);
+    diagnostics.extend(path::unresolved(&names, tree, tree.module().0));
+
+    // A reader reads a body from its top, and what lowering found is read the same way: the
+    // rules are checked in the order the expressions are walked, and the mistakes are ordered by
+    // where they are written rather than by when they were found.
+    diagnostics.sort_by_key(|diagnostic| diagnostic.span().range.start());
+
     Some(LoweredBody {
-        body: builder.finish(),
+        body: builder.finish(tree.scope()),
         diagnostics,
         source_map,
     })
@@ -183,6 +195,10 @@ impl BodyLowering<'_> {
     /// it. A path rooted at a project is none of a body's business either: what the keyword
     /// names is the project the module is written in, and a name is read against what the
     /// module may name, which is the scope of the module as much as the body's own bindings.
+    ///
+    /// A path the body can give no meaning to at all is what the body reports: a name that is
+    /// no binding of it, no name of the module, and no project the module may name is a name
+    /// nothing denotes ([`BodyLowering::report_unresolved`]).
     fn path_data(&mut self, path: &PathSyntax) -> PathData {
         let mut data = path::data(path, self.file(), &mut self.diagnostics);
 
@@ -202,7 +218,39 @@ impl BodyLowering<'_> {
         };
         data.anchor = anchor;
 
+        if matches!(data.anchor, PathAnchor::Unresolved) {
+            self.report_unresolved(path, name);
+        }
+
         data
+    }
+
+    /// Reports the name a path is rooted at when nothing the body knows denotes it.
+    ///
+    /// A name an expression is written with is a binding of the body, a name of the module, or
+    /// the name of a project the module may name ([`path::names_a_name`]). A name the module
+    /// knows in another namespace is a mistake of its own, which the stage that holds the scopes
+    /// reads, and so is the name of a binding a path goes on after: what the names after a name
+    /// denote is a name *inside* what it denotes, which the language has yet to have. What is
+    /// reported here is a name that is not there at all, which the module alone decides
+    /// ([ADR-0004]).
+    ///
+    /// [adr-0004]: ../../docs/adr/0004-module-system.md
+    fn report_unresolved(&mut self, path: &PathSyntax, name: &Name) {
+        if self.binding(name).is_some() || path::names_a_name(self.tree, name) {
+            return;
+        }
+
+        // A path the parser could not read has no name where it is rooted, and the parse is what
+        // a reader is told about it.
+        let Some(written) = path::root_name(path) else {
+            return;
+        };
+
+        let error = LoweringError::UnresolvedName { name: name.clone() };
+        let diagnostic = LoweringDiag::new(error, span(self.file(), &written.node));
+
+        self.diagnostics.push(diagnostic);
     }
 
     /// The value a string literal holds, with the escapes of the language decoded.
@@ -644,5 +692,121 @@ fun main(): Int = 1
         let body = crate::lower_body(&lowered.item_tree, &main).expect("a body");
         assert!(body.diagnostics.is_empty());
         assert_eq!(body.body[body.body.root()], Expr::Literal(Literal::Int(1)),);
+    }
+
+    #[test]
+    fn a_name_nothing_denotes_is_reported_where_the_expression_writes_it() {
+        let source = "\
+fun declared(value: Int): Int =
+    value
+
+fun main(): Int =
+    let bound = declared(1) in
+    bound + nope(2)
+";
+        let parsed = mlkc_parser::parse(source);
+        let root = parsed.tree::<ModuleRoot>();
+        let lowered = crate::lower_module(
+            ModuleId(FileId::from_raw(0)),
+            &root,
+            Prelude::standard(),
+            &[],
+            relative().as_path(),
+        );
+
+        let main = declaration(&root, &lowered, "main");
+        let body = crate::lower_body(&lowered.item_tree, &main).expect("a body");
+
+        // What an expression may be rooted at is a binding of the body, a name of the module,
+        // and a project the module may name; a name that is none of them is reported where it is
+        // written, and the body is the only stage that reads it.
+        let messages: Vec<String> = body
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.error().message())
+            .collect();
+
+        assert_eq!(messages, [
+            "the name `nope` is not a name of this module, and names no project",
+        ]);
+    }
+
+    #[test]
+    fn a_name_the_body_knows_is_not_a_name_nothing_denotes() {
+        let source = "\
+#[builtin]
+type Point
+
+fun declared(value: Int): Int =
+    value
+
+fun main(): Int =
+    let bound = declared(1) in
+    bound::get() + declared::get() + Point::make()
+";
+        let parsed = mlkc_parser::parse(source);
+        let root = parsed.tree::<ModuleRoot>();
+        let lowered = crate::lower_module(
+            ModuleId(FileId::from_raw(0)),
+            &root,
+            Prelude::standard(),
+            &[],
+            relative().as_path(),
+        );
+
+        let main = declaration(&root, &lowered, "main");
+        let body = crate::lower_body(&lowered.item_tree, &main).expect("a body");
+
+        // A binding the body made, a name of the module written where a path root is not read,
+        // and a name of another namespace are names the body knows: what the names after one of
+        // them denote is the language's business, and not a name that is not there.
+        assert!(body.diagnostics.is_empty(), "{:?}", body.diagnostics);
+    }
+
+    #[test]
+    fn a_type_a_body_writes_is_anchored_and_a_name_it_cannot_name_is_reported() {
+        let source = "\
+#[builtin]
+type Point
+
+#[extern]
+fun declared(value: Point): Point
+
+fun main(): Point =
+    declared[Point](1) + declared[Missing](1)
+";
+        let parsed = mlkc_parser::parse(source);
+        let root = parsed.tree::<ModuleRoot>();
+        let lowered = crate::lower_module(
+            ModuleId(FileId::from_raw(0)),
+            &root,
+            Prelude::standard(),
+            &[],
+            relative().as_path(),
+        );
+
+        let main = declaration(&root, &lowered, "main");
+        let body = crate::lower_body(&lowered.item_tree, &main).expect("a body");
+
+        // A type written in a body is a type like any other: a name of the module is what its
+        // root is read as, and a name the module knows nothing of is reported where it is
+        // written, as the name of an expression is.
+        let dumped = mlkc_hir_def::dump::body(&lowered.bodies[0].owner, &body.body);
+
+        assert!(dumped.contains("declared[Point -> type Point]"), "{dumped}");
+        assert!(
+            dumped.contains("declared[Missing -> unresolved]"),
+            "{dumped}"
+        );
+
+        let messages: Vec<String> = body
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.error().message())
+            .collect();
+
+        assert_eq!(messages, [
+            "the name `Missing` is not a name of this module, and names no project",
+        ]);
     }
 }

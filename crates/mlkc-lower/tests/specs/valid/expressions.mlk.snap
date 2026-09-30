@@ -9,8 +9,19 @@ expression: snapshot
 // it; a sign in front of an expression reads the same way, and a path names a value the way
 // it names a type.
 
+use project::data
+
 #[builtin]
 type Int
+
+#[extern]
+fun f(left: Int, right: Int): Int
+
+#[extern]
+fun g(value: Int): Int
+
+#[extern]
+fun h(left: Int, right: Int): Int
 
 fun products(): Int =
     42 * 2 - 10
@@ -47,34 +58,54 @@ fun qualified_call(): Int =
 MODULE #0 project::expressions
 
 ITEM TREE
-  type Int  @2.0
+  use data  @2.0
+    path: project::data
+    visibility: private
+  type Int  @2.1
     attributes: #[builtin]
     visibility: private
-  fun products  @2.1
+  fun f  @2.2
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun g  @2.3
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun h  @2.4
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun products  @2.5
     visibility: private
     ret: Int -> type Int
-  fun comparisons  @2.2
+  fun comparisons  @2.6
     visibility: private
     ret: Int -> type Int
-  fun logic  @2.3
+  fun logic  @2.7
     visibility: private
     ret: Int -> type Int
-  fun parentheses  @2.4
+  fun parentheses  @2.8
     visibility: private
     ret: Int -> type Int
-  fun calls  @2.5
+  fun calls  @2.9
     visibility: private
     ret: Int -> type Int
-  fun signs  @2.6
+  fun signs  @2.10
     visibility: private
     ret: Int -> type Int
-  fun negated_call  @2.7
+  fun negated_call  @2.11
     visibility: private
     ret: Int -> type Int
-  fun path_to_a_value  @2.8
+  fun path_to_a_value  @2.12
     visibility: private
     ret: Int -> type Int
-  fun qualified_call  @2.9
+  fun qualified_call  @2.13
     visibility: private
     ret: Int -> type Int
   use Int  prelude
@@ -164,9 +195,9 @@ exprs
   expr#7  call expr#4 (expr#5, expr#6)
   expr#8  call expr#0 (expr#3, expr#7)
 paths
-  path#0  f -> unresolved
-  path#1  g -> unresolved
-  path#2  h -> unresolved
+  path#0  f -> fun f
+  path#1  g -> fun g
+  path#2  h -> fun h
 ```
 
 ```
@@ -194,7 +225,7 @@ exprs
   expr#2  call expr#0 (expr#1)
   expr#3  unary - expr#2
 paths
-  path#0  f -> unresolved
+  path#0  f -> fun f
 ```
 
 ```
@@ -206,7 +237,7 @@ exprs
   expr#1  literal 1
   expr#2  call expr#0 (expr#1)
 paths
-  path#0  data::main-module::start-app -> unresolved
+  path#0  data::main-module::start-app -> use data
 ```
 
 ```

@@ -10,6 +10,12 @@ expression: snapshot
 #[builtin]
 type Int
 
+#[extern]
+fun f(value: Int): Int
+
+#[extern]
+fun g(left: Int, right: Int): Int
+
 fun nested(): Int =
     let x = 1 in
     let y = 2 in
@@ -38,16 +44,27 @@ ITEM TREE
   type Int  @2.0
     attributes: #[builtin]
     visibility: private
-  fun nested  @2.1
+  fun f  @2.1
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun g  @2.2
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun nested  @2.3
     visibility: private
     ret: Int -> type Int
-  fun ignored  @2.2
+  fun ignored  @2.4
     visibility: private
     ret: Int -> type Int
-  fun bound_to_a_call  @2.3
+  fun bound_to_a_call  @2.5
     visibility: private
     ret: Int -> type Int
-  fun shadows_a_parameter  @2.4
+  fun shadows_a_parameter  @2.6
     visibility: private
     param: Int -> type Int
     ret: Int -> type Int
@@ -109,8 +126,8 @@ exprs
 pats
   pat#0  bind x
 paths
-  path#0  f -> unresolved
-  path#1  g -> unresolved
+  path#0  f -> fun f
+  path#1  g -> fun g
   path#2  x -> binding pat#0
 ```
 

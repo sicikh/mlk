@@ -23,6 +23,9 @@ type Name
 #[builtin]
 type Data
 
+#[builtin]
+type Map
+
 fun load(config: Config): Config =
     config
 
@@ -74,39 +77,42 @@ ITEM TREE
   type Data  @2.4
     attributes: #[builtin]
     visibility: private
-  fun load  @2.5
+  type Map  @2.5
+    attributes: #[builtin]
+    visibility: private
+  fun load  @2.6
     visibility: private
     param: Config -> type Config
     ret: Config -> type Config
-  fun validate  @2.6
+  fun validate  @2.7
     visibility: private
     param: Config -> type Config
     ret: Config -> type Config
-  fun start  @2.7
+  fun start  @2.8
     visibility: private
     param: Config -> type Config
     ret: Int -> type Int
-  fun chained  @2.8
+  fun chained  @2.9
     visibility: private
     param: Config -> type Config
     ret: Int -> type Int
-  fun insert  @2.9
+  fun insert  @2.10
     visibility: private
     param: Persons -> type Persons
     param: Name -> type Name
     param: Data -> type Data
     ret: Persons -> type Persons
-  fun add  @2.10
+  fun add  @2.11
     visibility: private
     param: Persons -> type Persons
     param: Name -> type Name
     param: Data -> type Data
     ret: Persons -> type Persons
-  fun port  @2.11
+  fun port  @2.12
     visibility: private
     param: Config -> type Config
     ret: Int -> type Int
-  fun loaded_port  @2.12
+  fun loaded_port  @2.13
     visibility: private
     param: Config -> type Config
     ret: Int -> type Int

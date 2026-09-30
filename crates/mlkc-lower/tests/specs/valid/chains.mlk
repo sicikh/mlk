@@ -16,6 +16,9 @@ type Name
 #[builtin]
 type Data
 
+#[builtin]
+type Map
+
 fun load(config: Config): Config =
     config
 

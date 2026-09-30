@@ -106,20 +106,12 @@ impl TypeError {
                 function,
                 parameter: Some(index),
             } => {
-                format!(
-                    "`{function:?}` does not declare the type of its parameter #{index}, and the \
-                     first check does not infer the signature of a top-level function",
-                )
+                format!("`{function:?}` does not declare the type of its parameter #{index}")
             },
             Self::MissingType {
                 function,
                 parameter: None,
-            } => {
-                format!(
-                    "`{function:?}` does not declare the type of its result, and the first check \
-                     does not infer the signature of a top-level function",
-                )
-            },
+            } => format!("`{function:?}` does not declare the type of its result"),
             Self::NotAType { name } => {
                 format!("the name `{name:?}` does not denote a type, and a type belongs here")
             },
@@ -127,14 +119,10 @@ impl TypeError {
                 format!("the name `{name:?}` does not denote a value, and a value belongs here")
             },
             Self::TypeArguments { name } => {
-                format!(
-                    "the name `{name:?}` is applied to type arguments, and the language has no generics yet"
-                )
+                format!("the name `{name:?}` is applied to type arguments")
             },
             Self::NestedName { name } => {
-                format!(
-                    "`{name:?}` is a name inside something, and the language has no members yet"
-                )
+                format!("`{name:?}` is a name written inside something")
             },
             Self::NotCallable { found } => {
                 format!("a value of type `{found}` is called, and a function is what a call calls")
@@ -155,6 +143,55 @@ impl TypeError {
                  types of a module are resolved before its bodies are checked"
                     .to_owned()
             },
+        }
+    }
+
+    /// What a host writes under the place it marks, in a few words.
+    ///
+    /// The message is the headline of the error;
+    /// the label is the part of it that belongs to the place,
+    /// which is what an editor shows where the caret stands.
+    pub fn label(&self) -> String {
+        match self {
+            Self::MissingType {
+                parameter: Some(_), ..
+            } => "the type of this parameter is not written".to_owned(),
+            Self::MissingType {
+                parameter: None, ..
+            } => "the type of this result is not written".to_owned(),
+            Self::NotAType { .. } => "a type belongs here".to_owned(),
+            Self::NotAValue { .. } => "a value belongs here".to_owned(),
+            Self::TypeArguments { .. } => "a class takes no arguments".to_owned(),
+            Self::NestedName { .. } => "the language has no members yet".to_owned(),
+            Self::NotCallable { found } => format!("`{found}` is not a function"),
+            Self::ArgumentCount { expected, .. } => {
+                format!("the function takes {expected} arguments")
+            },
+            Self::ParameterCount { expected, .. } => {
+                format!("the declaration takes {expected} parameters")
+            },
+            Self::TypeMismatch { expected, found } => {
+                format!("expected `{expected}`, found `{found}`")
+            },
+            Self::RecursiveType => "this type contains itself".to_owned(),
+            Self::Unresolved { .. } | Self::MissingSignature => String::new(),
+        }
+    }
+
+    /// What the error has to add beyond the place it is at: a reason, a hint, a next step.
+    pub fn notes(&self) -> Vec<String> {
+        match self {
+            Self::MissingType { .. } => {
+                vec![
+                    "the first check does not infer the signature of a top-level function: every \
+                 top-level declaration writes its types, and inference of them is deferred"
+                        .to_owned(),
+                ]
+            },
+            Self::TypeArguments { .. } => {
+                vec!["the language has no generics yet".to_owned()]
+            },
+            _ => Vec::new(),
         }
     }
 }
@@ -265,14 +302,33 @@ impl TypeDiag {
         &self.place
     }
 
-    /// The diagnostic a host renders: the error, its kind, and the span of the place.
+    /// The diagnostic a host renders: the error, its kind, the span of the place, and the words
+    /// that belong under it.
     ///
     /// The span is the driver's: a pass knows the HIR and not the file, and where a node of the
     /// HIR is written is what the driver holds ([ADR-0009]).
     ///
     /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
     pub fn to_diagnostic(&self, span: Span) -> Diagnostic {
-        Diagnostic::from_kind(&self.error, self.error.message()).with_primary(span, "")
+        self.to_diagnostic_with(span, self.error.message())
+    }
+
+    /// The diagnostic a host renders, with the message the caller reads the error by.
+    ///
+    /// A check of a body walks the paths of the body itself, and a name a walk could not find
+    /// may be a name a module keeps to itself: the driver tells that by rendering the error with
+    /// the message of the look rather than the message of the walk ([ADR-0017]).
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    pub fn to_diagnostic_with(&self, span: Span, message: impl Into<String>) -> Diagnostic {
+        let mut diagnostic =
+            Diagnostic::from_kind(&self.error, message).with_primary(span, self.error.label());
+
+        for note in self.error.notes() {
+            diagnostic = diagnostic.with_note(note);
+        }
+
+        diagnostic
     }
 }
 

@@ -343,12 +343,23 @@ and the types it is about,
 so the driver renders it with the source map it already holds,
 and a type is rendered by a function next to `Ty` itself,
 from the names inside its `EntityLoc`s, with no store to consult.
+A check walks the paths of a body, which a resolution never reads,
+so the check is the first to report what those paths name ---
+and a name the walk could not find may be a name a module keeps to itself:
+the rendering takes the same look a resolution's rendering takes (`hidden_name`),
+and reports it as kept.
 
 **The builtins are a table, not a type.**
-`Int` and `Unit` are ordinary classes;
-the operators of the HIR and the `#[builtin]` declarations are given types by a table inside the
-checker, which is where the first `impl`s will replace it.
+`Int`, `Unit`, `String`, and `Bool` are ordinary classes;
+the operators of the HIR and the literals are given types by a table inside the checker,
+which is where the first `impl`s will replace it.
 No type of the language is special in the representation.
+The classes the table holds are the ones the standard library declares with `#[builtin]`:
+the driver reads them off `std::core` and hands them over as `Builtins`,
+which holds the four and nothing else ---
+not an `Option`, because a caller that checks a body always has them.
+A driver whose host recorded no library holds no classes and checks no types:
+what a literal is is nothing the checker can say.
 
 **Explicitly temporary.**
 The algorithm, the tables, the wording of the diagnostics, and the crate that holds them
@@ -392,6 +403,11 @@ and the dump is a function of those values alone.
 - A body edit cannot change what its module shows:
   every signature is written, and a surface is resolved from signatures alone,
   so an edit inside a body invalidates the check of that body and nothing that reads the module.
+- A check is retained like every other value ([ADR-0008][0008-compiler-driver.md]):
+  the driver keys it by the body, the resolution, the closure, and the surfaces it read,
+  and a check that recomputes to the same value is the value the driver held,
+  so a body edit moves neither the bodies that did not change
+  nor the diagnostics rendered from them.
 - Bodies are independent units of work:
   a check reads its own body, the surface of its module, and the surfaces of the modules it names,
   so the bodies of a module are checked in parallel the way the modules of a project are
@@ -402,9 +418,9 @@ and the dump is a function of those values alone.
 - The checker is replaceable:
   improving it, or throwing it away for a constraint solver or an `impl`-driven one,
   touches nothing that stores a type.
-- The standard library is not privileged:
-  `Int` and `Unit` are classes of `std`,
-  so the compiler carries no primitive-type table in its representation.
+- The classes of the language are declarations, not a primitive table:
+  `Int`, `Unit`, `String`, and `Bool` are classes the standard library declares `#[builtin]`,
+  and the compiler carries no primitive-type table in its representation.
 - Renaming and inserting entities move no type
   ([ADR-0010][0010-stable-entity-identity.md]):
   a type keys on names, and a name is what a revision preserves.
@@ -424,6 +440,9 @@ and the dump is a function of those values alone.
 - The first checker is a promise to be rewritten:
   it will have no user-written generics, no `impl`s, and not the diagnostics the language
   deserves, and code that grows around its limits is code to revisit.
+- A driver whose host recorded no standard library checks no types:
+  the classes of the language are what the library declares,
+  so there is nothing for a literal or an operator to be.
 - The representation is a commitment:
   a feature it cannot express as new variants and rules supersedes this record.
 
@@ -561,7 +580,7 @@ Wait until the language settles, then write the real one.
 - Bidirectional typing: <https://arxiv.org/abs/1908.05839>
 - rust-analyzer's resolved types: <https://github.com/rust-lang/rust-analyzer/tree/master/crates/hir-ty>
 - Implementation: `mlkc-hir-ty` (the values), `mlkc-typeck` (the temporary pass),
-  and, to come, new slots of [mlkc-driver]
+  and the slots of [mlkc-driver] that hold them and render their diagnostics
 
 [0003-id-based-ir.md]: 0003-id-based-ir.md
 [0004-module-system.md]: 0004-module-system.md

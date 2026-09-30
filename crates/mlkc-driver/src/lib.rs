@@ -4,13 +4,14 @@
 //! and the only one that decides what has to be recomputed.
 //! The pipeline it drives is the compiler pipeline;
 //! today that pipeline is the parser, the lowering of a module into the HIR,
-//! and the resolution of a module against the interfaces of the modules its paths name,
+//! the resolution of a module against the interfaces of the modules its paths name,
+//! and the check of the types of the module and of each of its bodies,
 //! so the table holds the values that are derived from the text of a file:
 //! the parse, the HIR, the interface of the module it is,
-//! the resolution of its names and the diagnostics of all three,
+//! the resolution of its names, the types of its entities, the check of every body,
+//! and the diagnostics of all of them,
 //! and the line index positions are read with --- and, per project,
-//! the module index and the def map. The units that follow --- the checked bodies ---
-//! are more slots in the same table rather than a different design.
+//! the module index and the def map.
 //!
 //! Three rules are visible in the code.
 //!
@@ -29,16 +30,39 @@
 //! # The diagnostics of a file
 //!
 //! Every stage reports its own, and what a host reads is the [`Diagnostics`] of a file: what
-//! the parser reported, what the lowering of the module reported, and what the resolution of
-//! it found, each of them the value the stage left. No stage's diagnostics are copied into
-//! another stage's, and a mistake one stage reports is not a reason to render what the stages
-//! around it reported again.
+//! the parser reported, what the lowering of the module reported, what the resolution of it
+//! found, and what checking its types found, each of them the value the stage left. No stage's
+//! diagnostics are copied into another stage's, and a mistake one stage reports is not a reason
+//! to render what the stages around it reported again.
 //!
-//! The one rendering that is the driver's is the resolution's: a resolution reports places in
-//! the HIR --- an entity, and the type among its types --- and where a place is written is what
-//! the driver holds. That rendering is a value of its own, keyed by what it read, and what it
-//! read is a module's HIR only for a name a walk could not find ([`mlkc_resolve::hidden_name`]):
-//! a module that resolved cleanly reads no HIR beside its own.
+//! The renderings that are the driver's are the ones of the stages that report places in the
+//! HIR: a resolution reports an entity and the type among its types, a check reports an
+//! expression, a pattern, or a type a declaration writes, and where a place is written is what
+//! the driver holds. Such a rendering is a value of its own, keyed by what it read, and what a
+//! resolution's rendering reads of another module is its HIR only for a name a walk could not
+//! find ([`mlkc_resolve::hidden_name`]): a module that resolved cleanly reads no HIR beside its
+//! own.
+//!
+//! # The types of a file
+//!
+//! The types of a module are resolved from the signatures it writes, and before the bodies of
+//! it are checked: every top-level declaration writes its types for now ([ADR-0017]), so a
+//! check never needs what another check found, and a body edit cannot change what the module
+//! shows. A check of one body is a slot of its own --- the body is the unit --- and it reads the
+//! surface of the module, the surfaces of the modules its paths reach, and the classes of the
+//! language, and nothing of another body's check.
+//!
+//! The classes of the language --- `Int`, `Unit`, `String`, `Bool` --- are the ones the standard
+//! library declares with `#[builtin]`: the driver reads them off `std::core` and hands them to
+//! the check, and a driver whose host recorded no library checks no types.
+//!
+//! The diagnostics of a check are rendered here as well, the way the resolution's are: a check
+//! reports places in the HIR --- an expression, a pattern, a type a declaration writes --- and
+//! where a place is written is what the driver holds. The look a name a body path could not
+//! find takes at the module it reached is the look the rendering of a resolution takes, and it
+//! is recorded the same way.
+//!
+//! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 //!
 //! # The prelude, and the projects it belongs to
 //!
@@ -108,9 +132,11 @@ use std::{
 
 use mlkc_diagnostics::Diagnostic;
 use mlkc_hir_def::{
-    BodyEntityLoc, Interface, ItemLoc, ItemTree, ModuleId, ModuleIndex, Prelude, ProjectData,
-    ProjectDefMap, ProjectGraph, ProjectId, dump::TypePlace,
+    Body, BodyEntityLoc, ClassLoc, EntityData, EntityLoc, Interface, ItemLoc, ItemTree, ModuleId,
+    ModuleIndex, Name, PathAnchor, Prelude, ProjectData, ProjectDefMap, ProjectGraph, ProjectId,
+    dump::TypePlace as DeclaredType,
 };
+use mlkc_hir_ty::{CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
 use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at};
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
@@ -120,6 +146,9 @@ use mlkc_resolve::{
 use mlkc_rowan::{AstNode, NodeCache};
 use mlkc_span::Span;
 use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, SyntaxNode, TextRange};
+use mlkc_typeck::{
+    Builtins, CheckDeps, TypeDiag, TypeError, TypePlace, check_body, resolve_module_types,
+};
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, RelPath, RelPathBuf, Vfs, VfsPath};
 use rustc_hash::FxHashMap;
 
@@ -158,12 +187,18 @@ pub struct Driver {
     module_indexes: FxHashMap<ProjectId, ModuleIndexSlot>,
     /// The resolution of every module that has been resolved.
     resolutions: FxHashMap<ModuleId, ResolutionSlot>,
+    /// The types of every module whose signatures have been resolved.
+    signatures: FxHashMap<ModuleId, SignaturesSlot>,
+    /// The check of every body that has been checked.
+    checks: FxHashMap<BodyEntityLoc, CheckSlot>,
     /// The def map of every project that has been asked for one.
     def_maps: FxHashMap<ProjectId, DefMapSlot>,
     /// The rendered diagnostics of the parse of every file that has been asked for them.
     parse_diagnostics: FxHashMap<FileId, TextSlot<[Diagnostic]>>,
     /// The rendered diagnostics of the resolution of every module that has been asked for them.
     resolution_diagnostics: FxHashMap<ModuleId, ResolutionDiagnosticsSlot>,
+    /// The rendered diagnostics of the checks of every module that has been asked for them.
+    type_diagnostics: FxHashMap<ModuleId, TypeDiagnosticsSlot>,
     /// The line index of every file whose positions have been read.
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
 }
@@ -262,6 +297,100 @@ struct ResolutionDiagnosticsSlot {
     resolution: Arc<Resolution>,
     /// The HIR the places of the diagnostics are read in.
     lowered: Arc<Lowered>,
+    /// The HIR of the modules a diagnostic looked at, by module.
+    looked: BTreeMap<ModuleId, Arc<Lowered>>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<[Diagnostic]>,
+}
+
+/// The types of one module's entities, and what resolving them found ([ADR-0017]).
+///
+/// The surface is resolved from the signatures the module writes and from nothing else, so the
+/// key of the slot is the module's own item tree, its resolution, and the closure the written
+/// types walk --- never a body ([ADR-0017]).
+///
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+struct SignaturesSlot {
+    /// The HIR the signatures are written in.
+    lowered: Arc<Lowered>,
+    /// What each name of the module denotes, and what each import resolved to.
+    resolution: Arc<Resolution>,
+    /// The modules the written types reach, and the entries of the indexes they read.
+    closure: Closure,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    signatures: Signatures,
+}
+
+/// The type surface of a module, and what resolving its written types reported.
+#[derive(Debug, Clone)]
+struct Signatures {
+    /// The types of the module's entities, by the entity that declares them.
+    value: Arc<ModuleTypes>,
+    /// What resolving a written type found, in the order of the module.
+    diagnostics: Arc<[TypeDiag]>,
+}
+
+impl Signatures {
+    /// Whether this is the same value as `other`: the same surface, and the same report.
+    fn reads_the_same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.value, &other.value) && Arc::ptr_eq(&self.diagnostics, &other.diagnostics)
+    }
+}
+
+/// The check of one body, and what it was made from ([ADR-0017]).
+///
+/// The key of a check is what the check read: the HIR of the module --- the body among it --- the
+/// resolution of the module, the closure of the check, the type surfaces of the modules the
+/// paths reach, and the classes of the language ([ADR-0017]).
+///
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+struct CheckSlot {
+    /// The HIR the body was read from.
+    lowered: Arc<Lowered>,
+    /// What each name of the module denotes, and what each import resolved to.
+    resolution: Arc<Resolution>,
+    /// The modules the check walks, and the entries of the indexes it read.
+    closure: Closure,
+    /// The type surface of every module the check may read, by module.
+    types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
+    /// The classes of the language the check was given.
+    builtins: Builtins,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    checked: Checked,
+}
+
+/// The types of one checked body, and what checking it reported.
+#[derive(Debug, Clone)]
+struct Checked {
+    /// The types of the nodes of the body, by the node inside it.
+    value: Arc<CheckedBody>,
+    /// What the check found, in the order of the body.
+    diagnostics: Arc<[TypeDiag]>,
+}
+
+impl Checked {
+    /// Whether this is the same value as `other`: the same types, and the same report.
+    fn reads_the_same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.value, &other.value) && Arc::ptr_eq(&self.diagnostics, &other.diagnostics)
+    }
+}
+
+/// The rendered diagnostics of the checks of one module, and what rendering them read
+/// ([ADR-0017]).
+///
+/// A check reports places in the HIR --- an expression, a pattern, a type a declaration writes ---
+/// and where a place is written is what the driver holds, so the rendering is the driver's. The
+/// look a body path takes at a module a walk could not find ([`hidden_name`]) is the one the
+/// rendering of a resolution takes, and it is recorded the same way.
+///
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+struct TypeDiagnosticsSlot {
+    /// The HIR the places of the diagnostics are read in.
+    lowered: Arc<Lowered>,
+    /// The signatures of the module, as they were rendered.
+    signatures: Signatures,
+    /// The check of every body of the module, in the order the module declares them.
+    checks: Vec<Checked>,
     /// The HIR of the modules a diagnostic looked at, by module.
     looked: BTreeMap<ModuleId, Arc<Lowered>>,
     /// The value, retained so that the driver can hand it out and compare it later.
@@ -431,12 +560,12 @@ impl Lowered {
     /// A type is a value of the HIR rather than a node of it, and the declaration a host reads
     /// it in is what says where it is written: the type of the parameter at an index, or the
     /// type the declaration writes for its result.
-    pub fn type_range(&self, item: &ItemLoc, place: TypePlace) -> Option<TextRange> {
+    pub fn type_range(&self, item: &ItemLoc, place: DeclaredType) -> Option<TextRange> {
         let places = self.types.get(item)?;
 
         match place {
-            TypePlace::Parameter(index) => places.params.get(index).copied().flatten(),
-            TypePlace::Result => places.result,
+            DeclaredType::Parameter(index) => places.params.get(index).copied().flatten(),
+            DeclaredType::Result => places.result,
         }
     }
 
@@ -908,6 +1037,252 @@ impl Driver {
         Some(value)
     }
 
+    /// The classes of the language, as the standard library declares them.
+    ///
+    /// `Int`, `Unit`, `String`, and `Bool` are ordinary classes ([ADR-0017]): the library
+    /// declares them with `#[builtin]`, and the check reads them by name rather than looking a
+    /// primitive type up. A driver whose host recorded no library holds no classes to give, and
+    /// checks no types: there is nothing for a literal or an operator to be.
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    fn builtins(&mut self) -> Option<Builtins> {
+        let project = ProjectId::new(mlkc_stdlib::PROJECT);
+        self.projects.project(&project)?;
+
+        let index = self.module_index(&project)?;
+        let core = index.get(&[Name::new(mlkc_stdlib::CORE)])?;
+        let lowered = self.lower(core.0)?;
+        let tree = lowered.item_tree();
+
+        let class = |name: &str| -> Option<EntityLoc<ClassLoc>> {
+            let target = tree.scope().get(&Name::new(name))?.ty.as_ref()?;
+            let PathAnchor::Item(entity) = target.anchor() else {
+                return None;
+            };
+            let EntityData::Class(data) = tree.entity_data(entity.item.clone())? else {
+                return None;
+            };
+
+            // The language's class is the one the library declares as a builtin; a class that
+            // happens to carry the name of one is a class like any other.
+            if !data.attributes.builtin {
+                return None;
+            }
+
+            Some(EntityLoc {
+                module: entity.module,
+                item: ClassLoc::try_from(entity.item).ok()?,
+            })
+        };
+
+        Some(Builtins::new(
+            class("Int")?,
+            class("Unit")?,
+            class("String")?,
+            class("Bool")?,
+        ))
+    }
+
+    /// The types of `module`'s entities, resolved from the signatures it writes ([ADR-0017]).
+    ///
+    /// The surface is a function of the module's own text and of the names it read, and never of
+    /// a body: an edit inside a body leaves it where it was, and only the check of that body is
+    /// read again.
+    ///
+    /// `None` when there is nothing to resolve the types against: the module has no HIR, or the
+    /// driver holds no standard library, whose `#[builtin]` classes the check is given
+    /// ([`Driver::use_std`]).
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    pub fn module_types(&mut self, module: ModuleId) -> Option<Arc<ModuleTypes>> {
+        self.signatures(module).map(|signatures| signatures.value)
+    }
+
+    /// The type surface of `module`, and what resolving its written types reported.
+    ///
+    /// The key of the slot is what the pass read: the module's item tree, its resolution, and
+    /// the closure its written types walk. A recomputation that ends up equal to what the driver
+    /// holds is the value it holds, so a reader that came to the same surface came to nothing new
+    /// ([ADR-0008]).
+    ///
+    /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    fn signatures(&mut self, module: ModuleId) -> Option<Signatures> {
+        let lowered = self.lower(module.0)?;
+        let resolution = self.resolution(module)?;
+        let builtins = self.builtins()?;
+        let graph = Arc::clone(&self.projects);
+        let indexes = self.indexes_of(module);
+
+        let closure = Closure::of(
+            module,
+            lowered.item_tree(),
+            &graph,
+            &indexes,
+            &mut |module| self.interface(module),
+        );
+
+        let held = self.signatures.get(&module);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &lowered)
+            && Arc::ptr_eq(&slot.resolution, &resolution)
+            && slot.closure.reads_the_same_as(&closure)
+        {
+            return Some(slot.signatures.clone());
+        }
+
+        let deps = CheckDeps::new(builtins)
+            .with_graph(graph)
+            .with_closure(closure.clone());
+        let (value, diagnostics) = resolve_module_types(lowered.item_tree(), &resolution, &deps);
+        let signatures = Signatures {
+            value: Arc::new(value),
+            diagnostics: Arc::from(diagnostics),
+        };
+
+        // A surface equal to the one the driver holds is the value it holds: a reader that came
+        // to the same types came to nothing new ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let signatures = match held {
+            Some(slot)
+                if *slot.signatures.value == *signatures.value
+                    && *slot.signatures.diagnostics == *signatures.diagnostics =>
+            {
+                slot.signatures.clone()
+            },
+            _ => signatures,
+        };
+
+        self.signatures.insert(module, SignaturesSlot {
+            lowered,
+            resolution,
+            closure,
+            signatures: signatures.clone(),
+        });
+
+        Some(signatures)
+    }
+
+    /// The check of one body: the types of its nodes, checked against the signatures its module
+    /// wrote ([ADR-0017]).
+    ///
+    /// `None` when the body is not a body of a module the driver holds, or when there is nothing
+    /// to check against: see [`Driver::module_types`].
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    pub fn check(&mut self, owner: &BodyEntityLoc) -> Option<Arc<CheckedBody>> {
+        self.checked(owner).map(|checked| checked.value)
+    }
+
+    /// The check of one body, and what checking it reported.
+    ///
+    /// The key of the slot is what the check read: the HIR of the module --- the body among it
+    /// --- the resolution, the wider closure of the check (the paths of every body, not only of
+    /// the surface), the type surfaces of the modules the paths reach, and the classes of the
+    /// language. A body edit changes the HIR, and the recomputation of a body that did not change
+    /// ends up equal to what the driver holds, so the value a reader sees stays where it was.
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    fn checked(&mut self, owner: &BodyEntityLoc) -> Option<Checked> {
+        let module = owner.module();
+        let lowered = self.lower(module.0)?;
+        let resolution = self.resolution(module)?;
+        let builtins = self.builtins()?;
+        let graph = Arc::clone(&self.projects);
+        let indexes = self.indexes_of(module);
+
+        // The closure of the check is wider than the closure of a resolution: a path of a body
+        // may name a module that no signature names ([ADR-0017]).
+        let bodies: Vec<&Body> = lowered
+            .bodies()
+            .iter()
+            .map(|body| &body.body().body)
+            .collect();
+        let closure = Closure::of_check(
+            module,
+            lowered.item_tree(),
+            bodies,
+            &graph,
+            &indexes,
+            &mut |module| self.interface(module),
+        );
+
+        // Every module the check may read a type from: its own, and the ones its paths reach.
+        let mut modules: Vec<ModuleId> = closure.interfaces().keys().copied().collect();
+        modules.push(module);
+        modules.sort_unstable();
+        modules.dedup();
+
+        let mut types: BTreeMap<ModuleId, Arc<ModuleTypes>> = BTreeMap::new();
+
+        for named in modules {
+            if let Some(signatures) = self.signatures(named) {
+                types.insert(named, signatures.value);
+            }
+        }
+
+        let held = self.checks.get(owner);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &lowered)
+            && Arc::ptr_eq(&slot.resolution, &resolution)
+            && slot.closure.reads_the_same_as(&closure)
+            && entries_are_the_same(&slot.types, &types)
+            && slot.builtins == builtins
+        {
+            return Some(slot.checked.clone());
+        }
+
+        let body = lowered.bodies().iter().find(|body| body.owner() == owner)?;
+        let mut deps = CheckDeps::new(builtins.clone())
+            .with_graph(graph)
+            .with_closure(closure.clone());
+
+        for (named, surface) in &types {
+            deps = deps.with_types(*named, Arc::clone(surface));
+        }
+
+        let (value, diagnostics) = check_body(
+            owner.clone(),
+            lowered.item_tree(),
+            &body.body().body,
+            &resolution,
+            &deps,
+        );
+        let checked = Checked {
+            value: Arc::new(value),
+            diagnostics: Arc::from(diagnostics),
+        };
+
+        // A check that ends up equal to the one the driver holds is the one it holds: a body edit
+        // neither moves the types of the bodies that did not change nor the values that read
+        // them ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let checked = match held {
+            Some(slot)
+                if *slot.checked.value == *checked.value
+                    && *slot.checked.diagnostics == *checked.diagnostics =>
+            {
+                slot.checked.clone()
+            },
+            _ => checked,
+        };
+
+        self.checks.insert(owner.clone(), CheckSlot {
+            lowered,
+            resolution,
+            closure,
+            types,
+            builtins,
+            checked: checked.clone(),
+        });
+
+        Some(checked)
+    }
+
     /// The def map of `project`: the scopes of its modules.
     ///
     /// The map is the index of the resolutions of the project's modules ([ADR-0016]): it holds
@@ -1066,7 +1441,8 @@ impl Driver {
     }
 
     /// The diagnostics of `file`: what the parser reported, what the lowering of the module
-    /// reported, and what the resolution of it found ([ADR-0016]).
+    /// reported, what the resolution of it found, and what checking its types found
+    /// ([ADR-0016], [ADR-0017]).
     ///
     /// Each stage's diagnostics are a value of their own, computed once per what their stage
     /// read and shared as an `Arc`: a mistake the parser reported is not a reason to render
@@ -1075,6 +1451,7 @@ impl Driver {
     /// `None` when the file has no parse: see [`Driver::parse`].
     ///
     /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
     pub fn diagnostics(&mut self, file: FileId) -> Option<Diagnostics> {
         let parse = self.parse_diagnostics(file)?;
         let lowered = self.lower(file);
@@ -1086,11 +1463,16 @@ impl Driver {
             .as_ref()
             .and_then(|_| self.resolution_diagnostics(ModuleId(file)))
             .unwrap_or_else(none);
+        let types = lowered
+            .as_ref()
+            .and_then(|_| self.type_diagnostics(ModuleId(file)))
+            .unwrap_or_else(none);
 
         Some(Diagnostics {
             parse,
             lowering,
             resolution,
+            types,
         })
     }
 
@@ -1197,8 +1579,141 @@ impl Driver {
         }
     }
 
-    /// The error a resolution should have reported instead, when the name it could not find is
-    /// a name a module keeps to itself ([`hidden_name`]).
+    /// The diagnostics of the checks of `module`'s bodies, in the shape a host renders.
+    ///
+    /// A check reports places in the HIR --- an expression, a pattern, a type a declaration
+    /// writes --- and where a place is written is what the driver holds, so the rendering is the
+    /// driver's. What a path of a body could not find is looked up in the module the path
+    /// reached, exactly as the rendering of a resolution does ([`hidden_name`]), and what the
+    /// look read is what the slot is keyed by.
+    ///
+    /// The reports of the module come first --- what resolving its signatures found, in the
+    /// order it declares them --- and then the reports of its bodies, in the order it declares
+    /// them.
+    fn type_diagnostics(&mut self, module: ModuleId) -> Option<Arc<[Diagnostic]>> {
+        let lowered = self.lower(module.0)?;
+        let signatures = self.signatures(module)?;
+
+        // Every body of the module is checked, in the order the module declares them.
+        let checks: Vec<Checked> = lowered
+            .bodies()
+            .iter()
+            .map(|body| self.checked(body.owner()))
+            .collect::<Option<Vec<_>>>()?;
+
+        let held = self.type_diagnostics.get(&module);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &lowered)
+            && slot.signatures.reads_the_same_as(&signatures)
+            && slot.checks.len() == checks.len()
+            && slot
+                .checks
+                .iter()
+                .zip(&checks)
+                .all(|(held, current)| held.reads_the_same_as(current))
+        {
+            // What the rendering looked at is the HIR of the modules a name the walk could not
+            // find may belong to: a look that names the same HIR is a look that read the same
+            // thing, and the value that was rendered from it is the value the driver holds.
+            let looked: Vec<(ModuleId, Arc<Lowered>)> = slot
+                .looked
+                .iter()
+                .map(|(module, lowered)| (*module, lowered.clone()))
+                .collect();
+
+            if looked.iter().all(|(module, held)| {
+                self.lower(module.0)
+                    .is_some_and(|current| Arc::ptr_eq(held, &current))
+            }) {
+                return Some(self.type_diagnostics[&module].value.clone());
+            }
+        }
+
+        let mut looked = BTreeMap::new();
+        let mut rendered = Vec::new();
+
+        // What resolving the signatures reported belongs to the module as a whole, and it comes
+        // before what its bodies reported, which is the order the module is read in.
+        for diagnostic in signatures.diagnostics.iter() {
+            rendered.push(self.rendered_type(diagnostic, module, &lowered, None, &mut looked));
+        }
+
+        for (body, checked) in lowered.bodies().iter().zip(&checks) {
+            for diagnostic in checked.diagnostics.iter() {
+                rendered.push(self.rendered_type(
+                    diagnostic,
+                    module,
+                    &lowered,
+                    Some(body),
+                    &mut looked,
+                ));
+            }
+        }
+
+        let value: Arc<[Diagnostic]> = Arc::from(rendered);
+
+        // A rendering equal to the one the driver holds is the value it holds: an edit that moved
+        // a body but not what a host reads does not move the value the buffer is marked by
+        // ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let value = match self.type_diagnostics.get(&module) {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.type_diagnostics.insert(module, TypeDiagnosticsSlot {
+            lowered,
+            signatures,
+            checks,
+            looked,
+            value: value.clone(),
+        });
+
+        Some(value)
+    }
+
+    /// The diagnostic a host renders of what a check found.
+    ///
+    /// A name a path of a body could not find may be a name the module at the end of the path
+    /// holds and does not show, and telling that is a look at the module itself: what the look
+    /// read is recorded, since it is what the rendering is keyed by ([`hidden_name`]).
+    fn rendered_type(
+        &mut self,
+        diagnostic: &TypeDiag,
+        file: ModuleId,
+        lowered: &Lowered,
+        body: Option<&ModuleBody>,
+        looked: &mut BTreeMap<ModuleId, Arc<Lowered>>,
+    ) -> Diagnostic {
+        // A place the driver wrote no range for has nowhere to point at: what the check found is
+        // still what a host is told about, and it is told without a place.
+        let Some(range) = type_place_range(lowered, body, diagnostic.place()) else {
+            return Diagnostic::from_kind(diagnostic.error(), diagnostic.error().message());
+        };
+
+        let span = Span::new(file.0, range);
+
+        // The paths of a body are walked by the check and never by the resolution ([ADR-0016]),
+        // so a name a body walk could not find is the check's to report --- and the look that
+        // tells a name a module keeps to itself is the look the rendering of a resolution
+        // takes.
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        let error = match diagnostic.error() {
+            TypeError::Unresolved { error } => self.hidden(error, looked),
+            _ => None,
+        };
+
+        match error {
+            Some(hidden) => diagnostic.to_diagnostic_with(span, hidden.message()),
+            None => diagnostic.to_diagnostic(span),
+        }
+    }
+
+    /// The error a walk should have reported instead, when the name it could not find is a name
+    /// a module keeps to itself ([`hidden_name`]).
     ///
     /// The look is taken only for a name a walk could not find, and what it read is what
     /// a caller keys the rendered diagnostics by: a module that resolved cleanly reads no item
@@ -1297,8 +1812,8 @@ impl Driver {
         self.def_maps.remove(project);
     }
 
-    /// Drops the values derived from one module: its HIR, its interface, its resolution, and
-    /// the diagnostics that were rendered from them.
+    /// Drops the values derived from one module: its HIR, its interface, its resolution, its
+    /// type surface, the checks of its bodies, and the diagnostics that were rendered from them.
     ///
     /// A module that changed project or text is read again; what reads this module is not
     /// dropped with it, and sees the new value when it is read again.
@@ -1307,6 +1822,9 @@ impl Driver {
         self.interfaces.remove(&module);
         self.resolutions.remove(&module);
         self.resolution_diagnostics.remove(&module);
+        self.signatures.remove(&module);
+        self.type_diagnostics.remove(&module);
+        self.checks.retain(|owner, _| owner.module() != module);
     }
 }
 
@@ -1329,12 +1847,47 @@ fn entries_are_the_same<T>(
         })
 }
 
+/// Where the place a check reported is written, if the driver found it.
+///
+/// An expression and a pattern are nodes of one body, and where they are written is the source
+/// map of that body; an entity and a type a declaration writes are part of the surface of the
+/// module, and where they are written is what the HIR of the module holds. A node the lowering
+/// made up has no range of its own, and the declaration it stands in is what is marked for it
+/// instead.
+fn type_place_range(
+    lowered: &Lowered,
+    body: Option<&ModuleBody>,
+    place: &TypePlace,
+) -> Option<TextRange> {
+    let declaration = || {
+        let item = body.map(|body| ItemLoc::from(body.owner().item.clone()))?;
+        lowered.item_range(&item)
+    };
+
+    match place {
+        TypePlace::Expr(expr) => {
+            body.and_then(|body| body.body().source_map.expr(*expr))
+                .or_else(declaration)
+        },
+        TypePlace::Pat(pat) => {
+            body.and_then(|body| body.body().source_map.pat(*pat))
+                .or_else(declaration)
+        },
+        TypePlace::Entity(item) => lowered.item_range(item),
+        TypePlace::Declared { item, place } => {
+            lowered
+                .type_range(item, *place)
+                .or_else(|| lowered.item_range(item))
+        },
+    }
+}
+
 /// The diagnostics of one file, in the order the stages of the pipeline reported them.
 ///
 /// The parts are the values the stages left: what the parser reported, what the lowering of the
-/// module reported, and what the resolution of it found. A part that did not change is the
-/// value the driver already held, and no part is copied into another: what a host reads is the
-/// parts in order ([`Diagnostics::iter`]).
+/// module reported, what the resolution of it found, and what checking its types found. A part
+/// that did not change is the value the driver already held, and no part is copied into another:
+/// what a host reads is the parts in order ([`Diagnostics::iter`]).
 #[derive(Debug, Clone)]
 pub struct Diagnostics {
     /// What the parser reported.
@@ -1343,6 +1896,8 @@ pub struct Diagnostics {
     lowering: Arc<[Diagnostic]>,
     /// What the resolution of the module reported.
     resolution: Arc<[Diagnostic]>,
+    /// What checking the types of the module's signatures and bodies reported.
+    types: Arc<[Diagnostic]>,
 }
 
 impl Diagnostics {
@@ -1361,22 +1916,31 @@ impl Diagnostics {
         &self.resolution
     }
 
+    /// What checking the types of the module reported, as the stage left it.
+    pub fn types(&self) -> &Arc<[Diagnostic]> {
+        &self.types
+    }
+
     /// The diagnostics of the file, in the order the stages reported them.
     pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
         self.parse
             .iter()
             .chain(self.lowering.iter())
             .chain(self.resolution.iter())
+            .chain(self.types.iter())
     }
 
     /// How many diagnostics the file has.
     pub fn len(&self) -> usize {
-        self.parse.len() + self.lowering.len() + self.resolution.len()
+        self.parse.len() + self.lowering.len() + self.resolution.len() + self.types.len()
     }
 
     /// Whether the file has no diagnostics at all.
     pub fn is_empty(&self) -> bool {
-        self.parse.is_empty() && self.lowering.is_empty() && self.resolution.is_empty()
+        self.parse.is_empty()
+            && self.lowering.is_empty()
+            && self.resolution.is_empty()
+            && self.types.is_empty()
     }
 }
 
@@ -1563,6 +2127,51 @@ fun get(): Point = get()
             .unwrap_or_else(|| panic!("a fixture to write a module at `{place}`"))
     }
 
+    /// A driver that holds the project a fixture writes, every module of it depending on the
+    /// standard library.
+    ///
+    /// The names of the language are names the library declares ([ADR-0011]): a module of the
+    /// fixture writes `Int` because the prelude of the project, the prelude of the language,
+    /// reaches the name through the re-export the library writes. A check reads the classes of
+    /// the language from the library, so the fixture is the one of tests that check types.
+    ///
+    /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
+    fn std_project_of(fixture: &str) -> Driver {
+        let mut driver = Driver::new();
+        driver.use_std();
+
+        let mut data = ProjectData::default();
+        data.dependencies.insert(
+            Name::new(mlkc_stdlib::PROJECT),
+            ProjectId::new(mlkc_stdlib::PROJECT),
+        );
+        driver.set_project(project(), data);
+
+        for module in mlkc_fixture::modules(fixture) {
+            let path = VfsPath::new_virtual_path(module.place.clone());
+            driver.set_file_text(path.clone(), Some(module.source.clone()));
+
+            let file = driver.file_id(&path).expect("the file to have an id");
+            driver.set_module_project(ModuleId(file), project());
+        }
+
+        driver
+    }
+
+    /// The owner of the body a module declares under `name`, in its current revision.
+    fn body_of(driver: &mut Driver, file: FileId, name: &str) -> BodyEntityLoc {
+        let lowered = driver.lower(file).expect("the file to be lowered");
+
+        lowered
+            .bodies()
+            .iter()
+            .find(|body| body.owner().item.name() == Some(&Name::new(name)))
+            .map_or_else(
+                || panic!("the module to declare a body for `{name}`"),
+                |body| body.owner().clone(),
+            )
+    }
+
     /// A driver that holds a project of two modules: the one of `data`, and the one that reads
     /// it. Both stand at the root of the file system, which is what names them.
     fn reader_and_data(data: &str, reader: &str) -> (Driver, FileId, FileId) {
@@ -1685,16 +2294,16 @@ fun get(): Point = get()
         let f = item(&lowered, "f");
 
         assert_eq!(
-            covered(source, lowered.type_range(&f, TypePlace::Parameter(0))),
+            covered(source, lowered.type_range(&f, DeclaredType::Parameter(0))),
             Some("Map[Int]"),
             "a parameter is read as the type the declaration annotated it with"
         );
         assert_eq!(
-            covered(source, lowered.type_range(&f, TypePlace::Result)),
+            covered(source, lowered.type_range(&f, DeclaredType::Result)),
             Some("Int")
         );
         assert_eq!(
-            lowered.type_range(&f, TypePlace::Parameter(1)),
+            lowered.type_range(&f, DeclaredType::Parameter(1)),
             None,
             "a function that writes one parameter has no type for a second"
         );
@@ -1710,12 +2319,12 @@ fun get(): Point = get()
         let f = item(&lowered, "f");
 
         assert_eq!(
-            lowered.type_range(&f, TypePlace::Parameter(0)),
+            lowered.type_range(&f, DeclaredType::Parameter(0)),
             None,
             "the parameter that broke has no type to point at"
         );
         assert_eq!(
-            covered(source, lowered.type_range(&f, TypePlace::Parameter(1))),
+            covered(source, lowered.type_range(&f, DeclaredType::Parameter(1))),
             Some("Int")
         );
     }
@@ -2420,6 +3029,201 @@ fun get(): Point = get()
         Prelude::from_paths([PlainPath::from_segments(
             path.iter().map(|segment| Name::new(segment)),
         )])
+    }
+
+    #[test]
+    fn the_types_of_a_module_are_resolved_from_the_signatures_it_writes() {
+        let (mut driver, file) =
+            driver_with_std("main.mlk", "fun double(value: Int): Int = value\n");
+        let module = ModuleId(file);
+        let types = driver
+            .module_types(module)
+            .expect("the signatures of the module to resolve");
+        let lowered = driver.lower(file).expect("the file to be lowered");
+        let double = lowered
+            .item_tree()
+            .entities()
+            .find(|(item, _)| item.name() == Some(&Name::new("double")))
+            .map(|(item, _)| EntityLoc { module, item })
+            .expect("the module to declare `double`");
+
+        // The signature is a value: `Int` is the class the library declares, and the type of the
+        // function reads as the types it writes ([ADR-0017]).
+        //
+        // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+        assert_eq!(
+            types.get(&double).map(ToString::to_string),
+            Some("(Int) -> Int".to_owned()),
+        );
+    }
+
+    #[test]
+    fn a_body_is_checked_against_the_signatures_of_its_module() {
+        let (mut driver, file) =
+            driver_with_std("main.mlk", "fun double(value: Int): Int = value + 1\n");
+        let owner = body_of(&mut driver, file, "double");
+        let lowered = driver.lower(file).expect("the file to be lowered");
+        let body = lowered
+            .bodies()
+            .iter()
+            .find(|body| body.owner() == &owner)
+            .expect("the body of `double`");
+        let checked = driver.check(&owner).expect("the body to check");
+
+        assert_eq!(
+            checked
+                .expr_type(body.body().body.root())
+                .map(ToString::to_string),
+            Some("Int".to_owned()),
+        );
+    }
+
+    #[test]
+    fn a_type_mistake_of_a_body_travels_with_the_diagnostics_of_the_file() {
+        const SOURCE: &str = "fun main(): Unit =\n    \"text\"\n";
+
+        let (mut driver, file) = driver_with_std("main.mlk", SOURCE);
+        let diagnostics = driver.diagnostics(file).expect("the file to be diagnosed");
+
+        assert_eq!(diagnostics.types().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.types()[0];
+        let label = diagnostic.labels.first().expect("a label");
+
+        // A check reports a place in the HIR, and the driver turns it into the span of the text
+        // the place is written at, with the words that belong under it ([ADR-0009]).
+        //
+        // [ADR-0009]: ../../docs/adr/0009-pass-contract.md
+        assert_eq!(diagnostic.category, Category::TypeChecker);
+        assert_eq!(diagnostic.code, "09");
+        assert_eq!(
+            diagnostic.message,
+            "a value of type `String` is where a value of type `Unit` belongs",
+        );
+        assert_eq!(label.message, "expected `Unit`, found `String`");
+        assert!(label.primary);
+        assert_eq!(covered(SOURCE, Some(label.span.range)), Some("\"text\""));
+    }
+
+    #[test]
+    fn a_signature_that_is_not_written_is_reported_at_its_declaration() {
+        const SOURCE: &str = "fun helper() = 1\n";
+
+        let (mut driver, file) = driver_with_std("main.mlk", SOURCE);
+        let diagnostics = driver.diagnostics(file).expect("the file to be diagnosed");
+
+        assert_eq!(diagnostics.types().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.types()[0];
+        let label = diagnostic.labels.first().expect("a label");
+
+        // The declaration writes no result type, so there is no type to point at and the
+        // declaration itself is what is marked.
+        assert_eq!(diagnostic.category, Category::TypeChecker);
+        assert_eq!(diagnostic.code, "01");
+        assert_eq!(
+            diagnostic.message,
+            "`fun helper` does not declare the type of its result",
+        );
+        assert_eq!(label.message, "the type of this result is not written");
+        assert_eq!(
+            covered(SOURCE, Some(label.span.range)),
+            Some("fun helper() = 1")
+        );
+        assert!(!diagnostic.notes.is_empty(), "the deferral is explained");
+    }
+
+    #[test]
+    fn a_name_a_module_keeps_to_itself_is_told_about_as_kept_from_a_body() {
+        const MAIN: &str = "\
+//- /data.mlk
+fun hidden(): Int = 1
+
+//- /main.mlk
+fun get(): Int = project::data::hidden()
+";
+
+        let mut driver = std_project_of(MAIN);
+        let main = file(&driver, "main.mlk");
+        let diagnostics = driver.diagnostics(main).expect("the file to be diagnosed");
+
+        // The paths of a body are walked by the check and never by the resolution ([ADR-0016]),
+        // so the walk that ends at a name a module keeps to itself is the check's --- and the
+        // look that tells why is the one the rendering of a resolution takes.
+        //
+        // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        assert_eq!(diagnostics.resolution().len(), 0, "{diagnostics:?}");
+        assert_eq!(diagnostics.types().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.types()[0];
+
+        assert_eq!(diagnostic.category, Category::TypeChecker);
+        assert_eq!(diagnostic.code, "11");
+        assert_eq!(
+            diagnostic.message,
+            "the module `project::data` holds the name `hidden` and does not show it",
+        );
+    }
+
+    #[test]
+    fn a_body_edit_leaves_the_signatures_and_the_other_bodies_where_they_were() {
+        const SOURCE: &str = "\
+//- /main.mlk
+fun first(): Int = 1
+
+fun second(): Int = 2
+";
+
+        let mut driver = std_project_of(SOURCE);
+        let main = file(&driver, "main.mlk");
+        let module = ModuleId(main);
+
+        let before_types = driver
+            .module_types(module)
+            .expect("the signatures of the module to resolve");
+        let owner = body_of(&mut driver, main, "second");
+        let before = driver.check(&owner).expect("the body to check");
+
+        driver.set_file_text(
+            path("main.mlk"),
+            Some("fun first(): Int = 42\n\nfun second(): Int = 2\n".to_owned()),
+        );
+
+        let after_types = driver
+            .module_types(module)
+            .expect("the signatures of the module to resolve");
+        let owner = body_of(&mut driver, main, "second");
+        let after = driver.check(&owner).expect("the body to check");
+
+        // A body edit cannot change what a module shows, and it does not change the check of a
+        // body it did not edit: a surface is resolved from signatures alone, and a check that
+        // ends up equal to the one the driver held is the one it held ([ADR-0017]).
+        //
+        // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+        assert!(
+            Arc::ptr_eq(&before_types, &after_types),
+            "a body edit moved the types of the module",
+        );
+        assert!(
+            Arc::ptr_eq(&before, &after),
+            "a body edit re-checked a body that did not change",
+        );
+    }
+
+    #[test]
+    fn a_driver_without_the_library_checks_no_types() {
+        // The classes of the language are the library's declaration, and a driver whose host
+        // recorded no library has none: what a literal is is nothing the checker can say.
+        let (mut driver, file) = driver_with("main.mlk", "fun main(): Int = 1\n");
+
+        assert!(driver.module_types(ModuleId(file)).is_none());
+        assert!(
+            driver
+                .diagnostics(file)
+                .expect("the file to be diagnosed")
+                .types()
+                .is_empty()
+        );
     }
 
     /// A project a test records.

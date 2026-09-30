@@ -168,7 +168,7 @@ struct Analysis {
     /// The HIR of the module, or `null` when there is nothing to lower.
     hir: Option<Hir>,
 
-    /// What the parser and the lowering reported, in the shape an editor marks the buffer with.
+    /// What the stages of the pipeline reported, in the shape an editor marks the buffer with.
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -394,7 +394,7 @@ struct Label {
     /// Whether this is the place the diagnostic is about, rather than a place it mentions.
     primary: bool,
 
-    /// What the label says: often empty for the primary one, since the message is above it.
+    /// What the label says: the part of the message that belongs to the place it marks.
     message: String,
 }
 
@@ -480,7 +480,7 @@ mod tests {
 
         assert!(driver.set_text(
             "/main.mlk",
-            Some("fun main(): Unit =\n    let x = 1 in\n    x\n".to_string())
+            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string())
         ));
         let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
         let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
@@ -761,7 +761,10 @@ mod tests {
 
         driver.set_text(
             "/main.mlk",
-            Some("fun f(): Unit =\n    1\n\nfun f(): Unit =\n    2\n".to_string()),
+            Some(
+                "fun f(): Unit =\n    g()\n\nfun g(): Unit =\n    g()\n\nfun f(): Unit =\n    g()\n"
+                    .to_string(),
+            ),
         );
         let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
         let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
@@ -771,6 +774,37 @@ mod tests {
         assert_eq!(diagnostics[0]["category"], "lowering");
         assert_eq!(diagnostics[0]["code"], "01");
         assert_eq!(diagnostics[0]["level"], "error");
+    }
+
+    #[test]
+    fn a_type_mistake_crosses_the_boundary_as_a_diagnostic() {
+        const SOURCE: &str = "fun main(): Unit =\n    \"text\"\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
+
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0]["category"], "typechecker");
+        assert_eq!(
+            diagnostics[0]["categoryCode"], "05",
+            "the type checker is the fifth stage of the pipeline"
+        );
+        assert_eq!(diagnostics[0]["code"], "09");
+
+        // The place of the label is the expression the check reported, and what it says is what
+        // an editor shows under the caret.
+        let label = &diagnostics[0]["labels"][0];
+        let start = SOURCE.find("\"text\"").expect("the literal to be written") as u64;
+
+        assert_eq!(label["primary"], true);
+        assert_eq!(label["start"], start);
+        assert_eq!(label["end"], start + "\"text\"".len() as u64);
+        assert_eq!(label["message"], "expected `Unit`, found `String`");
     }
 
     /// The text of the first token of a kind, wherever in a serialized tree it sits.

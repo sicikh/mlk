@@ -651,6 +651,7 @@ dependencies = [
  "mlkc-diagnostics",
  "mlkc-fixture",
  "mlkc-hir-def",
+ "mlkc-hir-ty",
  "mlkc-line-index",
  "mlkc-lower",
  "mlkc-parser",
@@ -661,6 +662,7 @@ dependencies = [
  "mlkc-stdlib",
  "mlkc-syntax",
  "mlkc-text-size",
+ "mlkc-typeck",
  "mlkc-vfs",
  "rustc-hash",
 ]

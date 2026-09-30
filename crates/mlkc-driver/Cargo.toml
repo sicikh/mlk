@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 mlkc-diagnostics.workspace = true
 mlkc-hir-def.workspace = true
+mlkc-hir-ty.workspace = true
 mlkc-line-index.workspace = true
 mlkc-lower.workspace = true
 mlkc-parser.workspace = true
@@ -19,6 +20,7 @@ mlkc-rowan.workspace = true
 mlkc-span.workspace = true
 mlkc-stdlib.workspace = true
 mlkc-syntax.workspace = true
+mlkc-typeck.workspace = true
 mlkc-vfs.workspace = true
 rustc-hash.workspace = true
 

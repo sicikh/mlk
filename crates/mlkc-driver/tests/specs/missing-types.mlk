@@ -1,0 +1,16 @@
+// The signatures the first check requires of a top-level declaration: the type a private
+// function writes is not inferred, a `_` is a type to infer rather than one a signature can
+// write, and a public function that writes no type is what the lowering reports --- the check
+// does not report the same mistake again.
+
+//- /main.mlk
+fun helper() = 1
+
+fun parameter(value): Int =
+    value
+
+fun inferred(value: _): Int =
+    value
+
+pub fun shown(value: Int) =
+    value

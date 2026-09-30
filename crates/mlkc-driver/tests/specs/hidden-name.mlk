@@ -1,0 +1,23 @@
+// The paths a body writes, and what walking them finds: a name another module keeps to itself,
+// a class written where a value belongs, and a module that is not there. The paths of a body are
+// walked by the check and never by the resolution, so what they find is the check's to report.
+
+//- /data.mlk
+// The module `project::data`: it keeps the function `hidden` to itself, and shows a class.
+
+pub type Point
+
+fun hidden(): Int =
+    1
+
+//- /main.mlk
+use project::data::Point
+
+fun call(): Int =
+    project::data::hidden()
+
+fun make(): Point =
+    project::data::Point
+
+fun gone(): Int =
+    project::gone::x()

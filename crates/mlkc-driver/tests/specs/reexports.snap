@@ -27,6 +27,10 @@ ITEM TREE
     visibility: private
 ```
 
+### Bodies
+
+No bodies.
+
 ### Resolution
 
 ```
@@ -42,6 +46,16 @@ SCOPE
   Bool
     ty: type Bool in module #0 (private)
 ```
+
+### Type Surface
+
+```
+MODULE TYPES
+```
+
+### Checked Bodies
+
+No bodies.
 
 ### Diagnostics
 
@@ -71,6 +85,10 @@ ITEM TREE
     visibility: private
 ```
 
+### Bodies
+
+No bodies.
+
 ### Resolution
 
 ```
@@ -86,6 +104,16 @@ SCOPE
   Bool
     ty: type Bool in module #0 (private)
 ```
+
+### Type Surface
+
+```
+MODULE TYPES
+```
+
+### Checked Bodies
+
+No bodies.
 
 ### Diagnostics
 
@@ -119,6 +147,21 @@ ITEM TREE
     visibility: private
 ```
 
+### Bodies
+
+`fun get`
+
+```
+BODY fun get in module #4
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  get -> fun get
+```
+
 ### Resolution
 
 ```
@@ -135,6 +178,23 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun get: () -> Point
+```
+
+### Checked Bodies
+
+`fun get`
+
+```
+CHECKED BODY
+  expr #0: () -> Point
+  expr #1: Point
 ```
 
 ### Diagnostics

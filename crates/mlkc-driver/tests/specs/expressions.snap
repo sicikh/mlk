@@ -1,0 +1,347 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #2 project::main
+
+ITEM TREE
+  fun print  @2.0
+    attributes: #[extern]
+    visibility: private
+    param: String -> use String
+    ret: Unit -> use Unit
+  fun signed  @2.1
+    visibility: private
+    ret: Int -> use Int
+  fun ordered  @2.2
+    visibility: private
+    param: Int -> use Int
+    param: Int -> use Int
+    ret: Bool -> use Bool
+  fun same  @2.3
+    visibility: private
+    param: String -> use String
+    param: String -> use String
+    ret: Bool -> use Bool
+  fun different  @2.4
+    visibility: private
+    param: Int -> use Int
+    param: Int -> use Int
+    ret: Bool -> use Bool
+  fun text  @2.5
+    visibility: private
+    ret: String -> use String
+  fun call  @2.6
+    visibility: private
+    ret: Unit -> use Unit
+  fun bound  @2.7
+    visibility: private
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+```
+
+### Bodies
+
+`fun signed`
+
+```
+BODY fun signed in module #2
+
+root expr#10
+exprs
+  expr#0  literal 1
+  expr#1  unary - expr#0
+  expr#2  literal 2
+  expr#3  unary + expr#2
+  expr#4  literal 3
+  expr#5  binary expr#3 * expr#4
+  expr#6  binary expr#1 + expr#5
+  expr#7  literal 4
+  expr#8  literal 5
+  expr#9  binary expr#7 / expr#8
+  expr#10  binary expr#6 - expr#9
+```
+
+`fun ordered`
+
+```
+BODY fun ordered in module #2
+
+root expr#14
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 < expr#1
+  expr#3  path path#0
+  expr#4  path path#1
+  expr#5  binary expr#3 <= expr#4
+  expr#6  binary expr#2 && expr#5
+  expr#7  path path#0
+  expr#8  path path#1
+  expr#9  binary expr#7 > expr#8
+  expr#10  binary expr#6 || expr#9
+  expr#11  path path#0
+  expr#12  path path#1
+  expr#13  binary expr#11 >= expr#12
+  expr#14  binary expr#10 || expr#13
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+  path#1  right -> binding pat#1
+```
+
+`fun same`
+
+```
+BODY fun same in module #2
+
+root expr#2
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 == expr#1
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+  path#1  right -> binding pat#1
+```
+
+`fun different`
+
+```
+BODY fun different in module #2
+
+root expr#2
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 != expr#1
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+  path#1  right -> binding pat#1
+```
+
+`fun text`
+
+```
+BODY fun text in module #2
+
+root expr#0
+exprs
+  expr#0  literal "hello"
+```
+
+`fun call`
+
+```
+BODY fun call in module #2
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal "hello"
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  print -> fun print
+```
+
+`fun bound`
+
+```
+BODY fun bound in module #2
+
+root expr#8
+exprs
+  expr#0  literal 2
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#0
+  expr#4  literal 1
+  expr#5  binary expr#3 + expr#4
+  expr#6  path path#1
+  expr#7  let pat#1 = expr#5 in expr#6
+  expr#8  let pat#0 = expr#2 in expr#7
+pats
+  pat#0  bind twice
+  pat#1  bind sum
+paths
+  path#0  twice -> binding pat#0
+  path#1  sum -> binding pat#1
+```
+
+### Resolution
+
+```
+SCOPE
+  print
+    value: fun print in module #2 (private)
+  signed
+    value: fun signed in module #2 (private)
+  ordered
+    value: fun ordered in module #2 (private)
+  same
+    value: fun same in module #2 (private)
+  different
+    value: fun different in module #2 (private)
+  text
+    value: fun text in module #2 (private)
+  call
+    value: fun call in module #2 (private)
+  bound
+    value: fun bound in module #2 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun print: (String) -> Unit
+  fun signed: () -> Int
+  fun ordered: (Int, Int) -> Bool
+  fun same: (String, String) -> Bool
+  fun different: (Int, Int) -> Bool
+  fun text: () -> String
+  fun call: () -> Unit
+  fun bound: () -> Int
+```
+
+### Checked Bodies
+
+`fun signed`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Int
+  expr #9: Int
+  expr #10: Int
+```
+
+`fun ordered`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  expr #3: Int
+  expr #4: Int
+  expr #5: Bool
+  expr #6: Bool
+  expr #7: Int
+  expr #8: Int
+  expr #9: Bool
+  expr #10: Bool
+  expr #11: Int
+  expr #12: Int
+  expr #13: Bool
+  expr #14: Bool
+  pat #0: Int
+  pat #1: Int
+```
+
+`fun same`
+
+```
+CHECKED BODY
+  expr #0: String
+  expr #1: String
+  expr #2: Bool
+  pat #0: String
+  pat #1: String
+```
+
+`fun different`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  pat #0: Int
+  pat #1: Int
+```
+
+`fun text`
+
+```
+CHECKED BODY
+  expr #0: String
+```
+
+`fun call`
+
+```
+CHECKED BODY
+  expr #0: (String) -> Unit
+  expr #1: String
+  expr #2: Unit
+```
+
+`fun bound`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Int
+  pat #0: Int
+  pat #1: Int
+```
+
+### Diagnostics
+
+No diagnostics.

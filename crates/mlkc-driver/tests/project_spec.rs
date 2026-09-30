@@ -10,12 +10,14 @@
 //! it, so the names of the language resolve.
 //!
 //! The snapshot holds, for every module of the project, the surface it was lowered to, the scope
-//! it resolved to, and what the stages reported. A snapshot is part of changing how a project is
-//! read: `INSTA_UPDATE=always cargo test -p mlkc-driver` rewrites them, and the diff of the
-//! snapshots is what a review reads ([ADR-0006], [ADR-0016]).
+//! it resolved to, the types its signatures and bodies were checked to, and what the stages
+//! reported. A snapshot is part of changing how a project is read:
+//! `INSTA_UPDATE=always cargo test -p mlkc-driver` rewrites them, and the diff of the snapshots
+//! is what a review reads ([ADR-0006], [ADR-0016], [ADR-0017]).
 //!
 //! [ADR-0006]: ../../docs/adr/0006-snapshot-testing.md
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+//! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 
 use std::{
     fmt::Write as _,
@@ -86,6 +88,22 @@ pub(crate) fn run(fixture: &str) {
         snapshot.push_str(&mlkc_hir_def::dump::item_tree(lowered.item_tree()));
         snapshot.push_str("```\n\n");
 
+        // A checked body is read by the positions of its nodes, and the HIR dump is what says
+        // which node a position is: the ids of the two are the ids of one body.
+        snapshot.push_str("### Bodies\n\n");
+
+        if lowered.bodies().is_empty() {
+            snapshot.push_str("No bodies.\n\n");
+        } else {
+            for body in lowered.bodies() {
+                writeln!(snapshot, "`{:?}`", body.owner().item)
+                    .expect("writing to a string to never fail");
+                snapshot.push_str("\n```\n");
+                snapshot.push_str(&mlkc_hir_def::dump::body(body.owner(), &body.body().body));
+                snapshot.push_str("```\n\n");
+            }
+        }
+
         let resolution = driver
             .resolution(module)
             .expect("a module of a fixture to resolve");
@@ -93,6 +111,36 @@ pub(crate) fn run(fixture: &str) {
         snapshot.push_str("### Resolution\n\n```\n");
         snapshot.push_str(&mlkc_hir_def::dump::resolution(resolution.scope()));
         snapshot.push_str("```\n\n");
+
+        // The types of the module are resolved from the signatures it writes, before any body
+        // is checked: the surface is what its readers read ([ADR-0017]).
+        //
+        // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+        let types = driver
+            .module_types(module)
+            .expect("a module of a fixture to have its types resolved");
+
+        snapshot.push_str("### Type Surface\n\n```\n");
+        snapshot.push_str(&mlkc_hir_ty::dump::module_types(&types));
+        snapshot.push_str("```\n\n");
+
+        snapshot.push_str("### Checked Bodies\n\n");
+
+        if lowered.bodies().is_empty() {
+            snapshot.push_str("No bodies.\n\n");
+        } else {
+            for body in lowered.bodies() {
+                let checked = driver
+                    .check(body.owner())
+                    .expect("a body of a fixture to be checked");
+
+                writeln!(snapshot, "`{:?}`", body.owner().item)
+                    .expect("writing to a string to never fail");
+                snapshot.push_str("\n```\n");
+                snapshot.push_str(&mlkc_hir_ty::dump::checked_body(&checked));
+                snapshot.push_str("```\n\n");
+            }
+        }
 
         snapshot.push_str("### Diagnostics\n\n");
 
@@ -176,29 +224,43 @@ fn write_diagnostics(text: &mut String, diagnostics: &Diagnostics) {
     text.push('\n');
 }
 
-/// The summary of a diagnostic, one line: what it is, what it says, and where it points.
+/// The summary of a diagnostic: what it is, what it says, where it points, and what it adds.
 ///
 /// The detail of what a diagnostic renders --- the text of the line it marks, and the marks
 /// under it --- is what a host shows a person; what a diff of a snapshot needs is which
-/// diagnostic it is and where it is.
+/// diagnostic it is, where it is, and what it says there.
 fn diagnostic_line(diagnostic: &Diagnostic) -> String {
-    let place = match diagnostic.labels.first() {
-        Some(label) => {
-            format!(
-                "{}..{}",
-                u32::from(label.span.range.start()),
-                u32::from(label.span.range.end()),
-            )
-        },
-        None => "no place".to_owned(),
-    };
-
-    format!(
-        "{}[{}]: {}  @{place}",
+    let mut line = format!(
+        "{}[{}]: {}",
         diagnostic.category.as_str(),
         diagnostic.code,
         diagnostic.message,
-    )
+    );
+
+    for label in &diagnostic.labels {
+        let place = format!(
+            "{}..{}",
+            u32::from(label.span.range.start()),
+            u32::from(label.span.range.end()),
+        );
+
+        if label.message.is_empty() {
+            write!(line, "  @{place}").expect("writing to a string to never fail");
+        } else {
+            write!(line, "  @{place} ({})", label.message)
+                .expect("writing to a string to never fail");
+        }
+    }
+
+    if diagnostic.labels.is_empty() {
+        line.push_str("  @no place");
+    }
+
+    for note in &diagnostic.notes {
+        write!(line, "\n  note: {note}").expect("writing to a string to never fail");
+    }
+
+    line
 }
 
 /// The directory the fixtures live in.

@@ -1,0 +1,26 @@
+// What the checker reports about a body and about a written type: a value where another one
+// belongs, a callee that is not a function, a call of the wrong arity, and a class applied to
+// arguments.
+
+//- /main.mlk
+fun one(): Unit =
+    1
+
+fun takes(value: Int): Int =
+    value
+
+fun wrong-argument(): Int =
+    takes("text")
+
+fun wrong-arity(): Int =
+    takes()
+
+fun extra-argument(): Int =
+    takes(1, 2)
+
+fun not-callable(): Int =
+    let value = 1 in
+    value()
+
+fun applied(value: Int[Bool]): Int[Bool] =
+    value

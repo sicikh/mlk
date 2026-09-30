@@ -29,6 +29,21 @@ ITEM TREE
     visibility: private
 ```
 
+### Bodies
+
+`fun origin`
+
+```
+BODY fun origin in module #2
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  origin -> fun origin
+```
+
 ### Resolution
 
 ```
@@ -45,6 +60,23 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun origin: () -> Point
+```
+
+### Checked Bodies
+
+`fun origin`
+
+```
+CHECKED BODY
+  expr #0: () -> Point
+  expr #1: Point
 ```
 
 ### Diagnostics
@@ -78,6 +110,21 @@ ITEM TREE
     visibility: private
 ```
 
+### Bodies
+
+`fun make`
+
+```
+BODY fun make in module #3
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  make -> fun make
+```
+
 ### Resolution
 
 ```
@@ -94,6 +141,23 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun make: () -> Point
+```
+
+### Checked Bodies
+
+`fun make`
+
+```
+CHECKED BODY
+  expr #0: () -> Point
+  expr #1: Point
 ```
 
 ### Diagnostics
@@ -138,6 +202,38 @@ ITEM TREE
     visibility: private
 ```
 
+### Bodies
+
+`fun handle`
+
+```
+BODY fun handle in module #4
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  literal 1
+pats
+  pat#0  bind value
+  pat#1  bind other
+```
+
+`fun read`
+
+```
+BODY fun read in module #4
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  literal 1
+pats
+  pat#0  bind value
+```
+
 ### Resolution
 
 ```
@@ -158,6 +254,33 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun handle: (Point, Point) -> Int
+  fun read: (Point) -> Int
+```
+
+### Checked Bodies
+
+`fun handle`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Point
+  pat #1: Point
+```
+
+`fun read`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Point
 ```
 
 ### Diagnostics

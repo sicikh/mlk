@@ -575,6 +575,7 @@ Wait until the language settles, then write the real one.
 - Interfaces, closures, and what a resolution reads: [0016-inter-module-resolution.md]
 - The arena model this record does not apply to types: [0003-id-based-ir.md]
 - Snapshot tests of a checked module: [0006-snapshot-testing.md]
+- The snapshots that hold the dumps of these values: [project_spec.rs]
 - Rémy's level-based generalization, explained by Kiselyov: <https://okmij.org/ftp/ML/generalization.html>
 - Rémy's technical report: <http://gallium.inria.fr/~remy/ftp/eq-theory-on-types.pdf>
 - Bidirectional typing: <https://arxiv.org/abs/1908.05839>
@@ -593,3 +594,4 @@ Wait until the language settles, then write the real one.
 [okmij]: https://okmij.org/ftp/ML/generalization.html
 [mlkc-hir-def]: ../../crates/mlkc-hir-def
 [mlkc-driver]: ../../crates/mlkc-driver
+[project_spec.rs]: ../../crates/mlkc-driver/tests/project_spec.rs

@@ -10,10 +10,11 @@ expression: snapshot
 MODULE #2 project::data
 
 ITEM TREE
-  type Hidden  @2.0
-    visibility: private
-  type Point  @2.1
+  type Point  @2.0
     visibility: public
+  fun hidden  @2.1
+    visibility: private
+    ret: Int -> use Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -30,16 +31,24 @@ ITEM TREE
 
 ### Bodies
 
-No bodies.
+`fun hidden`
+
+```
+BODY fun hidden in module #2
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
 
 ### Resolution
 
 ```
 SCOPE
-  Hidden
-    ty: type Hidden in module #2 (private)
   Point
     ty: type Point in module #2 (public)
+  hidden
+    value: fun hidden in module #2 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -54,11 +63,17 @@ SCOPE
 
 ```
 MODULE TYPES
+  fun hidden: () -> Int
 ```
 
 ### Checked Bodies
 
-No bodies.
+`fun hidden`
+
+```
+CHECKED BODY
+  expr #0: Int
+```
 
 ### Diagnostics
 
@@ -72,22 +87,18 @@ No diagnostics.
 MODULE #3 project::main
 
 ITEM TREE
-  use Hidden  @2.0
-    path: project::data::Hidden
+  use Point  @2.0
+    path: project::data::Point
     visibility: private
-  use X  @2.1
-    path: project::missing::X
+  fun call  @2.1
     visibility: private
-  fun get  @2.2
-    visibility: private
-    ret: Nope -> unresolved
-  fun size  @2.3
-    visibility: private
-    param: Int -> use Int
     ret: Int -> use Int
-  fun wrong  @2.4
+  fun make  @2.2
     visibility: private
-    ret: size -> unresolved
+    ret: Point -> use Point
+  fun gone  @2.3
+    visibility: private
+    ret: Int -> use Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -104,59 +115,56 @@ ITEM TREE
 
 ### Bodies
 
-`fun get`
+`fun call`
 
 ```
-BODY fun get in module #3
+BODY fun call in module #3
 
 root expr#1
 exprs
   expr#0  path path#0
   expr#1  call expr#0 ()
 paths
-  path#0  get -> fun get
+  path#0  project::data::hidden -> the project
 ```
 
-`fun size`
+`fun make`
 
 ```
-BODY fun size in module #3
+BODY fun make in module #3
 
 root expr#0
-params
-  pat#0
 exprs
   expr#0  path path#0
-pats
-  pat#0  bind value
 paths
-  path#0  value -> binding pat#0
+  path#0  project::data::Point -> the project
 ```
 
-`fun wrong`
+`fun gone`
 
 ```
-BODY fun wrong in module #3
+BODY fun gone in module #3
 
-root expr#2
+root expr#1
 exprs
   expr#0  path path#0
-  expr#1  literal 1
-  expr#2  call expr#0 (expr#1)
+  expr#1  call expr#0 ()
 paths
-  path#0  size -> fun size
+  path#0  project::gone::x -> the project
 ```
 
 ### Resolution
 
 ```
 SCOPE
-  get
-    value: fun get in module #3 (private)
-  size
-    value: fun size in module #3 (private)
-  wrong
-    value: fun wrong in module #3 (private)
+  Point
+    ty: type Point in module #2 (private)
+  call
+    value: fun call in module #3 (private)
+  make
+    value: fun make in module #3 (private)
+  gone
+    value: fun gone in module #3 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -171,41 +179,38 @@ SCOPE
 
 ```
 MODULE TYPES
-  fun get: () -> {error}
-  fun size: (Int) -> Int
-  fun wrong: () -> {error}
+  fun call: () -> Int
+  fun make: () -> Point
+  fun gone: () -> Int
 ```
 
 ### Checked Bodies
 
-`fun get`
+`fun call`
 
 ```
 CHECKED BODY
-  expr #0: () -> {error}
-  expr #1: {error}
-```
-
-`fun size`
-
-```
-CHECKED BODY
-  expr #0: Int
-  pat #0: Int
-```
-
-`fun wrong`
-
-```
-CHECKED BODY
-  expr #0: (Int) -> Int
+  expr #0: {error}
   expr #1: Int
-  expr #2: Int
+```
+
+`fun make`
+
+```
+CHECKED BODY
+  expr #0: Point
+```
+
+`fun gone`
+
+```
+CHECKED BODY
+  expr #0: {error}
+  expr #1: Int
 ```
 
 ### Diagnostics
 
-lowering[15]: the name `Nope` is not a name of this module, and names no project  @63..67
-resolver[08]: the module `project::data` holds the name `Hidden` and does not show it  @0..25
-resolver[03]: the project `app` holds no module `missing`  @27..50
-resolver[07]: the name `size` is a value of this module, and a type belongs here  @133..137
+typechecker[11]: the module `project::data` holds the name `hidden` and does not show it  @48..69
+typechecker[03]: the name `Point` does not denote a value, and a value belongs here  @97..117 (a value belongs here)
+typechecker[11]: the project `app` holds no module `gone`  @141..157

@@ -1,0 +1,267 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #2 project::main
+
+ITEM TREE
+  fun one  @2.0
+    visibility: private
+    ret: Unit -> use Unit
+  fun takes  @2.1
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun wrong-argument  @2.2
+    visibility: private
+    ret: Int -> use Int
+  fun wrong-arity  @2.3
+    visibility: private
+    ret: Int -> use Int
+  fun extra-argument  @2.4
+    visibility: private
+    ret: Int -> use Int
+  fun not-callable  @2.5
+    visibility: private
+    ret: Int -> use Int
+  fun applied  @2.6
+    visibility: private
+    param: Int[Bool -> use Bool] -> use Int
+    ret: Int[Bool -> use Bool] -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+```
+
+### Bodies
+
+`fun one`
+
+```
+BODY fun one in module #2
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+`fun takes`
+
+```
+BODY fun takes in module #2
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun wrong-argument`
+
+```
+BODY fun wrong-argument in module #2
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal "text"
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  takes -> fun takes
+```
+
+`fun wrong-arity`
+
+```
+BODY fun wrong-arity in module #2
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  takes -> fun takes
+```
+
+`fun extra-argument`
+
+```
+BODY fun extra-argument in module #2
+
+root expr#3
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  literal 2
+  expr#3  call expr#0 (expr#1, expr#2)
+paths
+  path#0  takes -> fun takes
+```
+
+`fun not-callable`
+
+```
+BODY fun not-callable in module #2
+
+root expr#3
+exprs
+  expr#0  literal 1
+  expr#1  path path#0
+  expr#2  call expr#1 ()
+  expr#3  let pat#0 = expr#0 in expr#2
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun applied`
+
+```
+BODY fun applied in module #2
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+### Resolution
+
+```
+SCOPE
+  one
+    value: fun one in module #2 (private)
+  takes
+    value: fun takes in module #2 (private)
+  wrong-argument
+    value: fun wrong-argument in module #2 (private)
+  wrong-arity
+    value: fun wrong-arity in module #2 (private)
+  extra-argument
+    value: fun extra-argument in module #2 (private)
+  not-callable
+    value: fun not-callable in module #2 (private)
+  applied
+    value: fun applied in module #2 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun one: () -> Unit
+  fun takes: (Int) -> Int
+  fun wrong-argument: () -> Int
+  fun wrong-arity: () -> Int
+  fun extra-argument: () -> Int
+  fun not-callable: () -> Int
+  fun applied: (Int[Bool]) -> Int[Bool]
+```
+
+### Checked Bodies
+
+`fun one`
+
+```
+CHECKED BODY
+  expr #0: {error}
+```
+
+`fun takes`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Int
+```
+
+`fun wrong-argument`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: {error}
+  expr #2: Int
+```
+
+`fun wrong-arity`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+```
+
+`fun extra-argument`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+```
+
+`fun not-callable`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  pat #0: Int
+```
+
+`fun applied`
+
+```
+CHECKED BODY
+  expr #0: Int[Bool]
+  pat #0: Int[Bool]
+```
+
+### Diagnostics
+
+typechecker[04]: the name `Int` is applied to type arguments  @274..283 (a class takes no arguments)
+  note: the language has no generics yet
+typechecker[04]: the name `Int` is applied to type arguments  @286..295 (a class takes no arguments)
+  note: the language has no generics yet
+typechecker[09]: a value of type `Int` is where a value of type `Unit` belongs  @22..23 (expected `Unit`, found `Int`)
+typechecker[09]: a value of type `String` is where a value of type `Int` belongs  @103..109 (expected `Int`, found `String`)
+typechecker[07]: the function takes 1 argument, and the call passes 0 arguments  @141..146 (expected 1 argument, found 0 arguments)
+typechecker[07]: the function takes 1 argument, and the call passes 2 arguments  @182..187 (expected 1 argument, found 2 arguments)
+typechecker[06]: a value of type `Int` is called, and a function is what a call calls  @246..251 (`Int` is not a function)

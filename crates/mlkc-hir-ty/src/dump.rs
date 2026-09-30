@@ -36,6 +36,9 @@ pub fn module_types(types: &ModuleTypes) -> String {
 }
 
 /// The types of one checked body, as text, in the order of the positions of the body.
+///
+/// A position is the label the HIR gives a node of the body: the same node reads under the same
+/// number in the dump of the body and in the dump of the types of its nodes.
 pub fn checked_body(body: &CheckedBody) -> String {
     let mut out = String::from("CHECKED BODY");
 
@@ -43,14 +46,16 @@ pub fn checked_body(body: &CheckedBody) -> String {
     exprs.sort_by_key(|(id, _)| *id);
 
     for (id, ty) in exprs {
-        let _ = write!(out, "\n  expr #{}: {ty}", id.into_raw());
+        // An id counts from one, and the label a person reads a node by counts from zero, as the
+        // HIR dump counts.
+        let _ = write!(out, "\n  expr #{}: {ty}", id.into_raw().into_u32() - 1);
     }
 
     let mut pats: Vec<_> = body.pat_types().collect();
     pats.sort_by_key(|(id, _)| *id);
 
     for (id, ty) in pats {
-        let _ = write!(out, "\n  pat #{}: {ty}", id.into_raw());
+        let _ = write!(out, "\n  pat #{}: {ty}", id.into_raw().into_u32() - 1);
     }
 
     let mut locals: Vec<_> = body.local_types().collect();
@@ -92,7 +97,7 @@ mod tests {
 
         assert_eq!(
             checked_body(&checked),
-            "CHECKED BODY\n  expr #1: {error}\n  expr #2: {error}\n  pat #1: {error}\n",
+            "CHECKED BODY\n  expr #0: {error}\n  expr #1: {error}\n  pat #0: {error}\n",
         );
         assert_eq!(checked.expr_type(first), Some(&Ty::Error));
         assert_eq!(checked.pat_type(pat), Some(&Ty::Error));

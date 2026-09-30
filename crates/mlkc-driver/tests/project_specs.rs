@@ -1,10 +1,10 @@
-//! The spec tests of a project: what its modules resolve to, read as a snapshot.
+//! The spec tests of a project: what its modules resolve to and check to, read as a snapshot.
 //!
 //! Every fixture under [`project_spec::SPECS_DIR`] has a test of its own, declared below, and a
 //! snapshot next to it that holds what the driver made of the project: the surface of every
-//! module, the scope it resolved to, and the diagnostics. The test names are the ones the
-//! review sees when a fixture changes, so they are spelled out instead of derived from the
-//! directory names.
+//! module, the bodies it holds, the scope it resolved to, the types its signatures and bodies
+//! were checked to, and the diagnostics. The test names are the ones the review sees when a
+//! fixture changes, so they are spelled out instead of derived from the directory names.
 //!
 //! A new fixture needs a line here: the tests read the directory of the fixtures as well,
 //! and fail when a fixture it holds has no test.
@@ -44,6 +44,22 @@ project_specs! {
     // What a module is told about when a path names nothing: the diagnostics of a resolution,
     // and the names they left unresolved.
     broken: "broken",
+
+    // What the checker makes of every expression of a body: the literals, the operators over
+    // `Int` and `Bool`, a call, and a `let`, each of them with the type it was checked to.
+    expressions: "expressions",
+
+    // The signatures the first check requires: missing types, an inferred `_`, and a public
+    // function the lowering has already reported.
+    missing_types: "missing-types",
+
+    // What a check finds: a value where another one belongs, a callee that is not a function,
+    // a call of the wrong arity, and a class applied to arguments.
+    type_errors: "type-errors",
+
+    // The paths of a body, which a resolution never walks: a name a module keeps to itself, a
+    // class written where a value belongs, and a module that is not there.
+    hidden_name: "hidden-name",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

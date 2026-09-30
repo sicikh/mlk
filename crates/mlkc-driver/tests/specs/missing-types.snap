@@ -1,0 +1,173 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #2 project::main
+
+ITEM TREE
+  fun helper  @2.0
+    visibility: private
+  fun parameter  @2.1
+    visibility: private
+    param
+    ret: Int -> use Int
+  fun inferred  @2.2
+    visibility: private
+    param: _
+    ret: Int -> use Int
+  fun shown  @2.3
+    visibility: public
+    param: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+```
+
+### Bodies
+
+`fun helper`
+
+```
+BODY fun helper in module #2
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+`fun parameter`
+
+```
+BODY fun parameter in module #2
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun inferred`
+
+```
+BODY fun inferred in module #2
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun shown`
+
+```
+BODY fun shown in module #2
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+### Resolution
+
+```
+SCOPE
+  helper
+    value: fun helper in module #2 (private)
+  parameter
+    value: fun parameter in module #2 (private)
+  inferred
+    value: fun inferred in module #2 (private)
+  shown
+    value: fun shown in module #2 (public)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun helper: () -> {error}
+  fun parameter: ({error}) -> Int
+  fun inferred: ({error}) -> Int
+  fun shown: (Int) -> {error}
+```
+
+### Checked Bodies
+
+`fun helper`
+
+```
+CHECKED BODY
+  expr #0: Int
+```
+
+`fun parameter`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: {error}
+```
+
+`fun inferred`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: {error}
+```
+
+`fun shown`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Int
+```
+
+### Diagnostics
+
+lowering[07]: `fun shown` is public and does not declare the type of its result, which a caller of it depends on  @123..123
+typechecker[01]: `fun helper` does not declare the type of its result  @0..16 (the type of this result is not written)
+  note: the first check does not infer the signature of a top-level function: every top-level declaration writes its types, and inference of them is deferred
+typechecker[01]: `fun parameter` does not declare the type of its parameter #0  @18..55 (the type of this parameter is not written)
+  note: the first check does not infer the signature of a top-level function: every top-level declaration writes its types, and inference of them is deferred
+typechecker[01]: `fun inferred` does not declare the type of its parameter #0  @77..78 (the type of this parameter is not written)
+  note: the first check does not infer the signature of a top-level function: every top-level declaration writes its types, and inference of them is deferred

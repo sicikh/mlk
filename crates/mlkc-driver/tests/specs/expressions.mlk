@@ -1,0 +1,30 @@
+// What the checker makes of every expression the language has: the literals, the operators over
+// `Int` and `Bool`, a call, and a `let` that binds the result of one. The snapshot holds the
+// type of every node of every body, so a rule of the check is one line of it.
+
+//- /main.mlk
+#[extern]
+fun print(value: String): Unit
+
+fun signed(): Int =
+    -1 + +2 * 3 - 4 / 5
+
+fun ordered(left: Int, right: Int): Bool =
+    left < right && left <= right || left > right || left >= right
+
+fun same(left: String, right: String): Bool =
+    left == right
+
+fun different(left: Int, right: Int): Bool =
+    left != right
+
+fun text(): String =
+    "hello"
+
+fun call(): Unit =
+    print("hello")
+
+fun bound(): Int =
+    let twice = 2 * 2 in
+    let sum = twice + 1 in
+    sum

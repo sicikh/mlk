@@ -128,10 +128,18 @@ impl TypeError {
                 format!("a value of type `{found}` is called, and a function is what a call calls")
             },
             Self::ArgumentCount { expected, found } => {
-                format!("the function takes {expected} arguments, and the call passes {found}")
+                format!(
+                    "the function takes {}, and the call passes {}",
+                    count(*expected, "argument"),
+                    count(*found, "argument"),
+                )
             },
             Self::ParameterCount { expected, found } => {
-                format!("the declaration takes {expected} parameters, and the body binds {found}")
+                format!(
+                    "the declaration takes {}, and the body binds {}",
+                    count(*expected, "parameter"),
+                    count(*found, "parameter"),
+                )
             },
             Self::TypeMismatch { expected, found } => {
                 format!("a value of type `{found}` is where a value of type `{expected}` belongs")
@@ -164,11 +172,19 @@ impl TypeError {
             Self::TypeArguments { .. } => "a class takes no arguments".to_owned(),
             Self::NestedName { .. } => "the language has no members yet".to_owned(),
             Self::NotCallable { found } => format!("`{found}` is not a function"),
-            Self::ArgumentCount { expected, .. } => {
-                format!("the function takes {expected} arguments")
+            Self::ArgumentCount { expected, found } => {
+                format!(
+                    "expected {}, found {}",
+                    count(*expected, "argument"),
+                    count(*found, "argument"),
+                )
             },
-            Self::ParameterCount { expected, .. } => {
-                format!("the declaration takes {expected} parameters")
+            Self::ParameterCount { expected, found } => {
+                format!(
+                    "expected {}, found {}",
+                    count(*expected, "parameter"),
+                    count(*found, "parameter"),
+                )
             },
             Self::TypeMismatch { expected, found } => {
                 format!("expected `{expected}`, found `{found}`")
@@ -193,6 +209,15 @@ impl TypeError {
             },
             _ => Vec::new(),
         }
+    }
+}
+
+/// A count and the word it counts, in the number the count is: `1 argument`, `2 arguments`.
+fn count(count: usize, thing: &str) -> String {
+    if count == 1 {
+        format!("{count} {thing}")
+    } else {
+        format!("{count} {thing}s")
     }
 }
 

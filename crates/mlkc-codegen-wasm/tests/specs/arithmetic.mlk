@@ -1,0 +1,34 @@
+// What the back end makes of arithmetic over immediates: every operator is the instruction of
+// the unboxed `i32`, and its result is boxed back into the word. Every body here is one block,
+// so it is emitted as the straight line it is: the snapshot shows the prologue that refines
+// each parameter once, the instructions an operator becomes, and the return of the word.
+
+//- /main.mlk
+pub fun double(value: Int): Int =
+    value + value
+
+pub fun mixed(left: Int, right: Int): Int =
+    left * right - left / right + (left - right)
+
+pub fun negated(value: Int): Int =
+    -value
+
+pub fun ordered(left: Int, right: Int): Bool =
+    left < right && left <= right || left > right || left >= right
+
+pub fun different(left: Int, right: Int): Bool =
+    left != right
+
+pub fun truth(): Bool =
+    true
+
+pub fun untruth(): Bool =
+    false
+
+pub fun both(): Bool =
+    true && false
+
+pub fun bound(): Int =
+    let twice = 2 * 2 in
+    let sum = twice + 1 in
+    sum

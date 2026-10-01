@@ -20,16 +20,19 @@
 //! # Modules
 //!
 //! - [`ty`] --- a type, and how it reads.
+//! - [`builtins`] --- the classes the language itself declares.
 //! - [`module_types`] --- the type surface of a module.
 //! - [`checked`] --- the types of one checked body.
 //! - [`dump`] --- a reading of the values, for a person and for a diff.
 
+pub mod builtins;
 pub mod checked;
 pub mod dump;
 pub mod module_types;
 pub mod ty;
 
 pub use crate::{
+    builtins::Builtins,
     checked::CheckedBody,
     module_types::ModuleTypes,
     ty::{INT_MAX, INT_MIN, Ty},

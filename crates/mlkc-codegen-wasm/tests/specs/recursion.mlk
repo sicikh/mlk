@@ -1,0 +1,8 @@
+// A function that calls itself: the call is to a function of the same module, so its index is
+// the one the layout assigned, and the dispatch loop of the body runs as many times as the
+// recursion descends. The recursive calls cross the word ABI, and the result of each comes back
+// as an immediate the emitter refines once, where it is known.
+
+//- /main.mlk
+pub fun fib(value: Int): Int =
+    if value < 2 then value else fib(value - 1) + fib(value - 2)

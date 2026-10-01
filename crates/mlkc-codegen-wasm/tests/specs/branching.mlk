@@ -1,0 +1,29 @@
+// A choice between expressions, compiled: the block that branches, the block of every arm, and
+// the block the arms meet in become cases of a dispatch loop, and the value the arms agree on is
+// passed to the block they meet in as a parameter of its own. An `if` without an `else` selects
+// the unit its arms are, and a body that calls itself is a call to a function of the same
+// module, resolved through the layout the emitter was handed.
+
+//- /main.mlk
+pub fun pick(flag: Bool): Int =
+    if flag then 1 else 2
+
+pub fun ordered(low: Bool, high: Bool): Int =
+    if low then 1 elif high then 2 else 3
+
+pub fun where_a_value_belongs(flag: Bool): Int =
+    (if flag then 1 else 2) + 3
+
+pub fun through_a_let(flag: Bool): Int =
+    let carried = if flag then 1 else 2 in
+    carried + 3
+
+pub fun log(flag: Bool): Unit =
+    if flag then
+        log(flag)
+
+pub fun log_ordered(low: Bool, high: Bool): Unit =
+    if low then
+        log(low)
+    elif high then
+        log(high)

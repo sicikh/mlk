@@ -47,8 +47,10 @@ mod engine;
 mod resolve;
 mod signatures;
 
+pub use mlkc_hir_ty::Builtins;
+
 pub use crate::{
-    check::{Builtins, CheckDeps, check_body},
+    check::{CheckDeps, check_body},
     diagnostic::{TypeDiag, TypeError, TypePlace},
     signatures::resolve_module_types,
 };

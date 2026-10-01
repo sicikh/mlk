@@ -1,0 +1,28 @@
+[package]
+name = "mlkc-codegen-wasm"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+mlkc-hir-def.workspace = true
+mlkc-hir-ty.workspace = true
+mlkc-mir.workspace = true
+mlkc-span.workspace = true
+wasm-encoder.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+mlkc-driver.workspace = true
+mlkc-fixture.workspace = true
+mlkc-stdlib.workspace = true
+mlkc-vfs.workspace = true
+wasmparser.workspace = true
+wasmprinter.workspace = true
+wasmtime.workspace = true
+
+[lints]
+workspace = true

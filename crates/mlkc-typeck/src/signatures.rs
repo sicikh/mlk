@@ -186,7 +186,7 @@ mod tests {
         ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name, Prelude,
         ProjectGraph, ProjectId,
     };
-    use mlkc_hir_ty::Ty;
+    use mlkc_hir_ty::{Builtins, Ty};
     use mlkc_lower::lower_module;
     use mlkc_parser::parse;
     use mlkc_resolve::{Closure, Resolution};
@@ -194,7 +194,6 @@ mod tests {
     use mlkc_vfs::{FileId, RelPathBuf};
 
     use super::*;
-    use crate::check::Builtins;
 
     /// The classes of the language, as a module of a test declares them.
     const CLASSES: &str = "#[builtin]\ntype Int\n\n#[builtin]\ntype Unit\n\n#[builtin]\ntype String\n\n#[builtin]\ntype Bool\n";

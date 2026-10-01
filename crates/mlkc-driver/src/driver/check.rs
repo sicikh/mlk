@@ -64,7 +64,7 @@ impl Driver {
     /// checks no types: there is nothing for a literal or an operator to be.
     ///
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
-    fn builtins(&mut self) -> Option<Builtins> {
+    pub fn builtins(&mut self) -> Option<Builtins> {
         let project = ProjectId::new(mlkc_stdlib::PROJECT);
         self.projects.project(&project)?;
 

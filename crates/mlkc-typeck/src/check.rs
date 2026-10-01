@@ -18,11 +18,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc,
-    ItemLocLike, ItemTree, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId,
-    ProjectGraph, UnaryOp,
+    BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
+    ItemTree, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId, ProjectGraph,
+    UnaryOp,
 };
-use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
+use mlkc_hir_ty::{Builtins, CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
 use mlkc_resolve::{Closure, Resolution};
 use rustc_hash::FxHashMap;
 
@@ -31,61 +31,6 @@ use crate::{
     engine::{Engine, InferTy, Scheme, UnifyError},
     resolve::PathResolver,
 };
-
-/// The classes of the language the check reads by name.
-///
-/// `Int`, `Unit`, `String`, and `Bool` are ordinary classes of the standard library
-/// ([ADR-0017]); what the check knows about them is a rule of the check, and not a variant of a
-/// type. The language declares all four --- the standard library is where they are, and the
-/// tests of the compiler keep the two sides of that from drifting apart --- so a caller hands
-/// them over rather than the check looking one up.
-///
-/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Builtins {
-    int: EntityLoc<ClassLoc>,
-    unit: EntityLoc<ClassLoc>,
-    string: EntityLoc<ClassLoc>,
-    boolean: EntityLoc<ClassLoc>,
-}
-
-impl Builtins {
-    /// The classes of the language, in the order the standard library declares them: `Int`,
-    /// `Unit`, `String`, and `Bool`.
-    pub fn new(
-        int: EntityLoc<ClassLoc>,
-        unit: EntityLoc<ClassLoc>,
-        string: EntityLoc<ClassLoc>,
-        boolean: EntityLoc<ClassLoc>,
-    ) -> Self {
-        Self {
-            int,
-            unit,
-            string,
-            boolean,
-        }
-    }
-
-    /// The class `Int`.
-    pub fn int(&self) -> &EntityLoc<ClassLoc> {
-        &self.int
-    }
-
-    /// The class `Unit`.
-    pub fn unit(&self) -> &EntityLoc<ClassLoc> {
-        &self.unit
-    }
-
-    /// The class `String`.
-    pub fn string(&self) -> &EntityLoc<ClassLoc> {
-        &self.string
-    }
-
-    /// The class `Bool`.
-    pub fn boolean(&self) -> &EntityLoc<ClassLoc> {
-        &self.boolean
-    }
-}
 
 /// What checking a body reads of the rest of the project ([ADR-0009]).
 ///

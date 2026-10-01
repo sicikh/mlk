@@ -69,11 +69,12 @@ pub(crate) fn targets(term: &Terminator) -> Vec<&BlockTarget> {
         Terminator::Branch { then_, else_, .. } => vec![then_, else_],
         Terminator::Switch {
             arms, otherwise, ..
-        } => arms
-            .iter()
-            .map(|(_, target)| target)
-            .chain([otherwise])
-            .collect(),
+        } => {
+            arms.iter()
+                .map(|(_, target)| target)
+                .chain([otherwise])
+                .collect()
+        },
         Terminator::Return { .. } | Terminator::Unreachable { .. } => Vec::new(),
     }
 }

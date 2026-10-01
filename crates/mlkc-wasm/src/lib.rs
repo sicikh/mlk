@@ -127,9 +127,11 @@ impl WasmDriver {
         self.driver
             .use_std()
             .into_iter()
-            .map(|file| StdFile {
-                path: file.path.to_string(),
-                text: file.text,
+            .map(|file| {
+                StdFile {
+                    path: file.path.to_string(),
+                    text: file.text,
+                }
             })
             .collect()
     }
@@ -308,9 +310,11 @@ impl HirNode {
             parts: node
                 .parts
                 .iter()
-                .map(|part| HirPart {
-                    text: part.text.clone(),
-                    kind: part.kind.map(kind_of),
+                .map(|part| {
+                    HirPart {
+                        text: part.text.clone(),
+                        kind: part.kind.map(kind_of),
+                    }
                 })
                 .collect(),
             kind: kind_of(node.kind),
@@ -477,17 +481,13 @@ impl Types {
 fn node(kind: &'static str, id: u32, range: Option<TextRange>, ty: &Ty) -> (u32, u32, TypedNode) {
     let at = range.map_or(u32::MAX, |range| u32::from(range.start()));
 
-    (
-        at,
-        id,
-        TypedNode {
-            kind,
-            label: format!("{kind} #{}", id - 1),
-            range: range.map(covered),
-            ty: ty.to_string(),
-            error: ty.is_error(),
-        },
-    )
+    (at, id, TypedNode {
+        kind,
+        label: format!("{kind} #{}", id - 1),
+        range: range.map(covered),
+        ty: ty.to_string(),
+        error: ty.is_error(),
+    })
 }
 
 /// The name of an entity of the surface of a module, as a host reads it: `fun main`.
@@ -546,13 +546,15 @@ impl Diagnostic {
             labels: diagnostic
                 .labels
                 .iter()
-                .map(|label| Label {
-                    start: u32::from(label.span.range.start()),
-                    end: u32::from(label.span.range.end()),
-                    line: index.line_col(label.span.range.start()).line,
-                    column: index.line_col(label.span.range.start()).col,
-                    primary: label.primary,
-                    message: label.message.clone(),
+                .map(|label| {
+                    Label {
+                        start: u32::from(label.span.range.start()),
+                        end: u32::from(label.span.range.end()),
+                        line: index.line_col(label.span.range.start()).line,
+                        column: index.line_col(label.span.range.start()).col,
+                        primary: label.primary,
+                        message: label.message.clone(),
+                    }
                 })
                 .collect(),
             notes: diagnostic.notes.clone(),

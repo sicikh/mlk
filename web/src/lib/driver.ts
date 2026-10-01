@@ -215,15 +215,22 @@ export interface Types {
 }
 
 /**
- * What one pass of the compiler did while a host was reading the driver.
+ * What one pass of the compiler did for one unit while a host was reading the driver.
  *
  * A counter is of consultations rather than of values: one pull that asks the driver for the
  * same slot twice is two lookups, and a lookup that found the value is a hit whatever it was
- * that asked.
+ * that asked. What a row is about is the pass and the unit: the parse of a file, the check of
+ * a body, the index of a project.
  */
-export interface PassStats {
+export interface StatsRow {
     /** The pass, by the name it is known by: `parse`, `interface`, `check`. */
     pass: string;
+
+    /**
+     * The unit the pass was asked for: the path of a file or a module, the name of a project,
+     * or the name of a body and where it is written (`/main.mlk: main`).
+     */
+    unit: string;
 
     /** How often the value was there: the slot was keyed by what it was built from. */
     hits: number;
@@ -245,23 +252,30 @@ export interface PassStats {
 
     /** How many values went, with the input they were built from. */
     dropped: number;
+
+    /**
+     * How long the pass spent running for this unit, in milliseconds: zero for a pass that never
+     * ran, and zero when the host gave the driver no clock.
+     */
+    took: number;
 }
 
-/** What the driver did since a host last read the counters, by pass. */
+/** What the driver did since a host last read the counters, by pass and unit. */
 export interface Stats {
-    /** The counters of every pass, in the order a module is read in. */
-    passes: PassStats[];
+    /** The counters of every pass and unit, in the order a module is read in. */
+    rows: StatsRow[];
 }
 
 /**
  * What one pull of the driver cost, as a host reads it.
  *
- * The counters are the driver's, and the time is the host's: the driver does not read a clock,
- * so a host that wants milliseconds takes them around the pull it made.
+ * The counters are the driver's, and the time of the pull is the host's: the driver measures
+ * the passes it runs by the clock the host gave it, and a host that wants the whole pull timed
+ * takes it around the call as well.
  */
 export interface Cost {
-    /** The passes the pull touched, in the order a module is read in. */
-    passes: PassStats[];
+    /** The counters of every pass and unit the pull touched, in the order a module is read in. */
+    rows: StatsRow[];
 
     /** How long the pull took, in milliseconds, as the host waited for it. */
     took: number;
@@ -308,8 +322,9 @@ export interface Driver {
     diagnostics(path: string): Promise<Diagnostic[]>;
 
     /**
-     * What the driver did since this was last asked: what it reused, what it read again, what
-     * it kept although it read again, and what it dropped, by pass.
+     * What the driver did since this was last asked, by pass and unit: what it reused, what it
+     * read again, what it kept although it read again, what it dropped, and how long the passes
+     * it ran took.
      *
      * Reading the counters is what clears them, so what comes back is the work since the call
      * before it. A host that wants one pull's work asks right after that pull, and the time the

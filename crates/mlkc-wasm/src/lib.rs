@@ -32,20 +32,54 @@ use mlkc_vfs::{FileId, VfsPath};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+/// The clock of the page, which is the clock a driver in a browser is measured by.
+///
+/// A browser has no time of its own inside wasm, and this is the time it does have: the
+/// milliseconds `performance.now()` counts, which is what a look at the driver costs in the
+/// end. A host that is not a browser --- the tests of this crate --- leaves the driver without
+/// a clock, and reads the work of the passes rather than the time they took.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance)]
+    fn now() -> f64;
+}
+
 /// A driver a browser can own.
 #[wasm_bindgen]
 pub struct WasmDriver {
     driver: Driver,
 }
 
+/// A driver the page times: a browser has no clock inside wasm, so it hands the driver the one
+/// it has (`performance.now`).
+#[cfg(target_arch = "wasm32")]
+fn timed_driver() -> Driver {
+    let mut driver = Driver::new();
+
+    driver.set_clock(now);
+
+    driver
+}
+
+/// A driver that is not timed: the module was not built for a browser, which is what the tests
+/// of this crate are, and nothing there measures a pass.
+#[cfg(not(target_arch = "wasm32"))]
+fn timed_driver() -> Driver {
+    Driver::new()
+}
+
 #[wasm_bindgen]
 impl WasmDriver {
     /// A driver that knows nothing: a host pushes the buffers it holds, and asks for the
     /// standard library of the language when it wants it ([`WasmDriver::use_std`]).
+    ///
+    /// The driver measures the passes it runs by the clock of the page
+    /// ([`mlkc_driver::Driver::set_clock`]).
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            driver: Driver::new(),
+            driver: timed_driver(),
         }
     }
 
@@ -120,12 +154,15 @@ impl WasmDriver {
         to_js(&self.diagnostics_of(path)?)
     }
 
-    /// What the driver did since this was last asked, by pass: what it handed over from a slot,
-    /// what it read again, what it kept although it read again, and what it dropped.
+    /// What the driver did since this was last asked, by pass and by unit: what it handed over
+    /// from a slot, what it read again, what it kept although it read again, what it dropped,
+    /// and how long the passes it ran took.
     ///
     /// Reading the counters is what clears them, so a host that wants to know what one pull
     /// cost asks for them right after it: what comes back is that pull's work, and the time it
-    /// took is the host's own clock around the call.
+    /// took is the host's own clock around the call. A unit is what a pass is a value of: the
+    /// path of a file or a module, the name of a project, and the name of a body and where it
+    /// is written.
     ///
     /// The name a host sees is `stats`: wasm-bindgen keeps the Rust name otherwise.
     #[wasm_bindgen(js_name = stats)]
@@ -388,13 +425,13 @@ struct Types {
 /// What the driver did since a host last read the counters, as it reads it.
 ///
 /// The counters are the driver's account of its own incrementality: what it handed over from
-/// a slot, what it had to read again, what it kept although it read again, and what went. A
-/// host reads them between the pulls it wants told apart, and the time of a pull is the host's
-/// own clock around it.
+/// a slot, what it had to read again, what it kept although it read again, what went, and how
+/// long the passes it ran took. A row is of one pass and one unit, and a host that wants the
+/// totals of a pass --- or of a pull --- adds the rows up.
 #[derive(Serialize)]
 struct Stats {
-    /// The counters of every pass, in the order a module is read in.
-    passes: Vec<PassStats>,
+    /// The counters of every pass and unit, in the order a module is read in.
+    rows: Vec<StatsRow>,
 }
 
 impl Stats {
@@ -403,16 +440,18 @@ impl Stats {
         let taken = driver.take_stats();
 
         Self {
-            passes: taken
+            rows: taken
                 .iter()
-                .map(|(pass, tally)| {
-                    PassStats {
+                .map(|(pass, unit, tally)| {
+                    StatsRow {
                         pass: pass.name().to_owned(),
+                        unit: driver.unit_name(unit),
                         hits: tally.hits,
                         misses: tally.misses,
                         stales: tally.stales,
                         kept: tally.kept,
                         dropped: tally.dropped,
+                        took: tally.took.as_secs_f64() * 1000.0,
                     }
                 })
                 .collect(),
@@ -420,11 +459,15 @@ impl Stats {
     }
 }
 
-/// What one pass did since the counters were last read.
+/// What one pass did for one unit since the counters were last read.
 #[derive(Serialize)]
-struct PassStats {
+struct StatsRow {
     /// The pass, by the name it is known by: `parse`, `interface`, `check`.
     pass: String,
+
+    /// The unit the pass was asked for: the path of a file or a module, the name of a project,
+    /// or the name of a body and where it is written.
+    unit: String,
 
     /// How often the value was there: the slot was keyed by what it was built from.
     hits: u32,
@@ -442,6 +485,10 @@ struct PassStats {
 
     /// How many values went, with the input they were built from.
     dropped: u32,
+
+    /// How long the pass spent running for this unit, in milliseconds: zero for a pass that
+    /// never ran, and zero for a host that gave the driver no clock.
+    took: f64,
 }
 
 /// One entity of the surface of a module and the type it was resolved to.
@@ -808,12 +855,13 @@ mod tests {
         // consultations of the values the read made and asked for again --- the library is
         // walked more than once by one pull --- and what a first read cannot have is a stale
         // read or a drop.
-        let parse = pass(&taken, "parse");
+        let parse = row(&taken, "parse", "/main.mlk");
 
         assert!(parse.misses > 0, "the parse of a new buffer to be a miss");
+        assert_eq!(parse.took, 0.0, "no clock was given: nothing is timed");
         assert!(
             taken
-                .passes
+                .rows
                 .iter()
                 .all(|it| it.stales == 0 && it.dropped == 0),
             "a first read of a buffer to read nothing again",
@@ -824,26 +872,64 @@ mod tests {
             .diagnostics_of("/main.mlk")
             .expect("the file to be diagnosed");
         let taken = Stats::of(&mut driver.driver);
-        let parse = pass(&taken, "parse");
+        let parse = row(&taken, "parse", "/main.mlk");
 
         assert_eq!(parse.misses, 0);
         assert!(parse.hits > 0, "a second read of a buffer to be a hit");
         assert!(
             taken
-                .passes
+                .rows
                 .iter()
                 .all(|it| it.stales == 0 && it.dropped == 0),
             "a second read of a buffer to read nothing again",
         );
+
+        // The check of the buffer is a value of a body, and the row says whose: the name of
+        // the body and the module it is written in.
+        let checked: Vec<&str> = taken
+            .rows
+            .iter()
+            .filter(|it| it.pass == "check")
+            .map(|it| it.unit.as_str())
+            .collect();
+
+        assert_eq!(checked, ["/main.mlk: main"]);
     }
 
-    /// The counters of one pass, by the name a host reads it by.
-    fn pass<'a>(stats: &'a Stats, name: &str) -> &'a PassStats {
+    #[test]
+    fn a_pass_the_driver_ran_crosses_the_boundary_timed() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string()),
+        );
+
+        // A host that has a clock of its own hands it over, and what the passes it runs cost is
+        // read off it: a parse is not so fast that a machine's clock reports it as nothing.
+        driver.driver.set_clock(mlkc_driver::system_clock());
+
+        let _ = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let taken = Stats::of(&mut driver.driver);
+        let parse = row(&taken, "parse", "/main.mlk");
+
+        assert!(parse.misses > 0, "the parse of a new buffer to be a miss");
+        assert!(
+            parse.took > 0.0,
+            "the time of the parse to cross the boundary in milliseconds, not {}",
+            parse.took,
+        );
+    }
+
+    /// The counters of one pass for one unit, by the names a host reads them by.
+    fn row<'a>(stats: &'a Stats, pass: &str, unit: &str) -> &'a StatsRow {
         stats
-            .passes
+            .rows
             .iter()
-            .find(|it| it.pass == name)
-            .unwrap_or_else(|| panic!("a row for `{name}`"))
+            .find(|it| it.pass == pass && it.unit == unit)
+            .unwrap_or_else(|| panic!("a row for {pass} of {unit}"))
     }
 
     #[test]

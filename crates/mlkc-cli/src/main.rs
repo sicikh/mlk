@@ -5,12 +5,12 @@
 //! and prints what a person reads:
 //! the typed view of the tree, the tree itself, and the diagnostics.
 
-use std::{fs, path::PathBuf, process::ExitCode};
+use std::{fs, path::PathBuf, process::ExitCode, time::Duration};
 
 use anyhow::Context as _;
 use bpaf::Bpaf;
 use mlkc_diagnostics::Diagnostic;
-use mlkc_driver::{Driver, Parse};
+use mlkc_driver::{Driver, Parse, system_clock};
 use mlkc_line_index::LineIndex;
 use mlkc_span::TextRange;
 use mlkc_vfs::{FileId, VfsPath};
@@ -49,6 +49,10 @@ fn run(options: &Options) -> anyhow::Result<bool> {
     let vfs_path = VfsPath::new_real_path(path.to_string_lossy().into_owned());
 
     let mut driver = Driver::new();
+
+    // A pass is measured by the clock of the host, and this host has one: what a module costs
+    // to read is read off it ([`Driver::set_clock`]).
+    driver.set_clock(system_clock());
     driver.set_file_contents(vfs_path.clone(), Some(contents));
 
     // The standard library is part of the compiler, and it goes in beside the file a person
@@ -71,7 +75,46 @@ fn run(options: &Options) -> anyhow::Result<bool> {
     print_ast(&parse);
     print_cst(&parse);
 
-    Ok(print_diagnostics(&mut driver, file, &vfs_path))
+    let failed = print_diagnostics(&mut driver, file, &vfs_path);
+
+    print_metrics(&mut driver);
+
+    Ok(failed)
+}
+
+/// Prints what the compiler did, and what each pass of it cost.
+///
+/// The driver counts its own work ([`Driver::take_stats`]): which passes ran, for which unit,
+/// and --- since this host gave it a clock --- how long each of them took.
+fn print_metrics(driver: &mut Driver) {
+    let taken = driver.take_stats();
+
+    if taken.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("## Metrics");
+    println!();
+
+    let mut total = Duration::ZERO;
+
+    for (pass, unit, tally) in taken.iter() {
+        total += tally.took;
+
+        println!(
+            "{:<22} {:>7.2} ms  {:<32} {} hit(s), {} read again ({} kept), {} dropped",
+            pass.name(),
+            tally.took.as_secs_f64() * 1000.0,
+            driver.unit_name(unit),
+            tally.hits,
+            tally.misses + tally.stales,
+            tally.kept,
+            tally.dropped,
+        );
+    }
+
+    println!("{:<22} {:>7.2} ms", "total", total.as_secs_f64() * 1000.0);
 }
 
 /// Prints the typed view over the tree, which is the AST.

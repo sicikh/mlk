@@ -301,6 +301,7 @@ impl Driver {
 
         Self::text_derived(
             &mut self.stats,
+            self.clock,
             Pass::LineIndex,
             &mut self.line_indices,
             file,

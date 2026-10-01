@@ -17,7 +17,7 @@ use mlkc_typeck::{
 
 use super::{
     CheckInputs, CheckSlot, Checked, Driver, Lowered, ModuleBody, Pass, Signatures, SignaturesSlot,
-    TypeDiagnosticsSlot, entries_are_the_same,
+    TypeDiagnosticsSlot, Unit, entries_are_the_same,
 };
 
 /// Where the place a check reported is written, if the driver found it.
@@ -142,20 +142,22 @@ impl Driver {
         );
 
         let held = self.signatures.get(&module);
+        let unit = Unit::Module(module);
 
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
             && Arc::ptr_eq(&slot.resolution, &resolution)
             && slot.closure.reads_the_same_as(&closure)
         {
-            self.stats.consulted(Pass::Signatures, true, true);
+            self.stats.consulted(Pass::Signatures, &unit, true, true);
 
             return Some(slot.signatures.clone());
         }
 
         self.stats
-            .consulted(Pass::Signatures, held.is_some(), false);
+            .consulted(Pass::Signatures, &unit, held.is_some(), false);
 
+        let started = self.ticking();
         let deps = CheckDeps::new(builtins)
             .with_graph(graph)
             .with_closure(closure.clone());
@@ -164,6 +166,8 @@ impl Driver {
             value: Arc::new(value),
             diagnostics: Arc::from(diagnostics),
         };
+
+        self.stats.ran(Pass::Signatures, &unit, self.clock, started);
 
         // A surface equal to the one the driver holds is the value it holds: a reader that came
         // to the same types came to nothing new ([ADR-0008]).
@@ -174,7 +178,7 @@ impl Driver {
                 if *slot.signatures.value == *signatures.value
                     && *slot.signatures.diagnostics == *signatures.diagnostics =>
             {
-                self.stats.kept(Pass::Signatures);
+                self.stats.kept(Pass::Signatures, &unit);
 
                 slot.signatures.clone()
             },
@@ -281,6 +285,7 @@ impl Driver {
             types,
             builtins,
         } = inputs;
+        let unit = Unit::Body(owner.clone());
         let held = self.checks.get(owner);
 
         if let Some(slot) = held
@@ -290,12 +295,13 @@ impl Driver {
             && entries_are_the_same(&slot.types, types)
             && slot.builtins == *builtins
         {
-            self.stats.consulted(Pass::Check, true, true);
+            self.stats.consulted(Pass::Check, &unit, true, true);
 
             return Some(slot.checked.clone());
         }
 
-        self.stats.consulted(Pass::Check, held.is_some(), false);
+        self.stats
+            .consulted(Pass::Check, &unit, held.is_some(), false);
 
         let body = lowered.bodies().iter().find(|body| body.owner() == owner)?;
         let mut deps = CheckDeps::new(builtins.clone())
@@ -306,6 +312,7 @@ impl Driver {
             deps = deps.with_types(*named, Arc::clone(surface));
         }
 
+        let started = self.ticking();
         let (value, diagnostics) = check_body(
             owner.clone(),
             lowered.item_tree(),
@@ -318,6 +325,8 @@ impl Driver {
             diagnostics: Arc::from(diagnostics),
         };
 
+        self.stats.ran(Pass::Check, &unit, self.clock, started);
+
         // A check that ends up equal to the one the driver holds is the one it holds: a body edit
         // neither moves the types of the bodies that did not change nor the values that read
         // them ([ADR-0008]).
@@ -328,7 +337,7 @@ impl Driver {
                 if *slot.checked.value == *checked.value
                     && *slot.checked.diagnostics == *checked.diagnostics =>
             {
-                self.stats.kept(Pass::Check);
+                self.stats.kept(Pass::Check, &unit);
 
                 slot.checked.clone()
             },
@@ -371,6 +380,7 @@ impl Driver {
 
         let held = self.type_diagnostics.get(&module);
         let existed = held.is_some();
+        let unit = Unit::Module(module);
 
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
@@ -395,14 +405,17 @@ impl Driver {
                 self.lower(module.0)
                     .is_some_and(|current| Arc::ptr_eq(held, &current))
             }) {
-                self.stats.consulted(Pass::TypeDiagnostics, true, true);
+                self.stats
+                    .consulted(Pass::TypeDiagnostics, &unit, true, true);
 
                 return Some(self.type_diagnostics[&module].value.clone());
             }
         }
 
-        self.stats.consulted(Pass::TypeDiagnostics, existed, false);
+        self.stats
+            .consulted(Pass::TypeDiagnostics, &unit, existed, false);
 
+        let started = self.ticking();
         let mut looked = BTreeMap::new();
         let mut rendered = Vec::new();
 
@@ -426,6 +439,9 @@ impl Driver {
 
         let value: Arc<[Diagnostic]> = Arc::from(rendered);
 
+        self.stats
+            .ran(Pass::TypeDiagnostics, &unit, self.clock, started);
+
         // A rendering equal to the one the driver holds is the value it holds: an edit that moved
         // a body but not what a host reads does not move the value the buffer is marked by
         // ([ADR-0008]).
@@ -433,7 +449,7 @@ impl Driver {
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match self.type_diagnostics.get(&module) {
             Some(slot) if *slot.value == *value => {
-                self.stats.kept(Pass::TypeDiagnostics);
+                self.stats.kept(Pass::TypeDiagnostics, &unit);
 
                 slot.value.clone()
             },

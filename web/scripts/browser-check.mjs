@@ -200,13 +200,14 @@ const STEPS = {
 
     showStats: `show('stats'); return true`,
 
-    // What the driver did for the look that is in front, as the table of the tab reads it.
-    stats: `const counter = (row) => Object.fromEntries([...row.querySelectorAll('[data-count]')]
-    \t\t.map((cell) => [cell.dataset.count, Number(text(cell))]));
+    // What the driver did for the look that is in front, as the table of the tab reads it: the
+    // rows are per pass and unit, and the time of a row is the time the pass spent running.
+    stats: `const value = (cell) => cell.dataset.took !== undefined ? Number(cell.dataset.took) : Number(text(cell));
+\tconst row = (element) => ({ pass: element.dataset.stats, unit: element.dataset.unit, ...Object.fromEntries([...element.querySelectorAll('[data-count]')]
+\t\t.map((cell) => [cell.dataset.count, value(cell)])) });
 \treturn JSON.stringify({
-\t\ttook: text(inspector().querySelector('[data-cost=took]')),
-\t\tcounters: Object.fromEntries([...inspector().querySelectorAll('[data-stats]')]
-\t\t\t.map((row) => [row.dataset.stats, counter(row)]))
+\t\ttook: Number(inspector().querySelector('[data-cost=took]').dataset.took),
+\t\trows: [...inspector().querySelectorAll('[data-stats]')].map(row)
 \t})`,
 
     showTc: `show('tc'); return true`,
@@ -996,6 +997,13 @@ function report(page, problems, warnings, asked) {
 
     const diagnostic = page.broken?.[0] ?? {};
 
+    // What the counters of a read come to, by pass and by row: what a check of one assertion
+    // asks about is stated over the rows and not over the rows of one pass.
+    const counted = (pass, field) =>
+        page.stats.rows
+            .filter((it) => it.pass === pass)
+            .reduce((all, it) => all + (it[field] ?? 0), 0);
+
     const checks = [
         ["the page hydrated", page.hydrated],
         ["the cst of a clean buffer is a module", page.clean.root],
@@ -1226,22 +1234,40 @@ function report(page, problems, warnings, asked) {
             // An edit of a body is read out of what the driver held: the parse of the buffer is
             // a stale read and never a miss, and nothing that was held was dropped.
             "an edit of a body is paid for out of what the driver held",
-            page.stats.counters.parse?.stales === 1 &&
-                page.stats.counters.parse?.misses === 0 &&
-                Object.values(page.stats.counters).every(
-                    (it) => it.dropped === 0,
-                ),
+            counted("parse", "stales") === 1 &&
+                counted("parse", "misses") === 0 &&
+                page.stats.rows.every((it) => it.dropped === 0),
         ],
         [
             // What a module shows is a function of its own text and of no body, so the edit
             // reads the surface of it again and keeps the types it had.
             "the signature surface of an edited module is read again and kept",
-            page.stats.counters.signatures?.stales >= 1 &&
-                page.stats.counters.signatures?.kept >= 1,
+            counted("signatures", "stales") >= 1 &&
+                counted("signatures", "kept") >= 1,
         ],
         [
             "the body that was edited is checked again",
-            page.stats.counters.check?.stales >= 1,
+            counted("check", "stales") >= 1,
+        ],
+        [
+            // A check is a value of a body, and the counters say which body: the name of the
+            // entity it belongs to and the file it is written in.
+            "a check is counted for the body it is about",
+            page.stats.rows.some(
+                (it) => it.pass === "check" && it.unit === "/main.mlk: main",
+            ),
+        ],
+        [
+            // What a look cost is the time of the page around it, and every row carries what
+            // its pass cost. The times of the rows are zero in the browser this check drives
+            // --- its clock reads the same value twice within one task, and a pull is one task
+            // --- which is why the time of a pass is what the tests of the driver measure,
+            // with a clock they control.
+            "a look is timed, and its rows carry the time of their passes",
+            page.stats.took > 0 &&
+                page.stats.rows.every(
+                    (it) => Number.isFinite(it.took) && it.took >= 0,
+                ),
         ],
         ["the page said nothing it should not have", problems.length === 0],
     ];
@@ -1293,7 +1319,7 @@ function report(page, problems, warnings, asked) {
         `a pick of ${JSON.stringify(page.phoneToken.says)} in a tree marks ${JSON.stringify(page.phoneToken.marked)}, which the editor ${page.phoneToken.scrolls ? (page.phoneToken.scrolled ? "is taken to" : "stays away from") : "has nothing to scroll to"}`,
     );
     console.log(
-        `a read of an edited body took ${page.stats.took}: ${page.stats.counters.check?.stales ?? 0} checked again, ${page.stats.counters.signatures?.kept ?? 0} surface(s) kept, ${page.stats.counters.parse?.misses ?? 0} first read(s)`,
+        `a read of an edited body took ${page.stats.took} ms, of which ${counted("check", "stales")} check(s) read again and ${page.stats.rows.filter((it) => it.took > 0).length} pass(es) timed`,
     );
 
     if (diagnostic.whole)

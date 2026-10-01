@@ -11,7 +11,7 @@ use mlkc_span::Span;
 
 use super::{
     DefMapSlot, Driver, InterfaceSlot, Lowered, ModuleIndexSlot, Pass, ResolutionDiagnosticsSlot,
-    ResolutionSlot, entries_are_the_same,
+    ResolutionSlot, Unit, entries_are_the_same,
 };
 
 impl Driver {
@@ -27,19 +27,24 @@ impl Driver {
     /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     pub fn interface(&mut self, module: ModuleId) -> Option<Arc<Interface>> {
         let lowered = self.lower(module.0)?;
+        let unit = Unit::Module(module);
         let held = self.interfaces.get(&module);
 
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
         {
-            self.stats.consulted(Pass::Interface, true, true);
+            self.stats.consulted(Pass::Interface, &unit, true, true);
 
             return Some(slot.value.clone());
         }
 
-        self.stats.consulted(Pass::Interface, held.is_some(), false);
+        self.stats
+            .consulted(Pass::Interface, &unit, held.is_some(), false);
 
+        let started = self.ticking();
         let value = Arc::new(Interface::of(lowered.item_tree()));
+
+        self.stats.ran(Pass::Interface, &unit, self.clock, started);
 
         // An interface equal to the one the driver holds is the value it holds: everything
         // keyed by the interface stays where it was ([ADR-0008]).
@@ -47,7 +52,7 @@ impl Driver {
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match held {
             Some(slot) if *slot.value == *value => {
-                self.stats.kept(Pass::Interface);
+                self.stats.kept(Pass::Interface, &unit);
 
                 slot.value.clone()
             },
@@ -84,28 +89,33 @@ impl Driver {
         }
 
         let held = self.module_indexes.get(project);
+        let unit = Unit::Project(project.clone());
 
         if let Some(slot) = held
             && entries_are_the_same(&slot.interfaces, &interfaces)
         {
-            self.stats.consulted(Pass::ModuleIndex, true, true);
+            self.stats.consulted(Pass::ModuleIndex, &unit, true, true);
 
             return Some(slot.value.clone());
         }
 
         self.stats
-            .consulted(Pass::ModuleIndex, held.is_some(), false);
+            .consulted(Pass::ModuleIndex, &unit, held.is_some(), false);
 
+        let started = self.ticking();
         let mut index = ModuleIndex::new(project.clone());
 
         for (module, interface) in &interfaces {
             index.insert(*module, interface.path());
         }
 
+        self.stats
+            .ran(Pass::ModuleIndex, &unit, self.clock, started);
+
         let value = Arc::new(index);
         let value = match held {
             Some(slot) if *slot.value == *value => {
-                self.stats.kept(Pass::ModuleIndex);
+                self.stats.kept(Pass::ModuleIndex, &unit);
 
                 slot.value.clone()
             },
@@ -146,23 +156,27 @@ impl Driver {
         );
 
         let held = self.resolutions.get(&module);
+        let unit = Unit::Module(module);
 
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
             && slot.closure.reads_the_same_as(&closure)
         {
-            self.stats.consulted(Pass::Resolution, true, true);
+            self.stats.consulted(Pass::Resolution, &unit, true, true);
 
             return Some(slot.value.clone());
         }
 
         self.stats
-            .consulted(Pass::Resolution, held.is_some(), false);
+            .consulted(Pass::Resolution, &unit, held.is_some(), false);
 
+        let started = self.ticking();
         let value = Arc::new(resolve_module(module, lowered.item_tree(), &ResolveDeps {
             graph,
             closure: closure.clone(),
         }));
+
+        self.stats.ran(Pass::Resolution, &unit, self.clock, started);
 
         // A resolution equal to the one the driver holds is the value it holds: a reader that
         // came to the same entities came to nothing new ([ADR-0008]).
@@ -170,7 +184,7 @@ impl Driver {
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match held {
             Some(slot) if *slot.value == *value => {
-                self.stats.kept(Pass::Resolution);
+                self.stats.kept(Pass::Resolution, &unit);
 
                 slot.value.clone()
             },
@@ -208,27 +222,32 @@ impl Driver {
         }
 
         let held = self.def_maps.get(project);
+        let unit = Unit::Project(project.clone());
 
         if let Some(slot) = held
             && entries_are_the_same(&slot.resolutions, &resolutions)
         {
-            self.stats.consulted(Pass::DefMap, true, true);
+            self.stats.consulted(Pass::DefMap, &unit, true, true);
 
             return Some(slot.value.clone());
         }
 
-        self.stats.consulted(Pass::DefMap, held.is_some(), false);
+        self.stats
+            .consulted(Pass::DefMap, &unit, held.is_some(), false);
 
+        let started = self.ticking();
         let mut map = ProjectDefMap::default();
 
         for (module, resolution) in &resolutions {
             map.set(*module, Arc::clone(resolution.scope()));
         }
 
+        self.stats.ran(Pass::DefMap, &unit, self.clock, started);
+
         let value = Arc::new(map);
         let value = match held {
             Some(slot) if *slot.value == *value => {
-                self.stats.kept(Pass::DefMap);
+                self.stats.kept(Pass::DefMap, &unit);
 
                 slot.value.clone()
             },
@@ -274,6 +293,7 @@ impl Driver {
         let held = held.filter(|slot| {
             Arc::ptr_eq(&slot.resolution, &resolution) && Arc::ptr_eq(&slot.lowered, &lowered)
         });
+        let unit = Unit::Module(module);
 
         if let Some(slot) = held {
             // What the rendering looked at is the HIR of the modules a name the walk could not
@@ -290,21 +310,25 @@ impl Driver {
                     .is_some_and(|current| Arc::ptr_eq(held, &current))
             }) {
                 self.stats
-                    .consulted(Pass::ResolutionDiagnostics, true, true);
+                    .consulted(Pass::ResolutionDiagnostics, &unit, true, true);
 
                 return Some(self.resolution_diagnostics[&module].value.clone());
             }
         }
 
         self.stats
-            .consulted(Pass::ResolutionDiagnostics, existed, false);
+            .consulted(Pass::ResolutionDiagnostics, &unit, existed, false);
 
+        let started = self.ticking();
         let mut looked = BTreeMap::new();
         let mut rendered = Vec::with_capacity(resolution.diagnostics().len());
 
         for diagnostic in resolution.diagnostics().iter() {
             rendered.push(self.rendered(diagnostic, module, &lowered, &mut looked));
         }
+
+        self.stats
+            .ran(Pass::ResolutionDiagnostics, &unit, self.clock, started);
 
         let value: Arc<[Diagnostic]> = Arc::from(rendered);
 

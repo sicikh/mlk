@@ -117,9 +117,11 @@
 //!
 //! The driver counts its own work: every consultation of a slot is a hit, a miss, or a stale
 //! read, a pass that ran and read the same as the value that was held is a keep, and a value
-//! dropped with its input is a drop ([`Stats`]). It is how a host answers the question the
-//! driver is built around --- what did that edit cost --- without a profiler: the counters say
-//! which passes ran and why, and the clock a host wrapped a pull in says how long it took.
+//! dropped with its input is a drop ([`Stats`]). What the counters are of is the pass and the
+//! unit --- the parse of a file, the check of a body, the index of a project --- so a host reads
+//! which of them was read again, and not only how many were. A host that wants the passes timed
+//! gives the driver a [`Clock`] ([`Driver::set_clock`]): the driver reads no clock of its own,
+//! since a browser has none inside wasm, and a host that does not care about time gives none.
 //! [`Driver::take_stats`] hands the counters over and starts counting again.
 //!
 //! # Concurrency
@@ -142,5 +144,6 @@
 mod driver;
 
 pub use crate::driver::{
-    Diagnostics, Driver, IceReport, Lowered, ModuleBody, Parse, Pass, Stats, StdFile, Tally,
+    Clock, Diagnostics, Driver, IceReport, Lowered, ModuleBody, Parse, Pass, Stats, StdFile, Tally,
+    Unit, system_clock,
 };

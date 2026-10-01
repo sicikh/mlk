@@ -1,22 +1,56 @@
-//! The counters of the driver: what it reused, what it read again, and what it dropped.
+//! The counters of the driver: what it reused, what it read again, what it dropped, and how
+//! long the passes it ran took.
 //!
-//! The driver does not read a clock --- a value is a function of its inputs, and how long
-//! something took is not one of them --- so what it counts is the work itself. Every
-//! consultation of a slot is a hit, a miss, or a stale read; the pass a stale read runs may
-//! still come out equal to the value the driver held, which is the value it keeps, and which
-//! is what a keep counts ([ADR-0008]); and a value that goes with the input it was built from
-//! is a drop.
+//! The driver reads no clock of its own --- a browser has none inside wasm, and a host that
+//! measures is one that knows what it measures --- so a host that wants milliseconds gives the
+//! driver a [`Clock`], and what a pass takes is read off it. A driver with no clock counts the
+//! same work and reports no time.
 //!
-//! A host that wants milliseconds wraps the pull it made: the time of a pull is the host's to
-//! measure, and the counters say what the time was spent on. [`Driver::take_stats`] hands the
-//! counters over and starts counting again, so what a host reads is what happened since it last
-//! asked --- a lookup, a table, a log line, or a budget is the host's to keep.
+//! Every consultation of a slot is a hit, a miss, or a stale read; the pass a stale read runs
+//! may still come out equal to the value the driver held, which is the value it keeps, and
+//! which is what a keep counts ([ADR-0008]); and a value that goes with the input it was built
+//! from is a drop.
+//!
+//! [`Driver::take_stats`] hands the counters over and starts counting again, so what a host
+//! reads is what happened since it last asked --- a lookup, a table, a log line, or a budget is
+//! the host's to keep. What it reads them by is the pass and the unit: the parse of a file, the
+//! check of a body, the index of a project.
 //!
 //! [`Driver::take_stats`]: super::Driver::take_stats
 //!
 //! [ADR-0008]: ../../../docs/adr/0008-compiler-driver.md
 
-use std::fmt;
+use std::{
+    fmt,
+    time::{Duration, Instant},
+};
+
+use mlkc_hir_def::{BodyEntityLoc, ModuleId, ProjectId};
+use mlkc_vfs::FileId;
+
+/// A source of time, told to a driver by its host.
+///
+/// The driver reads no clock of its own, so a host that wants passes timed hands it one: what
+/// a clock answers is monotonic milliseconds, the same epoch for every call, and what the
+/// driver makes of it is the difference between two readings around a pass.
+pub type Clock = fn() -> f64;
+
+/// The clock of a host that has one: the time of the machine, in milliseconds since the first
+/// reading of it by this process.
+///
+/// A browser has no time of its own inside wasm, so the wasm shim gives its driver the clock of
+/// the page instead; a host that has no clock at all sets none, and reads the work of the
+/// passes rather than the time they took.
+pub fn system_clock() -> Clock {
+    /// The first reading, which every reading after it is counted from.
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
+    fn now() -> f64 {
+        START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+    }
+
+    now
+}
 
 /// One pass of the pipeline, as the driver counts what it does with it.
 ///
@@ -102,7 +136,28 @@ impl fmt::Display for Pass {
     }
 }
 
-/// What one pass did since a host last took the counters.
+/// Which value a pass was asked for: the unit the slot it read belongs to.
+///
+/// A file owns its parse, its HIR, its line index and the rendered diagnostics of its parse; a
+/// module owns its interface, its resolution, its type surface and the diagnostics of them; a
+/// project owns its module index and its def map; a body owns its check, its MIR and its SSA
+/// form. What a host reads of the counters is which of those had to be read again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unit {
+    /// A file of the host's, by the id it was pushed under.
+    File(FileId),
+
+    /// A module: a file the compiler reads as one.
+    Module(ModuleId),
+
+    /// A project: the modules of a host, and what they are read under.
+    Project(ProjectId),
+
+    /// A body: the body of one entity of a module.
+    Body(BodyEntityLoc),
+}
+
+/// What one pass did for one unit since a host last took the counters.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Tally {
     /// The slot was keyed by what it was built from: the value was handed over, and the pass
@@ -119,6 +174,9 @@ pub struct Tally {
     pub kept: u32,
     /// The value went, with the input it was built from: the next read of it is a miss.
     pub dropped: u32,
+    /// The time the pass spent running for this unit, as the host's clock read it: zero when
+    /// the driver was given no clock, and zero for a pass that never ran.
+    pub took: Duration,
 }
 
 impl Tally {
@@ -131,36 +189,67 @@ impl Tally {
 /// What the driver did since a host last took the counters.
 ///
 /// A counter is of consultations rather than of values: one pull that asks for the same slot
-/// twice is two lookups, one that may be a miss and one that may be a hit. What the counters
-/// say is what the driver did, not how many slots it holds.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// twice is two lookups, one that may be a miss and one that may be a hit. The entries are per
+/// pass and per unit --- the check of one body is one entry, the check of another is another
+/// --- and they read in the order a module is read in.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Stats {
-    /// The counters of every pass, by [`Pass::ALL`].
-    tally: [Tally; Pass::ALL.len()],
+    /// The counters of every pass and unit that was asked for, by pass and by the order they
+    /// were first asked for.
+    units: Vec<(Pass, Unit, Tally)>,
 }
 
 impl Stats {
-    /// The counters of one pass.
-    pub fn of(&self, pass: Pass) -> Tally {
-        self.tally[pass as usize]
+    /// The counters of one pass for one unit, or nothing when it was never asked for.
+    pub fn of(&self, pass: Pass, unit: &Unit) -> Option<Tally> {
+        self.units
+            .iter()
+            .find(|(it, held, _)| *it == pass && held == unit)
+            .map(|(_, _, tally)| *tally)
     }
 
-    /// Every pass and what it did, in the order a module is read in.
-    pub fn iter(&self) -> impl Iterator<Item = (Pass, Tally)> + '_ {
-        Pass::ALL.into_iter().map(|pass| (pass, self.of(pass)))
+    /// Every pass and unit that was asked for, in the order a module is read in.
+    pub fn iter(&self) -> impl Iterator<Item = (Pass, &Unit, Tally)> + '_ {
+        self.units
+            .iter()
+            .map(|(pass, unit, tally)| (*pass, unit, *tally))
+    }
+
+    /// What one pass did over every unit it was asked for.
+    pub fn total(&self, pass: Pass) -> Tally {
+        self.units.iter().filter(|(it, ..)| *it == pass).fold(
+            Tally::default(),
+            |all, (_, _, tally)| {
+                Tally {
+                    hits: all.hits + tally.hits,
+                    misses: all.misses + tally.misses,
+                    stales: all.stales + tally.stales,
+                    kept: all.kept + tally.kept,
+                    dropped: all.dropped + tally.dropped,
+                    took: all.took + tally.took,
+                }
+            },
+        )
     }
 
     /// Whether the driver did nothing at all.
     pub fn is_empty(&self) -> bool {
-        self.tally.iter().all(Tally::is_empty)
+        self.units.iter().all(|(_, _, tally)| tally.is_empty())
     }
 
-    /// Counts one consultation of a slot: a hit, or a pass that had to run.
+    /// The counters a host is taking, with the clock left where it was.
+    pub(super) fn take(&mut self) -> Self {
+        Self {
+            units: std::mem::take(&mut self.units),
+        }
+    }
+
+    /// Counts one consultation of a slot: a hit, or a pass that has to run.
     ///
     /// `held` is whether the driver held a value for the slot when it was consulted, which is
     /// what tells a first read from one whose input had changed.
-    pub(super) fn consulted(&mut self, pass: Pass, held: bool, hit: bool) {
-        let tally = &mut self.tally[pass as usize];
+    pub(super) fn consulted(&mut self, pass: Pass, unit: &Unit, held: bool, hit: bool) {
+        let tally = self.tally(pass, unit);
 
         if hit {
             tally.hits += 1;
@@ -171,22 +260,73 @@ impl Stats {
         }
     }
 
+    /// Counts a pass that ran, and the time between two readings of the host's clock.
+    ///
+    /// `started` is the reading taken before the pass ran, and `None` is what a host that gave
+    /// the driver no clock leaves behind: the work is counted either way, and nothing is timed.
+    pub(super) fn ran(
+        &mut self,
+        pass: Pass,
+        unit: &Unit,
+        clock: Option<Clock>,
+        started: Option<f64>,
+    ) {
+        let took = match (clock, started) {
+            (Some(clock), Some(started)) => {
+                Duration::from_secs_f64((clock() - started).max(0.0) / 1000.0)
+            },
+            _ => Duration::ZERO,
+        };
+
+        self.tally(pass, unit).took += took;
+    }
+
     /// Counts a pass that ran and read the same as the value the driver held.
-    pub(super) fn kept(&mut self, pass: Pass) {
-        self.tally[pass as usize].kept += 1;
+    pub(super) fn kept(&mut self, pass: Pass, unit: &Unit) {
+        self.tally(pass, unit).kept += 1;
     }
 
     /// Counts values that went, with the input they were built from.
-    pub(super) fn dropped(&mut self, pass: Pass, count: usize) {
-        self.tally[pass as usize].dropped += count as u32;
+    pub(super) fn dropped(&mut self, pass: Pass, unit: &Unit, count: usize) {
+        self.tally(pass, unit).dropped += count as u32;
+    }
+
+    /// The counters of one pass and unit, made to exist when they are not there yet.
+    ///
+    /// An entry is put where it reads in the order a module is read in: after the entries of
+    /// the passes before it, and after the entries of its own pass.
+    fn tally(&mut self, pass: Pass, unit: &Unit) -> &mut Tally {
+        if let Some(at) = self
+            .units
+            .iter()
+            .position(|(it, held, _)| *it == pass && held == unit)
+        {
+            return &mut self.units[at].2;
+        }
+
+        let at = self
+            .units
+            .iter()
+            .rposition(|(it, ..)| *it <= pass)
+            .map_or(0, |at| at + 1);
+
+        self.units
+            .insert(at, (pass, unit.clone(), Tally::default()));
+
+        &mut self.units[at].2
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Pass, Stats, Tally};
+    use std::time::Duration;
 
-    /// The list is the enum, and the enum indexes the counters: a pass added to one is a pass
+    use mlkc_hir_def::ModuleId;
+    use mlkc_vfs::FileId;
+
+    use super::{Pass, Stats, Tally, Unit};
+
+    /// The list is the enum, and the enum indexes the passes: a pass added to one is a pass
     /// added to the other, and the compiler is what says so.
     #[test]
     fn every_pass_is_counted() {
@@ -228,29 +368,69 @@ mod tests {
 
     /// One tally does not spill into another, and a clean read is a read that counted nothing.
     #[test]
-    fn counters_are_per_pass() {
+    fn counters_are_per_pass_and_unit() {
+        let file = Unit::File(FileId::from_raw(1));
+        let module = Unit::Module(ModuleId(FileId::from_raw(1)));
         let mut stats = Stats::default();
 
         assert!(stats.is_empty());
 
-        stats.consulted(Pass::Parse, false, false);
-        stats.consulted(Pass::Parse, true, false);
-        stats.consulted(Pass::Parse, true, true);
-        stats.kept(Pass::Parse);
-        stats.dropped(Pass::Parse, 2);
+        stats.consulted(Pass::Parse, &file, false, false);
+        stats.consulted(Pass::Parse, &file, true, false);
+        stats.consulted(Pass::Parse, &file, true, true);
+        stats.kept(Pass::Parse, &file);
+        stats.dropped(Pass::Parse, &file, 2);
 
-        assert_eq!(stats.of(Pass::Parse), Tally {
-            hits: 1,
-            misses: 1,
-            stales: 1,
-            kept: 1,
-            dropped: 2,
-        });
-        assert_eq!(stats.of(Pass::Check), Tally::default());
-        assert!(!stats.is_empty());
         assert_eq!(
-            stats.iter().filter(|(_, tally)| !tally.is_empty()).count(),
-            1,
+            stats.of(Pass::Parse, &file),
+            Some(Tally {
+                hits: 1,
+                misses: 1,
+                stales: 1,
+                kept: 1,
+                dropped: 2,
+                took: Duration::ZERO,
+            })
         );
+        assert_eq!(stats.of(Pass::Parse, &module), None);
+        assert_eq!(stats.of(Pass::Interface, &file), None);
+        assert!(!stats.is_empty());
+        assert_eq!(stats.iter().count(), 1);
+    }
+
+    /// The entries read in the order a module is read in, and in the order they were made
+    /// within one pass.
+    #[test]
+    fn the_entries_read_in_the_order_of_the_passes() {
+        let file = Unit::File(FileId::from_raw(1));
+        let other = Unit::File(FileId::from_raw(2));
+        let mut stats = Stats::default();
+
+        stats.consulted(Pass::Check, &file, false, false);
+        stats.consulted(Pass::Parse, &other, false, false);
+        stats.consulted(Pass::Parse, &file, false, false);
+        stats.consulted(Pass::Check, &file, true, true);
+
+        let read: Vec<(Pass, &Unit)> = stats.iter().map(|(pass, unit, _)| (pass, unit)).collect();
+
+        assert_eq!(read, vec![
+            (Pass::Parse, &other),
+            (Pass::Parse, &file),
+            (Pass::Check, &file),
+        ]);
+    }
+
+    /// What a host takes is the counters, and the clock stays with the driver.
+    #[test]
+    fn taking_the_counters_leaves_the_clock_behind() {
+        let unit = Unit::File(FileId::from_raw(1));
+        let mut stats = Stats::default();
+
+        stats.consulted(Pass::Parse, &unit, false, false);
+
+        let taken = stats.take();
+
+        assert_eq!(taken.iter().count(), 1);
+        assert_eq!(stats.iter().count(), 0);
     }
 }

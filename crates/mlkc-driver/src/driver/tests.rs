@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc, time::Duration};
 
 use mlkc_diagnostics::{Category, Level};
 use mlkc_hir_def::{
@@ -894,12 +894,13 @@ fn a_body_edit_of_a_module_leaves_the_modules_that_read_it_where_they_were() {
 #[test]
 fn a_read_of_a_value_the_driver_holds_is_a_hit() {
     let (mut driver, file) = driver_with("main.mlk", MODULE);
+    let unit = Unit::File(file);
 
     let first = driver.parse(file).expect("the file to be parsed");
     let taken = driver.take_stats();
 
     // Nothing was held, so the pass had to run, and the counters say why.
-    assert_eq!(taken.of(Pass::Parse), Tally {
+    assert_eq!(counters(&taken, Pass::Parse, &unit), Tally {
         misses: 1,
         ..Tally::default()
     });
@@ -908,13 +909,37 @@ fn a_read_of_a_value_the_driver_holds_is_a_hit() {
     let taken = driver.take_stats();
 
     assert!(Arc::ptr_eq(&first, &second));
-    assert_eq!(taken.of(Pass::Parse), Tally {
+    assert_eq!(counters(&taken, Pass::Parse, &unit), Tally {
         hits: 1,
         ..Tally::default()
     });
 
     // Taking the counters is what clears them: what a host reads is what happened since.
     assert!(driver.take_stats().is_empty());
+}
+
+/// The counters of one pass for one unit, which is what a test about them reads.
+fn counters(taken: &Stats, pass: Pass, unit: &Unit) -> Tally {
+    taken
+        .of(pass, unit)
+        .unwrap_or_else(|| panic!("counters for {pass} of {unit:?}"))
+}
+
+/// A clock that stands a second still per reading, so that what a pass cost is what it read.
+///
+/// The readings are per thread, so what one test reads is not what another one moves.
+fn ticking_clock() -> f64 {
+    thread_local! {
+        static NOW: Cell<f64> = const { Cell::new(0.0) };
+    }
+
+    NOW.with(|now| {
+        let at = now.get();
+
+        now.set(at + 1000.0);
+
+        at
+    })
 }
 
 #[test]
@@ -934,11 +959,18 @@ fn an_edit_of_a_body_reads_the_surface_of_its_module_again_and_keeps_it() {
     let taken = driver.take_stats();
 
     // The text changed, so what is derived from it is read again --- and the surface of the
-    // module came out of it unchanged, which is what the counters call a keep.
-    assert_eq!(taken.of(Pass::Parse).stales, 1);
-    assert_eq!(taken.of(Pass::Lower).stales, 1);
-    assert_eq!(taken.of(Pass::Interface).stales, 1);
-    assert_eq!(taken.of(Pass::Interface).kept, 1);
+    // module came out of it unchanged, which is what the counters call a keep. The parse is a
+    // value of the file and the interface one of the module, which is what the units say.
+    assert_eq!(counters(&taken, Pass::Parse, &Unit::File(data)).stales, 1);
+    assert_eq!(counters(&taken, Pass::Lower, &Unit::File(data)).stales, 1);
+    assert_eq!(
+        counters(&taken, Pass::Interface, &Unit::Module(module)).stales,
+        1
+    );
+    assert_eq!(
+        counters(&taken, Pass::Interface, &Unit::Module(module)).kept,
+        1
+    );
 }
 
 #[test]
@@ -961,10 +993,10 @@ fn an_edit_of_a_body_costs_its_module_and_nothing_of_its_readers() {
     // --- what they are keyed by is a new value --- and the ones whose body did not change came
     // out the same, which is what the counters call a keep. Nothing here is a miss, and what
     // the module shows did not move either.
-    assert_eq!(taken.of(Pass::Check).misses, 0);
-    assert!(taken.of(Pass::Check).stales >= 2);
-    assert!(taken.of(Pass::Check).kept >= 1);
-    assert_eq!(taken.of(Pass::Signatures).kept, 1, "{taken:?}");
+    assert_eq!(taken.total(Pass::Check).misses, 0);
+    assert!(taken.total(Pass::Check).stales >= 2);
+    assert!(taken.total(Pass::Check).kept >= 1);
+    assert_eq!(taken.total(Pass::Signatures).kept, 1);
 
     // The module that reads `data` is read again with nothing to do: what it reads --- the
     // interface of `data` --- is the value the driver kept, so every pass is a hit. The hits
@@ -975,11 +1007,11 @@ fn an_edit_of_a_body_costs_its_module_and_nothing_of_its_readers() {
     assert!(
         taken
             .iter()
-            .all(|(_, tally)| tally.misses == 0 && tally.stales == 0),
+            .all(|(_, _, tally)| tally.misses == 0 && tally.stales == 0),
         "a reader of an edited body was read again: {taken:?}",
     );
     assert!(
-        taken.of(Pass::Check).hits >= 1,
+        taken.total(Pass::Check).hits >= 1,
         "the body of the reader to be checked from a slot: {taken:?}",
     );
 }
@@ -1004,9 +1036,80 @@ fn a_change_of_a_project_drops_what_was_read_under_it() {
 
     let taken = driver.take_stats();
 
-    assert!(taken.of(Pass::Lower).dropped >= 1);
-    assert!(taken.of(Pass::Interface).dropped >= 1);
-    assert!(taken.of(Pass::Resolution).dropped >= 1);
+    assert!(taken.total(Pass::Lower).dropped >= 1);
+    assert!(taken.total(Pass::Interface).dropped >= 1);
+    assert!(taken.total(Pass::Resolution).dropped >= 1);
+
+    // What went is named by the unit it belonged to, and a body goes by its own name.
+    assert_eq!(
+        counters(&taken, Pass::Lower, &Unit::File(data.0)).dropped,
+        1
+    );
+    assert_eq!(
+        counters(&taken, Pass::Resolution, &Unit::Module(data)).dropped,
+        1
+    );
+    assert!(counters(&taken, Pass::ModuleIndex, &Unit::Project(project())).dropped >= 1);
+}
+
+#[test]
+fn the_counters_name_the_unit_a_pass_was_asked_for() {
+    let fixture = format!("//- /data.mlk\n{DATA}\n//- /main.mlk\n{READER}");
+    let mut driver = std_project_of(&fixture);
+    let data = file(&driver, "data.mlk");
+
+    let _ = driver.diagnostics(data).expect("the diagnostics of data");
+    let taken = driver.take_stats();
+
+    // A check is a value of a body: what was read is counted for the body it was read for, and
+    // the counters name both of them --- the two bodies of the module.
+    let mut checked: Vec<String> = Vec::new();
+
+    for (pass, unit, tally) in taken.iter() {
+        if pass != Pass::Check || tally.is_empty() {
+            continue;
+        }
+
+        let Unit::Body(owner) = unit else {
+            panic!("a check to be a value of a body, not of {unit:?}");
+        };
+
+        assert_eq!(owner.module(), ModuleId(data), "a check of another module");
+
+        checked.push(driver.unit_name(unit));
+    }
+
+    checked.sort_unstable();
+
+    assert_eq!(checked.len(), 2, "the module has two bodies: {checked:?}");
+    assert!(checked[0].ends_with(": helper"), "{}", checked[0]);
+    assert!(checked[1].ends_with(": origin"), "{}", checked[1]);
+}
+
+#[test]
+fn a_pass_that_runs_is_measured_by_the_clock_of_the_host() {
+    let (mut driver, file) = driver_with("main.mlk", MODULE);
+
+    driver.set_clock(ticking_clock);
+
+    let _ = driver.parse(file).expect("the file to be parsed");
+    let taken = driver.take_stats();
+
+    // The pass was read off the clock before it ran and once after it, and the clock stands a
+    // second still per reading: what it cost is one second, whatever it really took.
+    assert_eq!(
+        counters(&taken, Pass::Parse, &Unit::File(file)).took,
+        Duration::from_secs(1),
+    );
+
+    // A hit is not timed: the pass did not run, so the clock was not read for it.
+    let _ = driver.parse(file).expect("the file to be parsed");
+    let taken = driver.take_stats();
+
+    assert_eq!(
+        counters(&taken, Pass::Parse, &Unit::File(file)).took,
+        Duration::ZERO,
+    );
 }
 
 #[test]

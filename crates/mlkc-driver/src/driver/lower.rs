@@ -12,7 +12,7 @@ use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, TextRange};
 use mlkc_vfs::{FileId, RelPath};
 use rustc_hash::FxHashMap;
 
-use super::{Driver, Pass};
+use super::{Driver, Pass, Unit};
 
 /// The HIR of one file, and where what it holds is written.
 ///
@@ -218,9 +218,14 @@ impl Driver {
     /// `None` means there is nothing to lower: the file has no text, it was never parsed,
     /// the parse did not find a module in it, or the place of the file names no module.
     pub fn lower(&mut self, file: FileId) -> Option<Arc<Lowered>> {
+        let unit = Unit::File(file);
+
         let Some(parse) = self.parse(file) else {
-            self.stats
-                .dropped(Pass::Lower, self.lowered.remove(&file).is_some() as usize);
+            self.stats.dropped(
+                Pass::Lower,
+                &unit,
+                self.lowered.remove(&file).is_some() as usize,
+            );
 
             return None;
         };
@@ -231,8 +236,11 @@ impl Driver {
         let Some(relative) = self.module_path(ModuleId(file)) else {
             // The place names no file, and a place that names no file names no module: there
             // is no path to call one by, and nothing to lower it to.
-            self.stats
-                .dropped(Pass::Lower, self.lowered.remove(&file).is_some() as usize);
+            self.stats.dropped(
+                Pass::Lower,
+                &unit,
+                self.lowered.remove(&file).is_some() as usize,
+            );
 
             return None;
         };
@@ -248,6 +256,7 @@ impl Driver {
 
         Self::text_derived(
             &mut self.stats,
+            self.clock,
             Pass::Lower,
             &mut self.lowered,
             file,

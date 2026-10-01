@@ -17,7 +17,7 @@
         type Diagnostic,
         type Driver,
         type Hir,
-        type PassStats,
+        type StatsRow,
         type StdFile,
         type SyntaxNode,
         type Types,
@@ -336,7 +336,7 @@ fun main(): Unit =
                 cst,
                 ast,
                 hir,
-                cost: { passes: stats.passes, took },
+                cost: { rows: stats.rows, took },
             };
         } catch (error) {
             if (path !== active) return;
@@ -464,7 +464,7 @@ fun main(): Unit =
 
                 say(
                     "note",
-                    `${name(it.path)}: ${count === 0 ? "no diagnostics" : `${count} diagnostic${count === 1 ? "" : "s"}`} in ${took} ms — ${counted(counters.passes)}`,
+                    `${name(it.path)}: ${count === 0 ? "no diagnostics" : `${count} diagnostic${count === 1 ? "" : "s"}`} in ${took} ms — ${counted(counters.rows)}`,
                 );
             } catch (error) {
                 say(
@@ -489,18 +489,19 @@ fun main(): Unit =
      * What the counters of one read come to, as a line of the console reads them.
      *
      * A person reads a summary, not a table: what a read reused, what it had to read again,
-     * how much of that came out the same, and what went.
+     * how much of that came out the same, what went, and how long the read spent on it.
      */
-    function counted(passes: PassStats[]): string {
-        const total = (of: (it: PassStats) => number) =>
-            passes.reduce((all, it) => all + of(it), 0);
+    function counted(rows: StatsRow[]): string {
+        const total = (of: (it: StatsRow) => number) =>
+            rows.reduce((all, it) => all + of(it), 0);
 
         const hits = total((it) => it.hits);
         const read = total((it) => it.misses + it.stales);
         const kept = total((it) => it.kept);
         const dropped = total((it) => it.dropped);
+        const took = total((it) => it.took);
 
-        return `${hits} hit${hits === 1 ? "" : "s"}, ${read} read again (${kept} kept), ${dropped} dropped`;
+        return `${hits} hit${hits === 1 ? "" : "s"}, ${read} read again (${kept} kept), ${dropped} dropped, ${took.toFixed(1)} ms in the passes`;
     }
 
     /**

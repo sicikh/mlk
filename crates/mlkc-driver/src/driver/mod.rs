@@ -1,5 +1,5 @@
-//! The driver's state: the table of slots, the counters of what the passes did, the guards
-//! around a pass, and the report a bug leaves.
+//! The driver's state: the table of slots, the counters of what the passes did, the clock the
+//! host gave it, the guards around a pass, and the report a bug leaves.
 
 mod check;
 mod diagnostics;
@@ -39,7 +39,7 @@ pub use self::{
     host::StdFile,
     lower::{Lowered, ModuleBody},
     parse::Parse,
-    stats::{Pass, Stats, Tally},
+    stats::{Clock, Pass, Stats, Tally, Unit, system_clock},
 };
 
 /// The driver: the only mutable component, and the owner of the memo table.
@@ -84,6 +84,11 @@ pub struct Driver {
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
     /// What the passes did since a host last took the counters.
     stats: Stats,
+    /// The clock the host gave the driver, if it gave it one.
+    ///
+    /// The driver reads no clock of its own ([`Clock`]), so a host that wants passes timed
+    /// hands it one; a host that does not leaves it out, and the work is counted without a time.
+    clock: Option<Clock>,
     /// The first internal compiler exception a pass raised, and what the driver was computing.
     ice: Option<Arc<IceReport>>,
 }
@@ -438,11 +443,32 @@ impl Driver {
     /// What the passes did since a host last took this, and a clean slate again.
     ///
     /// The counters are the driver's account of its own incrementality: what it handed over
-    /// from a slot, what it had to read again, what it kept although it read again, and what
-    /// went. Taking them is what clears them, so a host that wraps one pull with two takes
-    /// reads what that pull cost ([`Stats`]).
+    /// from a slot, what it had to read again, what it kept although it read again, what went,
+    /// and --- for a host that gave the driver a clock --- how long the passes it ran took. What
+    /// a host reads them by is the pass and the unit ([`Stats`]).
     pub fn take_stats(&mut self) -> Stats {
-        std::mem::take(&mut self.stats)
+        self.stats.take()
+    }
+
+    /// Gives the driver a clock to measure the passes it runs by ([`Clock`]).
+    ///
+    /// The clock is the host's, and it stays with the driver: taking the counters takes what
+    /// the passes did, not the clock they were read against.
+    pub fn set_clock(&mut self, clock: Clock) {
+        self.clock = Some(clock);
+    }
+
+    /// The name a host knows a unit by: where a file or a module is written, what a project is
+    /// called, and where the body of an entity is.
+    pub fn unit_name(&self, unit: &Unit) -> String {
+        match unit {
+            Unit::File(file) => self.file_path(*file).to_string(),
+            Unit::Module(module) => self.file_path(module.0).to_string(),
+            Unit::Project(project) => project.as_str().to_owned(),
+            Unit::Body(owner) => {
+                format!("{}: {}", self.file_path(owner.module().0), body_name(owner),)
+            },
+        }
     }
 
     /// Runs a pass that may bug, holding the report and answering `None` instead of unwinding.
@@ -474,13 +500,19 @@ impl Driver {
     /// The body a report is about, as a person reads it: the name of the entity that owns it and
     /// the path of the file it is written in.
     fn body_context(&self, owner: &BodyEntityLoc) -> String {
-        let name = owner
-            .item
-            .name()
-            .map_or_else(|| format!("{:?}", owner.item), ToString::to_string);
-        let path = self.file_path(owner.module().0);
+        format!(
+            "the body of `{}` in `{}`",
+            body_name(owner),
+            self.file_path(owner.module().0),
+        )
+    }
 
-        format!("the body of `{name}` in `{path}`")
+    /// The reading of the host's clock, for a pass that is about to run.
+    ///
+    /// `None` when the host gave the driver no clock, which is what a host that reads the work
+    /// of the passes rather than the time they took leaves behind.
+    fn ticking(&self) -> Option<f64> {
+        self.clock.map(|clock| clock())
     }
 
     /// The value of a slot keyed by the version of a file,
@@ -491,28 +523,35 @@ impl Driver {
     /// written out for.
     fn text_derived<T: ?Sized>(
         stats: &mut Stats,
+        clock: Option<Clock>,
         pass: Pass,
         slots: &mut FxHashMap<FileId, TextSlot<T>>,
         file: FileId,
         version: FileVersion,
         build: impl FnOnce() -> Option<Arc<T>>,
     ) -> Option<Arc<T>> {
+        let unit = Unit::File(file);
         let held = slots.get(&file);
 
         if let Some(slot) = held
             && slot.version == version
         {
-            stats.consulted(pass, true, true);
+            stats.consulted(pass, &unit, true, true);
 
             return Some(slot.value.clone());
         }
 
-        stats.consulted(pass, held.is_some(), false);
+        stats.consulted(pass, &unit, held.is_some(), false);
 
-        let Some(value) = build() else {
+        let started = clock.map(|clock| clock());
+        let value = build();
+
+        stats.ran(pass, &unit, clock, started);
+
+        let Some(value) = value else {
             // There is no input left to describe, so the slot goes.
             // The next push of this file builds it again from nothing.
-            stats.dropped(pass, slots.remove(&file).is_some() as usize);
+            stats.dropped(pass, &unit, slots.remove(&file).is_some() as usize);
 
             return None;
         };
@@ -540,12 +579,16 @@ impl Driver {
             self.invalidate_module(module);
         }
 
+        let unit = Unit::Project(project.clone());
+
         self.stats.dropped(
             Pass::ModuleIndex,
+            &unit,
             self.module_indexes.remove(project).is_some() as usize,
         );
         self.stats.dropped(
             Pass::DefMap,
+            &unit,
             self.def_maps.remove(project).is_some() as usize,
         );
     }
@@ -555,43 +598,83 @@ impl Driver {
     /// from them.
     ///
     /// A module that changed project or text is read again; what reads this module is not
-    /// dropped with it, and sees the new value when it is read again.
+    /// dropped with it, and sees the new value when it is read again. A value of a body goes by
+    /// its own name: what a host reads of a drop is which body it was, and a count of them is
+    /// not.
     fn invalidate_module(&mut self, module: ModuleId) {
+        let file = Unit::File(module.0);
+        let named = Unit::Module(module);
+
         self.stats.dropped(
             Pass::Lower,
+            &file,
             self.lowered.remove(&module.0).is_some() as usize,
         );
         self.stats.dropped(
             Pass::Interface,
+            &named,
             self.interfaces.remove(&module).is_some() as usize,
         );
         self.stats.dropped(
             Pass::Resolution,
+            &named,
             self.resolutions.remove(&module).is_some() as usize,
         );
         self.stats.dropped(
             Pass::ResolutionDiagnostics,
+            &named,
             self.resolution_diagnostics.remove(&module).is_some() as usize,
         );
         self.stats.dropped(
             Pass::Signatures,
+            &named,
             self.signatures.remove(&module).is_some() as usize,
         );
         self.stats.dropped(
             Pass::TypeDiagnostics,
+            &named,
             self.type_diagnostics.remove(&module).is_some() as usize,
         );
 
-        let checks = self.checks.len();
-        self.checks.retain(|owner, _| owner.module() != module);
-        self.stats.dropped(Pass::Check, checks - self.checks.len());
+        let bodies: Vec<BodyEntityLoc> = self
+            .checks
+            .keys()
+            .filter(|owner| owner.module() == module)
+            .cloned()
+            .collect();
+        for owner in bodies {
+            self.checks.remove(&owner);
+            self.stats.dropped(Pass::Check, &Unit::Body(owner), 1);
+        }
 
-        let mirs = self.mirs.len();
-        self.mirs.retain(|owner, _| owner.module() != module);
-        self.stats.dropped(Pass::Mir, mirs - self.mirs.len());
+        let bodies: Vec<BodyEntityLoc> = self
+            .mirs
+            .keys()
+            .filter(|owner| owner.module() == module)
+            .cloned()
+            .collect();
+        for owner in bodies {
+            self.mirs.remove(&owner);
+            self.stats.dropped(Pass::Mir, &Unit::Body(owner), 1);
+        }
 
-        let ssas = self.ssas.len();
-        self.ssas.retain(|owner, _| owner.module() != module);
-        self.stats.dropped(Pass::Ssa, ssas - self.ssas.len());
+        let bodies: Vec<BodyEntityLoc> = self
+            .ssas
+            .keys()
+            .filter(|owner| owner.module() == module)
+            .cloned()
+            .collect();
+        for owner in bodies {
+            self.ssas.remove(&owner);
+            self.stats.dropped(Pass::Ssa, &Unit::Body(owner), 1);
+        }
     }
+}
+
+/// What a body is called by: the name of the entity that owns it, or the entity itself.
+fn body_name(owner: &BodyEntityLoc) -> String {
+    owner
+        .item
+        .name()
+        .map_or_else(|| format!("{:?}", owner.item), ToString::to_string)
 }

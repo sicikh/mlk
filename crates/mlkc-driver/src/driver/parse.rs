@@ -8,7 +8,7 @@ use mlkc_rowan::{AstNode, NodeCache};
 use mlkc_syntax::{ModuleRoot, SyntaxNode};
 use mlkc_vfs::FileId;
 
-use super::{Driver, ParseSlot, Pass};
+use super::{Driver, ParseSlot, Pass, Unit};
 
 /// The value of the parse slot: what the parser returned, whole.
 ///
@@ -72,6 +72,7 @@ impl Driver {
     /// it was never pushed, it is gone, or it is not text at all.
     /// [`Driver::file_state`] tells which of those it is.
     pub fn parse(&mut self, file: FileId) -> Option<Arc<Parse>> {
+        let unit = Unit::File(file);
         let version = self.file_version(file);
         let held = self.parses.get(&file);
 
@@ -82,18 +83,22 @@ impl Driver {
         if let Some(slot) = held
             && slot.version == version
         {
-            self.stats.consulted(Pass::Parse, true, true);
+            self.stats.consulted(Pass::Parse, &unit, true, true);
 
             return Some(slot.value.clone());
         }
 
-        self.stats.consulted(Pass::Parse, held.is_some(), false);
+        self.stats
+            .consulted(Pass::Parse, &unit, held.is_some(), false);
 
         let Some(text) = self.file_text(file) else {
             // There is no input left to describe, so the slot goes, and the green nodes of
             // this file go with it: nothing is going to be parsed the way it was.
-            self.stats
-                .dropped(Pass::Parse, self.parses.remove(&file).is_some() as usize);
+            self.stats.dropped(
+                Pass::Parse,
+                &unit,
+                self.parses.remove(&file).is_some() as usize,
+            );
 
             return None;
         };
@@ -104,7 +109,10 @@ impl Driver {
             .parses
             .remove(&file)
             .map_or_else(NodeCache::default, |slot| slot.cache);
+        let started = self.ticking();
         let value = Arc::new(Parse::of(&text, &mut cache));
+
+        self.stats.ran(Pass::Parse, &unit, self.clock, started);
 
         self.parses.insert(file, ParseSlot {
             version,
@@ -125,6 +133,7 @@ impl Driver {
 
         Self::text_derived(
             &mut self.stats,
+            self.clock,
             Pass::ParseDiagnostics,
             &mut self.parse_diagnostics,
             file,

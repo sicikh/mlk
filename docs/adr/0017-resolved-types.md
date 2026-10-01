@@ -17,7 +17,7 @@ and [ADR-0016][0016-inter-module-resolution.md]'s interface deliberately holds n
 so a type has no representation with which to cross a module boundary at all.
 
 At the same time, the language is not settled:
-classes with parameters, `impl`s, sums and products, and their inference rules
+type classes with parameters, `impl`s, sums and products, and their inference rules
 are still to be designed,
 and a checker written today will be replaced before any of them land.
 The back end does not have to wait for that,
@@ -103,9 +103,9 @@ pub enum Ty {
     /// nothing, a mistake already reported. It absorbs what it meets, so one mistake is one report.
     Error,
 
-    /// A class, applied to its arguments: `Int`, `Map[Int, Str]`.
+    /// A type class, applied to its arguments: `Int`, `Map[Int, Str]`.
     Class {
-        /// The class, named the way the project names it.
+        /// The type class, named the way the project names it.
         class: EntityLoc<ClassLoc>,
         /// The arguments, in the order they are applied.
         args: Vec<Ty>,
@@ -126,13 +126,13 @@ pub enum Ty {
 
 Three choices in this enum are worth stating as rules.
 
-- **A class is a name, not a path.**
+- **A type class is a name, not a path.**
   `EntityLoc` is [ADR-0010][0010-stable-entity-identity.md]'s stable identity of an entity,
-  so two modules that write a class in different ways resolve to the same value,
-  and a type stays meaningful after the module that declared the class is rebuilt.
+  so two modules that write a type class in different ways resolve to the same value,
+  and a type stays meaningful after the module that declared the type class is rebuilt.
 - **No type is primitive.**
-  `Int` and `Unit` are classes of the standard library,
-  and every type the language adds will be a class or a new variant;
+  `Int` and `Unit` are type classes of the standard library,
+  and every type the language adds will be a type class or a new variant;
   what the checker knows about a builtin is a rule of the checker, not a variant of `Ty`.
   When `impl`s arrive, the rules change and the representation does not.
 - **The only variable that survives a check is a parameter.**
@@ -216,7 +216,7 @@ pub struct CheckDeps {
     pub closure: Closure,
     /// The type surface of the module the body belongs to, and of every module its paths name.
     pub types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
-    /// The classes of the language, which the literals and the operators are typed by.
+    /// The type classes of the language, which the literals and the operators are typed by.
     pub builtins: Builtins,
 }
 ```
@@ -301,7 +301,7 @@ which reads the names the resolution produced and never a body;
 `ModuleTypes` is that pass's value, and it is what both the module's readers
 and the module's own body checks read.
 The pass is not inference:
-every type is written, and resolving one is following the path to its class and its arguments,
+every type is written, and resolving one is following the path to its type class and its arguments,
 walking the modules it names over the closure like any other path.
 
 **Bidirectional, with one unification.**
@@ -350,15 +350,15 @@ the rendering takes the same look a resolution's rendering takes (`hidden_name`)
 and reports it as kept.
 
 **The builtins are a table, not a type.**
-`Int`, `Unit`, `String`, and `Bool` are ordinary classes;
+`Int`, `Unit`, `String`, and `Bool` are ordinary type classes;
 the operators of the HIR and the literals are given types by a table inside the checker,
 which is where the first `impl`s will replace it.
 No type of the language is special in the representation.
-The classes the table holds are the ones the standard library declares with `#[builtin]`:
+The type classes the table holds are the ones the standard library declares with `#[builtin]`:
 the driver reads them off `std::core` and hands them over as `Builtins`,
-which holds the four and nothing else ---
+which holds the four and nothing else —
 not an `Option`, because a caller that checks a body always has them.
-A driver whose host recorded no library holds no classes and checks no types:
+A driver whose host recorded no library holds no type classes and checks no types:
 what a literal is is nothing the checker can say.
 
 **Explicitly temporary.**
@@ -372,8 +372,8 @@ and the dump is a function of those values alone.
 
 ### What this record does not decide
 
-- The syntax that declares type parameters, and the arity rules of classes.
-  A class declares no parameter today;
+- The syntax that declares type parameters, and the arity rules of type classes.
+  A type class declares no parameter today;
   an argument written at one is read as a type and reported where the arity is read.
 - The inference of the signature of a top-level function.
   It waits for an order between the bodies of a module --- a dependency graph, or a fixpoint ---
@@ -418,8 +418,8 @@ and the dump is a function of those values alone.
 - The checker is replaceable:
   improving it, or throwing it away for a constraint solver or an `impl`-driven one,
   touches nothing that stores a type.
-- The classes of the language are declarations, not a primitive table:
-  `Int`, `Unit`, `String`, and `Bool` are classes the standard library declares `#[builtin]`,
+- The type classes of the language are declarations, not a primitive table:
+  `Int`, `Unit`, `String`, and `Bool` are type classes the standard library declares `#[builtin]`,
   and the compiler carries no primitive-type table in its representation.
 - Renaming and inserting entities move no type
   ([ADR-0010][0010-stable-entity-identity.md]):
@@ -441,7 +441,7 @@ and the dump is a function of those values alone.
   it will have no user-written generics, no `impl`s, and not the diagnostics the language
   deserves, and code that grows around its limits is code to revisit.
 - A driver whose host recorded no standard library checks no types:
-  the classes of the language are what the library declares,
+  the type classes of the language are what the library declares,
   so there is nothing for a literal or an operator to be.
 - The representation is a commitment:
   a feature it cannot express as new variants and rules supersedes this record.
@@ -450,7 +450,7 @@ and the dump is a function of those values alone.
 
 ### Types as self-contained values
 
-Chosen. A `Ty` is a recursive enum that owns its children and names its classes by `EntityLoc`.
+Chosen. A `Ty` is a recursive enum that owns its children and names its type classes by `EntityLoc`.
 
 - Good, because a type survives the pass that made it:
   the driver compares and back-dates it, a diagnostic carries it, and it serializes.

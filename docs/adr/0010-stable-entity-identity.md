@@ -215,8 +215,8 @@ The family is not decoration: it turns the sets the language already defines int
   `BodyLoc` for the entities that own a body,
   and the same shape where a scope has namespaces.
   This is where the typing earns its keep:
-  the guarantee worth having is "a body slot cannot name a class",
-  more than "a class cannot be used where a function is expected".
+  the guarantee worth having is "a body slot cannot name a type class",
+  more than "a type class cannot be used where a function is expected".
 - **One project-wide name**: `EntityLoc<I>` -- a module and a name inside it --
   with `BodyEntityLoc = EntityLoc<BodyLoc>` for the units that are bodies.
   The default parameter keeps the common case spelled `EntityLoc`.
@@ -289,7 +289,7 @@ impl ItemTree {
 ```
 
 **The observable data of an entity is a value of its own.**
-`EntityData` -- a signature, the shape of a class, the class and the type of an `impl` --
+`EntityData` -- a signature, the shape of a type class, the type class and the type of an `impl` --
 owns what it names:
 
 - a local target is an `EntityLoc` of the same module;
@@ -443,7 +443,7 @@ Three rules of the table are new, and all three follow from this record.
 - A unit is addressed by a name and keyed by what it read.
   A positional id appears in neither.
 - A unit that is a body is addressed by a **body name**:
-  a slot for a body cannot name a class, and the compiler says so.
+  a slot for a body cannot name a type class, and the compiler says so.
 - An entity's data enters the key of a dependent **by value**:
   it is small, it is exact, and a value needs no retention to stay meaningful.
   The `Arc`-identity variant of [ADR-0008][0008-compiler-driver.md] remains for the big values --
@@ -488,7 +488,7 @@ and the only new work is the entity `h` and whatever asks for it.
 - The identity of a unit is a value:
   it can be logged, compared in a test, and written to disk.
 - A position that carries a kind is checked by the compiler:
-  a body cannot be addressed by the name of a class,
+  a body cannot be addressed by the name of a type class,
   and a name of any kind is still one value that can be stored, compared, and printed.
 - Names have a canonical order,
   so a scope, an interface, or the use sites in a diagnostic read the same way in every process.

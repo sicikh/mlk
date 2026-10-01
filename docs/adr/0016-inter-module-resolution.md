@@ -36,7 +36,7 @@ does not re-resolve the whole project ([ADR-0004][0004-module-system.md], [ADR-0
 The naming this record decides is the naming the language has today:
 a name denotes what the text of the modules that write it says, and nothing else.
 A type system with type classes adds names that are not a function of text alone —
-which `impl` provides the name a path reaches through a class —
+which `impl` provides the name a path reaches through a type class —
 and that naming is left to a record of its own.
 What is text-determined does not change when the rest arrives:
 the resolution this record fixes stays as it is,
@@ -180,7 +180,7 @@ pub struct Interface {
 /// What one exported name denotes inside the module that exports it.
 pub struct Export {
     /// The entity the module declares under this name:
-    /// a class is in the type namespace, a function, a value, and a constant in the value one.
+    /// a type class is in the type namespace, a function, a value, and a constant in the value one.
     pub ty: Option<EntityLoc>,
     pub value: Option<EntityLoc>,
     /// What an import of the name brings in: the path, as the module wrote it, unresolved.
@@ -208,7 +208,7 @@ Three rules make the interface what it is.
   ([ADR-0004][0004-module-system.md]'s "the global pass works only with surfaces").
 
 Today an interface holds names, and nothing behind them.
-The signatures a check reads and the `impl`s a class search reads
+The signatures a check reads and the `impl`s a type class search reads
 join this value with the stages that read them;
 both are additive, and a value that grows invalidates its readers once.
 
@@ -283,7 +283,7 @@ what it denotes in the three namespaces of the language (`PerNs`).
 Reaching a `Ty`/`Value` target is the end of a walk; a path that continues after it
 (`Map::insert`) is a segment of an entity, and the language has no members today.
 Such a path is unresolved, and it is where the deferred naming of type classes
-will enter: the name after a class is what a type decides, not what the text decides.
+will enter: the name after a type class is what a type decides, not what the text decides.
 
 ### Visibility, roots, and the prelude
 
@@ -448,7 +448,7 @@ Two costs of the mechanism are worth stating plainly.
   so a change of the project's shape is visible to it; the entries it read are what its key holds,
   and the walk is what decides which those are.
 - The record decides the naming of today, and a name that a type should decide —
-  a segment after a class --- is unresolved until the naming of type classes is decided,
+  a segment after a type class --- is unresolved until the naming of type classes is decided,
   which is a record of its own.
 
 ## Pros and Cons of the Options

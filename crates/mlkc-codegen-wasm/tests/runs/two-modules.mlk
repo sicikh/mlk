@@ -4,6 +4,7 @@
 //- /main.mlk
 use project::math::twice
 
+#[entry]
 pub fun main(): Unit =
     print-int(twice(21))
 

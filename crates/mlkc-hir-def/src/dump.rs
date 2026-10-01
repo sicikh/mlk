@@ -815,6 +815,10 @@ fn attributes_line(attributes: Option<&Attributes>) -> Option<Node> {
         words.push("#[extern]");
     }
 
+    if attributes.entry {
+        words.push("#[entry]");
+    }
+
     Some(field_node(format!("attributes: {}", words.join(" "))))
 }
 
@@ -1224,6 +1228,7 @@ ITEM TREE
                 attributes: Attributes {
                     builtin: true,
                     external: false,
+                    entry: false,
                 },
                 visibility: Visibility::Public,
             }),
@@ -1235,6 +1240,7 @@ ITEM TREE
                 attributes: Attributes {
                     builtin: false,
                     external: true,
+                    entry: false,
                 },
                 visibility: Visibility::Private,
                 signature: Signature {

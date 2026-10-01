@@ -12,6 +12,11 @@ pub enum Category {
     Resolver,
     TypeChecker,
     Codegen,
+    /// The stage that links the compiled modules of a project into a plan a host runs
+    /// ([ADR-0021]).
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    Link,
 }
 
 impl Category {
@@ -23,6 +28,7 @@ impl Category {
             Category::Resolver => "resolver",
             Category::TypeChecker => "typechecker",
             Category::Codegen => "codegen",
+            Category::Link => "link",
         }
     }
 
@@ -36,6 +42,7 @@ impl Category {
             Category::Resolver => "04",
             Category::TypeChecker => "05",
             Category::Codegen => "06",
+            Category::Link => "07",
         }
     }
 }

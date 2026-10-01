@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+mlkc-codegen-wasm.workspace = true
 mlkc-diagnostics.workspace = true
 mlkc-hir-def.workspace = true
 mlkc-hir-ty.workspace = true

@@ -50,7 +50,7 @@ pub struct FnSignature {
 /// name ([ADR-0021][adr-0021]).
 ///
 /// [adr-0021]: ../../docs/adr/0021-translation-units.md
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleImport {
     /// The entity the import is of; it is what a body of this module calls.
     pub entity: EntityLoc<FunctionLoc>,
@@ -60,10 +60,17 @@ pub struct ModuleImport {
     pub name: String,
     /// What the function takes and gives back.
     pub signature: FnSignature,
+    /// Whether the function is declared `#[extern]`.
+    ///
+    /// An external function is implemented outside the program, so the import is what a host
+    /// provides and not a dependency on another module ([ADR-0021]).
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    pub external: bool,
 }
 
 /// One function of a module, as the back end reads it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleFunction {
     /// The entity that owns the body.
     pub owner: BodyEntityLoc,
@@ -80,7 +87,7 @@ pub struct ModuleFunction {
 }
 
 /// One module: the functions it imports, the ones it declares, and the classes of the language.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleMir {
     /// The canonical path of the module, which names it in the `name` section, in an import of
     /// another module, and in a stack trace.

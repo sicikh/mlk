@@ -5,6 +5,7 @@
 use project::answer::answer
 use project::text::small
 
+#[entry]
 pub fun main(): Unit =
     let value = answer() in
     let shown = print-int(value) in

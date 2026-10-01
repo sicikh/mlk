@@ -1918,3 +1918,214 @@ fn take_changes_reports_the_net_effect_since_the_last_call() {
     driver.set_file_text(path, None);
     assert_eq!(driver.take_changes()[0].change, Change::Delete);
 }
+
+/// A project of two modules whose entry point prints what the other module computes.
+const LINKED: &str = "\
+//- /main.mlk
+use project::math::twice
+
+#[entry]
+pub fun main(): Unit =
+    print-int(twice(21))
+
+//- /math.mlk
+pub fun twice(value: Int): Int =
+    value * 2
+";
+
+#[test]
+fn a_module_of_a_project_reads_as_the_functions_it_declares_and_imports() {
+    let mut driver = std_project_of(LINKED);
+    let main = file(&driver, "main.mlk");
+    let module = driver
+        .mir_module(ModuleId(main))
+        .expect("the module to be read by the front end");
+
+    assert_eq!(module.name, "the-project::main");
+    assert_eq!(module.functions.len(), 1);
+    assert_eq!(module.functions[0].name, "main");
+    assert!(
+        module.functions[0].exported,
+        "a public function is exported"
+    );
+
+    let imports: Vec<String> = module
+        .imports
+        .iter()
+        .map(|import| format!("{}::{}", import.module, import.name))
+        .collect();
+
+    assert_eq!(imports, [
+        "std::runtime::print-int",
+        "the-project::math::twice"
+    ],);
+    assert!(
+        module.imports[0].external,
+        "the runtime function is a host's",
+    );
+    assert!(!module.imports[1].external, "`twice` is a module's");
+}
+
+#[test]
+fn a_second_mir_module_is_the_value_the_first_one_returned() {
+    let mut driver = std_project_of(LINKED);
+    let main = file(&driver, "main.mlk");
+
+    let first = driver
+        .mir_module(ModuleId(main))
+        .expect("the module to be read by the front end");
+    let second = driver
+        .mir_module(ModuleId(main))
+        .expect("the module to be read by the front end");
+
+    assert!(Arc::ptr_eq(&first, &second), "the module was built twice");
+}
+
+#[test]
+fn the_link_plan_holds_every_module_in_an_order_and_the_entry_point() {
+    let mut driver = std_project_of(LINKED);
+    let plan = driver.link(&project()).expect("the project to link");
+
+    assert!(plan.diagnostics.is_empty(), "{:?}", plan.diagnostics);
+
+    let names: Vec<&str> = plan
+        .order
+        .iter()
+        .map(|module| plan.names[module].as_str())
+        .collect();
+
+    // The library comes before the project, and a provider before the modules that import it.
+    assert_eq!(names, [
+        "std::core",
+        "std::prelude",
+        "std::runtime",
+        "the-project::math",
+        "the-project::main",
+    ]);
+
+    let (entry, name) = plan.entry.clone().expect("the entry point");
+
+    assert_eq!(name, "main");
+    assert_eq!(plan.names[&entry], "the-project::main");
+    assert!(
+        plan.modules[&entry]
+            .exports
+            .iter()
+            .any(|export| export.name == "main"),
+        "the entry to be exported",
+    );
+}
+
+#[test]
+fn a_second_link_is_the_value_the_first_one_returned() {
+    let mut driver = std_project_of(LINKED);
+
+    let first = driver.link(&project()).expect("the project to link");
+    let second = driver.link(&project()).expect("the project to link");
+
+    assert!(Arc::ptr_eq(&first, &second), "the plan was built twice");
+}
+
+#[test]
+fn an_edit_of_a_body_links_the_program_again() {
+    let mut driver = std_project_of(LINKED);
+    let before = driver.link(&project()).expect("the project to link");
+
+    driver.set_file_text(
+        path("math.mlk"),
+        Some("pub fun twice(value: Int): Int =\n    value * 3\n".to_string()),
+    );
+
+    let after = driver.link(&project()).expect("the project to link");
+
+    assert!(!Arc::ptr_eq(&before, &after), "the plan was not read again");
+}
+
+#[test]
+fn a_project_without_an_entry_links_without_one() {
+    let mut driver = std_project_of("//- /main.mlk\npub fun main(): Unit =\n    print-int(1)\n");
+    let plan = driver.link(&project()).expect("the project to link");
+
+    assert!(plan.diagnostics.is_empty(), "{:?}", plan.diagnostics);
+    assert_eq!(plan.entry, None);
+}
+
+#[test]
+fn a_second_entry_is_a_mistake_of_the_program() {
+    let mut driver = std_project_of(
+        "\
+//- /main.mlk
+#[entry]
+pub fun first(): Unit =
+    print-int(0)
+
+#[entry]
+pub fun second(): Unit =
+    print-int(1)
+",
+    );
+    let plan = driver.link(&project()).expect("the project to link");
+    let diagnostic = plan.diagnostics.first().expect("a diagnostic");
+
+    assert_eq!(diagnostic.category, Category::Link);
+    assert_eq!(diagnostic.code, "01");
+    assert_eq!(plan.entry, None);
+}
+
+#[test]
+fn an_entry_that_is_not_unit_to_unit_is_a_mistake_of_the_program() {
+    let mut driver = std_project_of(
+        "\
+//- /main.mlk
+#[entry]
+pub fun main(): Int =
+    1
+",
+    );
+    let plan = driver.link(&project()).expect("the project to link");
+    let diagnostic = plan.diagnostics.first().expect("a diagnostic");
+
+    assert_eq!(diagnostic.category, Category::Link);
+    assert_eq!(diagnostic.code, "02");
+    assert_eq!(plan.entry, None);
+}
+
+#[test]
+fn a_private_entry_is_a_mistake_of_the_module() {
+    let mut driver = std_project_of(
+        "\
+//- /main.mlk
+#[entry]
+fun main(): Unit =
+    print-int(1)
+",
+    );
+    let main = file(&driver, "main.mlk");
+    let diagnostics = driver.diagnostics(main).expect("the file to be diagnosed");
+
+    assert_eq!(diagnostics.lowering().len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics.lowering()[0].code, "17");
+}
+
+#[test]
+fn the_link_of_a_project_is_reached_by_a_pass() {
+    let mut driver = std_project_of(LINKED);
+    let first = driver.link(&project()).expect("the project to link");
+    let taken = driver.take_stats();
+    let tally = taken
+        .of(Pass::Link, &Unit::Project(project()))
+        .expect("the link to be counted");
+
+    assert_eq!(tally.misses, 1);
+
+    let again = driver.link(&project()).expect("the project to link");
+
+    assert!(Arc::ptr_eq(&first, &again));
+
+    let taken = driver.take_stats();
+    let tally = taken
+        .of(Pass::Link, &Unit::Project(project()))
+        .expect("the link to be counted");
+
+    assert_eq!(tally.hits, 1);
+}

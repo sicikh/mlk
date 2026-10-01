@@ -3,6 +3,9 @@ source: crates/mlkc-codegen-wasm/tests/run.rs
 expression: snapshot
 ---
 Modules, in the order they are linked:
+- `std::core`
+- `std::prelude`
+- `std::runtime`
 - `app::double`
 - `app::text`
 - `app::answer`

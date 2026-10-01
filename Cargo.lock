@@ -1036,6 +1036,7 @@ name = "mlkc-driver"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "mlkc-codegen-wasm",
  "mlkc-diagnostics",
  "mlkc-fixture",
  "mlkc-hir-def",

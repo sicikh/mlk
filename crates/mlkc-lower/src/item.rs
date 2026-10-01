@@ -404,6 +404,29 @@ impl ItemLowering<'_> {
             self.diagnostics.push(diagnostic);
         }
 
+        // An entry point is where a program begins: the host calls it from outside the module,
+        // and a function the module keeps to itself is one nothing outside it can call.
+        if attributes.entry && !visibility.is_public() {
+            let error = LoweringError::EntryFunctionNotPublic {
+                function: function.clone(),
+            };
+            let diagnostic = LoweringDiag::new(error, syntax::span(self.file, decl.syntax()));
+
+            self.diagnostics.push(diagnostic);
+        }
+
+        // An entry point is a function the program writes: `#[extern]` implements a function
+        // outside the project, and `#[builtin]` in the compiler, so neither is where a person's
+        // program begins.
+        if attributes.entry && (attributes.external || attributes.builtin) {
+            let error = LoweringError::EntryFunctionNotWritten {
+                function: function.clone(),
+            };
+            let diagnostic = LoweringDiag::new(error, syntax::span(self.file, decl.syntax()));
+
+            self.diagnostics.push(diagnostic);
+        }
+
         // A caller of a public function depends on the surface of its module, so the surface
         // has to say what the function takes and gives back ([ADR-0004]).
         //
@@ -502,6 +525,16 @@ impl ItemLowering<'_> {
             data,
         );
         let class = ClassLoc::try_from(loc.item).expect("a type is a type");
+
+        // An entry point is a function, and a type is not where a program begins.
+        if attributes.entry {
+            let error = LoweringError::EntryType {
+                class: class.clone(),
+            };
+            let diagnostic = LoweringDiag::new(error, syntax::span(self.file, decl.syntax()));
+
+            self.diagnostics.push(diagnostic);
+        }
 
         // An external type is a type the project does not declare, and the language has not
         // decided how a module says that yet.
@@ -822,6 +855,44 @@ fun same(left: Int, left: Int): Int =
             &LoweringError::DuplicateParameterName {
                 function: function(tree, "same"),
                 name: Name::new("left"),
+            },
+        ]);
+    }
+
+    #[test]
+    fn an_entry_point_is_a_public_function_the_program_writes() {
+        let lowered = lower_with(
+            "\
+#[entry]
+#[extern]
+pub fun outside(): Unit
+
+#[entry]
+fun kept(): Unit =
+    1
+
+#[entry]
+type NotAFunction
+",
+            Prelude::standard(),
+        );
+        let tree = &lowered.item_tree;
+
+        let errors: Vec<&LoweringError> = lowered
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.error())
+            .collect();
+
+        assert_eq!(errors, [
+            &LoweringError::EntryFunctionNotWritten {
+                function: function(tree, "outside"),
+            },
+            &LoweringError::EntryFunctionNotPublic {
+                function: function(tree, "kept"),
+            },
+            &LoweringError::EntryType {
+                class: class(tree, "NotAFunction"),
             },
         ]);
     }

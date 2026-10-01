@@ -119,6 +119,15 @@ pub enum CodegenDiag {
     },
 }
 
+impl CodegenDiag {
+    /// Where the construct is written.
+    pub fn span(&self) -> Span {
+        match self {
+            Self::Unsupported { span, .. } | Self::Unexpected { span, .. } => *span,
+        }
+    }
+}
+
 impl fmt::Display for CodegenDiag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

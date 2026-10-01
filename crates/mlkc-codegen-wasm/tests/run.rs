@@ -56,14 +56,18 @@ fn run(name: &str) {
 
     for module in &project.modules {
         module.validate();
-
-        assert!(
-            module.diagnostics.is_empty(),
-            "`{}` to be emitted without a report: {:?}",
-            module.module.name,
-            module.diagnostics,
-        );
     }
+
+    assert!(
+        project.plan.diagnostics.is_empty(),
+        "the project to link without a report: {:?}",
+        project.plan.diagnostics,
+    );
+
+    assert!(
+        project.entry.is_some(),
+        "the run to declare an entry point with `#[entry]`",
+    );
 
     let cfg = interpret(&project, &project.cfg);
     let ssa = interpret(&project, &project.ssa);

@@ -88,11 +88,17 @@ pub enum Pass {
     Mir,
     /// The MIR of one body, in the SSA form.
     Ssa,
+    /// The module of one module: its functions, and the functions they call ([ADR-0021]).
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    MirModule,
+    /// The compiled modules of one project, ordered for a host to link.
+    Link,
 }
 
 impl Pass {
     /// Every pass, in the order a module is read in.
-    pub const ALL: [Pass; 14] = [
+    pub const ALL: [Pass; 16] = [
         Pass::Parse,
         Pass::Lower,
         Pass::LineIndex,
@@ -107,6 +113,8 @@ impl Pass {
         Pass::Check,
         Pass::Mir,
         Pass::Ssa,
+        Pass::MirModule,
+        Pass::Link,
     ];
 
     /// The name a host knows the pass by: the one a table is read by, and one word.
@@ -126,6 +134,8 @@ impl Pass {
             Pass::Check => "check",
             Pass::Mir => "mir",
             Pass::Ssa => "ssa",
+            Pass::MirModule => "mir_module",
+            Pass::Link => "link",
         }
     }
 }
@@ -348,11 +358,13 @@ mod tests {
                 | Pass::ParseDiagnostics
                 | Pass::Check
                 | Pass::Mir
-                | Pass::Ssa => (),
+                | Pass::Ssa
+                | Pass::MirModule
+                | Pass::Link => (),
             }
         }
 
-        assert_eq!(Pass::ALL.len(), 14);
+        assert_eq!(Pass::ALL.len(), 16);
     }
 
     /// A name is what a table and a log read a pass by, and two passes share none.

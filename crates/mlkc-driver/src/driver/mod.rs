@@ -4,8 +4,10 @@
 mod check;
 mod diagnostics;
 mod host;
+mod link;
 mod lower;
 mod mir;
+mod mir_module;
 mod parse;
 mod resolve;
 mod stats;
@@ -20,6 +22,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+use mlkc_codegen_wasm::ModuleMir;
 use mlkc_diagnostics::{Diagnostic, Ice};
 use mlkc_hir_def::{
     BodyEntityLoc, Interface, ItemLocLike, ModuleId, ModuleIndex, ProjectDefMap, ProjectGraph,
@@ -37,6 +40,7 @@ use rustc_hash::FxHashMap;
 pub use self::{
     diagnostics::Diagnostics,
     host::StdFile,
+    link::{LinkError, LinkPlan},
     lower::{Lowered, ModuleBody},
     parse::Parse,
     stats::{Clock, Pass, Stats, Tally, Unit, system_clock},
@@ -72,6 +76,10 @@ pub struct Driver {
     mirs: FxHashMap<BodyEntityLoc, MirSlot>,
     /// The SSA form of every body whose MIR has been asked for in it.
     ssas: FxHashMap<BodyEntityLoc, SsaSlot>,
+    /// The module of every module that has been asked for one.
+    mir_modules: FxHashMap<ModuleId, ModuleMirSlot>,
+    /// The plan of every project that has been asked to link.
+    links: FxHashMap<ProjectId, LinkSlot>,
     /// The def map of every project that has been asked for one.
     def_maps: FxHashMap<ProjectId, DefMapSlot>,
     /// The rendered diagnostics of the parse of every file that has been asked for them.
@@ -318,6 +326,42 @@ struct SsaSlot {
     cfg: Arc<MirBody>,
     /// The value, retained so that the driver can hand it out and compare it later.
     value: Arc<MirBody>,
+}
+
+/// The module of one module, and what building it read ([ADR-0021]).
+///
+/// The key of the slot is what the stage read: the HIR the functions and their names are read
+/// from, the types of the module's entities, the classes of the language, the SSA form of every
+/// body, and the type surface of every module a callee belongs to --- an import carries the
+/// signature of the function it names ([ADR-0021]).
+///
+/// [adr-0021]: ../../docs/adr/0021-translation-units.md
+struct ModuleMirSlot {
+    /// The HIR the functions and their names were read from.
+    lowered: Arc<Lowered>,
+    /// The types of the module's entities, which say what each function takes and gives back.
+    types: Arc<ModuleTypes>,
+    /// The classes of the language the module was read with.
+    builtins: Builtins,
+    /// The SSA form of every body of the module, in the order the module declares them.
+    bodies: Vec<Arc<MirBody>>,
+    /// The type surface of every module a callee belongs to, by module.
+    callees: BTreeMap<ModuleId, Arc<ModuleTypes>>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<ModuleMir>,
+}
+
+/// The plan of one project, and the modules it was built from ([ADR-0021]).
+///
+/// A plan is a function of the modules of the program and of nothing else: every import a
+/// compiled module carries is a name the module of the plan already has.
+///
+/// [adr-0021]: ../../docs/adr/0021-translation-units.md
+struct LinkSlot {
+    /// The module of every module of the program, by module, as the plan was built.
+    modules: BTreeMap<ModuleId, Arc<ModuleMir>>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<LinkPlan>,
 }
 
 /// The rendered diagnostics of the checks of one module, and what rendering them read
@@ -591,6 +635,11 @@ impl Driver {
             &unit,
             self.def_maps.remove(project).is_some() as usize,
         );
+        self.stats.dropped(
+            Pass::Link,
+            &unit,
+            self.links.remove(project).is_some() as usize,
+        );
     }
 
     /// Drops the values derived from one module: its HIR, its interface, its resolution, its
@@ -667,6 +716,22 @@ impl Driver {
         for owner in bodies {
             self.ssas.remove(&owner);
             self.stats.dropped(Pass::Ssa, &Unit::Body(owner), 1);
+        }
+
+        self.stats.dropped(
+            Pass::MirModule,
+            &named,
+            self.mir_modules.remove(&module).is_some() as usize,
+        );
+
+        // A plan is compiled from the modules of its project, so it goes with the first of them
+        // that changes; what a host reads of the drop is the project it was of.
+        if let Some(project) = self.projects.project_of(module).cloned() {
+            self.stats.dropped(
+                Pass::Link,
+                &Unit::Project(project.clone()),
+                self.links.remove(&project).is_some() as usize,
+            );
         }
     }
 }

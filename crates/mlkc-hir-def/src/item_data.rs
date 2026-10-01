@@ -51,6 +51,15 @@ pub struct Attributes {
     pub builtin: bool,
     /// `#[extern]`: the entity is implemented outside the project, so it has no body here.
     pub external: bool,
+    /// `#[entry]`: the function is where a program begins.
+    ///
+    /// A project declares at most one, and a host calls it from outside. What a declaration
+    /// alone cannot say is checked by the stages that read it: the lowering checks that an
+    /// entry is a public function the program writes, and the link stage that there is one of
+    /// them and that its signature is `() -> Unit` ([ADR-0021]).
+    ///
+    /// [ADR-0021]: ../../docs/adr/0021-translation-units.md
+    pub entry: bool,
 }
 
 impl Attributes {
@@ -62,6 +71,7 @@ impl Attributes {
         match name.as_str() {
             "builtin" => self.builtin = true,
             "extern" => self.external = true,
+            "entry" => self.entry = true,
             _ => return false,
         }
 
@@ -77,13 +87,14 @@ impl Attributes {
         match name.as_str() {
             "builtin" => self.builtin,
             "extern" => self.external,
+            "entry" => self.entry,
             _ => false,
         }
     }
 
     /// Whether the declaration carries no attribute at all.
     pub fn is_none(&self) -> bool {
-        !self.builtin && !self.external
+        !self.builtin && !self.external && !self.entry
     }
 }
 
@@ -380,12 +391,14 @@ mod tests {
 
         assert!(attributes.insert(&Name::new("builtin")));
         assert!(attributes.insert(&Name::new("extern")));
+        assert!(attributes.insert(&Name::new("entry")));
         // A name the language has no attribute for is what a reader reports rather than what
         // the HIR holds somewhere.
         assert!(!attributes.insert(&Name::new("biultin")));
 
         assert!(attributes.builtin);
         assert!(attributes.external);
+        assert!(attributes.entry);
         assert!(!attributes.is_none());
 
         // What is already read is what a reading of it again finds: an attribute written
@@ -393,6 +406,7 @@ mod tests {
         // the language has.
         assert!(attributes.contains(&Name::new("builtin")));
         assert!(attributes.contains(&Name::new("extern")));
+        assert!(attributes.contains(&Name::new("entry")));
         assert!(!attributes.contains(&Name::new("biultin")));
         assert!(!Attributes::default().contains(&Name::new("builtin")));
     }

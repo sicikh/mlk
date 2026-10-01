@@ -99,6 +99,28 @@ pub enum LoweringError {
         /// The type.
         class: ClassLoc,
     },
+    /// `#[entry]` is on a type, and an entry point is a function.
+    EntryType {
+        /// The type.
+        class: ClassLoc,
+    },
+    /// `#[entry]` is on a function that is not public.
+    ///
+    /// An entry point is where a program begins: the host calls it from outside the module, and
+    /// a function the module keeps to itself is one nothing outside it can call.
+    EntryFunctionNotPublic {
+        /// The function.
+        function: FunctionLoc,
+    },
+    /// `#[entry]` is on a function the program does not write.
+    ///
+    /// An entry point is where the program begins, and a program begins in a body of its own:
+    /// a function declared `#[extern]` is implemented by the host, and one declared
+    /// `#[builtin]` by the compiler, so neither is where a person's program begins.
+    EntryFunctionNotWritten {
+        /// The function.
+        function: FunctionLoc,
+    },
     /// A public function does not declare the type of its result.
     ///
     /// A caller of a public function depends on it, and the surface of the module it is in has
@@ -218,6 +240,24 @@ impl LoweringError {
                     "`{class:?}` is declared `#[extern]`, and the language has no external types yet",
                 )
             },
+            Self::EntryType { class } => {
+                format!(
+                    "`{class:?}` is declared `#[entry]`, and an entry point is a function: \
+                     a program does not begin in a type",
+                )
+            },
+            Self::EntryFunctionNotPublic { function } => {
+                format!(
+                    "`{function:?}` is declared `#[entry]` and is not public: an entry point is \
+                     called from outside the module",
+                )
+            },
+            Self::EntryFunctionNotWritten { function } => {
+                format!(
+                    "`{function:?}` is declared `#[entry]`, and an entry point is a function the \
+                     program writes: this one is implemented elsewhere",
+                )
+            },
             Self::PublicFunctionWithoutResult { function } => {
                 format!(
                     "`{function:?}` is public and does not declare the type of its result, \
@@ -283,6 +323,9 @@ impl DiagKind for LoweringError {
             Self::UnknownEscape { .. } => "13",
             Self::ProjectWithTypeArguments { .. } => "14",
             Self::UnresolvedName { .. } => "15",
+            Self::EntryType { .. } => "16",
+            Self::EntryFunctionNotPublic { .. } => "17",
+            Self::EntryFunctionNotWritten { .. } => "18",
         }
     }
 }

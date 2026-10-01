@@ -29,11 +29,12 @@
 //! # What is not emitted yet
 //!
 //! The emitter reports [`CodegenDiag::Unsupported`] for the constructs it does not lower yet
-//! rather than emitting something wrong: string constants, calls into other modules and to
-//! functions declared inside a body, indirect calls, and field access. Control flow of a body
-//! with more than one block is emitted as a dispatch loop; structuring it into `if`/`loop`
-//! regions, allocating locals by live range, and the DWARF custom sections are the next
-//! milestones of [ADR-0020][adr-0020].
+//! rather than emitting something wrong: string constants, calls to functions declared inside a
+//! body, indirect calls, and field access. A call to a function of another module, and a call to
+//! one declared `#[extern]`, is an import ([`ModuleImport`]), and the linker resolves it
+//! ([ADR-0021][adr-0021]). Control flow of a body with more than one block is emitted as a
+//! dispatch loop; structuring it into `if`/`loop` regions, allocating locals by live range, and
+//! the DWARF custom sections are the next milestones of [ADR-0020][adr-0020].
 //!
 //! [adr-0005]: ../../docs/adr/0005-compiler-pipeline.md
 //! [adr-0009]: ../../docs/adr/0009-pass-contract.md
@@ -47,8 +48,8 @@ mod refine;
 pub use crate::{
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},
     module::{
-        DebugLevel, FnSignature, ModuleFunction, ModuleLayout, ModuleMir, WasmModule,
-        assemble_module, layout,
+        DebugLevel, ExportDecl, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
+        ModuleLayout, ModuleMir, WasmModule, assemble_module, layout,
     },
     refine::Refinement,
 };

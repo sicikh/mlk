@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::main
+MODULE #3 project::main
 
 ITEM TREE
   fun print  @2.0
@@ -58,6 +58,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -65,7 +71,7 @@ ITEM TREE
 `fun signed`
 
 ```
-BODY fun signed in module #2
+BODY fun signed in module #3
 
 root expr#10
 exprs
@@ -85,7 +91,7 @@ exprs
 `fun ordered`
 
 ```
-BODY fun ordered in module #2
+BODY fun ordered in module #3
 
 root expr#14
 params
@@ -118,7 +124,7 @@ paths
 `fun different`
 
 ```
-BODY fun different in module #2
+BODY fun different in module #3
 
 root expr#2
 params
@@ -139,7 +145,7 @@ paths
 `fun text`
 
 ```
-BODY fun text in module #2
+BODY fun text in module #3
 
 root expr#0
 exprs
@@ -149,7 +155,7 @@ exprs
 `fun truth`
 
 ```
-BODY fun truth in module #2
+BODY fun truth in module #3
 
 root expr#0
 exprs
@@ -159,7 +165,7 @@ exprs
 `fun untruth`
 
 ```
-BODY fun untruth in module #2
+BODY fun untruth in module #3
 
 root expr#0
 exprs
@@ -169,7 +175,7 @@ exprs
 `fun both`
 
 ```
-BODY fun both in module #2
+BODY fun both in module #3
 
 root expr#2
 exprs
@@ -181,7 +187,7 @@ exprs
 `fun call`
 
 ```
-BODY fun call in module #2
+BODY fun call in module #3
 
 root expr#2
 exprs
@@ -195,7 +201,7 @@ paths
 `fun bound`
 
 ```
-BODY fun bound in module #2
+BODY fun bound in module #3
 
 root expr#8
 exprs
@@ -221,25 +227,25 @@ paths
 ```
 SCOPE
   print
-    value: fun print in module #2 (private)
+    value: fun print in module #3 (private)
   signed
-    value: fun signed in module #2 (private)
+    value: fun signed in module #3 (private)
   ordered
-    value: fun ordered in module #2 (private)
+    value: fun ordered in module #3 (private)
   different
-    value: fun different in module #2 (private)
+    value: fun different in module #3 (private)
   text
-    value: fun text in module #2 (private)
+    value: fun text in module #3 (private)
   truth
-    value: fun truth in module #2 (private)
+    value: fun truth in module #3 (private)
   untruth
-    value: fun untruth in module #2 (private)
+    value: fun untruth in module #3 (private)
   both
-    value: fun both in module #2 (private)
+    value: fun both in module #3 (private)
   call
-    value: fun call in module #2 (private)
+    value: fun call in module #3 (private)
   bound
-    value: fun bound in module #2 (private)
+    value: fun bound in module #3 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -248,6 +254,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

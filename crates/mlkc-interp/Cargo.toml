@@ -1,0 +1,22 @@
+[package]
+name = "mlkc-interp"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+mlkc-hir-def.workspace = true
+mlkc-mir.workspace = true
+mlkc-span.workspace = true
+
+[dev-dependencies]
+mlkc-driver.workspace = true
+mlkc-fixture.workspace = true
+mlkc-stdlib.workspace = true
+mlkc-vfs.workspace = true
+
+[lints]
+workspace = true

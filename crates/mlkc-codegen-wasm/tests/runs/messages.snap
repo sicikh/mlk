@@ -1,0 +1,16 @@
+---
+source: crates/mlkc-codegen-wasm/tests/run.rs
+expression: snapshot
+---
+Modules, in the order they are linked:
+- `app::double`
+- `app::text`
+- `app::answer`
+- `app::main`
+
+Entry: `app::main::main`
+
+What the program printed:
+- 42
+- false
+- 2

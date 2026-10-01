@@ -1,0 +1,17 @@
+#[no-prelude]
+module project::runtime
+
+// What a program of the language says to the world outside it. Every function here is
+// `#[extern]`: the compiler emits an import of it, and the host that runs the module --- a
+// process, a browser, a test --- says what it does. The name a host implements is the one the
+// linker uses: `std::runtime::print-int` is `print-int` of this module.
+
+use project::core::Bool
+use project::core::Int
+use project::core::Unit
+
+#[extern]
+pub fun print-int(value: Int): Unit
+
+#[extern]
+pub fun print-bool(value: Bool): Unit

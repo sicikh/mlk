@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::data
+MODULE #3 project::data
 
 ITEM TREE
   type Hidden  @2.0
@@ -26,6 +26,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -37,9 +43,9 @@ No bodies.
 ```
 SCOPE
   Hidden
-    ty: type Hidden in module #2 (private)
+    ty: type Hidden in module #3 (private)
   Point
-    ty: type Point in module #2 (public)
+    ty: type Point in module #3 (public)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -48,6 +54,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface
@@ -73,7 +83,7 @@ No diagnostics.
 ### Item Tree
 
 ```
-MODULE #3 project::main
+MODULE #4 project::main
 
 ITEM TREE
   use Hidden  @2.0
@@ -104,6 +114,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -111,7 +127,7 @@ ITEM TREE
 `fun get`
 
 ```
-BODY fun get in module #3
+BODY fun get in module #4
 
 root expr#1
 exprs
@@ -124,7 +140,7 @@ paths
 `fun size`
 
 ```
-BODY fun size in module #3
+BODY fun size in module #4
 
 root expr#0
 params
@@ -140,7 +156,7 @@ paths
 `fun wrong`
 
 ```
-BODY fun wrong in module #3
+BODY fun wrong in module #4
 
 root expr#2
 exprs
@@ -156,11 +172,11 @@ paths
 ```
 SCOPE
   get
-    value: fun get in module #3 (private)
+    value: fun get in module #4 (private)
   size
-    value: fun size in module #3 (private)
+    value: fun size in module #4 (private)
   wrong
-    value: fun wrong in module #3 (private)
+    value: fun wrong in module #4 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -169,6 +185,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

@@ -1078,7 +1078,11 @@ mod tests {
         let files = driver.register_library();
         let paths: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
 
-        assert_eq!(paths, ["/std/core.mlk", "/std/prelude.mlk"]);
+        assert_eq!(paths, [
+            "/std/core.mlk",
+            "/std/prelude.mlk",
+            "/std/runtime.mlk"
+        ]);
         assert!(
             files[0].text.contains("module project::core"),
             "a host is handed the source, not a path to read"

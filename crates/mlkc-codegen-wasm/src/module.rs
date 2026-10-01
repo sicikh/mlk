@@ -1,14 +1,18 @@
-//! The module a back end assembles: its functions, and the WASM module they become.
+//! The module a back end assembles: its imports, its functions, and the WASM module they become.
 //!
 //! One MLK module becomes one WASM module ([ADR-0020][adr-0020], [ADR-0021][adr-0021]).
 //! [`ModuleMir`] is what `assemble_module` reads: the checked bodies and their MIR, the
-//! signatures their owners have, and the classes of the language.
+//! signatures their owners have, the functions they call and do not declare, and the classes of
+//! the language.
 //!
-//! Assembly is deterministic: indices are assigned in the order the module declares its
-//! entities, so two compilations of the same module agree byte for byte. The layout is a value
-//! of its own ([`layout`]), which is what `emit_function` is handed as well --- a function
-//! body embeds the index of every callee --- so the emitter and the assembler cannot disagree
-//! about an index.
+//! A function the module does not declare is an import: a function of another module, or one
+//! declared `#[extern]` and implemented by the host. Its WASM index comes before every local
+//! function, which is what the function index space of a module is, and that is why a layout is
+//! a value of its own ([`layout`]): the emitter and the assembler both read it, so a body embeds
+//! the same index the assembler numbered the function with.
+//!
+//! Assembly is deterministic: imports keep the order the module lists them in, functions the
+//! order the module declares them, and two compilations of one module agree byte for byte.
 //!
 //! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
 //! [adr-0021]: ../../docs/adr/0021-translation-units.md
@@ -19,8 +23,8 @@ use mlkc_hir_def::{BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, Name};
 use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_mir::Body as MirBody;
 use wasm_encoder::{
-    CodeSection, ExportKind, ExportSection, FunctionSection, IndirectNameMap, NameMap, NameSection,
-    RefType, TypeSection, ValType,
+    CodeSection, EntityType, ExportKind, ExportSection, FunctionSection, ImportSection,
+    IndirectNameMap, NameMap, NameSection, RefType, TypeSection, ValType,
 };
 
 use crate::emit::{CodegenDiag, FuncArtifact};
@@ -37,6 +41,25 @@ pub struct FnSignature {
     pub params: Vec<Ty>,
     /// What the function gives back.
     pub ret: Ty,
+}
+
+/// A function the module needs and does not declare.
+///
+/// It is one of another module of the program, which the linker finds by the canonical path of
+/// that module, or one declared `#[extern]` anywhere, which the host provides under the same
+/// name ([ADR-0021][adr-0021]).
+///
+/// [adr-0021]: ../../docs/adr/0021-translation-units.md
+#[derive(Debug, Clone)]
+pub struct ModuleImport {
+    /// The entity the import is of; it is what a body of this module calls.
+    pub entity: EntityLoc<FunctionLoc>,
+    /// The canonical path of the module the function belongs to.
+    pub module: String,
+    /// The name of the function inside its module.
+    pub name: String,
+    /// What the function takes and gives back.
+    pub signature: FnSignature,
 }
 
 /// One function of a module, as the back end reads it.
@@ -56,25 +79,33 @@ pub struct ModuleFunction {
     pub body: Arc<MirBody>,
 }
 
-/// One module: the functions it declares, and the classes of the language.
+/// One module: the functions it imports, the ones it declares, and the classes of the language.
 #[derive(Debug, Clone)]
 pub struct ModuleMir {
-    /// The name of the module, which names it in the `name` section and in a stack trace.
+    /// The canonical path of the module, which names it in the `name` section, in an import of
+    /// another module, and in a stack trace.
     pub name: String,
     /// The classes of the language, which say what a type refines to.
     pub builtins: Builtins,
-    /// The functions, in the order the module declares them.
+    /// The functions the module imports, in the order their indices are assigned.
+    pub imports: Vec<ModuleImport>,
+    /// The functions the module declares, in the order the module declares them.
     pub functions: Vec<ModuleFunction>,
 }
 
-/// How the entities of a module are numbered in the WASM module it becomes.
+/// How the functions of a module are numbered in the WASM module it becomes.
 ///
 /// The layout is computed from the module alone, so the emitter and the assembler both derive
-/// the same indices, and a function body can embed the index of the function it calls.
+/// the same indices, and a function body can embed the index of the function it calls. The
+/// index space is the one of WASM: the imports first, in the order the module lists them, and
+/// the functions the module declares after them, in declaration order.
 #[derive(Debug, Clone)]
 pub struct ModuleLayout {
     builtins: Builtins,
-    functions: Vec<FnSignature>,
+    /// One signature per function of the index space.
+    signatures: Vec<FnSignature>,
+    /// How many of the signatures are imports; the rest are the module's own functions.
+    imports: usize,
     by_entity: BTreeMap<EntityLoc<FunctionLoc>, u32>,
 }
 
@@ -84,38 +115,50 @@ impl ModuleLayout {
         &self.builtins
     }
 
-    /// The index of the function an entity names, if the module declares it.
+    /// The index of the function an entity names, if the module declares or imports it.
     pub fn function_index(&self, entity: &EntityLoc<FunctionLoc>) -> Option<u32> {
         self.by_entity.get(entity).copied()
     }
 
-    /// The signature of the function an entity names, if the module declares it.
+    /// The signature of the function an entity names, if the module declares or imports it.
     pub fn signature_of(&self, entity: &EntityLoc<FunctionLoc>) -> Option<&FnSignature> {
         let index = self.by_entity.get(entity)?;
 
-        self.functions.get(*index as usize)
+        self.signatures.get(*index as usize)
     }
 
-    /// The number of functions of the module.
+    /// How many functions of the index space are imports.
+    pub fn imported(&self) -> usize {
+        self.imports
+    }
+
+    /// The number of functions in the index space, imports included.
     pub fn len(&self) -> usize {
-        self.functions.len()
+        self.signatures.len()
     }
 
-    /// Whether the module declares no function.
+    /// Whether the module imports and declares no function.
     pub fn is_empty(&self) -> bool {
-        self.functions.is_empty()
+        self.signatures.is_empty()
     }
 }
 
-/// Numbers the functions of a module: one index per function, in declaration order.
+/// Numbers the functions of a module: the imports first, then the functions it declares.
 pub fn layout(module: &ModuleMir) -> ModuleLayout {
-    let mut functions = Vec::with_capacity(module.functions.len());
+    let mut signatures = Vec::with_capacity(module.imports.len() + module.functions.len());
     let mut by_entity = BTreeMap::new();
 
-    for (index, function) in module.functions.iter().enumerate() {
-        let index = index as u32;
+    for import in &module.imports {
+        let index = signatures.len() as u32;
 
-        functions.push(function.signature.clone());
+        signatures.push(import.signature.clone());
+        by_entity.insert(import.entity.clone(), index);
+    }
+
+    for function in &module.functions {
+        let index = signatures.len() as u32;
+
+        signatures.push(function.signature.clone());
 
         // A body is a function's when the entity that owns it is one; a constant's body has no
         // function to be called as.
@@ -132,7 +175,8 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
 
     ModuleLayout {
         builtins: module.builtins.clone(),
-        functions,
+        signatures,
+        imports: module.imports.len(),
         by_entity,
     }
 }
@@ -157,29 +201,48 @@ pub enum DebugLevel {
     Full,
 }
 
+/// One function a module imports: what a linker resolves ([ADR-0021][adr-0021]).
+///
+/// [adr-0021]: ../../docs/adr/0021-translation-units.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportDecl {
+    /// The canonical path of the module the function belongs to.
+    pub module: String,
+    /// The name of the function inside its module.
+    pub name: String,
+    /// How many words the function takes; it gives back one.
+    pub arity: u32,
+}
+
+/// One function a module offers: what a linker resolves an import to ([ADR-0021][adr-0021]).
+///
+/// [adr-0021]: ../../docs/adr/0021-translation-units.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportDecl {
+    /// The canonical path of the module that offers the function.
+    pub module: String,
+    /// The name of the function inside its module.
+    pub name: String,
+    /// How many words the function takes; it gives back one.
+    pub arity: u32,
+}
+
 /// The WASM module the assembler wrote.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WasmModule {
     /// The bytes of the module.
     pub bytes: Vec<u8>,
-    /// What the module exports, in the order it exports it; the linker reads this rather than
+    /// What it needs from other modules and from the host; the linker reads this rather than
     /// parsing what the assembler just wrote.
-    pub exports: Vec<WasmExport>,
-}
-
-/// One export of a module.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WasmExport {
-    /// The name the export is under.
-    pub name: String,
-    /// The index of the exported function.
-    pub function: u32,
+    pub imports: Vec<ImportDecl>,
+    /// What it offers, in the order it offers it; the linker reads this likewise.
+    pub exports: Vec<ExportDecl>,
 }
 
 /// Assembles the WASM module of `module` from the artifacts of its functions.
 ///
-/// `functions` are the artifacts of every function of the module, in declaration order; the
-/// `debug` level says how much debug information the module carries.
+/// `functions` are the artifacts of every function the module declares, in declaration order;
+/// the `debug` level says how much debug information the module carries.
 ///
 /// # Panics
 ///
@@ -205,9 +268,15 @@ pub fn assemble_module(
     // parameter and one back. One type per arity is all the section needs, and the arities are
     // sorted so that an assignment of indices follows from the module alone.
     let mut arities: Vec<usize> = module
-        .functions
+        .imports
         .iter()
-        .map(|function| function.signature.params.len())
+        .map(|import| import.signature.params.len())
+        .chain(
+            module
+                .functions
+                .iter()
+                .map(|function| function.signature.params.len()),
+        )
         .collect();
 
     arities.sort_unstable();
@@ -226,6 +295,25 @@ pub fn assemble_module(
         types.ty().function((0..*arity).map(|_| word), [word]);
     }
 
+    let mut import_section = ImportSection::new();
+    let mut import_table = Vec::with_capacity(module.imports.len());
+
+    for import in &module.imports {
+        import_section.import(
+            &import.module,
+            &import.name,
+            EntityType::Function(type_index(import.signature.params.len())),
+        );
+        import_table.push(ImportDecl {
+            module: import.module.clone(),
+            name: import.name.clone(),
+            arity: import.signature.params.len() as u32,
+        });
+    }
+
+    // The functions the module declares take the indices after the imports; nothing else is
+    // numbered in the function index space.
+    let offset = module.imports.len() as u32;
     let mut function_section = FunctionSection::new();
 
     for function in &module.functions {
@@ -237,10 +325,13 @@ pub fn assemble_module(
 
     for (index, function) in module.functions.iter().enumerate() {
         if function.exported {
-            exports.export(&function.name, ExportKind::Func, index as u32);
-            export_table.push(WasmExport {
+            let index = offset + index as u32;
+
+            exports.export(&function.name, ExportKind::Func, index);
+            export_table.push(ExportDecl {
+                module: module.name.clone(),
                 name: function.name.clone(),
-                function: index as u32,
+                arity: function.signature.params.len() as u32,
             });
         }
     }
@@ -256,6 +347,7 @@ pub fn assemble_module(
     let mut wasm = wasm_encoder::Module::new();
 
     wasm.section(&types);
+    wasm.section(&import_section);
     wasm.section(&function_section);
     wasm.section(&exports);
     wasm.section(&code);
@@ -265,8 +357,12 @@ pub fn assemble_module(
 
     let mut function_names = NameMap::new();
 
+    for (index, import) in module.imports.iter().enumerate() {
+        function_names.append(index as u32, &import.name);
+    }
+
     for (index, function) in module.functions.iter().enumerate() {
-        function_names.append(index as u32, &function.name);
+        function_names.append(offset + index as u32, &function.name);
     }
 
     names.functions(&function_names);
@@ -277,7 +373,8 @@ pub fn assemble_module(
         let mut names = NameMap::new();
 
         // The ABI parameters are locals of every function, and so are the locals the values
-        // live in; a name is written for each of them where the source has one.
+        // live in; a name is written for each of them where the source has one. An imported
+        // function has no body and no locals of its own.
         for (parameter, name) in function.param_names.iter().enumerate() {
             if let Some(name) = name {
                 names.append(parameter as u32, name.as_str());
@@ -292,7 +389,7 @@ pub fn assemble_module(
             }
         }
 
-        local_names.append(index as u32, &names);
+        local_names.append(offset + index as u32, &names);
     }
 
     names.locals(&local_names);
@@ -302,6 +399,7 @@ pub fn assemble_module(
     (
         WasmModule {
             bytes: wasm.finish(),
+            imports: import_table,
             exports: export_table,
         },
         Vec::new(),

@@ -18,6 +18,7 @@ wasm-encoder.workspace = true
 insta.workspace = true
 mlkc-driver.workspace = true
 mlkc-fixture.workspace = true
+mlkc-interp.workspace = true
 mlkc-stdlib.workspace = true
 mlkc-vfs.workspace = true
 wasmparser.workspace = true

@@ -339,11 +339,11 @@ fn the_hir_of_a_module_is_lowered_from_the_same_parse() {
     let lowered = driver.lower(file).expect("the file to be lowered");
 
     // The module declares `println-int` and `main`, and the prelude of the language brings
-    // in four more names.
+    // in six more names.
     assert_eq!(
         lowered.item_tree().scope().len(),
-        6,
-        "six names are declared"
+        8,
+        "eight names are declared"
     );
     assert_eq!(lowered.bodies().len(), 1, "one entity owns a body");
 
@@ -458,10 +458,10 @@ fn the_hir_follows_the_text_and_the_old_one_keeps_its_own() {
     let after = driver.lower(file).expect("the file to be lowered");
 
     assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
-    assert_eq!(before.item_tree().scope().len(), 6, "the old value stands");
+    assert_eq!(before.item_tree().scope().len(), 8, "the old value stands");
     assert_eq!(
         after.item_tree().scope().len(),
-        5,
+        7,
         "a function without an `in` is still a function"
     );
 }

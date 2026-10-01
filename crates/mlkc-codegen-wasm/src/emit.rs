@@ -489,7 +489,10 @@ impl<'a> Emitter<'a> {
                 match self.ctx.layout.function_index(entity) {
                     Some(index) => index,
                     None => {
-                        self.unsupported("a call to a function of another module", span);
+                        self.unsupported(
+                            "a call to a function the module neither declares nor imports",
+                            span,
+                        );
 
                         return false;
                     },

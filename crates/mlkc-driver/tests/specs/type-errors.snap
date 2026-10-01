@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::main
+MODULE #3 project::main
 
 ITEM TREE
   fun one  @2.0
@@ -61,6 +61,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -68,7 +74,7 @@ ITEM TREE
 `fun one`
 
 ```
-BODY fun one in module #2
+BODY fun one in module #3
 
 root expr#0
 exprs
@@ -78,7 +84,7 @@ exprs
 `fun takes`
 
 ```
-BODY fun takes in module #2
+BODY fun takes in module #3
 
 root expr#0
 params
@@ -94,7 +100,7 @@ paths
 `fun wrong-argument`
 
 ```
-BODY fun wrong-argument in module #2
+BODY fun wrong-argument in module #3
 
 root expr#2
 exprs
@@ -108,7 +114,7 @@ paths
 `fun wrong-arity`
 
 ```
-BODY fun wrong-arity in module #2
+BODY fun wrong-arity in module #3
 
 root expr#1
 exprs
@@ -121,7 +127,7 @@ paths
 `fun extra-argument`
 
 ```
-BODY fun extra-argument in module #2
+BODY fun extra-argument in module #3
 
 root expr#3
 exprs
@@ -136,7 +142,7 @@ paths
 `fun not-callable`
 
 ```
-BODY fun not-callable in module #2
+BODY fun not-callable in module #3
 
 root expr#3
 exprs
@@ -153,7 +159,7 @@ paths
 `fun applied`
 
 ```
-BODY fun applied in module #2
+BODY fun applied in module #3
 
 root expr#0
 params
@@ -169,7 +175,7 @@ paths
 `fun no-equality`
 
 ```
-BODY fun no-equality in module #2
+BODY fun no-equality in module #3
 
 root expr#2
 params
@@ -190,7 +196,7 @@ paths
 `fun condition-not-a-bool`
 
 ```
-BODY fun condition-not-a-bool in module #2
+BODY fun condition-not-a-bool in module #3
 
 root expr#3
 params
@@ -209,7 +215,7 @@ paths
 `fun branch-of-another-type`
 
 ```
-BODY fun branch-of-another-type in module #2
+BODY fun branch-of-another-type in module #3
 
 root expr#5
 exprs
@@ -224,7 +230,7 @@ exprs
 `fun arm-of-another-type`
 
 ```
-BODY fun arm-of-another-type in module #2
+BODY fun arm-of-another-type in module #3
 
 root expr#2
 params
@@ -244,27 +250,27 @@ paths
 ```
 SCOPE
   one
-    value: fun one in module #2 (private)
+    value: fun one in module #3 (private)
   takes
-    value: fun takes in module #2 (private)
+    value: fun takes in module #3 (private)
   wrong-argument
-    value: fun wrong-argument in module #2 (private)
+    value: fun wrong-argument in module #3 (private)
   wrong-arity
-    value: fun wrong-arity in module #2 (private)
+    value: fun wrong-arity in module #3 (private)
   extra-argument
-    value: fun extra-argument in module #2 (private)
+    value: fun extra-argument in module #3 (private)
   not-callable
-    value: fun not-callable in module #2 (private)
+    value: fun not-callable in module #3 (private)
   applied
-    value: fun applied in module #2 (private)
+    value: fun applied in module #3 (private)
   no-equality
-    value: fun no-equality in module #2 (private)
+    value: fun no-equality in module #3 (private)
   condition-not-a-bool
-    value: fun condition-not-a-bool in module #2 (private)
+    value: fun condition-not-a-bool in module #3 (private)
   branch-of-another-type
-    value: fun branch-of-another-type in module #2 (private)
+    value: fun branch-of-another-type in module #3 (private)
   arm-of-another-type
-    value: fun arm-of-another-type in module #2 (private)
+    value: fun arm-of-another-type in module #3 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -273,6 +279,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

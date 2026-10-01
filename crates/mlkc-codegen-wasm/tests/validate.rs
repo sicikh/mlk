@@ -43,6 +43,32 @@ fn only_a_public_function_is_exported() {
 }
 
 #[test]
+fn an_extern_function_becomes_an_import() {
+    let compiled = harness::module("pub fun report(value: Int): Unit =\n    print-int(value)\n");
+
+    compiled.validate();
+
+    assert!(
+        compiled.diagnostics.is_empty(),
+        "`report` to be emitted: {:?}",
+        compiled.diagnostics,
+    );
+
+    let imports: Vec<(&str, &str)> = compiled
+        .wasm
+        .imports
+        .iter()
+        .map(|import| (import.module.as_str(), import.name.as_str()))
+        .collect();
+
+    assert_eq!(
+        imports,
+        [("std::runtime", "print-int")],
+        "the call to become an import of the module that declares it",
+    );
+}
+
+#[test]
 fn a_string_constant_is_reported_not_emitted() {
     let compiled = harness::module("pub fun text(): String = \"hello\"\n");
 

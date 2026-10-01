@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::main
+MODULE #3 project::main
 
 ITEM TREE
   fun pick  @2.0
@@ -48,6 +48,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -55,7 +61,7 @@ ITEM TREE
 `fun pick`
 
 ```
-BODY fun pick in module #2
+BODY fun pick in module #3
 
 root expr#3
 params
@@ -74,7 +80,7 @@ paths
 `fun ordered`
 
 ```
-BODY fun ordered in module #2
+BODY fun ordered in module #3
 
 root expr#5
 params
@@ -98,7 +104,7 @@ paths
 `fun where_a_value_belongs`
 
 ```
-BODY fun where_a_value_belongs in module #2
+BODY fun where_a_value_belongs in module #3
 
 root expr#5
 params
@@ -119,7 +125,7 @@ paths
 `fun through_a_let`
 
 ```
-BODY fun through_a_let in module #2
+BODY fun through_a_let in module #3
 
 root expr#7
 params
@@ -144,7 +150,7 @@ paths
 `fun log`
 
 ```
-BODY fun log in module #2
+BODY fun log in module #3
 
 root expr#4
 params
@@ -165,7 +171,7 @@ paths
 `fun log_ordered`
 
 ```
-BODY fun log_ordered in module #2
+BODY fun log_ordered in module #3
 
 root expr#8
 params
@@ -195,17 +201,17 @@ paths
 ```
 SCOPE
   pick
-    value: fun pick in module #2 (private)
+    value: fun pick in module #3 (private)
   ordered
-    value: fun ordered in module #2 (private)
+    value: fun ordered in module #3 (private)
   where_a_value_belongs
-    value: fun where_a_value_belongs in module #2 (private)
+    value: fun where_a_value_belongs in module #3 (private)
   through_a_let
-    value: fun through_a_let in module #2 (private)
+    value: fun through_a_let in module #3 (private)
   log
-    value: fun log in module #2 (private)
+    value: fun log in module #3 (private)
   log_ordered
-    value: fun log_ordered in module #2 (private)
+    value: fun log_ordered in module #3 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -214,6 +220,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

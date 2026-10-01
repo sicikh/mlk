@@ -3,7 +3,7 @@ source: crates/mlkc-codegen-wasm/tests/wasm_specs.rs
 expression: snapshot
 ---
 ```wat
-(module $main
+(module $app::main
   (type (;0;) (func (result eqref)))
   (type (;1;) (func (param eqref) (result eqref)))
   (type (;2;) (func (param eqref eqref) (result eqref)))

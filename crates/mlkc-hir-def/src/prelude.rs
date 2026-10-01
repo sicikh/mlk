@@ -107,6 +107,16 @@ impl Prelude {
                     Name::new("prelude"),
                     Name::new("Bool"),
                 ]),
+                PlainPath::from_segments([
+                    Name::new("std"),
+                    Name::new("prelude"),
+                    Name::new("print-int"),
+                ]),
+                PlainPath::from_segments([
+                    Name::new("std"),
+                    Name::new("prelude"),
+                    Name::new("print-bool"),
+                ]),
             ])
         })
     }
@@ -177,7 +187,14 @@ mod tests {
             .map(|import| import.name().as_str().to_owned())
             .collect();
 
-        assert_eq!(names, ["Int", "Unit", "String", "Bool"]);
+        assert_eq!(names, [
+            "Int",
+            "Unit",
+            "String",
+            "Bool",
+            "print-int",
+            "print-bool"
+        ]);
         assert_eq!(prelude.imports()[0].path().to_string(), "std::prelude::Int");
     }
 

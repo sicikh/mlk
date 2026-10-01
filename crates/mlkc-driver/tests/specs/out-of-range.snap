@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::main
+MODULE #3 project::main
 
 ITEM TREE
   fun big  @2.0
@@ -25,6 +25,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -32,7 +38,7 @@ ITEM TREE
 `fun big`
 
 ```
-BODY fun big in module #2
+BODY fun big in module #3
 
 root expr#0
 exprs
@@ -44,7 +50,7 @@ exprs
 ```
 SCOPE
   big
-    value: fun big in module #2 (private)
+    value: fun big in module #3 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -53,6 +59,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

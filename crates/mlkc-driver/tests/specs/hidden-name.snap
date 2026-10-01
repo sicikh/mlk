@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::data
+MODULE #3 project::data
 
 ITEM TREE
   type Point  @2.0
@@ -27,6 +27,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -34,7 +40,7 @@ ITEM TREE
 `fun hidden`
 
 ```
-BODY fun hidden in module #2
+BODY fun hidden in module #3
 
 root expr#0
 exprs
@@ -46,9 +52,9 @@ exprs
 ```
 SCOPE
   Point
-    ty: type Point in module #2 (public)
+    ty: type Point in module #3 (public)
   hidden
-    value: fun hidden in module #2 (private)
+    value: fun hidden in module #3 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -57,6 +63,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface
@@ -106,7 +116,7 @@ No diagnostics.
 ### Item Tree
 
 ```
-MODULE #3 project::main
+MODULE #4 project::main
 
 ITEM TREE
   use Point  @2.0
@@ -133,6 +143,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -140,7 +156,7 @@ ITEM TREE
 `fun call`
 
 ```
-BODY fun call in module #3
+BODY fun call in module #4
 
 root expr#1
 exprs
@@ -153,7 +169,7 @@ paths
 `fun make`
 
 ```
-BODY fun make in module #3
+BODY fun make in module #4
 
 root expr#0
 exprs
@@ -165,7 +181,7 @@ paths
 `fun gone`
 
 ```
-BODY fun gone in module #3
+BODY fun gone in module #4
 
 root expr#1
 exprs
@@ -180,13 +196,13 @@ paths
 ```
 SCOPE
   Point
-    ty: type Point in module #2 (private)
+    ty: type Point in module #3 (private)
   call
-    value: fun call in module #3 (private)
+    value: fun call in module #4 (private)
   make
-    value: fun make in module #3 (private)
+    value: fun make in module #4 (private)
   gone
-    value: fun gone in module #3 (private)
+    value: fun gone in module #4 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -195,6 +211,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

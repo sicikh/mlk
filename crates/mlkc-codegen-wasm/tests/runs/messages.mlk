@@ -1,0 +1,27 @@
+// A project of four modules, linked in a chain: `main` reads `answer`, which reads `twice`, and
+// `text`; what a choice returns and what a boolean prints are compared the same way.
+
+//- /main.mlk
+use project::answer::answer
+use project::text::small
+
+pub fun main(): Unit =
+    let value = answer() in
+    let shown = print-int(value) in
+    let flag = small(3) in
+    let noted = print-bool(flag) in
+    print-int(if flag then 1 else 2)
+
+//- /answer.mlk
+use project::double::twice
+
+pub fun answer(): Int =
+    twice(21)
+
+//- /double.mlk
+pub fun twice(value: Int): Int =
+    value * 2
+
+//- /text.mlk
+pub fun small(value: Int): Bool =
+    if value < 2 then true elif value < 5 then false else true

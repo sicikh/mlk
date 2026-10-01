@@ -27,6 +27,13 @@ pub const PROJECT: &str = "std";
 /// language names it: `std::prelude::Int` is a name of this module, re-exported ([`prelude`]).
 pub const CORE: &str = "core";
 
+/// The name of the module that declares what a program says to the world outside it.
+///
+/// Its functions are `#[extern]`: nothing in the language implements them, and a host that runs
+/// a compiled module provides them. A module of a project reaches them through the prelude of
+/// the language, which re-exports them ([`prelude`]).
+pub const RUNTIME: &str = "runtime";
+
 /// One module of the standard library.
 #[derive(Debug, Clone, Copy)]
 pub struct Module {
@@ -51,6 +58,10 @@ pub fn modules() -> &'static [Module] {
         Module {
             name: "prelude",
             source: include_str!("../../../library/std/prelude.mlk"),
+        },
+        Module {
+            name: RUNTIME,
+            source: include_str!("../../../library/std/runtime.mlk"),
         },
     ]
 }
@@ -136,7 +147,11 @@ mod tests {
             .map(|module| path(module).to_string())
             .collect();
 
-        assert_eq!(named, ["/std/core.mlk", "/std/prelude.mlk"]);
+        assert_eq!(named, [
+            "/std/core.mlk",
+            "/std/prelude.mlk",
+            "/std/runtime.mlk"
+        ]);
     }
 
     #[test]

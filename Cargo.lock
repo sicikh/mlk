@@ -1012,6 +1012,7 @@ dependencies = [
  "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-hir-ty",
+ "mlkc-interp",
  "mlkc-mir",
  "mlkc-span",
  "mlkc-stdlib",
@@ -1089,6 +1090,19 @@ dependencies = [
  "hashbrown 0.14.5",
  "rustc-hash",
  "triomphe",
+]
+
+[[package]]
+name = "mlkc-interp"
+version = "0.1.0"
+dependencies = [
+ "mlkc-driver",
+ "mlkc-fixture",
+ "mlkc-hir-def",
+ "mlkc-mir",
+ "mlkc-span",
+ "mlkc-stdlib",
+ "mlkc-vfs",
 ]
 
 [[package]]

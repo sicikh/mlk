@@ -1,0 +1,12 @@
+// A project of two modules: `main` prints what `twice` of the other module computes. The
+// interpreter and the compiled modules have to print the same thing.
+
+//- /main.mlk
+use project::math::twice
+
+pub fun main(): Unit =
+    print-int(twice(21))
+
+//- /math.mlk
+pub fun twice(value: Int): Int =
+    value * 2

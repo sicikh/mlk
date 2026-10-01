@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::a
+MODULE #3 project::a
 
 ITEM TREE
   use Point  @2.0
@@ -25,6 +25,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -36,7 +42,7 @@ No bodies.
 ```
 SCOPE
   Point
-    ty: type Point in module #3 (public)
+    ty: type Point in module #4 (public)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -45,6 +51,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface
@@ -70,7 +80,7 @@ No diagnostics.
 ### Item Tree
 
 ```
-MODULE #3 project::b
+MODULE #4 project::b
 
 ITEM TREE
   type Point  @2.0
@@ -87,6 +97,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -98,7 +114,7 @@ No bodies.
 ```
 SCOPE
   Point
-    ty: type Point in module #3 (public)
+    ty: type Point in module #4 (public)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -107,6 +123,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface
@@ -132,7 +152,7 @@ No diagnostics.
 ### Item Tree
 
 ```
-MODULE #4 project::main
+MODULE #5 project::main
 
 ITEM TREE
   use Point  @2.0
@@ -153,6 +173,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -160,7 +186,7 @@ ITEM TREE
 `fun get`
 
 ```
-BODY fun get in module #4
+BODY fun get in module #5
 
 root expr#1
 exprs
@@ -175,9 +201,9 @@ paths
 ```
 SCOPE
   Point
-    ty: type Point in module #3 (private)
+    ty: type Point in module #4 (private)
   get
-    value: fun get in module #4 (private)
+    value: fun get in module #5 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -186,6 +212,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

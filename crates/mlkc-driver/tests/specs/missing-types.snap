@@ -7,7 +7,7 @@ expression: snapshot
 ### Item Tree
 
 ```
-MODULE #2 project::main
+MODULE #3 project::main
 
 ITEM TREE
   fun helper  @2.0
@@ -35,6 +35,12 @@ ITEM TREE
   use Bool  prelude
     path: std::prelude::Bool
     visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
 ```
 
 ### Bodies
@@ -42,7 +48,7 @@ ITEM TREE
 `fun helper`
 
 ```
-BODY fun helper in module #2
+BODY fun helper in module #3
 
 root expr#0
 exprs
@@ -52,7 +58,7 @@ exprs
 `fun parameter`
 
 ```
-BODY fun parameter in module #2
+BODY fun parameter in module #3
 
 root expr#0
 params
@@ -68,7 +74,7 @@ paths
 `fun inferred`
 
 ```
-BODY fun inferred in module #2
+BODY fun inferred in module #3
 
 root expr#0
 params
@@ -84,7 +90,7 @@ paths
 `fun shown`
 
 ```
-BODY fun shown in module #2
+BODY fun shown in module #3
 
 root expr#0
 params
@@ -102,13 +108,13 @@ paths
 ```
 SCOPE
   helper
-    value: fun helper in module #2 (private)
+    value: fun helper in module #3 (private)
   parameter
-    value: fun parameter in module #2 (private)
+    value: fun parameter in module #3 (private)
   inferred
-    value: fun inferred in module #2 (private)
+    value: fun inferred in module #3 (private)
   shown
-    value: fun shown in module #2 (public)
+    value: fun shown in module #3 (public)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -117,6 +123,10 @@ SCOPE
     ty: type String in module #0 (private)
   Bool
     ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
 ```
 
 ### Type Surface

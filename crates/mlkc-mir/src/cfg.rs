@@ -3,7 +3,7 @@
 //! The edges of every block and an order to walk them in are what the verifier, the SSA
 //! construction, and every analysis over a body read. They are computed once, here, and read
 //! by position: a position is what an arena id is, and an algorithm that walks the graph is
-//! written over positions ([`Idx::index`]).
+//! written over positions ([`mlkc_la_arena::Idx::index`]).
 //!
 //! A block that no path from the entry reaches is in the graph all the same --- an edge to it
 //! exists, and an analysis may look at it --- but it is not in the reverse postorder, and the
@@ -69,12 +69,11 @@ pub(crate) fn targets(term: &Terminator) -> Vec<&BlockTarget> {
         Terminator::Branch { then_, else_, .. } => vec![then_, else_],
         Terminator::Switch {
             arms, otherwise, ..
-        } => {
-            arms.iter()
-                .map(|(_, target)| target)
-                .chain([otherwise])
-                .collect()
-        },
+        } => arms
+            .iter()
+            .map(|(_, target)| target)
+            .chain([otherwise])
+            .collect(),
         Terminator::Return { .. } | Terminator::Unreachable { .. } => Vec::new(),
     }
 }

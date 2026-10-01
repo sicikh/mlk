@@ -101,6 +101,10 @@ function answer(
             return driver.hir(request.path);
         case "types":
             return driver.types(request.path);
+        case "mir":
+            return driver.mir(request.path);
+        case "mirSsa":
+            return driver.mirSsa(request.path);
         case "diagnostics":
             return driver.diagnostics(request.path);
         case "stats":

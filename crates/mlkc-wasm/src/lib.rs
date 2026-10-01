@@ -27,6 +27,8 @@ use mlkc_driver::{Driver, Lowered, Parse};
 use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, dump};
 use mlkc_hir_ty::Ty;
 use mlkc_line_index::LineIndex;
+use mlkc_mir::{Rvalue, Stmt, StmtKind, Terminator, ValueId, cfg::Cfg, dump as mir_dump};
+use mlkc_span::Span;
 use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::{FileId, VfsPath};
 use serde::Serialize;
@@ -146,6 +148,26 @@ impl WasmDriver {
         to_js(&self.types_of(path)?)
     }
 
+    /// The MIR of the module in the buffer, in the CFG form, or `null` when there is nothing to
+    /// lower ([ADR-0019](../../docs/adr/0019-mir.md)).
+    ///
+    /// The bodies are read the way a person reads them --- a block with its parameters, the
+    /// statements of it, and the terminator it ends in --- and every line says where it was read
+    /// from, which is what an editor marks the buffer by. A body whose check reported a mistake
+    /// has no MIR, and is not among the bodies.
+    pub fn mir(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.mir_of(path, Form::Cfg)?)
+    }
+
+    /// The MIR of the module in the buffer, in the SSA form: the CFG form with block parameters
+    /// ([ADR-0019](../../docs/adr/0019-mir.md)).
+    ///
+    /// The name a host sees is `mirSsa`: wasm-bindgen keeps the Rust name otherwise.
+    #[wasm_bindgen(js_name = mirSsa)]
+    pub fn mir_ssa(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.mir_of(path, Form::Ssa)?)
+    }
+
     /// What the stages of the pipeline reported, in the order they reported it.
     ///
     /// The diagnostics are what an editor marks the buffer with: the level, the kind, and the
@@ -212,6 +234,20 @@ impl WasmDriver {
         };
 
         Ok(Types::of(&mut self.driver, ModuleId(file), &lowered))
+    }
+
+    /// The MIR of every body of the module in the buffer, in the form asked for.
+    fn mir_of(&mut self, path: &str, form: Form) -> Result<Option<Mir>, JsValue> {
+        let file = self.file(path)?;
+
+        // A file the driver does not lower has no MIR to read: the parse reported a mistake, or
+        // found no module. A body of a file that lowers but does not check clean is left out by
+        // the driver ([ADR-0019](../../docs/adr/0019-mir.md)).
+        let Some(lowered) = self.driver.lower(file) else {
+            return Ok(None);
+        };
+
+        Ok(Some(Mir::of(&mut self.driver, &lowered, form)))
     }
 
     /// What the stages of the pipeline reported.
@@ -607,6 +643,293 @@ fn node(kind: &'static str, id: u32, range: Option<TextRange>, ty: &Ty) -> (u32,
         ty: ty.to_string(),
         error: ty.is_error(),
     })
+}
+
+/// Which of the two forms of MIR a host asks for ([ADR-0019](../../docs/adr/0019-mir.md)).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Form {
+    /// The CFG form: an assignment writes a slot, and a join is a slot the predecessors wrote.
+    Cfg,
+    /// The SSA form: every value is defined once, and a join is a block parameter.
+    Ssa,
+}
+
+impl Form {
+    /// The form, by the name a host reads it by.
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Cfg => "cfg",
+            Self::Ssa => "ssa",
+        }
+    }
+}
+
+/// The MIR of the bodies of one module, as a host reads it.
+///
+/// A body is read the way a person reads it: the blocks in the order they are allocated, the
+/// statements of a block in the order they run, and the terminator the block ends in. Every
+/// line and every value carries the range of the buffer it was read from, which is what an
+/// editor marks while a pointer is on the line.
+#[derive(Serialize)]
+struct Mir {
+    /// Which form the bodies are read in: `cfg` or `ssa`.
+    form: &'static str,
+
+    /// The bodies of the module that check clean, in the order it declares them.
+    bodies: Vec<MirBody>,
+}
+
+impl Mir {
+    /// Reads the MIR of every body of a lowered module, in the form asked for.
+    ///
+    /// A body whose check reported a mistake has no MIR ([ADR-0019](../../docs/adr/0019-mir.md))
+    /// and is not among the bodies: the diagnostics of the buffer say why, and the reading of
+    /// the MIR is what there is to read.
+    fn of(driver: &mut Driver, lowered: &Lowered, form: Form) -> Self {
+        let mut bodies = Vec::new();
+
+        for body in lowered.bodies() {
+            let owner = body.owner().clone();
+            let mir = match form {
+                Form::Cfg => driver.mir(&owner),
+                Form::Ssa => driver.mir_ssa(&owner),
+            };
+
+            let Some(mir) = mir else {
+                continue;
+            };
+
+            let place = ItemLoc::from(owner.item.clone());
+
+            bodies.push(MirBody::of(
+                &mir,
+                entity_name(&place),
+                lowered.item_range(&place).map(covered),
+            ));
+        }
+
+        Self {
+            form: form.name(),
+            bodies,
+        }
+    }
+}
+
+/// One body of the MIR, as a host reads it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MirBody {
+    /// The entity the body belongs to: `fun main`.
+    owner: String,
+
+    /// Where the declaration that owns the body is written, in bytes, or nothing where it is
+    /// written nowhere.
+    range: Option<[u32; 2]>,
+
+    /// The block the body is entered at, by position.
+    entry: u32,
+
+    /// The parameters of the body: one per parameter of the owner.
+    params: Vec<MirValue>,
+
+    /// The slots of the CFG form, in the order the lowering bound them; empty in the SSA form,
+    /// where every value is defined once and no slot is needed.
+    locals: Vec<MirLocal>,
+
+    /// The blocks, in the order they are allocated.
+    blocks: Vec<MirBlock>,
+}
+
+impl MirBody {
+    /// Reads one body of the MIR the way a host reads it.
+    fn of(body: &mlkc_mir::Body, owner: String, range: Option<[u32; 2]>) -> Self {
+        let graph = Cfg::of(body);
+        let module = body.owner.module().0;
+        let mut blocks = Vec::with_capacity(body.blocks.len());
+
+        for (id, block) in body.blocks.iter() {
+            let at = id.index();
+            let params = block
+                .params
+                .iter()
+                .copied()
+                .map(|value| value_of(body, value))
+                .collect();
+            let stmts = block
+                .stmts
+                .iter()
+                .map(|stmt| {
+                    MirLine {
+                        text: mir_dump::stmt_text(body, stmt),
+                        kind: stmt_kind(stmt),
+                        range: span_range(stmt.span, module),
+                    }
+                })
+                .collect();
+            let (text, kind, span) = match &block.term {
+                Terminator::Goto { span, .. }
+                | Terminator::Branch { span, .. }
+                | Terminator::Switch { span, .. }
+                | Terminator::Return { span, .. }
+                | Terminator::Unreachable { span } => {
+                    (
+                        mir_dump::terminator_text(&block.term),
+                        terminator_kind(&block.term),
+                        *span,
+                    )
+                },
+            };
+
+            blocks.push(MirBlock {
+                label: mir_dump::block_label(id),
+                params,
+                stmts,
+                term: MirLine {
+                    text,
+                    kind,
+                    range: span_range(span, module),
+                },
+                predecessors: graph.predecessors(at).iter().map(|it| *it as u32).collect(),
+                successors: graph.successors(at).iter().map(|it| *it as u32).collect(),
+            });
+        }
+
+        Self {
+            owner,
+            range,
+            entry: body.entry.index() as u32,
+            params: body
+                .params
+                .iter()
+                .copied()
+                .map(|value| value_of(body, value))
+                .collect(),
+            locals: body
+                .locals
+                .iter()
+                .map(|(id, local)| {
+                    MirLocal {
+                        label: mir_dump::local_label(id),
+                        name: local.name.as_ref().map(ToString::to_string),
+                        ty: local.ty.to_string(),
+                        range: span_range(local.span, module),
+                    }
+                })
+                .collect(),
+            blocks,
+        }
+    }
+}
+
+/// One block of a body, as a host reads it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MirBlock {
+    /// The label of the block: `b0`.
+    label: String,
+
+    /// The block parameters: one per value born at a join in the SSA form, and none in the CFG
+    /// form.
+    params: Vec<MirValue>,
+
+    /// The statements of the block, in the order they run.
+    stmts: Vec<MirLine>,
+
+    /// The terminator the block ends in.
+    term: MirLine,
+
+    /// The blocks that come into this one, by position.
+    predecessors: Vec<u32>,
+
+    /// The blocks this one goes to, by position, in the order the terminator lists them.
+    successors: Vec<u32>,
+}
+
+/// One line of a body: a statement, or the terminator of a block.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MirLine {
+    /// What the line says: `l0(x) = const 1`, `goto b1(l0)`.
+    text: String,
+
+    /// What the line is: `use`, `const`, `call`, or `prim` for a statement, and `goto`,
+    /// `branch`, `switch`, `return`, or `unreachable` for the terminator of a block.
+    kind: &'static str,
+
+    /// Where the line is written, in bytes, or nothing where it was written nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// One value of a body: a parameter, a block parameter, or the value a statement defines.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MirValue {
+    /// The label of the value, as the dump reads it: `v0`.
+    label: String,
+
+    /// The source type the checker gave it: `Int`, `() -> Unit`.
+    ty: String,
+
+    /// Where it is written, in bytes, or nothing where it was written nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// One slot of the CFG form: a name a statement writes, and other statements read.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MirLocal {
+    /// The label of the slot, as the dump reads it: `l0`.
+    label: String,
+
+    /// The name the slot was bound under, if it was bound under one: `x` for `l0(x)`.
+    name: Option<String>,
+
+    /// The source type of what the slot holds: `Int`, `() -> Unit`.
+    ty: String,
+
+    /// Where the slot is bound, in bytes, or nothing where it is bound nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// Reads one value of a body the way a host reads it.
+fn value_of(body: &mlkc_mir::Body, value: ValueId) -> MirValue {
+    let data = &body.values[value];
+
+    MirValue {
+        label: mir_dump::value_label(value),
+        ty: data.ty.to_string(),
+        range: span_range(data.span, body.owner.module().0),
+    }
+}
+
+/// Where a span of a body is written, in the bytes a host counts: nothing for a span that was
+/// written in another file --- a synthesized node --- since a host marks the buffer it asked
+/// about and no other.
+fn span_range(span: Span, file: FileId) -> Option<[u32; 2]> {
+    (span.file == file).then(|| covered(span.range))
+}
+
+/// What a statement of a body is, as a host reads it.
+fn stmt_kind(stmt: &Stmt) -> &'static str {
+    let StmtKind::Assign { rvalue, .. } = &stmt.kind;
+
+    match rvalue {
+        Rvalue::Use(_) => "use",
+        Rvalue::Const(_) => "const",
+        Rvalue::Call { .. } => "call",
+        Rvalue::Prim { .. } => "prim",
+    }
+}
+
+/// What a terminator of a block is, as a host reads it.
+fn terminator_kind(term: &Terminator) -> &'static str {
+    match term {
+        Terminator::Goto { .. } => "goto",
+        Terminator::Branch { .. } => "branch",
+        Terminator::Switch { .. } => "switch",
+        Terminator::Return { .. } => "return",
+        Terminator::Unreachable { .. } => "unreachable",
+    }
 }
 
 /// The name of an entity of the surface of a module, as a host reads it: `fun main`.
@@ -1313,6 +1636,269 @@ mod tests {
         assert!(rows[0].2.starts_with("let x = 1"), "{:?}", rows[0]);
         assert_eq!(rows[1].0, "pat");
         assert_eq!(rows[3], ("expr", "Int", "x"));
+    }
+
+    #[test]
+    fn the_mir_of_a_buffer_crosses_the_boundary_in_both_forms() {
+        const SOURCE: &str = "fun main(): Int =\n    let x = 1 in\n    x\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+
+        // The CFG form reads a body as one block of slots: every expression is lowered into
+        // a slot of its own, and the terminator gives one back. Every line says where it was
+        // read from, which is what an editor marks the buffer by.
+        let cfg = driver
+            .mir_of("/main.mlk", Form::Cfg)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&cfg).expect("the MIR to serialize");
+
+        assert_eq!(json["form"], "cfg");
+
+        let body = &json["bodies"][0];
+
+        assert_eq!(body["owner"], "fun main");
+        assert_eq!(body["entry"], 0);
+        assert!(body["params"].as_array().is_some_and(Vec::is_empty));
+
+        // The slots of the CFG form, in the order the lowering bound them: the result of the
+        // `let`, the literal, the name it binds, and the name the body gives back. A slot
+        // bound by a pattern says the name it was bound under.
+        let locals = body["locals"].as_array().expect("the slots of the body");
+
+        assert_eq!(locals.len(), 4);
+        assert_eq!(locals[0]["label"], "l0");
+        assert!(locals[0]["name"].is_null());
+        assert_eq!(locals[2]["label"], "l2");
+        assert_eq!(locals[2]["name"], "x");
+        assert_eq!(locals[2]["ty"], "Int");
+
+        let (from, to) = range(&locals[2]);
+
+        assert_eq!(&SOURCE[from..to], "x", "a slot says where it was bound");
+
+        let block = &body["blocks"][0];
+
+        assert_eq!(block["label"], "b0");
+        assert!(
+            block["params"].as_array().is_some_and(Vec::is_empty),
+            "the CFG form has no block parameters",
+        );
+        assert!(
+            block["predecessors"].as_array().is_some_and(Vec::is_empty)
+                && block["successors"].as_array().is_some_and(Vec::is_empty),
+            "the entry of a body of one block has no edges",
+        );
+
+        let lines: Vec<(&str, &str, &str)> = block["stmts"]
+            .as_array()
+            .expect("the statements of the block")
+            .iter()
+            .map(|it| {
+                let (from, to) = range(it);
+
+                (
+                    it["kind"].as_str().expect("a kind"),
+                    it["text"].as_str().expect("a line"),
+                    &SOURCE[from..to],
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            lines,
+            [
+                ("const", "l1 = const 1", "1"),
+                ("use", "l2(x) = use l1", "x"),
+                ("use", "l3 = use l2", "x"),
+                ("use", "l0 = use l3", "let x = 1 in\n    x"),
+            ],
+            "the slots of the body, and the places they were read from"
+        );
+
+        let term = &block["term"];
+        let (from, to) = range(term);
+
+        assert_eq!(
+            term["kind"], "return",
+            "the body ends by giving a value back"
+        );
+        assert_eq!(term["text"], "return l0");
+        assert_eq!(&SOURCE[from..to], "let x = 1 in\n    x");
+
+        // The SSA form reads the same body with values in place of slots: every value is
+        // defined once, and no statement reads a slot.
+        let ssa = driver
+            .mir_of("/main.mlk", Form::Ssa)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&ssa).expect("the MIR to serialize");
+
+        assert_eq!(json["form"], "ssa");
+        assert!(
+            json["bodies"][0]["locals"]
+                .as_array()
+                .is_some_and(Vec::is_empty),
+            "the SSA form has no slots",
+        );
+
+        let texts: Vec<&str> = json["bodies"][0]["blocks"][0]["stmts"]
+            .as_array()
+            .expect("the statements of the block")
+            .iter()
+            .map(|it| it["text"].as_str().expect("a line"))
+            .collect();
+
+        assert_eq!(texts, [
+            "v0 = const 1",
+            "v1 = use v0",
+            "v2 = use v1",
+            "v3 = use v2",
+        ]);
+        assert_eq!(json["bodies"][0]["blocks"][0]["term"]["text"], "return v3");
+    }
+
+    #[test]
+    fn a_body_of_a_join_crosses_the_boundary_with_its_parameters_and_edges() {
+        use mlkc_hir_def::{
+            Attributes, BodyEntityLoc, BodyLoc, EntityData, FunctionData, ItemSyntaxLoc,
+            ItemTreeBuilder, Name, PathRoot, PlainPath, PlainPathId, Signature, Visibility,
+        };
+        use mlkc_mir::{
+            Block, BlockTarget, BodyBuilder, Const, LocalData, Operand, Place, Rvalue, Stmt,
+            StmtKind, ValueData,
+        };
+        use mlkc_vfs::FileId;
+
+        // A body the way the SSA form leaves a join: the entry branches into two arms, each of
+        // them passes a value to a third block, and the third block is entered through
+        // a parameter. No source lowers to one yet --- the language has no conditional yet ---
+        // and what this checks is the reading of one, not the construction.
+        let mut tree = ItemTreeBuilder::new(
+            ModuleId(FileId::from_raw(0)),
+            PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new("join")])),
+        );
+
+        tree.declare(
+            Some(Name::new("join")),
+            EntityData::Function(FunctionData {
+                attributes: Attributes::default(),
+                visibility: Visibility::Public,
+                signature: Signature::default(),
+            }),
+            ItemSyntaxLoc::root().child(0),
+        );
+
+        let tree = tree.finish();
+        let (item, _) = tree.entities().next().expect("the function to be declared");
+        let ItemLoc::Function(function) = item else {
+            panic!("the entity is a function");
+        };
+        let owner = BodyEntityLoc {
+            module: tree.module(),
+            item: BodyLoc::Function(function),
+        };
+        let span = Span::dummy();
+        let mut builder = BodyBuilder::new(owner);
+        let cond = builder.param(ValueData {
+            span,
+            ty: Ty::Error,
+        });
+        let join = builder.value(ValueData {
+            span,
+            ty: Ty::Error,
+        });
+        let carried = builder.local(LocalData {
+            span,
+            name: Some(Name::new("x")),
+            ty: Ty::Error,
+        });
+        let entry = builder.block(Block {
+            params: Vec::new(),
+            stmts: Vec::new(),
+            term: Terminator::Unreachable { span },
+        });
+        let left = builder.block(Block {
+            params: Vec::new(),
+            stmts: Vec::new(),
+            term: Terminator::Unreachable { span },
+        });
+        let right = builder.block(Block {
+            params: Vec::new(),
+            stmts: Vec::new(),
+            term: Terminator::Unreachable { span },
+        });
+        let done = builder.block(Block {
+            params: vec![join],
+            stmts: Vec::new(),
+            term: Terminator::Return {
+                value: Operand::Value(join),
+                span,
+            },
+        });
+
+        *builder.block_mut(entry) = Block {
+            params: Vec::new(),
+            stmts: vec![Stmt {
+                kind: StmtKind::Assign {
+                    place: Place::Local(carried),
+                    rvalue: Rvalue::Const(Const::Int(1)),
+                },
+                span,
+            }],
+            term: Terminator::Branch {
+                cond: Operand::Value(cond),
+                then_: BlockTarget {
+                    block: left,
+                    args: Vec::new(),
+                },
+                else_: BlockTarget {
+                    block: right,
+                    args: Vec::new(),
+                },
+                span,
+            },
+        };
+
+        for arm in [left, right] {
+            *builder.block_mut(arm) = Block {
+                params: Vec::new(),
+                stmts: Vec::new(),
+                term: Terminator::Goto {
+                    target: BlockTarget {
+                        block: done,
+                        args: vec![Operand::Local(carried)],
+                    },
+                    span,
+                },
+            };
+        }
+
+        let body = builder.finish(entry);
+        let json = serde_json::to_value(MirBody::of(&body, "fun join".to_owned(), None))
+            .expect("the body to serialize");
+
+        assert_eq!(json["entry"], 0);
+        assert_eq!(json["params"][0]["label"], "v0");
+        assert_eq!(json["locals"][0]["label"], "l0");
+        assert_eq!(json["locals"][0]["name"], "x");
+        assert_eq!(json["blocks"][0]["term"]["kind"], "branch");
+        assert_eq!(json["blocks"][1]["term"]["text"], "goto b3(l0)");
+        assert_eq!(json["blocks"][3]["params"][0]["label"], "v1");
+        assert_eq!(json["blocks"][3]["term"]["text"], "return v1");
+        assert_eq!(
+            json["blocks"][3]["predecessors"],
+            serde_json::json!([1, 2]),
+            "the join is entered from both arms",
+        );
+        assert_eq!(json["blocks"][0]["successors"], serde_json::json!([1, 2]));
+        assert_eq!(json["blocks"][1]["successors"], serde_json::json!([3]));
+        assert!(
+            json["blocks"][0]["stmts"][0]["range"].is_null(),
+            "a synthesized node was written nowhere",
+        );
     }
 
     /// The place a serialized row points at, in the bytes a host counts.

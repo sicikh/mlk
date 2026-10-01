@@ -215,6 +215,117 @@ export interface Types {
 }
 
 /**
+ * One value of a body of the MIR: a parameter, a block parameter, or the value a statement
+ * defines.
+ */
+export interface MirValue {
+    /** The label of the value, as the dump reads it: `v0`. */
+    label: string;
+
+    /** The source type the checker gave it: `Int`, `() -> Unit`. */
+    ty: string;
+
+    /** Where it is written, in bytes, or nothing where it was written nowhere. */
+    range: [number, number] | null;
+}
+
+/** One line of a body of the MIR: a statement, or the terminator of a block. */
+export interface MirLine {
+    /** What the line says: `l0(x) = const 1`, `goto b1(l0)`. */
+    text: string;
+
+    /**
+     * What the line is: `use`, `const`, `call`, or `prim` for a statement, and `goto`, `branch`,
+     * `switch`, `return`, or `unreachable` for the terminator of a block.
+     */
+    kind: string;
+
+    /** Where the line is written, in bytes, or nothing where it was written nowhere. */
+    range: [number, number] | null;
+}
+
+/** One block of a body of the MIR. */
+export interface MirBlock {
+    /** The label of the block: `b0`. */
+    label: string;
+
+    /**
+     * The block parameters: one per value born at a join in the SSA form, and none in the CFG
+     * form.
+     */
+    params: MirValue[];
+
+    /** The statements of the block, in the order they run. */
+    stmts: MirLine[];
+
+    /** The terminator the block ends in. */
+    term: MirLine;
+
+    /** The blocks that come into this one, by position. */
+    predecessors: number[];
+
+    /** The blocks this one goes to, by position, in the order the terminator lists them. */
+    successors: number[];
+}
+
+/** One slot of the CFG form: a name a statement writes, and other statements read. */
+export interface MirLocal {
+    /** The label of the slot, as the dump reads it: `l0`. */
+    label: string;
+
+    /** The name the slot was bound under, if it was bound under one: `x` for `l0(x)`. */
+    name: string | null;
+
+    /** The source type of what the slot holds: `Int`, `() -> Unit`. */
+    ty: string;
+
+    /** Where the slot is bound, in bytes, or nothing where it is bound nowhere. */
+    range: [number, number] | null;
+}
+
+/** One body of the MIR. */
+export interface MirBody {
+    /** The entity the body belongs to: `fun main`. */
+    owner: string;
+
+    /**
+     * Where the declaration that owns the body is written, in bytes, or nothing where it is
+     * written nowhere.
+     */
+    range: [number, number] | null;
+
+    /** The block the body is entered at, by position. */
+    entry: number;
+
+    /** The parameters of the body: one per parameter of the owner. */
+    params: MirValue[];
+
+    /**
+     * The slots of the CFG form, in the order the lowering bound them; empty in the SSA form,
+     * where every value is defined once and no slot is needed.
+     */
+    locals: MirLocal[];
+
+    /** The blocks, in the order they are allocated. */
+    blocks: MirBlock[];
+}
+
+/**
+ * The MIR of the module in the buffer, as the compiler reads it.
+ *
+ * A body is read the way a person reads it: its blocks, the statements of a block, and the
+ * terminator it ends in. Every line and every value carries the range of the buffer it was read
+ * from, which is what the editor marks while a pointer is on the line.
+ */
+export interface Mir {
+    /** Which form the bodies are read in: `cfg` or `ssa`. */
+    form: string;
+
+    /** The bodies of the module that check clean, in the order it declares them. */
+    bodies: MirBody[];
+}
+
+/**
  * What one pass of the compiler did for one unit while a host was reading the driver.
  *
  * A counter is of consultations rather than of values: one pull that asks the driver for the
@@ -318,6 +429,12 @@ export interface Driver {
     /** What checking the types of the module left, or `null` when there is nothing to check. */
     types(path: string): Promise<Types | null>;
 
+    /** The MIR of the module in the CFG form, or `null` when there is nothing to lower. */
+    mir(path: string): Promise<Mir | null>;
+
+    /** The MIR of the module in the SSA form: the CFG form with block parameters. */
+    mirSsa(path: string): Promise<Mir | null>;
+
     /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
     diagnostics(path: string): Promise<Diagnostic[]>;
 
@@ -355,6 +472,8 @@ export type DriverRequest =
     | { kind: "ast"; id: number; path: string }
     | { kind: "hir"; id: number; path: string }
     | { kind: "types"; id: number; path: string }
+    | { kind: "mir"; id: number; path: string }
+    | { kind: "mirSsa"; id: number; path: string }
     | { kind: "diagnostics"; id: number; path: string }
     | { kind: "stats"; id: number };
 
@@ -507,6 +626,9 @@ export async function loadDriver(): Promise<Driver> {
         hir: (path) => ask<Hir | null>((id) => ({ kind: "hir", id, path })),
         types: (path) =>
             ask<Types | null>((id) => ({ kind: "types", id, path })),
+        mir: (path) => ask<Mir | null>((id) => ({ kind: "mir", id, path })),
+        mirSsa: (path) =>
+            ask<Mir | null>((id) => ({ kind: "mirSsa", id, path })),
         diagnostics: (path) =>
             ask<Diagnostic[]>((id) => ({ kind: "diagnostics", id, path })),
         stats: () => ask<Stats>((id) => ({ kind: "stats", id })),

@@ -929,6 +929,8 @@ dependencies = [
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-line-index",
+ "mlkc-mir",
+ "mlkc-span",
  "mlkc-syntax",
  "mlkc-vfs",
  "serde",

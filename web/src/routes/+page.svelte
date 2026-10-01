@@ -7,6 +7,7 @@
     import Editor from "$lib/components/Editor.svelte";
     import FileList from "$lib/components/FileList.svelte";
     import HirView from "$lib/components/HirView.svelte";
+    import MirView from "$lib/components/MirView.svelte";
     import Splitter from "$lib/components/Splitter.svelte";
     import StatsView from "$lib/components/StatsView.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
@@ -17,6 +18,7 @@
         type Diagnostic,
         type Driver,
         type Hir,
+        type Mir,
         type StatsRow,
         type StdFile,
         type SyntaxNode,
@@ -51,6 +53,12 @@
 
         /** The HIR, read when the tab of the HIR is in front. */
         hir?: Hir | null;
+
+        /** The MIR in the CFG form, read when its tab is in front. */
+        mir?: Mir | null;
+
+        /** The MIR in the SSA form, read when its tab is in front. */
+        mirSsa?: Mir | null;
     }
 
     /**
@@ -76,7 +84,15 @@ fun main(): Unit =
     const FIRST = STARTER[0].path;
 
     /** The views of what the compiler makes of the buffer on the right. */
-    type Tab = "diagnostics" | "cst" | "ast" | "hir" | "tc" | "stats";
+    type Tab =
+        | "diagnostics"
+        | "cst"
+        | "ast"
+        | "hir"
+        | "mir"
+        | "mir-ssa"
+        | "tc"
+        | "stats";
 
     /**
      * Which panel a narrow screen shows, where there is room for one at a time.
@@ -311,13 +327,16 @@ fun main(): Unit =
 
         try {
             const started = performance.now();
-            const [diagnostics, types, cst, ast, hir] = await Promise.all([
-                driver.diagnostics(path),
-                driver.types(path),
-                tab === "cst" ? driver.cst(path) : undefined,
-                tab === "ast" ? driver.ast(path) : undefined,
-                tab === "hir" ? driver.hir(path) : undefined,
-            ]);
+            const [diagnostics, types, cst, ast, hir, mir, mirSsa] =
+                await Promise.all([
+                    driver.diagnostics(path),
+                    driver.types(path),
+                    tab === "cst" ? driver.cst(path) : undefined,
+                    tab === "ast" ? driver.ast(path) : undefined,
+                    tab === "hir" ? driver.hir(path) : undefined,
+                    tab === "mir" ? driver.mir(path) : undefined,
+                    tab === "mir-ssa" ? driver.mirSsa(path) : undefined,
+                ]);
 
             // The time of a look is the time of its values: the counters are a read of their
             // own, and the clock is stopped before it. Reading them is what clears them, so
@@ -336,6 +355,8 @@ fun main(): Unit =
                 cst,
                 ast,
                 hir,
+                mir,
+                mirSsa,
                 cost: { rows: stats.rows, took },
             };
         } catch (error) {
@@ -675,6 +696,16 @@ fun main(): Unit =
                 {/if}
             </button>
             <button
+                data-tab="mir"
+                class:active={tab === "mir"}
+                onclick={() => show("mir")}>MIR/CFG</button
+            >
+            <button
+                data-tab="mir-ssa"
+                class:active={tab === "mir-ssa"}
+                onclick={() => show("mir-ssa")}>MIR/SSA</button
+            >
+            <button
                 data-tab="stats"
                 class:active={tab === "stats"}
                 onclick={() => show("stats")}>Stats</button
@@ -715,6 +746,38 @@ fun main(): Unit =
                     <TypeView
                         types={reading.types}
                         text={find(active)?.text ?? ""}
+                        onHover={pointed}
+                        onPick={picked}
+                    />
+                {/if}
+            {:else if tab === "mir"}
+                {#if reading.mir === undefined}
+                    <p class="empty">Reading the MIR.</p>
+                {:else if reading.mir === null}
+                    <p class="empty">There is nothing to lower.</p>
+                {:else if reading.mir.bodies.length === 0}
+                    <p class="empty">
+                        No body of the module checks clean, so none has MIR.
+                    </p>
+                {:else}
+                    <MirView
+                        mir={reading.mir}
+                        onHover={pointed}
+                        onPick={picked}
+                    />
+                {/if}
+            {:else if tab === "mir-ssa"}
+                {#if reading.mirSsa === undefined}
+                    <p class="empty">Reading the MIR.</p>
+                {:else if reading.mirSsa === null}
+                    <p class="empty">There is nothing to lower.</p>
+                {:else if reading.mirSsa.bodies.length === 0}
+                    <p class="empty">
+                        No body of the module checks clean, so none has MIR.
+                    </p>
+                {:else}
+                    <MirView
+                        mir={reading.mirSsa}
                         onHover={pointed}
                         onPick={picked}
                     />
@@ -894,6 +957,7 @@ fun main(): Unit =
 
     .tabs {
         display: flex;
+        flex-wrap: wrap;
         padding: 0 0.25rem;
         border-bottom: 1px solid var(--border);
     }

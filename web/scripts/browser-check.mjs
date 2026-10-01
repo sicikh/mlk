@@ -105,6 +105,23 @@ const LONG =
  */
 const WRITTEN = "fun main(): Unit =\n    x\n";
 
+/**
+ * What a tab of the MIR reads: which form it shows, the bodies, and the lines of their blocks.
+ *
+ * The lines are read as a person reads them: the text of every statement and terminator, which
+ * is what says whether the tab shows the CFG form (slots) or the SSA form (values of their own).
+ */
+const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-line=' + kind + ']')].map((it) => text(it));
+	return JSON.stringify({
+		form: inspector().querySelector('[data-form]')?.dataset.form,
+		owners: lines('owner'),
+		blocks: [...inspector().querySelectorAll('[data-block]')].map((it) => it.dataset.block),
+		entry: inspector().querySelectorAll('[data-entry=true]').length,
+		stmts: lines('stmt'),
+		term: lines('term'),
+		locals: lines('local')
+	})`;
+
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
@@ -240,6 +257,27 @@ const STEPS = {
     		count: parts.length,
     		marked: parts.map((it) => it.textContent).join('')
     	})`,
+
+    showMir: `show('mir'); return true`,
+
+    mir: MIR,
+
+    // A line of a body stands for the expression it was lowered from: a pointer on it asks the
+    // editor to mark that expression in the buffer.
+    hoverMir: `const row = [...inspector().querySelectorAll('[data-line=stmt]')]
+    		.find((it) => text(it).includes('const 42'));
+    	row.dispatchEvent(new MouseEvent('mouseenter'));
+    	return JSON.stringify({ says: text(row) })`,
+
+    mirHovered: `const parts = [...document.querySelectorAll('.cm-content .cm-hovered')];
+    	return JSON.stringify({
+    		count: parts.length,
+    		marked: parts.map((it) => it.textContent).join('')
+    	})`,
+
+    showSsa: `show('mir-ssa'); return true`,
+
+    ssa: MIR,
 
     ast: `return JSON.stringify({
     		root: inspector().textContent.includes('ModuleRoot'),
@@ -552,6 +590,8 @@ const WAITS = {
     ast: `return inspector().textContent.includes('ModuleRoot')`,
     hir: `return inspector().textContent.includes('BODY fun main')`,
     tc: `return inspector().querySelector('[data-tc=entity]') !== null`,
+    mir: `return inspector().querySelector('[data-form=cfg] [data-block]') !== null`,
+    ssa: `return inspector().querySelector('[data-form=ssa] [data-line=term]') !== null`,
     broken: `return diagnostics().length > 0`,
     bogus: `return inspector().textContent.includes('Bogus')`,
     long: `return inspector().textContent.includes('x79')`,
@@ -789,6 +829,23 @@ async function main() {
     await ask(STEPS.hoverTc);
     const tcHover = JSON.parse(await ask(STEPS.tcHovered));
 
+    // The MIR of the buffer: the CFG form the checked body is lowered into, and the SSA form
+    // built from it. A line of a body stands for the expression it was read from, so a pointer
+    // on one asks the editor to mark that code.
+    await ask(STEPS.showMir);
+    await until(WAITS.mir, "the mir of the buffer");
+    const mir = JSON.parse(await ask(STEPS.mir));
+
+    const mirSays = JSON.parse(await ask(STEPS.hoverMir));
+    const mirHover = {
+        ...mirSays,
+        ...JSON.parse(await ask(STEPS.mirHovered)),
+    };
+
+    await ask(STEPS.showSsa);
+    await until(WAITS.ssa, "the ssa form of the buffer");
+    const ssa = JSON.parse(await ask(STEPS.ssa));
+
     await ask(STEPS.open);
     await ask(STEPS.typePath);
     await ask(STEPS.submitPath);
@@ -924,6 +981,9 @@ async function main() {
             typeColour,
             tc,
             tcHover,
+            mir,
+            mirHover,
+            ssa,
             program,
             width,
             made,
@@ -1116,6 +1176,44 @@ function report(page, problems, warnings, asked) {
             "a row of the types is a type of a piece of the code, and marks it in the editor",
             page.tcHover.count === 1 && page.tcHover.marked !== "",
         ],
+        [
+            "the cfg tab reads a body of the buffer as its blocks",
+            page.mir.form === "cfg" &&
+                page.mir.owners.some((it) => it.includes("fun main")) &&
+                page.mir.blocks.length === 1 &&
+                page.mir.blocks[0] === "b0" &&
+                page.mir.entry === 1,
+        ],
+        [
+            // The CFG form is the lowering as it leaves it: every expression is a slot of its
+            // own, and the body ends by giving one back.
+            "the cfg tab reads the slots of the lowering",
+            page.mir.stmts.some((it) => it.includes("const 42")) &&
+                page.mir.stmts.every((it) => /^l\d/.test(it)) &&
+                page.mir.term.every((it) => it.startsWith("return l")),
+        ],
+        [
+            "a line of the cfg marks the code it was read from",
+            page.mirHover.count === 1 && page.mirHover.marked.trim() === "42",
+        ],
+        [
+            // The slots of the CFG form: the lowering binds every expression to one, and a slot
+            // a pattern bound says the name it was bound under. The SSA form needs none.
+            "the cfg tab reads the slots of the body, and the ssa tab has none",
+            page.mir.locals.some((it) => it.includes("(x)")) &&
+                page.mir.locals.every((it) => /^l\d/.test(it)) &&
+                page.ssa.locals.length === 0,
+        ],
+        [
+            // The SSA form is built from the CFG form: the same body, with a value of its own
+            // in place of every slot.
+            "the ssa tab reads the same body with values in place of slots",
+            page.ssa.form === "ssa" &&
+                page.ssa.blocks.length === page.mir.blocks.length &&
+                page.ssa.stmts.some((it) => it.includes("const 42")) &&
+                page.ssa.stmts.every((it) => /^v\d/.test(it)) &&
+                page.ssa.term.every((it) => it.startsWith("return v")),
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 2],
@@ -1182,7 +1280,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Inspect shows the inspector",
             page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 6 &&
+                page.phoneInspector.tabs === 8 &&
                 !page.phoneInspector.overflows,
         ],
         [
@@ -1299,6 +1397,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `the type line ${page.typeHover.says} marks ${JSON.stringify(page.typeHover.at)} and is painted ${page.typeColour.part}`,
+    );
+    console.log(
+        `the mir reads a ${page.mir.form} form of ${page.mir.blocks.length} block(s), which ${page.mirHover.says.trim()} marks ${JSON.stringify(page.mirHover.marked)}, and the ssa ${page.ssa.blocks.length} block(s)`,
     );
     console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,

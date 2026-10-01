@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 use mlkc_hir_def::ItemLocLike;
 
 use crate::{
-    BlockId, BlockTarget, Body, Callee, Const, LocalId, Operand, Place, Rvalue, StmtKind,
+    BlockId, BlockTarget, Body, Callee, Const, LocalId, Operand, Place, Rvalue, Stmt, StmtKind,
     Terminator, ValueId,
 };
 
@@ -51,14 +51,7 @@ pub fn body(body: &Body) -> String {
         let _ = writeln!(out, ":");
 
         for stmt in &block.stmts {
-            let StmtKind::Assign { place, rvalue } = &stmt.kind;
-
-            let _ = writeln!(
-                out,
-                "    {} = {}",
-                place_text(body, place),
-                rvalue_text(rvalue),
-            );
+            let _ = writeln!(out, "    {}", stmt_text(body, stmt));
         }
 
         let _ = writeln!(out, "    {}", terminator_text(&block.term));
@@ -98,6 +91,13 @@ fn operand_text(operand: &Operand) -> String {
     }
 }
 
+/// What a statement writes and computes, as a line.
+pub fn stmt_text(body: &Body, stmt: &Stmt) -> String {
+    let StmtKind::Assign { place, rvalue } = &stmt.kind;
+
+    format!("{} = {}", place_text(body, place), rvalue_text(rvalue))
+}
+
 /// What a statement computes.
 fn rvalue_text(rvalue: &Rvalue) -> String {
     match rvalue {
@@ -126,8 +126,8 @@ fn callee_text(callee: &Callee) -> String {
     }
 }
 
-/// Where a block ends.
-fn terminator_text(term: &Terminator) -> String {
+/// Where a block ends, as a line.
+pub fn terminator_text(term: &Terminator) -> String {
     match term {
         Terminator::Goto { target, .. } => format!("goto {}", target_text(target)),
         Terminator::Branch {
@@ -204,7 +204,7 @@ pub fn value_label(value: ValueId) -> String {
 }
 
 /// The label of a slot.
-fn local_label(local: LocalId) -> String {
+pub fn local_label(local: LocalId) -> String {
     format!("l{}", local.index())
 }
 

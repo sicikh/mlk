@@ -1,15 +1,20 @@
 /**
  * The driver, as the editor sees it.
  *
- * The wasm module hands out one class, `WasmDriver`, whose methods cross the boundary
- * as untyped values; the shapes below are the mirror of the Rust types in
+ * The compiler runs in a worker of its own (see `driver.worker.ts`): the page never blocks on it,
+ * and a pull that takes a while takes it where nothing a person does has to wait. What crosses the
+ * boundary is the driver's own set of pulls --- one method per value, each computing only what
+ * it answers --- so a view asks for the tree it shows and not for every tree there is. The
+ * protocol is the shape of an editor's server as well: a notification for what a host tells the
+ * driver, a request and an answer for what it asks.
+ *
+ * The shapes below are the mirror of the Rust types in
  * `crates/mlkc-wasm/src/lib.rs`, and this file is the one place they have to be kept in step.
  *
  * Nothing here decides anything about the compiler: the editor pushes the text of a buffer
  * and reads back what the pipeline made of it. The same driver answers the CLI,
  * which is the point of keeping this boundary this thin.
  */
-import init, { WasmDriver } from "@mlk/wasm";
 
 /** One place a diagnostic points at. */
 export interface Label {
@@ -209,52 +214,45 @@ export interface Types {
     bodies: BodyTypes[];
 }
 
-/** Everything the editor shows about one buffer. */
-export interface Analysis {
-    /** The concrete syntax tree: lossless, tokens and trivia included. */
-    cst: SyntaxNode;
-
-    /**
-     * The typed view over the same tree, as the compiler serializes it,
-     * or `null` when the parse did not find a module root.
-     *
-     * Its shape is the one the typed tree gives itself: a field of the compiler's AST is a key here,
-     * a list is an array, and a token is a node of the concrete tree.
-     */
-    ast: unknown;
-
-    /** The HIR of the module, or `null` when there is nothing to lower. */
-    hir: Hir | null;
-
-    /** What checking the types of the module left, or `null` when there is nothing to check. */
-    types: Types | null;
-
-    /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
-    diagnostics: Diagnostic[];
-}
-
 /** The driver, typed for the editor. */
 export interface Driver {
     /**
      * Feeds the text of a buffer into the driver; `null` means the buffer is gone.
      *
-     * Returns whether the contents changed: pushing the same text again changes nothing,
-     * which is what makes analyzing after every keystroke affordable.
+     * A notification rather than a question: the driver is told, and the pulls that follow it
+     * see the text, because the worker answers in the order it is told.
      */
-    push(path: string, text: string | null): boolean;
-
-    /** The trees and the diagnostics of a buffer, computed only for what changed. */
-    analyze(path: string): Analysis;
+    push(path: string, text: string | null): void;
 
     /**
      * Records the standard library of the language in the driver, and hands over the files it
      * is made of.
      *
      * The library is part of the compiler rather than of the editor: a host asks for it
-     * instead of pushing it, and what comes back is what a host shows — files of the
+     * instead of pushing it, and what comes back is what a host shows --- files of the
      * compiler's, with nothing in them for a person to write.
      */
-    useStd(): StdFile[];
+    useStd(): Promise<StdFile[]>;
+
+    /** The concrete syntax tree of the buffer: lossless, tokens and trivia included. */
+    cst(path: string): Promise<SyntaxNode>;
+
+    /**
+     * The typed view over the same tree, or `null` when the parse found no module root.
+     *
+     * Its shape is the one the typed tree gives itself: a field of the compiler's AST is a key here,
+     * a list is an array, and a token is a node of the concrete tree.
+     */
+    ast(path: string): Promise<unknown | null>;
+
+    /** The HIR of the module, or `null` when there is nothing to lower. */
+    hir(path: string): Promise<Hir | null>;
+
+    /** What checking the types of the module left, or `null` when there is nothing to check. */
+    types(path: string): Promise<Types | null>;
+
+    /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
+    diagnostics(path: string): Promise<Diagnostic[]>;
 }
 
 /** One file of the standard library of the language, as the driver hands it over. */
@@ -267,19 +265,170 @@ export interface StdFile {
 }
 
 /**
- * Loads the wasm module and hands out a driver over it.
+ * A question the editor asks the driver.
  *
- * The module is fetched and instantiated on the first call; a page that loads once
- * loads it once.
+ * Passing the text of a buffer is a notification: there is nothing to answer, and nothing to
+ * wait for. Everything else is a question, and carries the id the answer comes back under.
+ */
+export type DriverRequest =
+    | { kind: "setText"; path: string; text: string | null }
+    | { kind: "useStd"; id: number }
+    | { kind: "cst"; id: number; path: string }
+    | { kind: "ast"; id: number; path: string }
+    | { kind: "hir"; id: number; path: string }
+    | { kind: "types"; id: number; path: string }
+    | { kind: "diagnostics"; id: number; path: string };
+
+/**
+ * What the worker says back.
+ *
+ * `ready` is said once, when the wasm module is instantiated and the driver can be asked;
+ * `fatal` replaces it when the module did not load, and the worker is not going to answer
+ * anything. An answer or an error closes one question: a question is asked once and answered
+ * once, in the order it was asked.
+ */
+export type DriverResponse =
+    | { kind: "ready" }
+    | { kind: "fatal"; message: string }
+    | { kind: "answer"; id: number; value: unknown }
+    | { kind: "error"; id: number; message: string };
+
+/**
+ * Starts the driver: a worker of its own, and the door to it.
+ *
+ * The worker fetches and instantiates the wasm module, and everything the editor asks of the
+ * compiler is a message to it: the page draws while the compiler works, and a pull that takes
+ * a while takes it where nothing a person does has to wait.
+ *
+ * What comes back is the driver itself --- one method per value, each a question --- and its
+ * questions and the text pushed into it keep their order, so a pull sees every push before it.
  */
 export async function loadDriver(): Promise<Driver> {
-    await init();
+    // The worker is asked for by its URL, as a string: the hosts this runs on are browsers, and
+    // not every one of them reads a `URL` where a worker script is named.
+    const worker = new Worker(
+        new URL("./driver.worker.ts", import.meta.url).href,
+        {
+            type: "module",
+        },
+    );
 
-    const wasm = new WasmDriver();
+    const ready = Promise.withResolvers<void>();
+
+    /** What each question is waiting for, by the id it was asked under. */
+    const waiting = new Map<
+        number,
+        { resolve: (value: unknown) => void; reject: (error: Error) => void }
+    >();
+
+    /**
+     * The questions asked before the worker was up.
+     *
+     * A worker starts when it starts: the wasm module takes a moment to arrive, and a message
+     * sent meanwhile would be a question to nobody. They wait here, in the order they were
+     * asked, and go out together when the worker says it is up --- which is also the order the
+     * worker answers in, so a pull still sees every push before it.
+     */
+    const early: DriverRequest[] = [];
+
+    let serial = 0;
+    let up = false;
+
+    /** Why the worker stopped answering, if it did. */
+    let broken: Error | null = null;
+
+    /** Says the driver is beyond asking, and lets go of everything that was waiting for it. */
+    const fail = (error: Error) => {
+        if (broken) return;
+
+        broken = error;
+
+        ready.reject(error);
+
+        for (const it of waiting.values()) it.reject(error);
+
+        waiting.clear();
+        worker.terminate();
+    };
+
+    const post = (request: DriverRequest) => {
+        if (broken) return;
+
+        if (up) worker.postMessage(request);
+        else early.push(request);
+    };
+
+    /** Asks a question and hands back the promise the answer keeps. */
+    const ask = <T>(question: (id: number) => DriverRequest): Promise<T> => {
+        return new Promise<T>((resolve, reject) => {
+            if (broken) {
+                reject(broken);
+                return;
+            }
+
+            const id = ++serial;
+
+            waiting.set(id, {
+                resolve: (value) => resolve(value as T),
+                reject,
+            });
+            post(question(id));
+        });
+    };
+
+    worker.onmessage = (event: MessageEvent<DriverResponse>) => {
+        const message = event.data;
+
+        switch (message.kind) {
+            case "ready":
+                up = true;
+                ready.resolve();
+
+                for (const request of early) worker.postMessage(request);
+
+                early.length = 0;
+                break;
+
+            case "fatal":
+                fail(new Error(message.message));
+                break;
+
+            case "answer": {
+                const it = waiting.get(message.id);
+
+                waiting.delete(message.id);
+                it?.resolve(message.value);
+                break;
+            }
+
+            case "error": {
+                const it = waiting.get(message.id);
+
+                waiting.delete(message.id);
+                it?.reject(new Error(message.message));
+                break;
+            }
+        }
+    };
+
+    // A worker whose script never ran, or whose module did not load, has nobody to answer with:
+    // the browser says so here rather than through the protocol.
+    worker.onerror = (event: ErrorEvent) => {
+        event.preventDefault();
+        fail(new Error(event.message || "the driver worker did not start"));
+    };
+
+    await ready.promise;
 
     return {
-        push: (path, text) => wasm.setText(path, text),
-        analyze: (path) => wasm.analyze(path) as Analysis,
-        useStd: () => wasm.useStd() as StdFile[],
+        push: (path, text) => post({ kind: "setText", path, text }),
+        useStd: () => ask<StdFile[]>((id) => ({ kind: "useStd", id })),
+        cst: (path) => ask<SyntaxNode>((id) => ({ kind: "cst", id, path })),
+        ast: (path) => ask<unknown | null>((id) => ({ kind: "ast", id, path })),
+        hir: (path) => ask<Hir | null>((id) => ({ kind: "hir", id, path })),
+        types: (path) =>
+            ask<Types | null>((id) => ({ kind: "types", id, path })),
+        diagnostics: (path) =>
+            ask<Diagnostic[]>((id) => ({ kind: "diagnostics", id, path })),
     };
 }

@@ -1,30 +1,34 @@
 //! The driver, for a browser.
 //!
-//! This is the wasm host of [`mlkc_driver`]: the same driver the CLI drives,
-//! with the text of a buffer pushed into it and the trees pulled out.
-//! Nothing here knows about a file system —
-//! in a browser there is none, and the driver never wanted one:
-//! an editor pushes the text it holds, and reads back what the pipeline made of it.
+//! This is the wasm host of [`mlkc_driver`]: the same driver the CLI drives, with the text of a
+//! buffer pushed into it and the values of the pipeline pulled out. Nothing here knows about a
+//! file system --- in a browser there is none, and the driver never wanted one.
+//!
+//! The boundary is the driver's own: one method per value a host may ask for --- the concrete
+//! tree, the typed view, the HIR, the types of a module, and the diagnostics --- and a pull
+//! computes what it answers and nothing else. A host that shows the trees only when a person
+//! opens them asks for them only then, and the pipeline under the boundary recomputes nothing
+//! it already holds. No method bundles the others: what a host does not ask for is not built,
+//! and a host that speaks another protocol --- an editor, over LSP --- asks for the same pulls.
 //!
 //! The standard library is the one thing a host does not push: it is part of the compiler, and
 //! a browser has nowhere to read it from, so a host asks the driver for it
 //! ([`WasmDriver::use_std`]) and is handed the files it is made of. The library is the
 //! compiler's, so the editor shows it as a buffer and writes in none of it.
 //!
-//! The boundary is deliberately thin: this module converts values and nothing else,
-//! so the browser and the CLI cannot drift apart in what they ask the driver to do.
-//!
-//! The trees cross it in the shape the syntax tree itself defines:
+//! The trees cross the boundary in the shape the syntax tree itself defines:
 //! a node is its kind, its range and its children, a token is its kind, its range and its text.
-//! A host walks that as deeply as it likes — folds it, prints it, jumps from it to the text —
+//! A host walks that as deeply as it likes --- folds it, prints it, jumps from it to the text ---
 //! and no conversion here decides what a tree is.
 
-use mlkc_driver::{Driver, Lowered};
+use std::sync::Arc;
+
+use mlkc_driver::{Driver, Lowered, Parse};
 use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, dump};
 use mlkc_hir_ty::Ty;
 use mlkc_line_index::LineIndex;
 use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
-use mlkc_vfs::VfsPath;
+use mlkc_vfs::{FileId, VfsPath};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -72,17 +76,48 @@ impl WasmDriver {
         self.driver.set_file_text(path_of(path), text)
     }
 
-    /// Everything a host reads from the parse of one file:
-    /// the concrete syntax tree, the typed view over it, the HIR, the types its nodes were
-    /// checked to, and the diagnostics.
+    /// The concrete syntax tree of a buffer: lossless, tokens and trivia included.
     ///
-    /// The trees are values a host navigates, not text it re-parses:
+    /// The tree is a value a host navigates, not text it re-parses:
     /// a node is its kind, its range and its children, a token is its kind, its range and its text.
     ///
     /// Throws when the driver holds no text for the file:
     /// an editor pushes the buffer before it asks about it.
-    pub fn analyze(&mut self, path: &str) -> Result<JsValue, JsValue> {
-        to_js(&self.analysis(path)?)
+    pub fn cst(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.cst_of(path)?)
+    }
+
+    /// The typed view over the same tree, or `null` when the parse found no module root.
+    ///
+    /// Its shape is the one the typed tree gives itself: a field of the compiler's AST is a key
+    /// here, a list is an array, and a token is a node of the concrete tree.
+    pub fn ast(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.ast_of(path)?)
+    }
+
+    /// The HIR of the module in the buffer, or `null` when there is nothing to lower.
+    ///
+    /// The lines are read the way a person reads the HIR --- the module and its items, and then
+    /// a body per entity that owns one --- and each line says where the node it is about is
+    /// written, which is what an editor marks the buffer by.
+    pub fn hir(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.hir_of(path)?)
+    }
+
+    /// What checking the types of the buffer left, or `null` when there is nothing to check.
+    ///
+    /// The types are read where a person reads them: the type an entity of the module was
+    /// resolved to, and the type every node of every body was checked to.
+    pub fn types(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.types_of(path)?)
+    }
+
+    /// What the stages of the pipeline reported, in the order they reported it.
+    ///
+    /// The diagnostics are what an editor marks the buffer with: the level, the kind, and the
+    /// places they point at, each of them with the line and the column it sits at.
+    pub fn diagnostics(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.diagnostics_of(path)?)
     }
 }
 
@@ -92,26 +127,44 @@ impl WasmDriver {
         self.driver
             .use_std()
             .into_iter()
-            .map(|file| {
-                StdFile {
-                    path: file.path.to_string(),
-                    text: file.text,
-                }
+            .map(|file| StdFile {
+                path: file.path.to_string(),
+                text: file.text,
             })
             .collect()
     }
 
-    /// Everything the editor shows about one buffer.
-    fn analysis(&mut self, path: &str) -> Result<Analysis, JsValue> {
+    /// The concrete syntax tree of a buffer.
+    fn cst_of(&mut self, path: &str) -> Result<SyntaxNode, JsValue> {
+        Ok(self.parse_of(path)?.syntax())
+    }
+
+    /// The typed view over the same tree.
+    fn ast_of(&mut self, path: &str) -> Result<Option<ModuleRoot>, JsValue> {
+        Ok(self.parse_of(path)?.module_root())
+    }
+
+    /// The HIR of the module in the buffer.
+    fn hir_of(&mut self, path: &str) -> Result<Option<Hir>, JsValue> {
         let file = self.file(path)?;
-        let parse = self
-            .driver
-            .parse(file)
-            .ok_or_else(|| failure(&format!("{path} is not text the driver can parse")))?;
-        let lowered = self.driver.lower(file);
-        let types = lowered
-            .as_ref()
-            .and_then(|lowered| Types::of(&mut self.driver, ModuleId(file), lowered));
+
+        Ok(self.driver.lower(file).map(|lowered| Hir::of(&lowered)))
+    }
+
+    /// What checking the types of the buffer left.
+    fn types_of(&mut self, path: &str) -> Result<Option<Types>, JsValue> {
+        let file = self.file(path)?;
+
+        let Some(lowered) = self.driver.lower(file) else {
+            return Ok(None);
+        };
+
+        Ok(Types::of(&mut self.driver, ModuleId(file), &lowered))
+    }
+
+    /// What the stages of the pipeline reported.
+    fn diagnostics_of(&mut self, path: &str) -> Result<Vec<Diagnostic>, JsValue> {
+        let file = self.file(path)?;
         let diagnostics = self
             .driver
             .diagnostics(file)
@@ -121,20 +174,23 @@ impl WasmDriver {
             .line_index(file)
             .ok_or_else(|| failure(&format!("{path} has no lines to read")))?;
 
-        Ok(Analysis {
-            cst: parse.syntax(),
-            ast: parse.module_root(),
-            hir: lowered.map(|lowered| Hir::of(&lowered)),
-            types,
-            diagnostics: diagnostics
-                .iter()
-                .map(|it| Diagnostic::of(it, &index))
-                .collect(),
-        })
+        Ok(diagnostics
+            .iter()
+            .map(|it| Diagnostic::of(it, &index))
+            .collect())
+    }
+
+    /// The parse of a buffer, or a thrown error when the driver holds no text for it.
+    fn parse_of(&mut self, path: &str) -> Result<Arc<Parse>, JsValue> {
+        let file = self.file(path)?;
+
+        self.driver
+            .parse(file)
+            .ok_or_else(|| failure(&format!("{path} is not text the driver can parse")))
     }
 
     /// The id the driver knows a path under, or a thrown error when it holds nothing for it.
-    fn file(&self, path: &str) -> Result<mlkc_vfs::FileId, JsValue> {
+    fn file(&self, path: &str) -> Result<FileId, JsValue> {
         self.driver
             .file_id(&path_of(path))
             .ok_or_else(|| failure(&format!("no file was pushed at {path}")))
@@ -155,30 +211,6 @@ struct StdFile {
 
     /// The source of it.
     text: &'static str,
-}
-
-/// Everything the editor shows about one buffer.
-///
-/// The shape of the trees is the one the syntax tree serializes itself into,
-/// and the one of the diagnostics is the one an editor marks a buffer with;
-/// the types of the editor mirror both, and that is the only place the two sides meet.
-#[derive(Serialize)]
-struct Analysis {
-    /// The concrete syntax tree: lossless, tokens and trivia included.
-    cst: SyntaxNode,
-
-    /// The typed view over the same tree,
-    /// or `null` when the parse did not find a module root.
-    ast: Option<ModuleRoot>,
-
-    /// The HIR of the module, or `null` when there is nothing to lower.
-    hir: Option<Hir>,
-
-    /// What checking the types of the module left, or `null` when there is nothing to check.
-    types: Option<Types>,
-
-    /// What the stages of the pipeline reported, in the shape an editor marks the buffer with.
-    diagnostics: Vec<Diagnostic>,
 }
 
 /// The HIR of one module, as a host reads it.
@@ -276,11 +308,9 @@ impl HirNode {
             parts: node
                 .parts
                 .iter()
-                .map(|part| {
-                    HirPart {
-                        text: part.text.clone(),
-                        kind: part.kind.map(kind_of),
-                    }
+                .map(|part| HirPart {
+                    text: part.text.clone(),
+                    kind: part.kind.map(kind_of),
                 })
                 .collect(),
             kind: kind_of(node.kind),
@@ -447,13 +477,17 @@ impl Types {
 fn node(kind: &'static str, id: u32, range: Option<TextRange>, ty: &Ty) -> (u32, u32, TypedNode) {
     let at = range.map_or(u32::MAX, |range| u32::from(range.start()));
 
-    (at, id, TypedNode {
-        kind,
-        label: format!("{kind} #{}", id - 1),
-        range: range.map(covered),
-        ty: ty.to_string(),
-        error: ty.is_error(),
-    })
+    (
+        at,
+        id,
+        TypedNode {
+            kind,
+            label: format!("{kind} #{}", id - 1),
+            range: range.map(covered),
+            ty: ty.to_string(),
+            error: ty.is_error(),
+        },
+    )
 }
 
 /// The name of an entity of the surface of a module, as a host reads it: `fun main`.
@@ -512,15 +546,13 @@ impl Diagnostic {
             labels: diagnostic
                 .labels
                 .iter()
-                .map(|label| {
-                    Label {
-                        start: u32::from(label.span.range.start()),
-                        end: u32::from(label.span.range.end()),
-                        line: index.line_col(label.span.range.start()).line,
-                        column: index.line_col(label.span.range.start()).col,
-                        primary: label.primary,
-                        message: label.message.clone(),
-                    }
+                .map(|label| Label {
+                    start: u32::from(label.span.range.start()),
+                    end: u32::from(label.span.range.end()),
+                    line: index.line_col(label.span.range.start()).line,
+                    column: index.line_col(label.span.range.start()).col,
+                    primary: label.primary,
+                    message: label.message.clone(),
                 })
                 .collect(),
             notes: diagnostic.notes.clone(),
@@ -610,21 +642,21 @@ mod tests {
 
         // The driver holds them, so a host that shows a file of the library gets its trees.
         for file in files {
-            let analysis = driver
-                .analysis(&file.path)
+            let diagnostics = driver
+                .diagnostics_of(&file.path)
                 .expect("a file of the library to analyze");
 
             assert!(
-                analysis.diagnostics.is_empty(),
+                diagnostics.is_empty(),
                 "{}: {}",
                 file.path,
-                serde_json::to_string(&analysis.diagnostics).unwrap_or_default(),
+                serde_json::to_string(&diagnostics).unwrap_or_default(),
             );
         }
     }
 
     #[test]
-    fn a_pushed_buffer_analyzes_into_trees_and_diagnostics() {
+    fn a_pushed_buffer_crosses_the_boundary_as_trees_and_diagnostics() {
         let mut driver = WasmDriver::new();
 
         // The names of the language are names the library declares: without it, `Unit` is a
@@ -635,10 +667,8 @@ mod tests {
             "/main.mlk",
             Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string())
         ));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-
-        let cst = &json["cst"];
+        let cst = serde_json::to_value(driver.cst_of("/main.mlk").expect("the file to parse"))
+            .expect("the tree to serialize");
 
         assert_eq!(cst["kind"], "MODULE_ROOT");
         assert!(
@@ -647,17 +677,18 @@ mod tests {
         );
         assert!(cst["children"].is_array(), "a host walks the children");
         assert_eq!(
-            token_text(cst, "FUN_KW").as_deref(),
+            token_text(&cst, "FUN_KW").as_deref(),
             Some("fun "),
             "a token carries the trivia that follows it"
         );
-        assert_eq!(token_text(cst, "IDENT").as_deref(), Some("main"));
+        assert_eq!(token_text(&cst, "IDENT").as_deref(), Some("main"));
         assert!(
-            token_text(cst, "WHITESPACE").is_none(),
+            token_text(&cst, "WHITESPACE").is_none(),
             "trivia is not a child: it belongs to the token it follows"
         );
 
-        let ast = &json["ast"];
+        let ast = serde_json::to_value(driver.ast_of("/main.mlk").expect("the file to parse"))
+            .expect("the tree to serialize");
         let decl = &ast["fields"]["items"]["items"][0];
 
         assert_eq!(ast["kind"], "ModuleRoot", "a node says what it is");
@@ -674,10 +705,14 @@ mod tests {
             ast["fields"]["bom_token"].is_null(),
             "an optional field that is missing is null"
         );
+        let diagnostics = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+
         assert!(
-            analysis.diagnostics.is_empty(),
+            diagnostics.is_empty(),
             "the module is one the language accepts: {}",
-            serde_json::to_string(&analysis.diagnostics).unwrap_or_default(),
+            serde_json::to_string(&diagnostics).unwrap_or_default(),
         );
     }
 
@@ -696,11 +731,12 @@ mod tests {
         let mut driver = WasmDriver::new();
 
         driver.set_text("/main.mlk", Some(source.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let nodes = json["hir"]["nodes"]
-            .as_array()
-            .expect("the HIR to hold lines");
+        let hir = driver
+            .hir_of("/main.mlk")
+            .expect("the file to lower")
+            .expect("the module to have a HIR");
+        let json = serde_json::to_value(&hir).expect("the HIR to serialize");
+        let nodes = json["nodes"].as_array().expect("the HIR to hold lines");
 
         // The module is read first, and it is a line about nothing a host can mark: the file
         // stands in no project, and the module is called by the name of its file.
@@ -788,11 +824,12 @@ mod tests {
         let mut driver = WasmDriver::new();
 
         driver.set_text("/main.mlk", Some(source.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let nodes = json["hir"]["nodes"]
-            .as_array()
-            .expect("the HIR to hold lines");
+        let hir = driver
+            .hir_of("/main.mlk")
+            .expect("the file to lower")
+            .expect("the module to have a HIR");
+        let json = serde_json::to_value(&hir).expect("the HIR to serialize");
+        let nodes = json["nodes"].as_array().expect("the HIR to hold lines");
 
         let declaration = &nodes[2]["children"][0]["children"][0];
 
@@ -838,9 +875,12 @@ mod tests {
         let mut driver = WasmDriver::new();
 
         driver.set_text("/main.mlk", Some(source.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let items = json["hir"]["nodes"][1]["children"]
+        let hir = driver
+            .hir_of("/main.mlk")
+            .expect("the file to lower")
+            .expect("the module to have a HIR");
+        let json = serde_json::to_value(&hir).expect("the HIR to serialize");
+        let items = json["nodes"][1]["children"]
             .as_array()
             .expect("the items of the module");
         let item = items
@@ -893,9 +933,12 @@ mod tests {
         let mut driver = WasmDriver::new();
 
         driver.set_text("/main.mlk", Some(source.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let body = &json["hir"]["nodes"][2];
+        let hir = driver
+            .hir_of("/main.mlk")
+            .expect("the file to lower")
+            .expect("the module to have a HIR");
+        let json = serde_json::to_value(&hir).expect("the HIR to serialize");
+        let body = &json["nodes"][2];
         let path = &body["children"][0]["children"][0]["children"][0];
 
         assert_eq!(path["text"], "path#0  Int -> use Int");
@@ -919,9 +962,11 @@ mod tests {
                     .to_string(),
             ),
         );
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
+        let diagnostics = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let diagnostics = serde_json::to_value(&diagnostics).expect("the diagnostics to serialize");
+        let diagnostics = diagnostics.as_array().expect("diagnostics");
 
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0]["category"], "lowering");
@@ -937,9 +982,11 @@ mod tests {
         driver.register_library();
 
         driver.set_text("/main.mlk", Some(SOURCE.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
+        let diagnostics = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let json = serde_json::to_value(&diagnostics).expect("the diagnostics to serialize");
+        let diagnostics = json.as_array().expect("diagnostics");
 
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert_eq!(diagnostics[0]["category"], "typechecker");
@@ -968,9 +1015,11 @@ mod tests {
         driver.register_library();
 
         driver.set_text("/main.mlk", Some(SOURCE.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
+        let diagnostics = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let json = serde_json::to_value(&diagnostics).expect("the diagnostics to serialize");
+        let diagnostics = json.as_array().expect("diagnostics");
 
         // The range of a literal is the meaning of the type it is written with, so the check is
         // what reports it ([ADR-0018]).
@@ -1006,9 +1055,12 @@ mod tests {
         driver.register_library();
 
         driver.set_text("/main.mlk", Some(SOURCE.to_string()));
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let types = &json["types"];
+        let types = driver
+            .types_of("/main.mlk")
+            .expect("the file to be checked")
+            .expect("the module to have types");
+        let json = serde_json::to_value(&types).expect("the types to serialize");
+        let types = &json;
 
         // The surface of the module: what its readers read of it.
         assert_eq!(types["surface"][0]["name"], "fun main");
@@ -1077,22 +1129,13 @@ mod tests {
             "/main.mlk",
             Some("fun main(): Unit =\n    let x = 1\n".to_string()),
         );
-        let file = driver.file("/main.mlk").expect("the file to be known");
         let diagnostics = driver
-            .driver
-            .diagnostics(file)
-            .expect("the file to be parsed");
-        let index = driver
-            .driver
-            .line_index(file)
-            .expect("the file to have lines");
-        let diagnostic = Diagnostic::of(
-            diagnostics
-                .iter()
-                .next()
-                .expect("the parse to report something"),
-            &index,
-        );
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let diagnostic = diagnostics
+            .into_iter()
+            .next()
+            .expect("the parse to report something");
 
         assert_eq!(diagnostic.level, "error");
         assert_eq!(diagnostic.category, "parser");
@@ -1123,9 +1166,12 @@ mod tests {
             "/main.mlk",
             Some("fun main(): Unit =\n    x\nabc\n".to_string()),
         );
-        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
-        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
-        let bogus = bogus_node(&json["ast"]).expect("the mistake to leave a node of no kind");
+        let ast = driver
+            .ast_of("/main.mlk")
+            .expect("the file to parse")
+            .expect("the module root to be found");
+        let json = serde_json::to_value(&ast).expect("the tree to serialize");
+        let bogus = bogus_node(&json).expect("the mistake to leave a node of no kind");
 
         assert!(
             bogus["items"].is_array(),

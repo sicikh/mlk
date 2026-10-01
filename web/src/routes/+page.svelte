@@ -12,14 +12,39 @@
     import TypeView from "$lib/components/TypeView.svelte";
     import {
         loadDriver,
-        type Analysis,
+        type Diagnostic,
         type Driver,
+        type Hir,
         type StdFile,
+        type SyntaxNode,
+        type Types,
     } from "$lib/driver";
 
     interface Buffer {
         path: string;
         text: string;
+    }
+
+    /**
+     * What the inspector read of the active buffer, one value at a time.
+     *
+     * A value is read when something shows it, so a field is `undefined` until the tab it
+     * belongs to has been in front, `null` when the driver was asked and had nothing to show,
+     * and what the driver handed over once it did. What every tab counts on --- the diagnostics
+     * and the types --- is read with every look, because more than one tab reads them.
+     */
+    interface Reading {
+        diagnostics: Diagnostic[];
+        types: Types | null;
+
+        /** The parse, read when the tab of the concrete tree is in front. */
+        cst?: SyntaxNode;
+
+        /** The typed view over the parse, read when the tab of the AST is in front. */
+        ast?: unknown | null;
+
+        /** The HIR, read when the tab of the HIR is in front. */
+        hir?: Hir | null;
     }
 
     /**
@@ -71,7 +96,13 @@ fun main(): Unit =
     /** The buffers open in the editor, in the order of their tabs: opening is not reading. */
     let open = $state<string[]>(STARTER.map((it) => it.path));
 
-    let analysis = $state<Analysis | null>(null);
+    /**
+     * What has been read of the active buffer.
+     *
+     * A reading is replaced whole rather than changed in place, and the trees inside it are
+     * the compiler's own values: nothing here makes them reactive, which is what `raw` says.
+     */
+    let reading = $state.raw<Reading | null>(null);
     let tab = $state<Tab>("diagnostics");
 
     /**
@@ -140,7 +171,7 @@ fun main(): Unit =
 
     let driver: Driver | null = null;
 
-    const diagnostics = $derived(analysis?.diagnostics ?? []);
+    const diagnostics = $derived(reading?.diagnostics ?? []);
     const errors = $derived(
         diagnostics.filter((it) => it.level === "error").length,
     );
@@ -153,7 +184,7 @@ fun main(): Unit =
      * how much of the tab is that.
      */
     const untyped = $derived(
-        (analysis?.types?.bodies ?? [])
+        (reading?.types?.bodies ?? [])
             .flatMap((it) => it.nodes)
             .filter((it) => it.error).length,
     );
@@ -168,7 +199,7 @@ fun main(): Unit =
 
             // The library of the language goes in beside them, and is shown beside them: it is
             // the compiler's, so the editor reads it where the compiler put it.
-            library = driver.useStd();
+            library = await driver.useStd();
             buffers = [
                 ...buffers,
                 ...library.map((it) => ({ path: it.path, text: it.text })),
@@ -215,29 +246,83 @@ fun main(): Unit =
         // there, and pushing it back would only let a copy overwrite what the compiler holds.
         if (!writable(path)) return;
 
-        try {
-            driver.push(it.path, it.text);
-        } catch (error) {
-            say("error", `the driver refused ${name(path)}: ${String(error)}`);
-        }
+        driver.push(it.path, it.text);
     }
 
-    /** Reads back what the driver made of the active buffer. */
-    function check() {
+    /**
+     * The look that is on its way to the driver, if one is, and whether something asked for
+     * another one while it runs.
+     *
+     * A look reads what the inspector shows, and a keystroke does not wait for it: what is
+     * asked while one runs is remembered, and the look after it reads the buffer as it is by
+     * then. The driver is told each keystroke either way, so what a look reads is the text of
+     * the moment it runs rather than the text the one before it started with.
+     */
+    let running: Promise<void> | null = null;
+    let queued = false;
+
+    /**
+     * Reads back what the driver made of the active buffer.
+     *
+     * A pull per value, and only for the values something shows: the diagnostics and the types
+     * every tab counts on, and the tree of the tab in front. Reading a tree that no tab shows
+     * would be work with nowhere to go, which is the point of a driver that answers one
+     * question at a time.
+     */
+    function check(): Promise<void> {
+        if (!driver || active === "") return Promise.resolve();
+
+        if (running) {
+            queued = true;
+
+            return running;
+        }
+
+        running = (async () => {
+            try {
+                do {
+                    queued = false;
+
+                    await look();
+                } while (queued);
+            } finally {
+                running = null;
+            }
+        })();
+
+        return running;
+    }
+
+    /** One look at the active buffer: everything the editor shows of it, read at once. */
+    async function look() {
         if (!driver || active === "") return;
+
+        const path = active;
 
         // Whatever a pointer was on belongs to the parse this one replaces.
         hovered = null;
         resolved = null;
 
         try {
-            analysis = driver.analyze(active);
+            const [diagnostics, types, cst, ast, hir] = await Promise.all([
+                driver.diagnostics(path),
+                driver.types(path),
+                tab === "cst" ? driver.cst(path) : undefined,
+                tab === "ast" ? driver.ast(path) : undefined,
+                tab === "hir" ? driver.hir(path) : undefined,
+            ]);
+
+            // The buffer under the look is not always the buffer in front of a person: what
+            // came back for one that is gone is dropped, and the look that follows it reads
+            // the one that took its place.
+            if (path !== active) return;
+
+            reading = { diagnostics, types, cst, ast, hir };
         } catch (error) {
-            analysis = null;
-            say(
-                "error",
-                `the driver refused ${name(active)}: ${String(error)}`,
-            );
+            if (path !== active) return;
+
+            reading = null;
+            say("error", `the driver refused ${name(path)}: ${String(error)}`);
         }
     }
 
@@ -296,7 +381,7 @@ fun main(): Unit =
         const next = open[at] ?? open[at - 1] ?? "";
 
         active = next;
-        analysis = null;
+        reading = null;
 
         if (next !== "") select(next);
     }
@@ -337,13 +422,13 @@ fun main(): Unit =
         const next = open[at] ?? open[at - 1] ?? buffers[0]?.path ?? "";
 
         active = next;
-        analysis = null;
+        reading = null;
 
         if (next !== "") select(next);
     }
 
     /** Compiles every buffer: the same work the driver does per keystroke, said out loud. */
-    function compile() {
+    async function compile() {
         if (!driver) return;
 
         for (const it of buffers) {
@@ -352,9 +437,9 @@ fun main(): Unit =
             push(it.path);
 
             try {
-                const result = driver.analyze(it.path);
+                const result = await driver.diagnostics(it.path);
                 const took = Math.round(performance.now() - started);
-                const count = result.diagnostics.length;
+                const count = result.length;
 
                 say(
                     "note",
@@ -368,7 +453,7 @@ fun main(): Unit =
             }
         }
 
-        check();
+        await check();
 
         if (errors > 0) {
             tab = "diagnostics";
@@ -377,6 +462,17 @@ fun main(): Unit =
             // and a narrow screen can only put one panel in front: it is the one that says it.
             view = "inspector";
         }
+    }
+
+    /**
+     * A tab of the inspector in front.
+     *
+     * A tab shows one value, and a value is read when it is shown: picking a tab is what asks
+     * the driver for the tree, and the tabs picked before keep what they read.
+     */
+    function show(next: Tab) {
+        tab = next;
+        check();
     }
 
     /** Running needs a code generator, which the pipeline does not reach yet. */
@@ -501,7 +597,7 @@ fun main(): Unit =
             <button
                 data-tab="diagnostics"
                 class:active={tab === "diagnostics"}
-                onclick={() => (tab = "diagnostics")}
+                onclick={() => show("diagnostics")}
             >
                 Diagnostics
                 {#if diagnostics.length > 0}
@@ -513,22 +609,22 @@ fun main(): Unit =
             <button
                 data-tab="cst"
                 class:active={tab === "cst"}
-                onclick={() => (tab = "cst")}>CST</button
+                onclick={() => show("cst")}>CST</button
             >
             <button
                 data-tab="ast"
                 class:active={tab === "ast"}
-                onclick={() => (tab = "ast")}>AST</button
+                onclick={() => show("ast")}>AST</button
             >
             <button
                 data-tab="hir"
                 class:active={tab === "hir"}
-                onclick={() => (tab = "hir")}>HIR</button
+                onclick={() => show("hir")}>HIR</button
             >
             <button
                 data-tab="tc"
                 class:active={tab === "tc"}
-                onclick={() => (tab = "tc")}
+                onclick={() => show("tc")}
             >
                 TC
                 {#if untyped > 0}
@@ -540,39 +636,47 @@ fun main(): Unit =
         <div class="view">
             {#if tab === "diagnostics"}
                 <Diagnostics {diagnostics} text={find(active)?.text ?? ""} />
-            {:else if !analysis}
+            {:else if !reading}
                 <p class="empty">Waiting for a parse.</p>
             {:else if tab === "cst"}
-                <TreeView
-                    node={analysis.cst}
-                    onHover={pointed}
-                    onPick={picked}
-                />
+                {#if reading.cst === undefined}
+                    <p class="empty">Reading the tree.</p>
+                {:else}
+                    <TreeView
+                        node={reading.cst}
+                        onHover={pointed}
+                        onPick={picked}
+                    />
+                {/if}
             {:else if tab === "ast"}
-                {#if analysis.ast === null}
+                {#if reading.ast === undefined}
+                    <p class="empty">Reading the tree.</p>
+                {:else if reading.ast === null}
                     <p class="empty">The root of the tree is not a module.</p>
                 {:else}
                     <AstView
-                        value={analysis.ast}
+                        value={reading.ast}
                         onHover={pointed}
                         onPick={picked}
                     />
                 {/if}
             {:else if tab === "tc"}
-                {#if analysis.types === null}
+                {#if reading.types === null}
                     <p class="empty">There is nothing to check.</p>
                 {:else}
                     <TypeView
-                        types={analysis.types}
+                        types={reading.types}
                         text={find(active)?.text ?? ""}
                         onHover={pointed}
                         onPick={picked}
                     />
                 {/if}
-            {:else if analysis.hir === null}
+            {:else if reading.hir === undefined}
+                <p class="empty">Reading the module.</p>
+            {:else if reading.hir === null}
                 <p class="empty">There is nothing to lower.</p>
             {:else}
-                {#each analysis.hir.nodes as node, index (index)}
+                {#each reading.hir.nodes as node, index (index)}
                     <HirView {node} onHover={pointed} onPick={picked} />
                 {/each}
             {/if}

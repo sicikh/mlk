@@ -13,7 +13,10 @@
  * The check serves `web/build`, so the site has to be built first — `pnpm check:browser`
  * does that. `vite preview` takes a free port, and `obscura serve` is started when no
  * browser answers; both are taken down on the way out unless `--keep` asks otherwise.
- * Pass `--base` to check a site that already runs — the dev server, say.
+ * Pass `--base` to check a site that already runs — the dev server, say. What the check
+ * drives by default is the built site, which hands the driver's worker over as one script
+ * every host runs; a dev server hands it over as a module, and obscura runs a worker as a
+ * classic script whatever its type says, so a dev server is one this browser cannot drive.
  */
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -34,8 +37,10 @@ const started = [];
 /**
  * The page is asked one question at a time, and the browser runs it between questions.
  *
- * Nothing here waits: a question that awaited something would hold the page still
- * for as long as it waited, because the browser runs the page and the answer on one thread.
+ * Nothing here waits: a question is one expression the page answers at once, and waiting inside
+ * the page would be waiting on the thread the answer has to be read on. What the page does wait
+ * for --- a pull of the compiler, which the worker answers a message later --- is waited for
+ * from here, by asking the same question again (see `until`).
  */
 const HELPERS = `
 	const text = (element) => element?.textContent ?? '';
@@ -499,6 +504,24 @@ const STEPS = {
     	})`,
 };
 
+/**
+ * What a step waits to see before it reads what it is about.
+ *
+ * A pull of the compiler is a question the page asks the worker, and the inspector paints the
+ * answer a message later rather than in the click that asked for it: what a step is about to
+ * read is only there once the tab holds it. Each of these is the thing the step reads, asked
+ * as a question until it answers yes.
+ */
+const WAITS = {
+    cst: `return inspector().querySelector('[data-kind=MODULE_ROOT]') !== null`,
+    ast: `return inspector().textContent.includes('ModuleRoot')`,
+    hir: `return inspector().textContent.includes('BODY fun main')`,
+    tc: `return inspector().querySelector('[data-tc=entity]') !== null`,
+    broken: `return diagnostics().length > 0`,
+    bogus: `return inspector().textContent.includes('Bogus')`,
+    long: `return inspector().textContent.includes('x79')`,
+};
+
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
 class Connection {
     #socket;
@@ -636,6 +659,22 @@ async function main() {
         return result.result.value;
     };
 
+    /**
+     * Waits until the page answers a question with yes.
+     *
+     * A pull of the compiler is answered a message later, and the inspector paints it a render
+     * after that: what a step reads is read after this says it is there, rather than after a
+     * while that happens to be long enough.
+     */
+    const until = async (body, what) => {
+        const found = await waitFor(async () => await ask(body), {
+            timeout: 20000,
+            interval: 50,
+        });
+
+        if (!found) throw new Error(`the page never showed ${what}`);
+    };
+
     // The page hydrates after it has loaded, which is also when the kernel is fetched.
     const hydrated = await waitFor(
         async () => {
@@ -649,6 +688,7 @@ async function main() {
     const state = JSON.parse(await ask(STEPS.state));
 
     await ask(STEPS.showCst);
+    await until(WAITS.cst, "the cst of the buffer");
     const cst = JSON.parse(await ask(STEPS.cst));
 
     // The editor paints the buffer in front, before anything is typed into it.
@@ -669,6 +709,7 @@ async function main() {
     const width = JSON.parse(await ask(STEPS.width));
 
     await ask(STEPS.showAst);
+    await until(WAITS.ast, "the ast of the buffer");
     const ast = JSON.parse(await ask(STEPS.ast));
 
     // A node of the typed tree covers the tokens under it, and a pointer on its row marks as much.
@@ -676,6 +717,7 @@ async function main() {
     const astHover = JSON.parse(await ask(STEPS.astHovered));
 
     await ask(STEPS.showHir);
+    await until(WAITS.hir, "the hir of the buffer");
     const hir = JSON.parse(await ask(STEPS.hir));
 
     // A line of the hir stands for a node of the HIR, and the lowering is what says where that
@@ -705,6 +747,7 @@ async function main() {
     // every node of every body to. A row of the tab stands for a node of the HIR, so a pointer
     // on one marks the code the node was read from.
     await ask(STEPS.showTc);
+    await until(WAITS.tc, "the types of the buffer");
     const tc = JSON.parse(await ask(STEPS.tc));
     await ask(STEPS.hoverTc);
     const tcHover = JSON.parse(await ask(STEPS.tcHovered));
@@ -719,6 +762,7 @@ async function main() {
     await sleep(300);
 
     await ask(STEPS.showDiagnostics);
+    await until(WAITS.broken, "the diagnostics of the broken buffer");
     const broken = JSON.parse(await ask(STEPS.seen));
 
     const marks = JSON.parse(await ask(STEPS.painted));
@@ -733,6 +777,7 @@ async function main() {
     await ask(STEPS.typeStray);
     await sleep(300);
     await ask(STEPS.showAst);
+    await until(WAITS.bogus, "the node the grammar has no room for");
     const bogus = JSON.parse(await ask(STEPS.bogus));
 
     await ask(STEPS.hoverBogus);
@@ -794,6 +839,7 @@ async function main() {
     await sleep(300);
     await ask(STEPS.pickInspector);
     await ask(STEPS.showCst);
+    await until(WAITS.long, "the tree of the long buffer");
     const phoneSays = JSON.parse(await ask(STEPS.pickLastToken));
     const phoneToken = {
         ...phoneSays,

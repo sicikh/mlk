@@ -129,7 +129,7 @@ that it sees surfaces and never bodies — stands.
 The paths inside a _body_ are not resolved here.
 A body is a unit of its own, and the stage that reads it — the check —
 resolves its paths against the same values with the same function.
-What the lowering of a body does read is the names the paths of it are rooted at --- the paths of
+What the lowering of a body does read is the names the paths of it are rooted at — the paths of
 its expressions, and the types they are written with: a binding of the body, a name of the module,
 and the name of a project are what such a name may be, and a name that is none of them is
 a mistake that has nothing to do with another module, so it is reported where the body wrote it
@@ -158,7 +158,7 @@ pub struct ResolveDeps {
 ### The interface of a module is a function of its own text
 
 An **interface** is what a module shows to the modules that read it.
-It is a function of the module's own text alone --- a projection of its item tree —
+It is a function of the module's own text alone — a projection of its item tree —
 so it is derived in parallel with every other module's,
 and it holds two things:
 
@@ -448,7 +448,7 @@ Two costs of the mechanism are worth stating plainly.
   so a change of the project's shape is visible to it; the entries it read are what its key holds,
   and the walk is what decides which those are.
 - The record decides the naming of today, and a name that a type should decide —
-  a segment after a type class --- is unresolved until the naming of type classes is decided,
+  a segment after a type class — is unresolved until the naming of type classes is decided,
   which is a record of its own.
 
 ## Pros and Cons of the Options

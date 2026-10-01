@@ -74,7 +74,7 @@ Produces the HIR.
 the high-level IR:
 the locally name-resolved tree,
 ID-based, allocated in per-owner arenas
-(see [ADR-0003][0003-ir-principles.md]).
+(see [ADR-0003][0003-id-based-ir.md]).
 `ItemTree` per module, `Body` per function,
 in `mlkc-hir-def`.
 The step from CST/AST to HIR is called **lowering**.
@@ -146,13 +146,13 @@ Provisional.
 
 - Against Query Based Compilers: <https://matklad.github.io/2026/02/25/against-query-based-compilers.html>
 - Incrementality: [0004-module-system.md]
-- IR design: [0003-ir-principles.md]
+- IR design: [0003-id-based-ir.md]
 - Syntax tree: [0002-lossless-syntax-tree.md]
 - Parser: [mlkc-parser]
 - HIR: [mlkc-hir-def]
 
 [0004-module-system.md]: 0004-module-system.md
-[0003-ir-principles.md]: 0003-id-based-ir.md
+[0003-id-based-ir.md]: 0003-id-based-ir.md
 [0002-lossless-syntax-tree.md]: 0002-lossless-syntax-tree.md
 [mlkc-parser]: ../../crates/mlkc-parser
 [mlkc-hir-def]: ../../crates/mlkc-hir-def

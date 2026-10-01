@@ -27,7 +27,7 @@ is what it leaves behind: the resolved types.
 
 The questions this record answers:
 
-- what is a resolved type ---
+- what is a resolved type —
   what may it name, what may it contain, and what does equality of two of them mean;
 - what does a check leave behind, and what may cross a unit boundary;
 - what is the first checker, and what about it is deliberately temporary.
@@ -64,23 +64,23 @@ The questions this record answers:
 
 A resolved type is:
 
-- **a self-contained value** --- a recursive enum, owned, compared structurally;
-- **a positional id into a per-module type store** ---
+- **a self-contained value** — a recursive enum, owned, compared structurally;
+- **a positional id into a per-module type store** —
   the flattened arenas of [ADR-0003][0003-id-based-ir.md], applied to types;
-- **a handle of one global interner** --- hash-consed types, equality by pointer;
-- **no resolved language at all** --- `TypeRef` stays the representation,
+- **a handle of one global interner** — hash-consed types, equality by pointer;
+- **no resolved language at all** — `TypeRef` stays the representation,
   and every consumer resolves it on demand.
 
 The first checker is:
 
-- **bidirectional Hindley–Milner, one body at a time** ---
+- **bidirectional Hindley–Milner, one body at a time** —
   `infer` where the type is open, `check` against a known type, level-based generalization,
   every signature of the module written out, and every body checked on its own;
-- **one check per module** ---
+- **one check per module** —
   a signature may be inferred from a body, at the price of checking the module as one unit;
-- **Algorithm W** ---
+- **Algorithm W** —
   inference only: an annotation is unified like any other type and never drives checking;
-- **nothing yet** --- the back end waits for the language to settle.
+- **nothing yet** — the back end waits for the language to settle.
 
 ## Decision Outcome
 
@@ -136,8 +136,8 @@ Three choices in this enum are worth stating as rules.
   what the checker knows about a builtin is a rule of the checker, not a variant of `Ty`.
   When `impl`s arrive, the rules change and the representation does not.
 - **The only variable that survives a check is a parameter.**
-  A parameter is the HIR's `TypeVarId` ---
-  the entity that owns it, and its index in that entity's declaration ([mlkc-hir-def]) ---
+  A parameter is the HIR's `TypeVarId` —
+  the entity that owns it, and its index in that entity's declaration ([mlkc-hir-def]) —
   which is exactly what a dependent records when it reads a signature.
   An inference variable, a substitution, a level, a region:
   none of them is in `Ty`, and none of them can be,
@@ -186,7 +186,7 @@ What the surface is, and what it is not:
   none of them changes what `Int` of `std` is,
   because the writer's `Int` and the reader's `Int` are one name.
 - **The surface is not the interface of [ADR-0016][0016-inter-module-resolution.md].**
-  An interface is a function of the module's text alone --- names, visibility, re-exported paths ---
+  An interface is a function of the module's text alone — names, visibility, re-exported paths —
   while a surface resolves the written types through the names the module read:
   the two are read together and keyed apart,
   and a surface is a function of the module's own text and of the names it read,
@@ -226,10 +226,10 @@ Two properties of this value matter.
 - **It is a closure of what was read** ([ADR-0009][0009-pass-contract.md]):
   a path of a body may name a module that no signature of the module names,
   so the closure of a check is wider than the closure of a resolution,
-  and the check walks its paths --- a module of the project, a module of another project,
-  a name a module re-exports --- over the value it was handed.
+  and the check walks its paths — a module of the project, a module of another project,
+  a name a module re-exports — over the value it was handed.
   The surfaces of the modules the walk reaches are in the input too,
-  its own module's among them --- a body may call any function of its module, public or not.
+  its own module's among them — a body may call any function of its module, public or not.
 - **A foreign type is read by name and by value, never by id.**
   Nothing in `CheckDeps` hands out an arena of another module:
   the only foreign handles are `EntityLoc`s and the self-contained `Ty`s they map to,
@@ -285,7 +285,7 @@ The language lets a private function omit its types
 ([ADR-0004][0004-module-system.md] requires them of a public one);
 the first checker does not read one without them.
 Inferring the signature of a top-level function would mean checking one body against another,
-which needs an order between the bodies of a module --- a dependency graph, or a fixpoint ---
+which needs an order between the bodies of a module — a dependency graph, or a fixpoint —
 and that is deferred.
 A missing annotation, and a `_` where a type is required, are reported as mistakes,
 and the incomplete declaration gets `Ty::Error` in place of what it does not write,
@@ -306,7 +306,7 @@ walking the modules it names over the closure like any other path.
 
 **Bidirectional, with one unification.**
 `infer(expr) -> Ty` computes a type where nothing fixes it;
-`check(expr, expected)` verifies one where something does ---
+`check(expr, expected)` verifies one where something does —
 a literal against `Int`, an argument of a call against the parameter type,
 the body of a declaration against its written result.
 A written type is checked, not only unified,
@@ -320,12 +320,12 @@ of the entity whose check generalized it.
 This is the algorithm Rémy discovered, as the note [okmij] explains:
 generalization is a walk of the type and nothing else,
 no environment is scanned, and no scope check is written.
-The eager form --- occurs check and level update on every unification ---
+The eager form — occurs check and level update on every unification —
 is enough for the first checker;
 the note's lazy form is an optimization that changes nothing that is stored.
 Generalization is where a `Param` is born today:
 a local `fun identity(value) = value` is stored with one parameter standing for both occurrences of
-its variable --- `(a) -> a` ---
+its variable — `(a) -> a` —
 and a call of it replaces the parameter with a fresh variable,
 instantiating both occurrences together.
 A top-level function will have its parameters declared rather than inferred
@@ -337,14 +337,14 @@ Every variable that reaches storage is either resolved or generalized into a `Pa
 the pass is written so that storage is reachable only through a step that does this.
 `Ty::Error` absorbs what the checker cannot make sense of,
 so a broken expression reports once and does not cascade.
-A `TypeDiag` names the place in the HIR ---
-an `ExprId`, a `PatId`, or an entity and the place of a type in it ---
+A `TypeDiag` names the place in the HIR —
+an `ExprId`, a `PatId`, or an entity and the place of a type in it —
 and the types it is about,
 so the driver renders it with the source map it already holds,
 and a type is rendered by a function next to `Ty` itself,
 from the names inside its `EntityLoc`s, with no store to consult.
 A check walks the paths of a body, which a resolution never reads,
-so the check is the first to report what those paths name ---
+so the check is the first to report what those paths name —
 and a name the walk could not find may be a name a module keeps to itself:
 the rendering takes the same look a resolution's rendering takes (`hidden_name`),
 and reports it as kept.
@@ -376,7 +376,7 @@ and the dump is a function of those values alone.
   A type class declares no parameter today;
   an argument written at one is read as a type and reported where the arity is read.
 - The inference of the signature of a top-level function.
-  It waits for an order between the bodies of a module --- a dependency graph, or a fixpoint ---
+  It waits for an order between the bodies of a module — a dependency graph, or a fixpoint —
   and until it exists every top-level declaration writes its type,
   and a `_` in one is a mistake like an omitted type.
 - How an inferred parameter is named when it belongs to a binding inside a body
@@ -475,7 +475,7 @@ and `TyId = Idx<Ty>` where a type is a node of that arena.
 - Good, because a check can index and rewrite its temporary structures without naming anything.
 - Bad, because a type in a surface would be a foreign id:
   a reader would have to retain the writer's store to interpret it,
-  and ids of two stores are not comparable ---
+  and ids of two stores are not comparable —
   exactly what [ADR-0010][0010-stable-entity-identity.md] rules out for anything that crosses a
   revision.
 - Bad, because a type in a diagnostic, a saved surface, or a test fixture
@@ -504,7 +504,7 @@ Hash-consing: `Ty` is interned once per structural value, and two equal types ar
 `TypeRef` stays the only representation, and each consumer resolves what it needs.
 
 - Good, because there is nothing to design now.
-- Bad, because every consumer --- MIR, the IDE, the crossing of a module boundary ---
+- Bad, because every consumer — MIR, the IDE, the crossing of a module boundary —
   would resolve with rules of its own, and the resolved forms would drift.
 - Bad, because the result of inference has no home:
   the type of an expression is not written anywhere at all.
@@ -528,8 +528,8 @@ its own.
   and the implementation needs no record of its own.
 - Bad, because inference is only as good as the annotations around it,
   and a top-level function that could be inferred must write its type for now.
-- Bad, because pure Hindley–Milner has no answer for the features to come ---
-  `impl`s, overloaded operators, higher-rank polymorphism ---
+- Bad, because pure Hindley–Milner has no answer for the features to come —
+  `impl`s, overloaded operators, higher-rank polymorphism —
   and is a placeholder for a checker that will.
 
 ### One check per module

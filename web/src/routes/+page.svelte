@@ -8,13 +8,16 @@
     import FileList from "$lib/components/FileList.svelte";
     import HirView from "$lib/components/HirView.svelte";
     import Splitter from "$lib/components/Splitter.svelte";
+    import StatsView from "$lib/components/StatsView.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
     import TypeView from "$lib/components/TypeView.svelte";
     import {
         loadDriver,
+        type Cost,
         type Diagnostic,
         type Driver,
         type Hir,
+        type PassStats,
         type StdFile,
         type SyntaxNode,
         type Types,
@@ -36,6 +39,9 @@
     interface Reading {
         diagnostics: Diagnostic[];
         types: Types | null;
+
+        /** What the look cost: the work the driver did, and what a person waited for it. */
+        cost: Cost;
 
         /** The parse, read when the tab of the concrete tree is in front. */
         cst?: SyntaxNode;
@@ -70,7 +76,7 @@ fun main(): Unit =
     const FIRST = STARTER[0].path;
 
     /** The views of what the compiler makes of the buffer on the right. */
-    type Tab = "diagnostics" | "cst" | "ast" | "hir" | "tc";
+    type Tab = "diagnostics" | "cst" | "ast" | "hir" | "tc" | "stats";
 
     /**
      * Which panel a narrow screen shows, where there is room for one at a time.
@@ -304,6 +310,7 @@ fun main(): Unit =
         resolved = null;
 
         try {
+            const started = performance.now();
             const [diagnostics, types, cst, ast, hir] = await Promise.all([
                 driver.diagnostics(path),
                 driver.types(path),
@@ -312,12 +319,25 @@ fun main(): Unit =
                 tab === "hir" ? driver.hir(path) : undefined,
             ]);
 
+            // The time of a look is the time of its values: the counters are a read of their
+            // own, and the clock is stopped before it. Reading them is what clears them, so
+            // what comes back is what this look did and nothing of the one before it.
+            const took = performance.now() - started;
+            const stats = await driver.stats();
+
             // The buffer under the look is not always the buffer in front of a person: what
             // came back for one that is gone is dropped, and the look that follows it reads
             // the one that took its place.
             if (path !== active) return;
 
-            reading = { diagnostics, types, cst, ast, hir };
+            reading = {
+                diagnostics,
+                types,
+                cst,
+                ast,
+                hir,
+                cost: { passes: stats.passes, took },
+            };
         } catch (error) {
             if (path !== active) return;
 
@@ -439,11 +459,12 @@ fun main(): Unit =
             try {
                 const result = await driver.diagnostics(it.path);
                 const took = Math.round(performance.now() - started);
+                const counters = await driver.stats();
                 const count = result.length;
 
                 say(
                     "note",
-                    `${name(it.path)}: ${count === 0 ? "no diagnostics" : `${count} diagnostic${count === 1 ? "" : "s"}`} in ${took} ms`,
+                    `${name(it.path)}: ${count === 0 ? "no diagnostics" : `${count} diagnostic${count === 1 ? "" : "s"}`} in ${took} ms — ${counted(counters.passes)}`,
                 );
             } catch (error) {
                 say(
@@ -465,14 +486,35 @@ fun main(): Unit =
     }
 
     /**
+     * What the counters of one read come to, as a line of the console reads them.
+     *
+     * A person reads a summary, not a table: what a read reused, what it had to read again,
+     * how much of that came out the same, and what went.
+     */
+    function counted(passes: PassStats[]): string {
+        const total = (of: (it: PassStats) => number) =>
+            passes.reduce((all, it) => all + of(it), 0);
+
+        const hits = total((it) => it.hits);
+        const read = total((it) => it.misses + it.stales);
+        const kept = total((it) => it.kept);
+        const dropped = total((it) => it.dropped);
+
+        return `${hits} hit${hits === 1 ? "" : "s"}, ${read} read again (${kept} kept), ${dropped} dropped`;
+    }
+
+    /**
      * A tab of the inspector in front.
      *
      * A tab shows one value, and a value is read when it is shown: picking a tab is what asks
-     * the driver for the tree, and the tabs picked before keep what they read.
+     * the driver for the tree, and the tabs picked before keep what they read. The tab of the
+     * counters is the one that is not read: what it shows is what the look before it cost, and
+     * a look of its own would replace that with the cost of asking for it.
      */
     function show(next: Tab) {
         tab = next;
-        check();
+
+        if (next !== "stats") check();
     }
 
     /** Running needs a code generator, which the pipeline does not reach yet. */
@@ -631,6 +673,11 @@ fun main(): Unit =
                     <span class="badge error">{untyped}</span>
                 {/if}
             </button>
+            <button
+                data-tab="stats"
+                class:active={tab === "stats"}
+                onclick={() => show("stats")}>Stats</button
+            >
         </nav>
 
         <div class="view">
@@ -671,6 +718,8 @@ fun main(): Unit =
                         onPick={picked}
                     />
                 {/if}
+            {:else if tab === "stats"}
+                <StatsView cost={reading.cost} />
             {:else if reading.hir === undefined}
                 <p class="empty">Reading the module.</p>
             {:else if reading.hir === null}

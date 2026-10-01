@@ -119,6 +119,19 @@ impl WasmDriver {
     pub fn diagnostics(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.diagnostics_of(path)?)
     }
+
+    /// What the driver did since this was last asked, by pass: what it handed over from a slot,
+    /// what it read again, what it kept although it read again, and what it dropped.
+    ///
+    /// Reading the counters is what clears them, so a host that wants to know what one pull
+    /// cost asks for them right after it: what comes back is that pull's work, and the time it
+    /// took is the host's own clock around the call.
+    ///
+    /// The name a host sees is `stats`: wasm-bindgen keeps the Rust name otherwise.
+    #[wasm_bindgen(js_name = stats)]
+    pub fn stats(&mut self) -> Result<JsValue, JsValue> {
+        to_js(&Stats::of(&mut self.driver))
+    }
 }
 
 impl WasmDriver {
@@ -370,6 +383,65 @@ struct Types {
 
     /// The checked bodies, in the order the module declares them.
     bodies: Vec<BodyTypes>,
+}
+
+/// What the driver did since a host last read the counters, as it reads it.
+///
+/// The counters are the driver's account of its own incrementality: what it handed over from
+/// a slot, what it had to read again, what it kept although it read again, and what went. A
+/// host reads them between the pulls it wants told apart, and the time of a pull is the host's
+/// own clock around it.
+#[derive(Serialize)]
+struct Stats {
+    /// The counters of every pass, in the order a module is read in.
+    passes: Vec<PassStats>,
+}
+
+impl Stats {
+    /// The counters the driver holds, and a clean slate for the next read of them.
+    fn of(driver: &mut mlkc_driver::Driver) -> Self {
+        let taken = driver.take_stats();
+
+        Self {
+            passes: taken
+                .iter()
+                .map(|(pass, tally)| {
+                    PassStats {
+                        pass: pass.name().to_owned(),
+                        hits: tally.hits,
+                        misses: tally.misses,
+                        stales: tally.stales,
+                        kept: tally.kept,
+                        dropped: tally.dropped,
+                    }
+                })
+                .collect(),
+        }
+    }
+}
+
+/// What one pass did since the counters were last read.
+#[derive(Serialize)]
+struct PassStats {
+    /// The pass, by the name it is known by: `parse`, `interface`, `check`.
+    pass: String,
+
+    /// How often the value was there: the slot was keyed by what it was built from.
+    hits: u32,
+
+    /// How often the pass ran and the driver held nothing to hand over.
+    misses: u32,
+
+    /// How often the pass ran although a value was held, because what the value was built from
+    /// had changed.
+    stales: u32,
+
+    /// How often a pass that ran read the same as the value the driver held, which is the value
+    /// it kept.
+    kept: u32,
+
+    /// How many values went, with the input they were built from.
+    dropped: u32,
 }
 
 /// One entity of the surface of a module and the type it was resolved to.
@@ -716,6 +788,62 @@ mod tests {
             "the module is one the language accepts: {}",
             serde_json::to_string(&diagnostics).unwrap_or_default(),
         );
+    }
+
+    #[test]
+    fn what_the_driver_did_crosses_the_boundary_as_counters() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string()),
+        );
+
+        let _ = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let taken = Stats::of(&mut driver.driver);
+
+        // The first read of a buffer is work: nothing it needs is held yet. The hits are the
+        // consultations of the values the read made and asked for again --- the library is
+        // walked more than once by one pull --- and what a first read cannot have is a stale
+        // read or a drop.
+        let parse = pass(&taken, "parse");
+
+        assert!(parse.misses > 0, "the parse of a new buffer to be a miss");
+        assert!(
+            taken
+                .passes
+                .iter()
+                .all(|it| it.stales == 0 && it.dropped == 0),
+            "a first read of a buffer to read nothing again",
+        );
+
+        // The second read of it is not: what came back is what the driver held.
+        let _ = driver
+            .diagnostics_of("/main.mlk")
+            .expect("the file to be diagnosed");
+        let taken = Stats::of(&mut driver.driver);
+        let parse = pass(&taken, "parse");
+
+        assert_eq!(parse.misses, 0);
+        assert!(parse.hits > 0, "a second read of a buffer to be a hit");
+        assert!(
+            taken
+                .passes
+                .iter()
+                .all(|it| it.stales == 0 && it.dropped == 0),
+            "a second read of a buffer to read nothing again",
+        );
+    }
+
+    /// The counters of one pass, by the name a host reads it by.
+    fn pass<'a>(stats: &'a Stats, name: &str) -> &'a PassStats {
+        stats
+            .passes
+            .iter()
+            .find(|it| it.pass == name)
+            .unwrap_or_else(|| panic!("a row for `{name}`"))
     }
 
     #[test]

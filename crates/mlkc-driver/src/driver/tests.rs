@@ -892,6 +892,124 @@ fn a_body_edit_of_a_module_leaves_the_modules_that_read_it_where_they_were() {
 }
 
 #[test]
+fn a_read_of_a_value_the_driver_holds_is_a_hit() {
+    let (mut driver, file) = driver_with("main.mlk", MODULE);
+
+    let first = driver.parse(file).expect("the file to be parsed");
+    let taken = driver.take_stats();
+
+    // Nothing was held, so the pass had to run, and the counters say why.
+    assert_eq!(taken.of(Pass::Parse), Tally {
+        misses: 1,
+        ..Tally::default()
+    });
+
+    let second = driver.parse(file).expect("the file to be parsed");
+    let taken = driver.take_stats();
+
+    assert!(Arc::ptr_eq(&first, &second));
+    assert_eq!(taken.of(Pass::Parse), Tally {
+        hits: 1,
+        ..Tally::default()
+    });
+
+    // Taking the counters is what clears them: what a host reads is what happened since.
+    assert!(driver.take_stats().is_empty());
+}
+
+#[test]
+fn an_edit_of_a_body_reads_the_surface_of_its_module_again_and_keeps_it() {
+    let (mut driver, _, data) = reader_and_data(DATA, READER);
+    let module = ModuleId(data);
+
+    let _ = driver
+        .interface(module)
+        .expect("the module to have an interface");
+    let _ = driver.take_stats();
+
+    driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+    let _ = driver
+        .interface(module)
+        .expect("the module to have an interface");
+    let taken = driver.take_stats();
+
+    // The text changed, so what is derived from it is read again --- and the surface of the
+    // module came out of it unchanged, which is what the counters call a keep.
+    assert_eq!(taken.of(Pass::Parse).stales, 1);
+    assert_eq!(taken.of(Pass::Lower).stales, 1);
+    assert_eq!(taken.of(Pass::Interface).stales, 1);
+    assert_eq!(taken.of(Pass::Interface).kept, 1);
+}
+
+#[test]
+fn an_edit_of_a_body_costs_its_module_and_nothing_of_its_readers() {
+    let fixture = format!("//- /data.mlk\n{DATA}\n//- /main.mlk\n{READER}");
+    let mut driver = std_project_of(&fixture);
+    let data = file(&driver, "data.mlk");
+    let main = file(&driver, "main.mlk");
+
+    // Both modules are read once, so what the edit costs is what follows.
+    let _ = driver.diagnostics(data).expect("the diagnostics of data");
+    let _ = driver.diagnostics(main).expect("the diagnostics of main");
+    let _ = driver.take_stats();
+
+    driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+    let _ = driver.diagnostics(data).expect("the diagnostics of data");
+    let taken = driver.take_stats();
+
+    // A body edited is a check read again: the checks of the module's bodies are stale reads
+    // --- what they are keyed by is a new value --- and the ones whose body did not change came
+    // out the same, which is what the counters call a keep. Nothing here is a miss, and what
+    // the module shows did not move either.
+    assert_eq!(taken.of(Pass::Check).misses, 0);
+    assert!(taken.of(Pass::Check).stales >= 2);
+    assert!(taken.of(Pass::Check).kept >= 1);
+    assert_eq!(taken.of(Pass::Signatures).kept, 1, "{taken:?}");
+
+    // The module that reads `data` is read again with nothing to do: what it reads --- the
+    // interface of `data` --- is the value the driver kept, so every pass is a hit. The hits
+    // of the library are the many of them, since every one of its parses is handed over again.
+    let _ = driver.diagnostics(main).expect("the diagnostics of main");
+    let taken = driver.take_stats();
+
+    assert!(
+        taken
+            .iter()
+            .all(|(_, tally)| tally.misses == 0 && tally.stales == 0),
+        "a reader of an edited body was read again: {taken:?}",
+    );
+    assert!(
+        taken.of(Pass::Check).hits >= 1,
+        "the body of the reader to be checked from a slot: {taken:?}",
+    );
+}
+
+#[test]
+fn a_change_of_a_project_drops_what_was_read_under_it() {
+    let fixture = format!("//- /data.mlk\n{DATA}\n//- /main.mlk\n{READER}");
+    let mut driver = project_of(&fixture);
+    let data = ModuleId(file(&driver, "data.mlk"));
+
+    let _ = driver.resolution(data).expect("the module to resolve");
+    let _ = driver.take_stats();
+
+    // The project gains the library, which is what its modules are read under: what was read
+    // under the old prelude goes, rather than being read again.
+    let mut library = ProjectData::default();
+    library.dependencies.insert(
+        Name::new(mlkc_stdlib::PROJECT),
+        ProjectId::new(mlkc_stdlib::PROJECT),
+    );
+    driver.set_project(project(), library);
+
+    let taken = driver.take_stats();
+
+    assert!(taken.of(Pass::Lower).dropped >= 1);
+    assert!(taken.of(Pass::Interface).dropped >= 1);
+    assert!(taken.of(Pass::Resolution).dropped >= 1);
+}
+
+#[test]
 fn a_name_added_to_a_module_does_not_move_what_its_readers_resolved_to() {
     let (mut driver, main, data) = reader_and_data(DATA, READER);
 

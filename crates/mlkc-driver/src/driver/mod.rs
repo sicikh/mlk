@@ -1,4 +1,5 @@
-//! The driver's state: the table of slots, the guards around a pass, and the report a bug leaves.
+//! The driver's state: the table of slots, the counters of what the passes did, the guards
+//! around a pass, and the report a bug leaves.
 
 mod check;
 mod diagnostics;
@@ -7,6 +8,7 @@ mod lower;
 mod mir;
 mod parse;
 mod resolve;
+mod stats;
 
 #[cfg(test)]
 mod tests;
@@ -37,6 +39,7 @@ pub use self::{
     host::StdFile,
     lower::{Lowered, ModuleBody},
     parse::Parse,
+    stats::{Pass, Stats, Tally},
 };
 
 /// The driver: the only mutable component, and the owner of the memo table.
@@ -79,6 +82,8 @@ pub struct Driver {
     type_diagnostics: FxHashMap<ModuleId, TypeDiagnosticsSlot>,
     /// The line index of every file whose positions have been read.
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
+    /// What the passes did since a host last took the counters.
+    stats: Stats,
     /// The first internal compiler exception a pass raised, and what the driver was computing.
     ice: Option<Arc<IceReport>>,
 }
@@ -430,6 +435,16 @@ impl Driver {
         self.ice.clone()
     }
 
+    /// What the passes did since a host last took this, and a clean slate again.
+    ///
+    /// The counters are the driver's account of its own incrementality: what it handed over
+    /// from a slot, what it had to read again, what it kept although it read again, and what
+    /// went. Taking them is what clears them, so a host that wraps one pull with two takes
+    /// reads what that pull cost ([`Stats`]).
+    pub fn take_stats(&mut self) -> Stats {
+        std::mem::take(&mut self.stats)
+    }
+
     /// Runs a pass that may bug, holding the report and answering `None` instead of unwinding.
     ///
     /// A slot is written only when its value is complete, so a pull a panic travels out of leaves
@@ -475,21 +490,30 @@ impl Driver {
     /// nodes of the parse next to its value ([`ParseSlot`]), and that is what its own pull is
     /// written out for.
     fn text_derived<T: ?Sized>(
+        stats: &mut Stats,
+        pass: Pass,
         slots: &mut FxHashMap<FileId, TextSlot<T>>,
         file: FileId,
         version: FileVersion,
         build: impl FnOnce() -> Option<Arc<T>>,
     ) -> Option<Arc<T>> {
-        if let Some(slot) = slots.get(&file)
+        let held = slots.get(&file);
+
+        if let Some(slot) = held
             && slot.version == version
         {
+            stats.consulted(pass, true, true);
+
             return Some(slot.value.clone());
         }
+
+        stats.consulted(pass, held.is_some(), false);
 
         let Some(value) = build() else {
             // There is no input left to describe, so the slot goes.
             // The next push of this file builds it again from nothing.
-            slots.remove(&file);
+            stats.dropped(pass, slots.remove(&file).is_some() as usize);
+
             return None;
         };
 
@@ -516,8 +540,14 @@ impl Driver {
             self.invalidate_module(module);
         }
 
-        self.module_indexes.remove(project);
-        self.def_maps.remove(project);
+        self.stats.dropped(
+            Pass::ModuleIndex,
+            self.module_indexes.remove(project).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::DefMap,
+            self.def_maps.remove(project).is_some() as usize,
+        );
     }
 
     /// Drops the values derived from one module: its HIR, its interface, its resolution, its
@@ -527,14 +557,41 @@ impl Driver {
     /// A module that changed project or text is read again; what reads this module is not
     /// dropped with it, and sees the new value when it is read again.
     fn invalidate_module(&mut self, module: ModuleId) {
-        self.lowered.remove(&module.0);
-        self.interfaces.remove(&module);
-        self.resolutions.remove(&module);
-        self.resolution_diagnostics.remove(&module);
-        self.signatures.remove(&module);
-        self.type_diagnostics.remove(&module);
+        self.stats.dropped(
+            Pass::Lower,
+            self.lowered.remove(&module.0).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::Interface,
+            self.interfaces.remove(&module).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::Resolution,
+            self.resolutions.remove(&module).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::ResolutionDiagnostics,
+            self.resolution_diagnostics.remove(&module).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::Signatures,
+            self.signatures.remove(&module).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::TypeDiagnostics,
+            self.type_diagnostics.remove(&module).is_some() as usize,
+        );
+
+        let checks = self.checks.len();
         self.checks.retain(|owner, _| owner.module() != module);
+        self.stats.dropped(Pass::Check, checks - self.checks.len());
+
+        let mirs = self.mirs.len();
         self.mirs.retain(|owner, _| owner.module() != module);
+        self.stats.dropped(Pass::Mir, mirs - self.mirs.len());
+
+        let ssas = self.ssas.len();
         self.ssas.retain(|owner, _| owner.module() != module);
+        self.stats.dropped(Pass::Ssa, ssas - self.ssas.len());
     }
 }

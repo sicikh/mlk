@@ -10,7 +10,7 @@ use mlkc_resolve::{
 use mlkc_span::Span;
 
 use super::{
-    DefMapSlot, Driver, InterfaceSlot, Lowered, ModuleIndexSlot, ResolutionDiagnosticsSlot,
+    DefMapSlot, Driver, InterfaceSlot, Lowered, ModuleIndexSlot, Pass, ResolutionDiagnosticsSlot,
     ResolutionSlot, entries_are_the_same,
 };
 
@@ -32,8 +32,12 @@ impl Driver {
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
         {
+            self.stats.consulted(Pass::Interface, true, true);
+
             return Some(slot.value.clone());
         }
+
+        self.stats.consulted(Pass::Interface, held.is_some(), false);
 
         let value = Arc::new(Interface::of(lowered.item_tree()));
 
@@ -42,7 +46,11 @@ impl Driver {
         //
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match held {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::Interface);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 
@@ -80,8 +88,13 @@ impl Driver {
         if let Some(slot) = held
             && entries_are_the_same(&slot.interfaces, &interfaces)
         {
+            self.stats.consulted(Pass::ModuleIndex, true, true);
+
             return Some(slot.value.clone());
         }
+
+        self.stats
+            .consulted(Pass::ModuleIndex, held.is_some(), false);
 
         let mut index = ModuleIndex::new(project.clone());
 
@@ -91,7 +104,11 @@ impl Driver {
 
         let value = Arc::new(index);
         let value = match held {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::ModuleIndex);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 
@@ -134,8 +151,13 @@ impl Driver {
             && Arc::ptr_eq(&slot.lowered, &lowered)
             && slot.closure.reads_the_same_as(&closure)
         {
+            self.stats.consulted(Pass::Resolution, true, true);
+
             return Some(slot.value.clone());
         }
+
+        self.stats
+            .consulted(Pass::Resolution, held.is_some(), false);
 
         let value = Arc::new(resolve_module(module, lowered.item_tree(), &ResolveDeps {
             graph,
@@ -147,7 +169,11 @@ impl Driver {
         //
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match held {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::Resolution);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 
@@ -186,8 +212,12 @@ impl Driver {
         if let Some(slot) = held
             && entries_are_the_same(&slot.resolutions, &resolutions)
         {
+            self.stats.consulted(Pass::DefMap, true, true);
+
             return Some(slot.value.clone());
         }
+
+        self.stats.consulted(Pass::DefMap, held.is_some(), false);
 
         let mut map = ProjectDefMap::default();
 
@@ -197,7 +227,11 @@ impl Driver {
 
         let value = Arc::new(map);
         let value = match held {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::DefMap);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 
@@ -235,7 +269,9 @@ impl Driver {
         let lowered = self.lower(module.0)?;
         let resolution = self.resolution(module)?;
 
-        let held = self.resolution_diagnostics.get(&module).filter(|slot| {
+        let held = self.resolution_diagnostics.get(&module);
+        let existed = held.is_some();
+        let held = held.filter(|slot| {
             Arc::ptr_eq(&slot.resolution, &resolution) && Arc::ptr_eq(&slot.lowered, &lowered)
         });
 
@@ -253,9 +289,15 @@ impl Driver {
                 self.lower(module.0)
                     .is_some_and(|current| Arc::ptr_eq(held, &current))
             }) {
+                self.stats
+                    .consulted(Pass::ResolutionDiagnostics, true, true);
+
                 return Some(self.resolution_diagnostics[&module].value.clone());
             }
         }
+
+        self.stats
+            .consulted(Pass::ResolutionDiagnostics, existed, false);
 
         let mut looked = BTreeMap::new();
         let mut rendered = Vec::with_capacity(resolution.diagnostics().len());

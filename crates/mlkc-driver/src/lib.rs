@@ -113,6 +113,15 @@
 //! else, and every parse of every file takes it mutably, which is a project parsed one file
 //! at a time.
 //!
+//! # What the driver did
+//!
+//! The driver counts its own work: every consultation of a slot is a hit, a miss, or a stale
+//! read, a pass that ran and read the same as the value that was held is a keep, and a value
+//! dropped with its input is a drop ([`Stats`]). It is how a host answers the question the
+//! driver is built around --- what did that edit cost --- without a profiler: the counters say
+//! which passes ran and why, and the clock a host wrapped a pull in says how long it took.
+//! [`Driver::take_stats`] hands the counters over and starts counting again.
+//!
 //! # Concurrency
 //!
 //! A pull takes `&mut self`, because it may compute, so the driver is not shared:
@@ -132,4 +141,6 @@
 
 mod driver;
 
-pub use crate::driver::{Diagnostics, Driver, IceReport, Lowered, ModuleBody, Parse, StdFile};
+pub use crate::driver::{
+    Diagnostics, Driver, IceReport, Lowered, ModuleBody, Parse, Pass, Stats, StdFile, Tally,
+};

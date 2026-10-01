@@ -7,7 +7,7 @@ use mlkc_mir::Body as MirBody;
 use mlkc_mir_build::{construct_ssa, lower_body as lower_mir};
 use mlkc_typeck::CheckDeps;
 
-use super::{Driver, MirSlot, SsaSlot};
+use super::{Driver, MirSlot, Pass, SsaSlot};
 
 impl Driver {
     /// The MIR of `owner` in the CFG form: the checked body lowered, before SSA ([ADR-0019]).
@@ -30,12 +30,17 @@ impl Driver {
     /// [ADR-0019]: ../../docs/adr/0019-mir.md
     pub fn mir_ssa(&mut self, owner: &BodyEntityLoc) -> Option<Arc<MirBody>> {
         let cfg = self.mir(owner)?;
+        let held = self.ssas.get(owner);
 
-        if let Some(slot) = self.ssas.get(owner)
+        if let Some(slot) = held
             && Arc::ptr_eq(&slot.cfg, &cfg)
         {
+            self.stats.consulted(Pass::Ssa, true, true);
+
             return Some(slot.value.clone());
         }
+
+        self.stats.consulted(Pass::Ssa, held.is_some(), false);
 
         let value = self.guarded(
             |driver| format!("building the SSA form of {}", driver.body_context(owner)),
@@ -47,7 +52,11 @@ impl Driver {
         //
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match self.ssas.get(owner) {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::Ssa);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 
@@ -83,9 +92,8 @@ impl Driver {
         // What the driver holds for this body, when its key still says it was built from what
         // this pull read: the value is cloned out of the slot so that the borrow of the table
         // ends before the pass runs.
-        let held = self
-            .mirs
-            .get(owner)
+        let held = self.mirs.get(owner);
+        let held = held
             .filter(|slot| {
                 Arc::ptr_eq(&slot.lowered, &inputs.lowered)
                     && Arc::ptr_eq(&slot.resolution, &inputs.resolution)
@@ -96,8 +104,13 @@ impl Driver {
             .map(|slot| slot.value.clone());
 
         if let Some(value) = held {
+            self.stats.consulted(Pass::Mir, true, true);
+
             return Some(value);
         }
+
+        self.stats
+            .consulted(Pass::Mir, self.mirs.contains_key(owner), false);
 
         let body = inputs
             .lowered
@@ -137,7 +150,11 @@ impl Driver {
         //
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match self.mirs.get(owner) {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::Mir);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 

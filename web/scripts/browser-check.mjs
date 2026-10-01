@@ -74,6 +74,17 @@ const VISIBLE =
     "use project::data::core as data\n\npub fun main(): Unit =\n    data.start()\n";
 
 /**
+ * What is typed into a buffer to watch what a read costs: the same module twice, with the body
+ * of it edited between the two.
+ *
+ * The first is what the second is measured by: the buffer was another module before it, so that
+ * read is paid for whole, and the second changes one body and nothing a reader of the module
+ * sees. The numbers are ones the buffer that was there before does not write.
+ */
+const EDITED = "fun main(): Int =\n    80 + 80\n";
+const EDITED_AGAIN = "fun main(): Int =\n    90 + 90\n";
+
+/**
  * A buffer long enough that its end is not on the screen.
  *
  * A pick of a row of a tree is a request to be taken to the place the row stands for, and
@@ -187,6 +198,17 @@ const STEPS = {
 
     showHir: `show('hir'); return true`,
 
+    showStats: `show('stats'); return true`,
+
+    // What the driver did for the look that is in front, as the table of the tab reads it.
+    stats: `const counter = (row) => Object.fromEntries([...row.querySelectorAll('[data-count]')]
+    \t\t.map((cell) => [cell.dataset.count, Number(text(cell))]));
+\treturn JSON.stringify({
+\t\ttook: text(inspector().querySelector('[data-cost=took]')),
+\t\tcounters: Object.fromEntries([...inspector().querySelectorAll('[data-stats]')]
+\t\t\t.map((row) => [row.dataset.stats, counter(row)]))
+\t})`,
+
     showTc: `show('tc'); return true`,
 
     // What the tab reads of the buffer: the surface of the module, and a row per node of every
@@ -290,6 +312,18 @@ const STEPS = {
     typeKeywords: `const content = document.querySelector('.cm-content');
 		content.focus();
 		content.textContent = ${JSON.stringify(VISIBLE)};
+		content.dispatchEvent(new Event('input', { bubbles: true }));
+		return true`,
+
+    typeEdited: `const content = document.querySelector('.cm-content');
+		content.focus();
+		content.textContent = ${JSON.stringify(EDITED)};
+		content.dispatchEvent(new Event('input', { bubbles: true }));
+		return true`,
+
+    typeEditedAgain: `const content = document.querySelector('.cm-content');
+		content.focus();
+		content.textContent = ${JSON.stringify(EDITED_AGAIN)};
 		content.dispatchEvent(new Event('input', { bubbles: true }));
 		return true`,
 
@@ -520,6 +554,8 @@ const WAITS = {
     broken: `return diagnostics().length > 0`,
     bogus: `return inspector().textContent.includes('Bogus')`,
     long: `return inspector().textContent.includes('x79')`,
+    edited: `return inspector().textContent.includes('80')`,
+    editedAgain: `return inspector().textContent.includes('90')`,
 };
 
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
@@ -863,6 +899,17 @@ async function main() {
     await ask(STEPS.submitStdPath);
     const refusedStdPath = JSON.parse(await ask(STEPS.refusedStdPath));
 
+    // What a read cost: the buffer in front is filled with a module, and then the body of it
+    // is edited, which is one value read again and nothing else. The look before the edit is
+    // the one the second is read against: it is what the driver holds afterwards.
+    await ask(STEPS.pickBuffer);
+    await ask(STEPS.typeEdited);
+    await until(WAITS.edited, "the tree of the edited buffer");
+    await ask(STEPS.typeEditedAgain);
+    await until(WAITS.editedAgain, "the tree of the buffer edited again");
+    await ask(STEPS.showStats);
+    const stats = JSON.parse(await ask(STEPS.stats));
+
     return report(
         {
             status: state.file,
@@ -901,6 +948,7 @@ async function main() {
             readLibrary,
             writtenLibrary,
             refusedStdPath,
+            stats,
         },
         problems,
         warnings,
@@ -1126,7 +1174,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Inspect shows the inspector",
             page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 5 &&
+                page.phoneInspector.tabs === 6 &&
                 !page.phoneInspector.overflows,
         ],
         [
@@ -1173,6 +1221,27 @@ function report(page, problems, warnings, asked) {
             page.refusedStdPath.problem ===
                 "the standard library is read-only" &&
                 !page.refusedStdPath.made,
+        ],
+        [
+            // An edit of a body is read out of what the driver held: the parse of the buffer is
+            // a stale read and never a miss, and nothing that was held was dropped.
+            "an edit of a body is paid for out of what the driver held",
+            page.stats.counters.parse?.stales === 1 &&
+                page.stats.counters.parse?.misses === 0 &&
+                Object.values(page.stats.counters).every(
+                    (it) => it.dropped === 0,
+                ),
+        ],
+        [
+            // What a module shows is a function of its own text and of no body, so the edit
+            // reads the surface of it again and keeps the types it had.
+            "the signature surface of an edited module is read again and kept",
+            page.stats.counters.signatures?.stales >= 1 &&
+                page.stats.counters.signatures?.kept >= 1,
+        ],
+        [
+            "the body that was edited is checked again",
+            page.stats.counters.check?.stales >= 1,
         ],
         ["the page said nothing it should not have", problems.length === 0],
     ];
@@ -1222,6 +1291,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a pick of ${JSON.stringify(page.phoneToken.says)} in a tree marks ${JSON.stringify(page.phoneToken.marked)}, which the editor ${page.phoneToken.scrolls ? (page.phoneToken.scrolled ? "is taken to" : "stays away from") : "has nothing to scroll to"}`,
+    );
+    console.log(
+        `a read of an edited body took ${page.stats.took}: ${page.stats.counters.check?.stales ?? 0} checked again, ${page.stats.counters.signatures?.kept ?? 0} surface(s) kept, ${page.stats.counters.parse?.misses ?? 0} first read(s)`,
     );
 
     if (diagnostic.whole)

@@ -214,6 +214,59 @@ export interface Types {
     bodies: BodyTypes[];
 }
 
+/**
+ * What one pass of the compiler did while a host was reading the driver.
+ *
+ * A counter is of consultations rather than of values: one pull that asks the driver for the
+ * same slot twice is two lookups, and a lookup that found the value is a hit whatever it was
+ * that asked.
+ */
+export interface PassStats {
+    /** The pass, by the name it is known by: `parse`, `interface`, `check`. */
+    pass: string;
+
+    /** How often the value was there: the slot was keyed by what it was built from. */
+    hits: number;
+
+    /** How often the pass ran and the driver held nothing to hand over. */
+    misses: number;
+
+    /**
+     * How often the pass ran although a value was held, because what the value was built from
+     * had changed.
+     */
+    stales: number;
+
+    /**
+     * How often a pass that ran read the same as the value the driver held, which is the value
+     * it kept: the readers of it do not move.
+     */
+    kept: number;
+
+    /** How many values went, with the input they were built from. */
+    dropped: number;
+}
+
+/** What the driver did since a host last read the counters, by pass. */
+export interface Stats {
+    /** The counters of every pass, in the order a module is read in. */
+    passes: PassStats[];
+}
+
+/**
+ * What one pull of the driver cost, as a host reads it.
+ *
+ * The counters are the driver's, and the time is the host's: the driver does not read a clock,
+ * so a host that wants milliseconds takes them around the pull it made.
+ */
+export interface Cost {
+    /** The passes the pull touched, in the order a module is read in. */
+    passes: PassStats[];
+
+    /** How long the pull took, in milliseconds, as the host waited for it. */
+    took: number;
+}
+
 /** The driver, typed for the editor. */
 export interface Driver {
     /**
@@ -253,6 +306,16 @@ export interface Driver {
 
     /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
     diagnostics(path: string): Promise<Diagnostic[]>;
+
+    /**
+     * What the driver did since this was last asked: what it reused, what it read again, what
+     * it kept although it read again, and what it dropped, by pass.
+     *
+     * Reading the counters is what clears them, so what comes back is the work since the call
+     * before it. A host that wants one pull's work asks right after that pull, and the time the
+     * pull took is the host's own clock around it.
+     */
+    stats(): Promise<Stats>;
 }
 
 /** One file of the standard library of the language, as the driver hands it over. */
@@ -277,7 +340,8 @@ export type DriverRequest =
     | { kind: "ast"; id: number; path: string }
     | { kind: "hir"; id: number; path: string }
     | { kind: "types"; id: number; path: string }
-    | { kind: "diagnostics"; id: number; path: string };
+    | { kind: "diagnostics"; id: number; path: string }
+    | { kind: "stats"; id: number };
 
 /**
  * What the worker says back.
@@ -430,5 +494,6 @@ export async function loadDriver(): Promise<Driver> {
             ask<Types | null>((id) => ({ kind: "types", id, path })),
         diagnostics: (path) =>
             ask<Diagnostic[]>((id) => ({ kind: "diagnostics", id, path })),
+        stats: () => ask<Stats>((id) => ({ kind: "stats", id })),
     };
 }

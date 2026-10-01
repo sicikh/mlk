@@ -103,5 +103,7 @@ function answer(
             return driver.types(request.path);
         case "diagnostics":
             return driver.diagnostics(request.path);
+        case "stats":
+            return driver.stats();
     }
 }

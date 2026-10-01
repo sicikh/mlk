@@ -16,7 +16,7 @@ use mlkc_typeck::{
 };
 
 use super::{
-    CheckInputs, CheckSlot, Checked, Driver, Lowered, ModuleBody, Signatures, SignaturesSlot,
+    CheckInputs, CheckSlot, Checked, Driver, Lowered, ModuleBody, Pass, Signatures, SignaturesSlot,
     TypeDiagnosticsSlot, entries_are_the_same,
 };
 
@@ -148,8 +148,13 @@ impl Driver {
             && Arc::ptr_eq(&slot.resolution, &resolution)
             && slot.closure.reads_the_same_as(&closure)
         {
+            self.stats.consulted(Pass::Signatures, true, true);
+
             return Some(slot.signatures.clone());
         }
+
+        self.stats
+            .consulted(Pass::Signatures, held.is_some(), false);
 
         let deps = CheckDeps::new(builtins)
             .with_graph(graph)
@@ -169,6 +174,8 @@ impl Driver {
                 if *slot.signatures.value == *signatures.value
                     && *slot.signatures.diagnostics == *signatures.diagnostics =>
             {
+                self.stats.kept(Pass::Signatures);
+
                 slot.signatures.clone()
             },
             _ => signatures,
@@ -283,8 +290,12 @@ impl Driver {
             && entries_are_the_same(&slot.types, types)
             && slot.builtins == *builtins
         {
+            self.stats.consulted(Pass::Check, true, true);
+
             return Some(slot.checked.clone());
         }
+
+        self.stats.consulted(Pass::Check, held.is_some(), false);
 
         let body = lowered.bodies().iter().find(|body| body.owner() == owner)?;
         let mut deps = CheckDeps::new(builtins.clone())
@@ -317,6 +328,8 @@ impl Driver {
                 if *slot.checked.value == *checked.value
                     && *slot.checked.diagnostics == *checked.diagnostics =>
             {
+                self.stats.kept(Pass::Check);
+
                 slot.checked.clone()
             },
             _ => checked,
@@ -357,6 +370,7 @@ impl Driver {
             .collect::<Option<Vec<_>>>()?;
 
         let held = self.type_diagnostics.get(&module);
+        let existed = held.is_some();
 
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
@@ -381,9 +395,13 @@ impl Driver {
                 self.lower(module.0)
                     .is_some_and(|current| Arc::ptr_eq(held, &current))
             }) {
+                self.stats.consulted(Pass::TypeDiagnostics, true, true);
+
                 return Some(self.type_diagnostics[&module].value.clone());
             }
         }
+
+        self.stats.consulted(Pass::TypeDiagnostics, existed, false);
 
         let mut looked = BTreeMap::new();
         let mut rendered = Vec::new();
@@ -414,7 +432,11 @@ impl Driver {
         //
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
         let value = match self.type_diagnostics.get(&module) {
-            Some(slot) if *slot.value == *value => slot.value.clone(),
+            Some(slot) if *slot.value == *value => {
+                self.stats.kept(Pass::TypeDiagnostics);
+
+                slot.value.clone()
+            },
             _ => value,
         };
 

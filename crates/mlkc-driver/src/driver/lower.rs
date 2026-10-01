@@ -12,7 +12,7 @@ use mlkc_syntax::{AnyParameter, FunDecl, ModuleRoot, TextRange};
 use mlkc_vfs::{FileId, RelPath};
 use rustc_hash::FxHashMap;
 
-use super::Driver;
+use super::{Driver, Pass};
 
 /// The HIR of one file, and where what it holds is written.
 ///
@@ -219,7 +219,9 @@ impl Driver {
     /// the parse did not find a module in it, or the place of the file names no module.
     pub fn lower(&mut self, file: FileId) -> Option<Arc<Lowered>> {
         let Some(parse) = self.parse(file) else {
-            self.lowered.remove(&file);
+            self.stats
+                .dropped(Pass::Lower, self.lowered.remove(&file).is_some() as usize);
+
             return None;
         };
 
@@ -229,7 +231,9 @@ impl Driver {
         let Some(relative) = self.module_path(ModuleId(file)) else {
             // The place names no file, and a place that names no file names no module: there
             // is no path to call one by, and nothing to lower it to.
-            self.lowered.remove(&file);
+            self.stats
+                .dropped(Pass::Lower, self.lowered.remove(&file).is_some() as usize);
+
             return None;
         };
 
@@ -242,20 +246,27 @@ impl Driver {
         // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
         let projects: Vec<ProjectId> = self.named_projects(module);
 
-        Self::text_derived(&mut self.lowered, file, version, || {
-            let root = parse.module_root()?;
+        Self::text_derived(
+            &mut self.stats,
+            Pass::Lower,
+            &mut self.lowered,
+            file,
+            version,
+            || {
+                let root = parse.module_root()?;
 
-            // What the module is read with is the prelude of its project, which is the
-            // prelude of the language for a module no project claims.
-            let prelude = self.projects.prelude_of(module);
+                // What the module is read with is the prelude of its project, which is the
+                // prelude of the language for a module no project claims.
+                let prelude = self.projects.prelude_of(module);
 
-            Some(Arc::new(Lowered::of(
-                module,
-                &root,
-                prelude,
-                &projects,
-                relative.as_path(),
-            )))
-        })
+                Some(Arc::new(Lowered::of(
+                    module,
+                    &root,
+                    prelude,
+                    &projects,
+                    relative.as_path(),
+                )))
+            },
+        )
     }
 }

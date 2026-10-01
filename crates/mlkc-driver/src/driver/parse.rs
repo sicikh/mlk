@@ -8,7 +8,7 @@ use mlkc_rowan::{AstNode, NodeCache};
 use mlkc_syntax::{ModuleRoot, SyntaxNode};
 use mlkc_vfs::FileId;
 
-use super::{Driver, ParseSlot};
+use super::{Driver, ParseSlot, Pass};
 
 /// The value of the parse slot: what the parser returned, whole.
 ///
@@ -73,21 +73,28 @@ impl Driver {
     /// [`Driver::file_state`] tells which of those it is.
     pub fn parse(&mut self, file: FileId) -> Option<Arc<Parse>> {
         let version = self.file_version(file);
+        let held = self.parses.get(&file);
 
         // There is nothing to back-date here: the parse is a function of the text,
         // and the tree of different text is a different tree.
         // The stages where a recomputation can end up equal to the retained value —
         // the item tree, the interface — are the ones that follow.
-        if let Some(slot) = self.parses.get(&file)
+        if let Some(slot) = held
             && slot.version == version
         {
+            self.stats.consulted(Pass::Parse, true, true);
+
             return Some(slot.value.clone());
         }
+
+        self.stats.consulted(Pass::Parse, held.is_some(), false);
 
         let Some(text) = self.file_text(file) else {
             // There is no input left to describe, so the slot goes, and the green nodes of
             // this file go with it: nothing is going to be parsed the way it was.
-            self.parses.remove(&file);
+            self.stats
+                .dropped(Pass::Parse, self.parses.remove(&file).is_some() as usize);
+
             return None;
         };
 
@@ -116,14 +123,21 @@ impl Driver {
         let parse = self.parse(file)?;
         let version = self.file_version(file);
 
-        Self::text_derived(&mut self.parse_diagnostics, file, version, || {
-            let rendered = parse
-                .diagnostics()
-                .iter()
-                .map(|diagnostic| diagnostic.to_diagnostic(file))
-                .collect::<Vec<_>>();
+        Self::text_derived(
+            &mut self.stats,
+            Pass::ParseDiagnostics,
+            &mut self.parse_diagnostics,
+            file,
+            version,
+            || {
+                let rendered = parse
+                    .diagnostics()
+                    .iter()
+                    .map(|diagnostic| diagnostic.to_diagnostic(file))
+                    .collect::<Vec<_>>();
 
-            Some(Arc::from(rendered))
-        })
+                Some(Arc::from(rendered))
+            },
+        )
     }
 }

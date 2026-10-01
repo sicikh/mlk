@@ -6,7 +6,7 @@ use mlkc_hir_def::{ModuleId, ProjectData, ProjectGraph, ProjectId};
 use mlkc_line_index::LineIndex;
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, RelPathBuf, VfsPath};
 
-use super::Driver;
+use super::{Driver, Pass};
 
 /// One file of the standard library: the path a driver keeps a module under, and its source.
 ///
@@ -299,9 +299,14 @@ impl Driver {
         let version = self.file_version(file);
         let text = self.file_text(file);
 
-        Self::text_derived(&mut self.line_indices, file, version, || {
-            text.map(|text| Arc::new(LineIndex::new(&text)))
-        })
+        Self::text_derived(
+            &mut self.stats,
+            Pass::LineIndex,
+            &mut self.line_indices,
+            file,
+            version,
+            || text.map(|text| Arc::new(LineIndex::new(&text))),
+        )
     }
 
     /// The net effect of the pushes a host made since its last call.

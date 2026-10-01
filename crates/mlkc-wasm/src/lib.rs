@@ -134,16 +134,38 @@ impl WasmDriver {
     #[wasm_bindgen(js_name = setText)]
     pub fn set_text(&mut self, path: &str, text: Option<String>) -> bool {
         let path = path_of(path);
+        let there = text.is_some();
         let changed = self.driver.set_file_text(path.clone(), text);
 
         // What a host pushes is a module of the project of the page: the driver holds no
         // manifest, and a buffer with no project would have no name another module could call
-        // it by ([ADR-0021]).
+        // it by. What the graph already says is read rather than overwritten: a file the compiler
+        // reads as one of another project --- a file of the library --- stays there, and a file
+        // that is gone is not one of the page's project any more, because a module is a file
+        // ([ADR-0021]).
+        //
+        // The id is read whether or not the file is there: a file that is gone keeps its id,
+        // and it is the only name the module it was has left ([`Driver::path_id`]).
         //
         // [adr-0021]: ../../docs/adr/0021-translation-units.md
-        if let Some(file) = self.driver.file_id(&path) {
-            self.driver
-                .set_module_project(ModuleId(file), ProjectId::new(PROJECT));
+        let page = ProjectId::new(PROJECT);
+
+        if let Some(file) = self.driver.path_id(&path) {
+            let module = ModuleId(file);
+            let held = self.driver.project_graph().project_of(module).cloned();
+
+            match (there, held) {
+                // A file that is gone is not one of the page's project any more.
+                (false, Some(project)) if project == page => {
+                    self.driver.remove_module_project(module);
+                },
+                // A file no project claims is one of the page's; a file of another project --- a
+                // file of the library --- stays where the compiler put it.
+                (true, None) => {
+                    self.driver.set_module_project(module, page);
+                },
+                _ => {},
+            }
         }
 
         changed
@@ -2652,6 +2674,93 @@ mod tests {
         assert_eq!(run.problems, [
             "the host does not implement the extern `app::main::putchar`"
         ],);
+    }
+
+    #[test]
+    fn a_file_of_the_library_is_not_moved_into_the_project_of_the_page() {
+        let mut driver = WasmDriver::new();
+        let files = driver.register_library();
+        let core = files
+            .iter()
+            .find(|file| file.path == "/std/core.mlk")
+            .expect("the core module");
+
+        // An editor shows a file of the library as a buffer, and reading it again is a push to
+        // the driver: the file is the compiler's, and the project it is read under is the one
+        // the compiler put it in ([ADR-0015]).
+        //
+        // [adr-0015]: ../../docs/adr/0015-standard-library.md
+        driver.set_text("/std/core.mlk", Some(core.text.to_string()));
+
+        let file = driver
+            .driver
+            .file_id(&path_of("/std/core.mlk"))
+            .expect("the file to have an id");
+        let project = driver
+            .driver
+            .project_graph()
+            .project_of(ModuleId(file))
+            .cloned();
+
+        assert_eq!(project, Some(ProjectId::new(mlkc_stdlib::PROJECT)));
+    }
+
+    #[test]
+    fn a_buffer_that_is_gone_leaves_the_project_of_the_page() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some("#[entry]\npub fun main(): Unit =\n    print-int(1)\n".to_string()),
+        );
+        driver.set_text(
+            "/gone.mlk",
+            Some("pub fun gone(): Int =\n    1\n".to_string()),
+        );
+
+        // The buffer is a module of the project while it is there.
+        let run = driver.run_of().expect("the program to describe");
+
+        assert!(
+            run.modules.iter().any(|module| module.name == "app::gone"),
+            "the program holds the module of the buffer: {:?}",
+            run.modules.iter().map(|it| &it.name).collect::<Vec<_>>(),
+        );
+
+        // A host that drops the buffer says so, and the module leaves the project with it.
+        assert!(driver.set_text("/gone.mlk", None));
+
+        let _ = Stats::of(&mut driver.driver);
+        let run = driver.run_of().expect("the program to describe");
+
+        assert!(
+            !run.modules.iter().any(|module| module.name == "app::gone"),
+            "the program does not hold a module whose file is gone",
+        );
+
+        // Nothing of the project reads the file that is gone: a host that forgot to say so
+        // would pay for a parse that is not there on every look.
+        let taken = Stats::of(&mut driver.driver);
+
+        assert!(
+            taken.rows.iter().all(|row| row.unit != "/gone.mlk"),
+            "the project is not read over a file that is not there: {:?}",
+            taken
+                .rows
+                .iter()
+                .map(|it| (&it.pass, &it.unit))
+                .collect::<Vec<_>>(),
+        );
+
+        // And the buffer written again is a module of the project again.
+        driver.set_text(
+            "/gone.mlk",
+            Some("pub fun gone(): Int =\n    2\n".to_string()),
+        );
+
+        let run = driver.run_of().expect("the program to describe");
+
+        assert!(run.modules.iter().any(|module| module.name == "app::gone"));
     }
 
     /// The place a serialized row points at, in the bytes a host counts.

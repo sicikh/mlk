@@ -134,7 +134,7 @@ pub struct ProjectData {
 /// The projects the compiler knows, and the project each module belongs to.
 ///
 /// The mapping of a module to its project is an index the loader keeps,
-/// and it is cleared when a project goes away.
+/// and it is cleared when a project goes away, or when a module leaves one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectGraph {
     projects: BTreeMap<ProjectId, ProjectData>,
@@ -176,6 +176,16 @@ impl ProjectGraph {
     /// The project a module belongs to, if the loader recorded one.
     pub fn project_of(&self, module: ModuleId) -> Option<&ProjectId> {
         self.module_project.get(&module)
+    }
+
+    /// Forgets which project a module belongs to, returning the one it was of.
+    ///
+    /// A module of no project is compiled with the prelude of the language again
+    /// ([`ProjectGraph::prelude_of`]), and the projects it may name are the ones of the graph:
+    /// a host says so when the file the module was is gone, since a module is a file and a file
+    /// that is not there is not one of the project.
+    pub fn remove_module(&mut self, module: ModuleId) -> Option<ProjectId> {
+        self.module_project.remove(&module)
     }
 
     /// The prelude of the project a module belongs to.
@@ -251,6 +261,28 @@ mod tests {
         assert!(graph.remove(&project()).is_some());
         assert_eq!(graph.project_of(module(0)), None);
         assert_eq!(graph.project_of(module(1)), None);
+    }
+
+    #[test]
+    fn a_module_leaves_the_project_it_was_recorded_in() {
+        let mut graph = ProjectGraph::default();
+        graph.insert(project(), ProjectData::default());
+        graph.set_module_project(module(0), project());
+        graph.set_module_project(module(1), project());
+
+        assert_eq!(graph.remove_module(module(0)), Some(project()));
+        assert_eq!(
+            graph.remove_module(module(0)),
+            None,
+            "the graph changes once"
+        );
+
+        assert_eq!(graph.project_of(module(0)), None);
+        assert_eq!(graph.project_of(module(1)), Some(&project()));
+
+        let modules: Vec<ModuleId> = graph.modules_of(&project()).collect();
+
+        assert_eq!(modules, [module(1)], "the project holds the other module");
     }
 
     #[test]

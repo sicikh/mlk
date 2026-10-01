@@ -148,6 +148,14 @@ Lowering reads the prelude of the project the module belongs to,
 and a module that belongs to no project — a file a host pushed on its own,
 which no manifest claimed — is compiled with the prelude of the language ([`Prelude::standard`]).
 
+A module leaves a project the way it joins one: the graph is told.
+A host that drops a file says that the module is not one of the project any more,
+since a module is a file and a file that is gone is not there to read;
+what was read under the project goes with it, the project's link plan included.
+Nothing is inferred from a file being missing:
+whether that is a module that left the project
+or one of the project's that is not there is a host's to say.
+
 Changing what a project says invalidates what its modules were lowered to, and nothing else:
 crossing a project boundary is crossing a configuration boundary,
 so the HIR of a module of another project, or of no project,

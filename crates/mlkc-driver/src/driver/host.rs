@@ -166,11 +166,47 @@ impl Driver {
         true
     }
 
+    /// Forgets which project a module belongs to, and returns whether the graph changed.
+    ///
+    /// A module that leaves a project is read with the prelude of the language again, so what
+    /// was read under the project goes, and so does the plan of the project: the plan is a value
+    /// of the modules it is built from ([ADR-0021]).
+    ///
+    /// A host that drops a file says so here. The file goes in with
+    /// [`Driver::set_file_text`], and the graph is told which project it is of by
+    /// [`Driver::set_module_project`]: nothing here is inferred, because whether a file that is
+    /// not there is a module that left the project or one that is missing is a host's to say.
+    ///
+    /// [ADR-0021]: ../../docs/adr/0021-translation-units.md
+    pub fn remove_module_project(&mut self, module: ModuleId) -> bool {
+        if self.projects.project_of(module).is_none() {
+            return false;
+        }
+
+        // What was read under the project goes before the module does: a value of the project
+        // names the modules it was built from.
+        self.invalidate_module(module);
+
+        Arc::make_mut(&mut self.projects)
+            .remove_module(module)
+            .is_some()
+    }
+
     // Reads: no computation, and none of them takes `&mut self`.
 
     /// The id of a path the driver knows, if the file is there.
     pub fn file_id(&self, path: &VfsPath) -> Option<FileId> {
         self.vfs.file_id(path).map(|(file, _)| file)
+    }
+
+    /// The id of a path the driver has seen, whether or not the file is still there.
+    ///
+    /// [`Driver::file_id`] answers for a file that is there; a file that is gone keeps its id,
+    /// and what a host reads of it afterwards is the state it went away with
+    /// ([`Driver::file_state`]). A host that drops a file says so by this id: the module it was
+    /// is a value of the driver, and the path is the only name it has left for it.
+    pub fn path_id(&self, path: &VfsPath) -> Option<FileId> {
+        self.vfs.path_id(path)
     }
 
     /// The contents of a file, or `None` if it is missing, unreadable, or excluded.

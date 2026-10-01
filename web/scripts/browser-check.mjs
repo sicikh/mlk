@@ -1553,12 +1553,15 @@ function report(page, problems, warnings, asked) {
         ],
         [
             // An edit of a body is read out of what the driver held: the parse of the edited
-            // buffer is a stale read and never a miss, and nothing that was held was dropped.
+            // buffer is a stale read and never a miss, nothing that was held was dropped, and a
+            // buffer that was dropped before is not read at all --- a host that says a file is
+            // gone takes its module out of the project, and the project is not read over it.
             // How many looks the two edits are read in is the editor's to decide, so what is
             // asked is that the edit was read rather than that it was read exactly once.
             "an edit of a body is paid for out of what the driver held",
             counted("parse", "stales", "/main.mlk") >= 1 &&
                 counted("parse", "misses", "/main.mlk") === 0 &&
+                page.stats.rows.every((it) => !it.unit.startsWith("/lib/")) &&
                 page.stats.rows.every((it) => it.dropped === 0),
         ],
         [

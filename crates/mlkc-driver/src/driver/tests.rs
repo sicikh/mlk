@@ -1793,7 +1793,60 @@ fn a_deleted_file_has_no_parse() {
     driver.set_file_text(path("main.mlk"), None);
 
     assert_eq!(driver.file_state(file), FileState::Deleted);
+    assert_eq!(
+        driver.path_id(&path("main.mlk")),
+        Some(file),
+        "the file keeps its id"
+    );
     assert!(driver.parse(file).is_none());
+}
+
+/// A host that says a file is gone takes its module out of the project: what the project is
+/// read over does not name it, and nothing of the project reads a file that is not there.
+#[test]
+fn a_module_that_leaves_its_project_is_not_read_by_it() {
+    let mut driver = project_of(
+        "//- /main.mlk\npub fun main(): Unit =\n    1\n//- /lib.mlk\npub fun size(): Int =\n    1\n",
+    );
+    let lib = file(&driver, "lib.mlk");
+
+    // The project is read once, so its index holds both modules.
+    let index = driver
+        .module_index(&project())
+        .expect("the index of the project");
+
+    assert_eq!(index.len(), 2);
+    assert_eq!(index.get(&[Name::new("lib")]), Some(ModuleId(lib)));
+    let _ = driver.take_stats();
+
+    // The host drops the file, and says the module is not one of the project any more.
+    driver.set_file_text(path("lib.mlk"), None);
+    assert!(driver.remove_module_project(ModuleId(lib)));
+    assert!(
+        !driver.remove_module_project(ModuleId(lib)),
+        "the graph changes once"
+    );
+
+    let index = driver
+        .module_index(&project())
+        .expect("the index of the project");
+
+    assert_eq!(index.len(), 1, "the project holds the module that is there");
+    assert_eq!(index.get(&[Name::new("lib")]), None);
+
+    // Nothing of the project reads the file that is gone: a host that did not say so would pay
+    // for a parse that is not there on every look.
+    let taken = driver.take_stats();
+
+    assert_eq!(
+        taken.of(Pass::Parse, &Unit::File(lib)),
+        None,
+        "the project is not read over a file that is not there: {:?}",
+        taken
+            .iter()
+            .map(|(pass, unit, tally)| (pass, unit.clone(), tally))
+            .collect::<Vec<_>>(),
+    );
 }
 
 #[test]

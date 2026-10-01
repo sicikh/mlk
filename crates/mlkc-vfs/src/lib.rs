@@ -295,6 +295,14 @@ impl Vfs {
         }
     }
 
+    /// Id of the given path if the `Vfs` has seen it, whether or not the file is there.
+    ///
+    /// A file that is gone keeps its id ([`Vfs::file_state`] tells the state it went away
+    /// with), and a host that says what happened to a file it dropped is one that reads this.
+    pub fn path_id(&self, path: &VfsPath) -> Option<FileId> {
+        self.interner.get(path)
+    }
+
     /// File path corresponding to the given `file_id`.
     ///
     /// # Panics
@@ -688,6 +696,11 @@ mod tests {
         vfs.set_file_contents(path.clone(), None);
 
         assert_eq!(vfs.file_id(&path), None);
+        assert_eq!(
+            vfs.path_id(&path),
+            Some(file_id),
+            "a file that is gone keeps the id it was known by"
+        );
         assert!(!vfs.exists(file_id));
         assert_eq!(vfs.file_state(file_id), FileState::Deleted);
         assert_eq!(vfs.file_text(file_id), None);

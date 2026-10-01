@@ -75,6 +75,28 @@ CHECKED BODY
   expr #0: Int
 ```
 
+### MIR
+
+`fun hidden`
+
+CFG form:
+
+```
+fun hidden (entry b0)
+  b0:
+    l0 = const 1
+    return l0
+```
+
+SSA form:
+
+```
+fun hidden (entry b0)
+  b0:
+    v0 = const 1
+    return v0
+```
+
 ### Diagnostics
 
 No diagnostics.
@@ -208,6 +230,20 @@ CHECKED BODY
   expr #0: {error}
   expr #1: Int
 ```
+
+### MIR
+
+`fun call`
+
+Not lowered: the body does not check clean.
+
+`fun make`
+
+Not lowered: the body does not check clean.
+
+`fun gone`
+
+Not lowered: the body does not check clean.
 
 ### Diagnostics
 

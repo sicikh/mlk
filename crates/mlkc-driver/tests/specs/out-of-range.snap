@@ -10,10 +10,7 @@ expression: snapshot
 MODULE #2 project::main
 
 ITEM TREE
-  fun main  @2.0
-    visibility: private
-    ret: Unit -> use Unit
-  fun make  @2.1
+  fun big  @2.0
     visibility: private
     ret: Int -> use Int
   use Int  prelude
@@ -32,40 +29,22 @@ ITEM TREE
 
 ### Bodies
 
-`fun main`
+`fun big`
 
 ```
-BODY fun main in module #2
+BODY fun big in module #2
 
-root expr#1
+root expr#0
 exprs
-  expr#0  path path#0
-  expr#1  call expr#0 ()
-paths
-  path#0  main -> fun main
-```
-
-`fun make`
-
-```
-BODY fun make in module #2
-
-root expr#1
-exprs
-  expr#0  path path#0
-  expr#1  call expr#0 ()
-paths
-  path#0  make -> fun make
+  expr#0  literal 1099511627776
 ```
 
 ### Resolution
 
 ```
 SCOPE
-  main
-    value: fun main in module #2 (private)
-  make
-    value: fun make in module #2 (private)
+  big
+    value: fun big in module #2 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -80,70 +59,40 @@ SCOPE
 
 ```
 MODULE TYPES
-  fun main: () -> Unit
-  fun make: () -> Int
+  fun big: () -> Int
 ```
 
 ### Checked Bodies
 
-`fun main`
+`fun big`
 
 ```
 CHECKED BODY
-  expr #0: () -> Unit
-  expr #1: Unit
-```
-
-`fun make`
-
-```
-CHECKED BODY
-  expr #0: () -> Int
-  expr #1: Int
+  expr #0: Int
 ```
 
 ### MIR
 
-`fun main`
+`fun big`
 
 CFG form:
 
 ```
-fun main (entry b0)
+fun big (entry b0)
   b0:
-    l0 = call fun main()
+    l0 = const 0
     return l0
 ```
 
 SSA form:
 
 ```
-fun main (entry b0)
+fun big (entry b0)
   b0:
-    v0 = call fun main()
-    return v0
-```
-
-`fun make`
-
-CFG form:
-
-```
-fun make (entry b0)
-  b0:
-    l0 = call fun make()
-    return l0
-```
-
-SSA form:
-
-```
-fun make (entry b0)
-  b0:
-    v0 = call fun make()
+    v0 = const 0
     return v0
 ```
 
 ### Diagnostics
 
-No diagnostics.
+mir[01]: the integer literal `1099511627776` is outside the 31-bit range of `Int`  @21..34

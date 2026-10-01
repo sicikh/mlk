@@ -254,6 +254,76 @@ CHECKED BODY
   pat #0: Int[Bool]
 ```
 
+### MIR
+
+`fun one`
+
+Not lowered: the body does not check clean.
+
+`fun takes`
+
+CFG form:
+
+```
+fun takes (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l1 = use l0
+    return l1
+```
+
+SSA form:
+
+```
+fun takes (entry b0)
+  params: v0: Int
+  b0:
+    v1 = use v0
+    v2 = use v1
+    return v2
+```
+
+`fun wrong-argument`
+
+Not lowered: the body does not check clean.
+
+`fun wrong-arity`
+
+Not lowered: the body does not check clean.
+
+`fun extra-argument`
+
+Not lowered: the body does not check clean.
+
+`fun not-callable`
+
+Not lowered: the body does not check clean.
+
+`fun applied`
+
+CFG form:
+
+```
+fun applied (entry b0)
+  params: v0: Int[Bool]
+  b0:
+    l0(value) = use v0
+    l1 = use l0
+    return l1
+```
+
+SSA form:
+
+```
+fun applied (entry b0)
+  params: v0: Int[Bool]
+  b0:
+    v1 = use v0
+    v2 = use v1
+    return v2
+```
+
 ### Diagnostics
 
 typechecker[04]: the name `Int` is applied to type arguments  @274..283 (a class takes no arguments)

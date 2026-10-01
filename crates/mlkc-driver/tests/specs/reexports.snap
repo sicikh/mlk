@@ -57,6 +57,10 @@ MODULE TYPES
 
 No bodies.
 
+### MIR
+
+No bodies.
+
 ### Diagnostics
 
 No diagnostics.
@@ -112,6 +116,10 @@ MODULE TYPES
 ```
 
 ### Checked Bodies
+
+No bodies.
+
+### MIR
 
 No bodies.
 
@@ -195,6 +203,28 @@ MODULE TYPES
 CHECKED BODY
   expr #0: () -> Point
   expr #1: Point
+```
+
+### MIR
+
+`fun get`
+
+CFG form:
+
+```
+fun get (entry b0)
+  b0:
+    l0 = call fun get()
+    return l0
+```
+
+SSA form:
+
+```
+fun get (entry b0)
+  b0:
+    v0 = call fun get()
+    return v0
 ```
 
 ### Diagnostics

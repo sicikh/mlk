@@ -10,14 +10,16 @@
 //! it, so the names of the language resolve.
 //!
 //! The snapshot holds, for every module of the project, the surface it was lowered to, the scope
-//! it resolved to, the types its signatures and bodies were checked to, and what the stages
-//! reported. A snapshot is part of changing how a project is read:
+//! it resolved to, the types its signatures and bodies were checked to, the MIR of every body
+//! that checks clean, in both of its forms, and what the stages reported. A snapshot is part of
+//! changing how a project is read:
 //! `INSTA_UPDATE=always cargo test -p mlkc-driver` rewrites them, and the diff of the snapshots
-//! is what a review reads ([ADR-0006], [ADR-0016], [ADR-0017]).
+//! is what a review reads ([ADR-0006], [ADR-0016], [ADR-0017], [ADR-0019]).
 //!
 //! [ADR-0006]: ../../docs/adr/0006-snapshot-testing.md
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+//! [ADR-0019]: ../../docs/adr/0019-mir.md
 
 use std::{
     fmt::Write as _,
@@ -138,6 +140,41 @@ pub(crate) fn run(fixture: &str) {
                     .expect("writing to a string to never fail");
                 snapshot.push_str("\n```\n");
                 snapshot.push_str(&mlkc_hir_ty::dump::checked_body(&checked));
+                snapshot.push_str("```\n\n");
+            }
+        }
+
+        // The MIR of a body is read in the form the stage left it in: the CFG form the lowering
+        // produces, and the SSA form the construction after it produces ([ADR-0019]).
+        //
+        // [ADR-0019]: ../../docs/adr/0019-mir.md
+        snapshot.push_str("### MIR\n\n");
+
+        if lowered.bodies().is_empty() {
+            snapshot.push_str("No bodies.\n\n");
+        } else {
+            for body in lowered.bodies() {
+                writeln!(snapshot, "`{:?}`", body.owner().item)
+                    .expect("writing to a string to never fail");
+                snapshot.push('\n');
+
+                // A body whose check reported a mistake is not lowered, and a host is told so
+                // by the diagnostics of the file ([ADR-0019]).
+                let Some(mir) = driver.mir(body.owner()) else {
+                    snapshot.push_str("Not lowered: the body does not check clean.\n\n");
+                    continue;
+                };
+
+                snapshot.push_str("CFG form:\n\n```\n");
+                snapshot.push_str(&mlkc_mir::dump::body(&mir));
+                snapshot.push_str("```\n\n");
+
+                let ssa = driver
+                    .mir_ssa(body.owner())
+                    .expect("a body that is lowered to have an SSA form");
+
+                snapshot.push_str("SSA form:\n\n```\n");
+                snapshot.push_str(&mlkc_mir::dump::body(&ssa));
                 snapshot.push_str("```\n\n");
             }
         }

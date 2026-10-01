@@ -1,0 +1,8 @@
+// What the construction of MIR reports about a body the checker accepted: an integer literal
+// outside the 31-bit range of the word ([ADR-0018]). The check is about types, and the range of
+// `Int` is the representation's business, so the mistake is MIR's to report --- and the body is
+// lowered all the same.
+
+//- /main.mlk
+fun big(): Int =
+    1099511627776

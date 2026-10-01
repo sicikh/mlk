@@ -60,6 +60,10 @@ project_specs! {
     // The paths of a body, which a resolution never walks: a name a module keeps to itself, a
     // class written where a value belongs, and a module that is not there.
     hidden_name: "hidden-name",
+
+    // What the construction of MIR reports about a body the checker accepted: an integer
+    // literal outside the 31-bit range of the word.
+    out_of_range: "out-of-range",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

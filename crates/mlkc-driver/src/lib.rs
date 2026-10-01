@@ -5,11 +5,12 @@
 //! The pipeline it drives is the compiler pipeline;
 //! today that pipeline is the parser, the lowering of a module into the HIR,
 //! the resolution of a module against the interfaces of the modules its paths name,
-//! and the check of the types of the module and of each of its bodies,
+//! the check of the types of the module and of each of its bodies,
+//! and the lowering of every body that checks clean into MIR and into its SSA form,
 //! so the table holds the values that are derived from the text of a file:
 //! the parse, the HIR, the interface of the module it is,
 //! the resolution of its names, the types of its entities, the check of every body,
-//! and the diagnostics of all of them,
+//! the MIR of every body that checks clean, and the diagnostics of all of them,
 //! and the line index positions are read with --- and, per project,
 //! the module index and the def map.
 //!
@@ -31,7 +32,8 @@
 //!
 //! Every stage reports its own, and what a host reads is the [`Diagnostics`] of a file: what
 //! the parser reported, what the lowering of the module reported, what the resolution of it
-//! found, and what checking its types found, each of them the value the stage left. No stage's
+//! found, what checking its types found, and what the construction of MIR found,
+//! each of them the value the stage left. No stage's
 //! diagnostics are copied into another stage's, and a mistake one stage reports is not a reason
 //! to render what the stages around it reported again.
 //!
@@ -41,7 +43,8 @@
 //! the driver holds. Such a rendering is a value of its own, keyed by what it read, and what a
 //! resolution's rendering reads of another module is its HIR only for a name a walk could not
 //! find ([`mlkc_resolve::hidden_name`]): a module that resolved cleanly reads no HIR beside its
-//! own.
+//! own. MIR is the one stage whose diagnostics carry their own span
+//! ([`mlkc_mir_build::MirDiag`]), so the driver renders them as they are.
 //!
 //! # The types of a file
 //!
@@ -139,6 +142,8 @@ use mlkc_hir_def::{
 use mlkc_hir_ty::{CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
 use mlkc_lower::{LoweredBody, LoweringDiag, lower_body, lower_module, syntax_at};
+use mlkc_mir::Body as MirBody;
+use mlkc_mir_build::{MirDiag, construct_ssa, lower_body as lower_mir};
 use mlkc_parser_core::{AnyParse, diagnostic::ParseDiagnostic};
 use mlkc_resolve::{
     Closure, Resolution, ResolveDeps, ResolveDiag, ResolveError, hidden_name, resolve_module,
@@ -191,6 +196,10 @@ pub struct Driver {
     signatures: FxHashMap<ModuleId, SignaturesSlot>,
     /// The check of every body that has been checked.
     checks: FxHashMap<BodyEntityLoc, CheckSlot>,
+    /// The MIR of every body that checks clean, in the CFG form.
+    mirs: FxHashMap<BodyEntityLoc, MirSlot>,
+    /// The SSA form of every body whose MIR has been asked for in it.
+    ssas: FxHashMap<BodyEntityLoc, SsaSlot>,
     /// The def map of every project that has been asked for one.
     def_maps: FxHashMap<ProjectId, DefMapSlot>,
     /// The rendered diagnostics of the parse of every file that has been asked for them.
@@ -199,6 +208,9 @@ pub struct Driver {
     resolution_diagnostics: FxHashMap<ModuleId, ResolutionDiagnosticsSlot>,
     /// The rendered diagnostics of the checks of every module that has been asked for them.
     type_diagnostics: FxHashMap<ModuleId, TypeDiagnosticsSlot>,
+    /// The rendered diagnostics of the MIR construction of every module that has been asked for
+    /// them.
+    mir_diagnostics: FxHashMap<ModuleId, MirDiagnosticsSlot>,
     /// The line index of every file whose positions have been read.
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
 }
@@ -337,6 +349,27 @@ impl Signatures {
     }
 }
 
+/// What the check of a body reads of the units around it, and what the lowering of the body
+/// reads after it ([ADR-0017], [ADR-0019]).
+///
+/// The inputs are gathered before either slot is asked, so that a pull of the MIR of a body
+/// does not walk the closure the check of it already walked.
+///
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+/// [ADR-0019]: ../../docs/adr/0019-mir.md
+struct CheckInputs {
+    /// The HIR the body was read from.
+    lowered: Arc<Lowered>,
+    /// What each name of the module denotes, and what each import resolved to.
+    resolution: Arc<Resolution>,
+    /// The modules the check walks, and the entries of the indexes it read.
+    closure: Closure,
+    /// The type surface of every module the check may read, by module.
+    types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
+    /// The classes of the language the check was given.
+    builtins: Builtins,
+}
+
 /// The check of one body, and what it was made from ([ADR-0017]).
 ///
 /// The key of a check is what the check read: the HIR of the module --- the body among it --- the
@@ -375,6 +408,58 @@ impl Checked {
     }
 }
 
+/// The MIR of one body in the CFG form, and what the lowering of it reported ([ADR-0019]).
+///
+/// [ADR-0019]: ../../docs/adr/0019-mir.md
+#[derive(Debug, Clone)]
+struct Mir {
+    /// The body, in the CFG form the lowering left it in.
+    value: Arc<MirBody>,
+    /// What the lowering of the body found, in the order of the body.
+    diagnostics: Arc<[MirDiag]>,
+}
+
+impl Mir {
+    /// Whether this is the same value as `other`: the same body, and the same report.
+    fn reads_the_same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.value, &other.value) && Arc::ptr_eq(&self.diagnostics, &other.diagnostics)
+    }
+}
+
+/// The MIR of one body in the CFG form, and what it was made from ([ADR-0019]).
+///
+/// The key of the slot is what the lowering read: the HIR of the module --- the body among it ---
+/// the resolution of the module, the closure the walk read, the classes of the language, and the
+/// check of the body, whose types pick the operators and the constants. The surfaces the check
+/// read are not read again here: the lowering reads the types of the check's value and no surface
+/// of another module.
+///
+/// [ADR-0019]: ../../docs/adr/0019-mir.md
+struct MirSlot {
+    /// The HIR the body was read from.
+    lowered: Arc<Lowered>,
+    /// What each name of the module denotes, and what each import resolved to.
+    resolution: Arc<Resolution>,
+    /// The modules the walk read, and the entries of the indexes it read.
+    closure: Closure,
+    /// The classes of the language the lowering was given.
+    builtins: Builtins,
+    /// The check the lowering read.
+    checked: Checked,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    mir: Mir,
+}
+
+/// The SSA form of one body, and the CFG form it was computed from ([ADR-0019]).
+///
+/// [ADR-0019]: ../../docs/adr/0019-mir.md
+struct SsaSlot {
+    /// The CFG form the pass read.
+    cfg: Arc<MirBody>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<MirBody>,
+}
+
 /// The rendered diagnostics of the checks of one module, and what rendering them read
 /// ([ADR-0017]).
 ///
@@ -393,6 +478,23 @@ struct TypeDiagnosticsSlot {
     checks: Vec<Checked>,
     /// The HIR of the modules a diagnostic looked at, by module.
     looked: BTreeMap<ModuleId, Arc<Lowered>>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<[Diagnostic]>,
+}
+
+/// The rendered diagnostics of the MIR construction of one module's bodies, and what rendering
+/// them read ([ADR-0019]).
+///
+/// A MIR diagnostic carries the span of the place it is about, so the rendering is keyed by the
+/// MIR of the bodies it was rendered from and by nothing else.
+///
+/// [ADR-0019]: ../../docs/adr/0019-mir.md
+struct MirDiagnosticsSlot {
+    /// The HIR the bodies were read in.
+    lowered: Arc<Lowered>,
+    /// The MIR of every body of the module, in the order the module declares them: `None` for a
+    /// body that does not check clean and is not lowered.
+    mirs: Vec<Option<Mir>>,
     /// The value, retained so that the driver can hand it out and compare it later.
     value: Arc<[Diagnostic]>,
 }
@@ -1186,7 +1288,17 @@ impl Driver {
     ///
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
     fn checked(&mut self, owner: &BodyEntityLoc) -> Option<Checked> {
-        let module = owner.module();
+        let inputs = self.check_inputs(owner.module())?;
+
+        self.checked_with(owner, &inputs)
+    }
+
+    /// What the check of a body reads of the units around it ([`CheckInputs`]).
+    ///
+    /// `None` when there is nothing to check against: the module has no HIR, it has no resolution,
+    /// or the driver holds no standard library, whose `#[builtin]` classes the check is given
+    /// ([`Driver::use_std`]).
+    fn check_inputs(&mut self, module: ModuleId) -> Option<CheckInputs> {
         let lowered = self.lower(module.0)?;
         let resolution = self.resolution(module)?;
         let builtins = self.builtins()?;
@@ -1223,24 +1335,42 @@ impl Driver {
             }
         }
 
+        Some(CheckInputs {
+            lowered,
+            resolution,
+            closure,
+            types,
+            builtins,
+        })
+    }
+
+    /// The check of a body against inputs already gathered ([`Driver::check_inputs`]).
+    fn checked_with(&mut self, owner: &BodyEntityLoc, inputs: &CheckInputs) -> Option<Checked> {
+        let CheckInputs {
+            lowered,
+            resolution,
+            closure,
+            types,
+            builtins,
+        } = inputs;
         let held = self.checks.get(owner);
 
         if let Some(slot) = held
-            && Arc::ptr_eq(&slot.lowered, &lowered)
-            && Arc::ptr_eq(&slot.resolution, &resolution)
-            && slot.closure.reads_the_same_as(&closure)
-            && entries_are_the_same(&slot.types, &types)
-            && slot.builtins == builtins
+            && Arc::ptr_eq(&slot.lowered, lowered)
+            && Arc::ptr_eq(&slot.resolution, resolution)
+            && slot.closure.reads_the_same_as(closure)
+            && entries_are_the_same(&slot.types, types)
+            && slot.builtins == *builtins
         {
             return Some(slot.checked.clone());
         }
 
         let body = lowered.bodies().iter().find(|body| body.owner() == owner)?;
         let mut deps = CheckDeps::new(builtins.clone())
-            .with_graph(graph)
+            .with_graph(Arc::clone(&self.projects))
             .with_closure(closure.clone());
 
-        for (named, surface) in &types {
+        for (named, surface) in types {
             deps = deps.with_types(*named, Arc::clone(surface));
         }
 
@@ -1248,7 +1378,7 @@ impl Driver {
             owner.clone(),
             lowered.item_tree(),
             &body.body().body,
-            &resolution,
+            resolution,
             &deps,
         );
         let checked = Checked {
@@ -1272,15 +1402,137 @@ impl Driver {
         };
 
         self.checks.insert(owner.clone(), CheckSlot {
-            lowered,
-            resolution,
-            closure,
-            types,
-            builtins,
+            lowered: Arc::clone(lowered),
+            resolution: Arc::clone(resolution),
+            closure: closure.clone(),
+            types: types.clone(),
+            builtins: builtins.clone(),
             checked: checked.clone(),
         });
 
         Some(checked)
+    }
+
+    /// The MIR of `owner` in the CFG form: the checked body lowered, before SSA ([ADR-0019]).
+    ///
+    /// `None` when the body is not a body of a module the driver holds, or when the check of it
+    /// reported a mistake: a body that does not check clean is not lowered, so no back end meets
+    /// an expression whose meaning is a mistake.
+    ///
+    /// [ADR-0019]: ../../docs/adr/0019-mir.md
+    pub fn mir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<MirBody>> {
+        self.checked_mir(owner).map(|mir| mir.value)
+    }
+
+    /// The MIR of `owner` in the SSA form: the CFG form with block parameters ([ADR-0019]).
+    ///
+    /// The pass reads the CFG form and nothing else, so a second pull is the value the first one
+    /// returned.
+    ///
+    /// [ADR-0019]: ../../docs/adr/0019-mir.md
+    pub fn mir_ssa(&mut self, owner: &BodyEntityLoc) -> Option<Arc<MirBody>> {
+        let cfg = self.mir(owner)?;
+
+        if let Some(slot) = self.ssas.get(owner)
+            && Arc::ptr_eq(&slot.cfg, &cfg)
+        {
+            return Some(slot.value.clone());
+        }
+
+        let value = Arc::new(construct_ssa(&cfg));
+
+        // An SSA form equal to the one the driver holds is the value it holds ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let value = match self.ssas.get(owner) {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.ssas.insert(owner.clone(), SsaSlot {
+            cfg,
+            value: value.clone(),
+        });
+
+        Some(value)
+    }
+
+    /// The MIR of one body in the CFG form, and what the lowering of it reported.
+    ///
+    /// The key of the slot is what the lowering read: the key of the check of the body without
+    /// the surfaces it does not read again ([`MirSlot`]).
+    fn checked_mir(&mut self, owner: &BodyEntityLoc) -> Option<Mir> {
+        let inputs = self.check_inputs(owner.module())?;
+        let checked = self.checked_with(owner, &inputs)?;
+
+        // A body whose check reported a mistake is not lowered ([ADR-0019]): there is no meaning
+        // to lower, and codegen never meets an expression whose meaning is a mistake.
+        //
+        // [ADR-0019]: ../../docs/adr/0019-mir.md
+        if !checked.diagnostics.is_empty() {
+            return None;
+        }
+
+        let held = self.mirs.get(owner);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &inputs.lowered)
+            && Arc::ptr_eq(&slot.resolution, &inputs.resolution)
+            && slot.closure.reads_the_same_as(&inputs.closure)
+            && slot.builtins == inputs.builtins
+            && slot.checked.reads_the_same_as(&checked)
+        {
+            return Some(slot.mir.clone());
+        }
+
+        let body = inputs
+            .lowered
+            .bodies()
+            .iter()
+            .find(|body| body.owner() == owner)?;
+
+        // The surfaces the check read are not handed over: the lowering reads the types of the
+        // check's value, and no surface of another module.
+        let deps = CheckDeps::new(inputs.builtins.clone())
+            .with_graph(Arc::clone(&self.projects))
+            .with_closure(inputs.closure.clone());
+
+        let (value, diagnostics) = lower_mir(
+            owner.clone(),
+            inputs.lowered.item_tree(),
+            &body.body().body,
+            &body.body().source_map,
+            &checked.value,
+            &inputs.resolution,
+            &deps,
+        );
+        let mir = Mir {
+            value: Arc::new(value),
+            diagnostics: Arc::from(diagnostics),
+        };
+
+        // MIR that ends up equal to the one the driver holds is the one it holds ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let mir = match held {
+            Some(slot)
+                if *slot.mir.value == *mir.value && *slot.mir.diagnostics == *mir.diagnostics =>
+            {
+                slot.mir.clone()
+            },
+            _ => mir,
+        };
+
+        self.mirs.insert(owner.clone(), MirSlot {
+            lowered: Arc::clone(&inputs.lowered),
+            resolution: Arc::clone(&inputs.resolution),
+            closure: inputs.closure.clone(),
+            builtins: inputs.builtins.clone(),
+            checked,
+            mir: mir.clone(),
+        });
+
+        Some(mir)
     }
 
     /// The def map of `project`: the scopes of its modules.
@@ -1441,8 +1693,8 @@ impl Driver {
     }
 
     /// The diagnostics of `file`: what the parser reported, what the lowering of the module
-    /// reported, what the resolution of it found, and what checking its types found
-    /// ([ADR-0016], [ADR-0017]).
+    /// reported, what the resolution of it found, what checking its types found, and what the
+    /// construction of MIR found ([ADR-0016], [ADR-0017], [ADR-0019]).
     ///
     /// Each stage's diagnostics are a value of their own, computed once per what their stage
     /// read and shared as an `Arc`: a mistake the parser reported is not a reason to render
@@ -1452,6 +1704,7 @@ impl Driver {
     ///
     /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    /// [ADR-0019]: ../../docs/adr/0019-mir.md
     pub fn diagnostics(&mut self, file: FileId) -> Option<Diagnostics> {
         let parse = self.parse_diagnostics(file)?;
         let lowered = self.lower(file);
@@ -1467,12 +1720,17 @@ impl Driver {
             .as_ref()
             .and_then(|_| self.type_diagnostics(ModuleId(file)))
             .unwrap_or_else(none);
+        let mir = lowered
+            .as_ref()
+            .and_then(|_| self.mir_diagnostics(ModuleId(file)))
+            .unwrap_or_else(none);
 
         Some(Diagnostics {
             parse,
             lowering,
             resolution,
             types,
+            mir,
         })
     }
 
@@ -1712,6 +1970,69 @@ impl Driver {
         }
     }
 
+    /// The diagnostics of the construction of MIR for `module`'s bodies, in the shape a host
+    /// renders ([ADR-0019]).
+    ///
+    /// A MIR diagnostic carries the span of the place it is about ([`MirDiag`]), so the driver
+    /// renders it as the stage left it: the value is keyed by the MIR of the bodies it was
+    /// rendered from, and by nothing else. A body that does not check clean is not lowered, and
+    /// reports nothing here: what its check found is the check's to report.
+    ///
+    /// [ADR-0019]: ../../docs/adr/0019-mir.md
+    fn mir_diagnostics(&mut self, module: ModuleId) -> Option<Arc<[Diagnostic]>> {
+        let lowered = self.lower(module.0)?;
+
+        // Every body of the module is lowered, in the order the module declares them: `None`
+        // stands for a body the check reported a mistake about.
+        let mirs: Vec<Option<Mir>> = lowered
+            .bodies()
+            .iter()
+            .map(|body| self.checked_mir(body.owner()))
+            .collect();
+
+        let held = self.mir_diagnostics.get(&module);
+
+        if let Some(slot) = held
+            && Arc::ptr_eq(&slot.lowered, &lowered)
+            && slot.mirs.len() == mirs.len()
+            && slot.mirs.iter().zip(&mirs).all(|(held, current)| {
+                match (held, current) {
+                    (Some(held), Some(current)) => held.reads_the_same_as(current),
+                    (None, None) => true,
+                    _ => false,
+                }
+            })
+        {
+            return Some(slot.value.clone());
+        }
+
+        let rendered: Vec<Diagnostic> = mirs
+            .iter()
+            .flatten()
+            .flat_map(|mir| mir.diagnostics.iter())
+            .map(MirDiag::to_diagnostic)
+            .collect();
+        let value: Arc<[Diagnostic]> = Arc::from(rendered);
+
+        // A rendering equal to the one the driver holds is the value it holds: an edit that moved
+        // the bodies but not what a host reads does not move the value a buffer is marked by
+        // ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        let value = match held {
+            Some(slot) if *slot.value == *value => slot.value.clone(),
+            _ => value,
+        };
+
+        self.mir_diagnostics.insert(module, MirDiagnosticsSlot {
+            lowered,
+            mirs,
+            value: value.clone(),
+        });
+
+        Some(value)
+    }
+
     /// The error a walk should have reported instead, when the name it could not find is a name
     /// a module keeps to itself ([`hidden_name`]).
     ///
@@ -1813,7 +2134,8 @@ impl Driver {
     }
 
     /// Drops the values derived from one module: its HIR, its interface, its resolution, its
-    /// type surface, the checks of its bodies, and the diagnostics that were rendered from them.
+    /// type surface, the checks and the MIR of its bodies, and the diagnostics that were rendered
+    /// from them.
     ///
     /// A module that changed project or text is read again; what reads this module is not
     /// dropped with it, and sees the new value when it is read again.
@@ -1824,7 +2146,10 @@ impl Driver {
         self.resolution_diagnostics.remove(&module);
         self.signatures.remove(&module);
         self.type_diagnostics.remove(&module);
+        self.mir_diagnostics.remove(&module);
         self.checks.retain(|owner, _| owner.module() != module);
+        self.mirs.retain(|owner, _| owner.module() != module);
+        self.ssas.retain(|owner, _| owner.module() != module);
     }
 }
 
@@ -1885,9 +2210,10 @@ fn type_place_range(
 /// The diagnostics of one file, in the order the stages of the pipeline reported them.
 ///
 /// The parts are the values the stages left: what the parser reported, what the lowering of the
-/// module reported, what the resolution of it found, and what checking its types found. A part
-/// that did not change is the value the driver already held, and no part is copied into another:
-/// what a host reads is the parts in order ([`Diagnostics::iter`]).
+/// module reported, what the resolution of it found, what checking its types found, and what the
+/// construction of MIR found. A part that did not change is the value the driver already held,
+/// and no part is copied into another: what a host reads is the parts in order
+/// ([`Diagnostics::iter`]).
 #[derive(Debug, Clone)]
 pub struct Diagnostics {
     /// What the parser reported.
@@ -1898,6 +2224,8 @@ pub struct Diagnostics {
     resolution: Arc<[Diagnostic]>,
     /// What checking the types of the module's signatures and bodies reported.
     types: Arc<[Diagnostic]>,
+    /// What the construction of MIR reported about the bodies that were lowered.
+    mir: Arc<[Diagnostic]>,
 }
 
 impl Diagnostics {
@@ -1921,6 +2249,11 @@ impl Diagnostics {
         &self.types
     }
 
+    /// What the construction of MIR reported, as the stage left it.
+    pub fn mir(&self) -> &Arc<[Diagnostic]> {
+        &self.mir
+    }
+
     /// The diagnostics of the file, in the order the stages reported them.
     pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
         self.parse
@@ -1928,11 +2261,16 @@ impl Diagnostics {
             .chain(self.lowering.iter())
             .chain(self.resolution.iter())
             .chain(self.types.iter())
+            .chain(self.mir.iter())
     }
 
     /// How many diagnostics the file has.
     pub fn len(&self) -> usize {
-        self.parse.len() + self.lowering.len() + self.resolution.len() + self.types.len()
+        self.parse.len()
+            + self.lowering.len()
+            + self.resolution.len()
+            + self.types.len()
+            + self.mir.len()
     }
 
     /// Whether the file has no diagnostics at all.
@@ -1941,6 +2279,7 @@ impl Diagnostics {
             && self.lowering.is_empty()
             && self.resolution.is_empty()
             && self.types.is_empty()
+            && self.mir.is_empty()
     }
 }
 
@@ -3207,6 +3546,149 @@ fun second(): Int = 2
         assert!(
             Arc::ptr_eq(&before, &after),
             "a body edit re-checked a body that did not change",
+        );
+    }
+
+    #[test]
+    fn the_mir_of_a_body_is_the_cfg_form_of_it() {
+        let (mut driver, file) =
+            driver_with_std("main.mlk", "fun double(value: Int): Int = value + 1\n");
+        let owner = body_of(&mut driver, file, "double");
+        let mir = driver.mir(&owner).expect("the body to have MIR");
+
+        // The construction is one walk of the checked body: the body is the one the entity
+        // owns, a parameter is a value the body is entered with, and the CFG form holds the
+        // slots the SSA construction will give definitions of their own ([ADR-0019]).
+        //
+        // [ADR-0019]: ../../docs/adr/0019-mir.md
+        assert_eq!(mir.owner, owner);
+        assert_eq!(mir.params.len(), 1);
+        assert_eq!(mir.validate_cfg(), Ok(()));
+    }
+
+    #[test]
+    fn a_second_pull_of_mir_is_the_value_the_first_one_returned() {
+        let (mut driver, file) =
+            driver_with_std("main.mlk", "fun double(value: Int): Int = value + 1\n");
+        let owner = body_of(&mut driver, file, "double");
+
+        let first = driver.mir(&owner).expect("the body to have MIR");
+        let second = driver.mir(&owner).expect("the body to have MIR");
+
+        assert!(Arc::ptr_eq(&first, &second), "the slot was built twice");
+    }
+
+    #[test]
+    fn a_body_that_does_not_check_clean_is_not_lowered() {
+        let (mut driver, file) = driver_with_std("main.mlk", "fun main(): Unit = 1\n");
+        let owner = body_of(&mut driver, file, "main");
+
+        // A body whose check reported a mistake has no MIR: there is no meaning to lower, and
+        // codegen never meets an expression whose meaning is a mistake ([ADR-0019]).
+        //
+        // [ADR-0019]: ../../docs/adr/0019-mir.md
+        assert!(driver.check(&owner).is_some(), "the body to be checked");
+        assert!(
+            driver.mir(&owner).is_none(),
+            "a body with a mistake to be lowered"
+        );
+        assert!(driver.mir_ssa(&owner).is_none(), "an SSA form of a mistake");
+    }
+
+    #[test]
+    fn a_mistake_of_the_construction_of_mir_travels_with_the_diagnostics_of_the_file() {
+        const SOURCE: &str = "fun big(): Int = 1099511627776\n";
+
+        let (mut driver, file) = driver_with_std("main.mlk", SOURCE);
+        let diagnostics = driver.diagnostics(file).expect("the file to be diagnosed");
+
+        // The check accepts the literal --- the range is the word's business, and the word is
+        // MIR's ([ADR-0018]) --- so the body is lowered and the construction reports it.
+        //
+        // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+        assert_eq!(diagnostics.types().len(), 0, "{diagnostics:?}");
+        assert_eq!(diagnostics.mir().len(), 1, "{diagnostics:?}");
+
+        let diagnostic = &diagnostics.mir()[0];
+        let label = diagnostic.labels.first().expect("a label");
+
+        assert_eq!(diagnostic.category, Category::Mir);
+        assert_eq!(diagnostic.code, "01");
+        assert_eq!(
+            diagnostic.message,
+            "the integer literal `1099511627776` is outside the 31-bit range of `Int`",
+        );
+        assert!(label.primary);
+        assert_eq!(
+            covered(SOURCE, Some(label.span.range)),
+            Some("1099511627776")
+        );
+    }
+
+    #[test]
+    fn the_ssa_form_of_a_body_is_reached_by_a_pass() {
+        let (mut driver, file) =
+            driver_with_std("main.mlk", "fun double(value: Int): Int = value + 1\n");
+        let owner = body_of(&mut driver, file, "double");
+
+        let cfg = driver.mir(&owner).expect("the body to have MIR");
+        let ssa = driver
+            .mir_ssa(&owner)
+            .expect("the body to have an SSA form");
+        let again = driver
+            .mir_ssa(&owner)
+            .expect("the body to have an SSA form");
+
+        assert!(Arc::ptr_eq(&ssa, &again), "the slot was built twice");
+        assert!(
+            !Arc::ptr_eq(&cfg, &ssa),
+            "the SSA form is a pass over the CFG form",
+        );
+        assert_eq!(cfg.validate_cfg(), Ok(()));
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+    }
+
+    #[test]
+    fn a_body_edit_leaves_the_mir_of_the_bodies_that_did_not_change_where_they_were() {
+        const SOURCE: &str = "\
+//- /main.mlk
+fun first(): Int = 1
+
+fun second(): Int = 2
+";
+
+        let mut driver = std_project_of(SOURCE);
+        let main = file(&driver, "main.mlk");
+
+        let owner = body_of(&mut driver, main, "second");
+        let before = driver.mir(&owner).expect("the body to have MIR");
+        let before_ssa = driver
+            .mir_ssa(&owner)
+            .expect("the body to have an SSA form");
+
+        driver.set_file_text(
+            path("main.mlk"),
+            Some("fun first(): Int = 3\n\nfun second(): Int = 2\n".to_owned()),
+        );
+
+        let owner = body_of(&mut driver, main, "second");
+        let after = driver.mir(&owner).expect("the body to have MIR");
+        let after_ssa = driver
+            .mir_ssa(&owner)
+            .expect("the body to have an SSA form");
+
+        // A body edit that does not move a body cannot change its MIR: the lowering of a body
+        // that ends up equal to the one the driver held is the one it held, spans included
+        // ([ADR-0019]).
+        //
+        // [ADR-0019]: ../../docs/adr/0019-mir.md
+        assert!(
+            Arc::ptr_eq(&before, &after),
+            "a body edit re-lowered a body that did not move",
+        );
+        assert!(
+            Arc::ptr_eq(&before_ssa, &after_ssa),
+            "a body edit rebuilt the SSA form of a body that did not move",
         );
     }
 

@@ -654,6 +654,8 @@ dependencies = [
  "mlkc-hir-ty",
  "mlkc-line-index",
  "mlkc-lower",
+ "mlkc-mir",
+ "mlkc-mir-build",
  "mlkc-parser",
  "mlkc-parser-core",
  "mlkc-resolve",

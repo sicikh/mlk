@@ -961,6 +961,42 @@ mod tests {
     }
 
     #[test]
+    fn a_mir_mistake_crosses_the_boundary_as_a_diagnostic() {
+        const SOURCE: &str = "fun big(): Int =\n    1099511627776\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        let analysis = driver.analysis("/main.mlk").expect("the file to analyze");
+        let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
+        let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
+
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0]["category"], "mir");
+        assert_eq!(
+            diagnostics[0]["categoryCode"], "06",
+            "the construction of MIR is the sixth stage of the pipeline"
+        );
+        assert_eq!(diagnostics[0]["code"], "01");
+        assert_eq!(
+            diagnostics[0]["message"],
+            "the integer literal `1099511627776` is outside the 31-bit range of `Int`"
+        );
+
+        // A MIR diagnostic carries its own span, and what a host is handed is that span.
+        let label = &diagnostics[0]["labels"][0];
+        let start = SOURCE
+            .find("1099511627776")
+            .expect("the literal to be written") as u64;
+
+        assert_eq!(label["primary"], true);
+        assert_eq!(label["start"], start);
+        assert_eq!(label["end"], start + "1099511627776".len() as u64);
+        assert_eq!(label["message"], "");
+    }
+
+    #[test]
     fn the_types_of_a_buffer_cross_the_boundary_as_places_and_types() {
         const SOURCE: &str = "fun main(): Int =\n    let x = 1 in\n    x\n";
 

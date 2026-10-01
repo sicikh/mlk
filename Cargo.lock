@@ -1326,6 +1326,7 @@ dependencies = [
 name = "mlkc-wasm"
 version = "0.1.0"
 dependencies = [
+ "mlkc-codegen-wasm",
  "mlkc-diagnostics",
  "mlkc-driver",
  "mlkc-hir-def",
@@ -1333,12 +1334,16 @@ dependencies = [
  "mlkc-line-index",
  "mlkc-mir",
  "mlkc-span",
+ "mlkc-stdlib",
  "mlkc-syntax",
  "mlkc-vfs",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",
+ "wasm-encoder 0.245.1",
+ "wasmprinter 0.245.1",
+ "wasmtime",
 ]
 
 [[package]]

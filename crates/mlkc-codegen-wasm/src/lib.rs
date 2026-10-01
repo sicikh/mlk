@@ -49,7 +49,7 @@ pub use crate::{
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},
     module::{
         DebugLevel, ExportDecl, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
-        ModuleLayout, ModuleMir, WasmModule, assemble_module, layout,
+        ModuleLayout, ModuleMir, WasmModule, assemble_module, compile_module, layout,
     },
     refine::Refinement,
 };

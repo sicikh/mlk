@@ -40,7 +40,7 @@ use rustc_hash::FxHashMap;
 pub use self::{
     diagnostics::Diagnostics,
     host::StdFile,
-    link::{LinkError, LinkPlan},
+    link::{LinkError, LinkPlan, codegen_diagnostic},
     lower::{Lowered, ModuleBody},
     parse::Parse,
     stats::{Clock, Pass, Stats, Tally, Unit, system_clock},

@@ -11,6 +11,7 @@ publish.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+mlkc-codegen-wasm.workspace = true
 mlkc-diagnostics.workspace = true
 mlkc-driver.workspace = true
 mlkc-hir-def.workspace = true
@@ -18,14 +19,18 @@ mlkc-hir-ty.workspace = true
 mlkc-line-index.workspace = true
 mlkc-mir.workspace = true
 mlkc-span.workspace = true
+mlkc-stdlib.workspace = true
 mlkc-syntax.workspace = true
 mlkc-vfs.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
+wasm-encoder.workspace = true
+wasmprinter.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+wasmtime.workspace = true
 
 [lints]
 workspace = true

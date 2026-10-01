@@ -27,7 +27,7 @@ use wasm_encoder::{
     IndirectNameMap, NameMap, NameSection, RefType, TypeSection, ValType,
 };
 
-use crate::emit::{CodegenDiag, FuncArtifact};
+use crate::emit::{CodegenDiag, FuncArtifact, FunctionCtx, emit_function};
 
 /// The signature of a body: one word per parameter, and one word back.
 ///
@@ -219,6 +219,14 @@ pub struct ImportDecl {
     pub name: String,
     /// How many words the function takes; it gives back one.
     pub arity: u32,
+    /// Whether the function is declared `#[extern]`.
+    ///
+    /// An external function is implemented outside the program, so the import is what a host
+    /// provides and not a dependency on another module ([ADR-0021]): a linker reads this to
+    /// know whether to look for a provider among the modules or among its own functions.
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    pub external: bool,
 }
 
 /// One function a module offers: what a linker resolves an import to ([ADR-0021][adr-0021]).
@@ -244,6 +252,36 @@ pub struct WasmModule {
     pub imports: Vec<ImportDecl>,
     /// What it offers, in the order it offers it; the linker reads this likewise.
     pub exports: Vec<ExportDecl>,
+}
+
+/// Compiles every function of a module, and assembles the module they become.
+///
+/// This is the whole of the back end for one module: [`emit_function`] per function, in the
+/// order the module declares them, and [`assemble_module`] over the artifacts. It is what the
+/// driver's link stage and a host that shows one module both read.
+pub fn compile_module(module: &ModuleMir) -> (WasmModule, Vec<CodegenDiag>) {
+    let layout = layout(module);
+    let mut artifacts = Vec::new();
+    let mut diagnostics = Vec::new();
+
+    for function in &module.functions {
+        let ctx = FunctionCtx {
+            name: &function.name,
+            signature: &function.signature,
+            param_names: &function.param_names,
+            layout: &layout,
+        };
+        let (artifact, reports) = emit_function(&function.body, &ctx);
+
+        artifacts.push(artifact);
+        diagnostics.extend(reports);
+    }
+
+    let (wasm, reports) = assemble_module(module, &artifacts, DebugLevel::Full);
+
+    diagnostics.extend(reports);
+
+    (wasm, diagnostics)
 }
 
 /// Assembles the WASM module of `module` from the artifacts of its functions.
@@ -315,6 +353,7 @@ pub fn assemble_module(
             module: import.module.clone(),
             name: import.name.clone(),
             arity: import.signature.params.len() as u32,
+            external: import.external,
         });
     }
 

@@ -23,6 +23,7 @@
         type StdFile,
         type SyntaxNode,
         type Types,
+        type Wat,
     } from "$lib/driver";
 
     interface Buffer {
@@ -59,6 +60,9 @@
 
         /** The MIR in the SSA form, read when its tab is in front. */
         mirSsa?: Mir | null;
+
+        /** The WASM of the module, read when the tab of the WAT is in front. */
+        wat?: Wat | null;
     }
 
     /**
@@ -68,8 +72,8 @@
     const STARTER: Buffer[] = [
         {
             path: "/main.mlk",
-            // The names of the prelude are the module's without it writing them: `Int` and
-            // `Unit` are imports the compiler makes (`#[no-prelude]` refuses them).
+            // The names of the prelude are the module's without it writing them: `Int`, `Unit`
+            // and `print-int` are imports the compiler makes (`#[no-prelude]` refuses them).
             text: `fun fib(n : Int) : Int =
     fib-aux(n, 0, 1)
 
@@ -79,12 +83,9 @@ fun fib-aux(n : Int, a : Int, b : Int) : Int =
     else
         fib-aux(n - 1, b, a + b)
 
-#[extern]
-fun println-int(_ : Int) : Unit
-
-fun main() : Unit =
-    let value = fib(5) in
-    println-int(value)
+#[entry]
+pub fun main() : Unit =
+    print-int(fib(5))
 `,
         },
     ];
@@ -100,6 +101,7 @@ fun main() : Unit =
         | "hir"
         | "mir"
         | "mir-ssa"
+        | "wat"
         | "tc"
         | "stats";
 
@@ -163,6 +165,18 @@ fun main() : Unit =
     let log = $state<Line[]>([
         { level: "note", text: "loading the wasm driver…" },
     ]);
+
+    /**
+     * What the program printed, and what happened to it, as the console shows it.
+     *
+     * The program console is the second console of the page: the compiler says what it thinks of
+     * the buffers, and running the program says what the program did. A run is of every buffer
+     * rather than of the one in front, so this belongs to the page and not to a buffer.
+     */
+    let program = $state<Line[]>([]);
+
+    /** Which console a run puts in front: a person pressed Run to read what the program says. */
+    let consoleTab = $state<"compiler" | "program">("compiler");
 
     /**
      * What a view of the inspector tells the page about the pointer: the part of the source
@@ -336,7 +350,7 @@ fun main() : Unit =
 
         try {
             const started = performance.now();
-            const [diagnostics, types, cst, ast, hir, mir, mirSsa] =
+            const [diagnostics, types, cst, ast, hir, mir, mirSsa, wat] =
                 await Promise.all([
                     driver.diagnostics(path),
                     driver.types(path),
@@ -345,6 +359,7 @@ fun main() : Unit =
                     tab === "hir" ? driver.hir(path) : undefined,
                     tab === "mir" ? driver.mir(path) : undefined,
                     tab === "mir-ssa" ? driver.mirSsa(path) : undefined,
+                    tab === "wat" ? driver.wat(path) : undefined,
                 ]);
 
             // The time of a look is the time of its values: the counters are a read of their
@@ -366,6 +381,7 @@ fun main() : Unit =
                 hir,
                 mir,
                 mirSsa,
+                wat,
                 cost: { rows: stats.rows, took },
             };
         } catch (error) {
@@ -548,9 +564,53 @@ fun main() : Unit =
         if (next !== "stats") check();
     }
 
-    /** Running needs a code generator, which the pipeline does not reach yet. */
-    function run() {
-        say("note", "nothing to run yet: the compiler stops at the typed tree");
+    /**
+     * Runs the program every buffer makes, and shows what it printed.
+     *
+     * A run is of the whole project: the driver compiles every module, links them into the
+     * manifest of a run ([ADR-0021](../../../docs/adr/0021-translation-units.md)), and the
+     * worker instantiates the modules and calls the entry point. What a person reads is the
+     * program console, which is where a program that cannot be run says why.
+     */
+    async function run() {
+        if (!driver) return;
+
+        program = [{ level: "note", text: "running…" }];
+        consoleTab = "program";
+        view = "console";
+
+        try {
+            const result = await driver.run();
+            const lines: Line[] = [
+                ...result.diagnostics.map((it) => ({
+                    level: "error" as const,
+                    text: `${it.level}[${it.category}::${it.code}]: ${it.message}`,
+                })),
+                ...result.printed.map((it) => ({
+                    level: "info" as const,
+                    text: it,
+                })),
+            ];
+
+            if (result.error)
+                lines.push({ level: "error", text: result.error });
+
+            if (lines.length === 0) {
+                lines.push({
+                    level: "note",
+                    text: "the program printed nothing",
+                });
+            }
+
+            program = lines;
+        } catch (error) {
+            program = [
+                {
+                    level: "error",
+                    text: `the driver refused the run: ${String(error)}`,
+                },
+            ];
+        }
     }
 </script>
 
@@ -567,7 +627,7 @@ fun main() : Unit =
         <span class="brand">MLK</span>
         <span class="grow"></span>
         <span class="tool-name">{name(active)}</span>
-        <button class="tool" onclick={run}>Run</button>
+        <button class="tool" data-run onclick={run}>Run</button>
         <button class="tool primary" onclick={compile}>Compile</button>
     </header>
 
@@ -715,6 +775,11 @@ fun main() : Unit =
                 onclick={() => show("mir-ssa")}>MIR/SSA</button
             >
             <button
+                data-tab="wat"
+                class:active={tab === "wat"}
+                onclick={() => show("wat")}>WAT</button
+            >
+            <button
                 data-tab="stats"
                 class:active={tab === "stats"}
                 onclick={() => show("stats")}>Stats</button
@@ -791,6 +856,22 @@ fun main() : Unit =
                         onPick={picked}
                     />
                 {/if}
+            {:else if tab === "wat"}
+                {#if reading.wat === undefined}
+                    <p class="empty">Compiling the module.</p>
+                {:else if reading.wat === null}
+                    <p class="empty">
+                        No body of the module checks clean, so there is nothing
+                        to compile.
+                    </p>
+                {:else}
+                    {#each reading.wat.diagnostics as it, index (index)}
+                        <p class="empty">
+                            {it.level}[{it.category}::{it.code}]: {it.message}
+                        </p>
+                    {/each}
+                    <pre class="wat" data-wat>{reading.wat.text}</pre>
+                {/if}
             {:else if tab === "stats"}
                 <StatsView cost={reading.cost} />
             {:else if reading.hir === undefined}
@@ -817,7 +898,7 @@ fun main() : Unit =
     />
 
     <section class="console">
-        <Console lines={log} />
+        <Console lines={log} {program} show={consoleTab} />
     </section>
 </div>
 
@@ -1015,6 +1096,16 @@ fun main() : Unit =
         margin: 0;
         padding: 0.35rem 0.25rem;
         color: var(--muted);
+    }
+
+    /* The module as text: a machine writes it, and a machine reads it back, which is what
+       the tab is for. The lines are long, so the view scrolls sideways rather than wrapping. */
+    .wat {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre;
     }
 
     /*

@@ -392,6 +392,102 @@ export interface Cost {
     took: number;
 }
 
+/** The WASM of one module, as the driver hands it over. */
+export interface Wat {
+    /** The module in the WebAssembly text format. */
+    text: string;
+
+    /** What the back end reported about the bodies of the module. */
+    diagnostics: Diagnostic[];
+}
+
+/** One function a module of a program imports. */
+export interface RunImport {
+    /** The canonical name of the module the function belongs to. */
+    module: string;
+
+    /** The name of the function inside its module. */
+    name: string;
+
+    /** Whether the function is declared `#[extern]`: the host implements it, not a module. */
+    external: boolean;
+
+    /** How many words the function takes. */
+    arity: number;
+}
+
+/** One function a module of a program exports. */
+export interface RunExport {
+    /** The name of the function inside its module. */
+    name: string;
+
+    /** How many words the function takes. */
+    arity: number;
+}
+
+/** One module of a program, as the driver hands it over to run. */
+export interface RunModule {
+    /** The canonical name of the module. */
+    name: string;
+
+    /** The bytes of the WASM module. */
+    bytes: Uint8Array;
+
+    /** The functions the module imports. */
+    imports: RunImport[];
+
+    /** The functions the module exports. */
+    exports: RunExport[];
+}
+
+/** Where a program begins. */
+export interface RunEntry {
+    /** The canonical name of the module the entry is in. */
+    module: string;
+
+    /** The name the entry is exported by. */
+    name: string;
+}
+
+/**
+ * The program the buffers make: the manifest of a run ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
+ *
+ * It is what a host needs to instantiate the program --- the modules in the order they are
+ * instantiated in, the module of the host functions, and the entry point --- and not a binary:
+ * the host following these instructions is `driver.worker.ts`.
+ */
+export interface Program {
+    /** The modules of the program, providers before the modules that import them. */
+    modules: RunModule[];
+
+    /** The module of the host functions the externs of the program are implemented by. */
+    host: Uint8Array;
+
+    /** The module and the function a host calls to run the program. */
+    entry: RunEntry | null;
+
+    /** What the code generator and the link stage reported about the program. */
+    diagnostics: Diagnostic[];
+
+    /** What the host cannot do for the program: an extern none of its functions implements. */
+    problems: string[];
+}
+
+/** What running a program gave back. */
+export interface Run {
+    /** Where the program began, or `null` when it could not be run. */
+    entry: RunEntry | null;
+
+    /** What the program printed, in the order it printed it. */
+    printed: string[];
+
+    /** Why the program could not be run, or what it trapped with: `null` on a clean run. */
+    error: string | null;
+
+    /** What the compiler reported about the program. */
+    diagnostics: Diagnostic[];
+}
+
 /** The driver, typed for the editor. */
 export interface Driver {
     /**
@@ -435,6 +531,18 @@ export interface Driver {
     /** The MIR of the module in the SSA form: the CFG form with block parameters. */
     mirSsa(path: string): Promise<Mir | null>;
 
+    /** The WASM the module assembles to, as text, or `null` when there is nothing to compile. */
+    wat(path: string): Promise<Wat | null>;
+
+    /**
+     * Runs the program the buffers make, and hands back what it printed.
+     *
+     * The program is of the whole project rather than of one buffer: every module of it is
+     * compiled, instantiated in the order the driver gives, and the `#[entry]` is called. A
+     * program that cannot be run has no entry, and says why in `error`.
+     */
+    run(): Promise<Run>;
+
     /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
     diagnostics(path: string): Promise<Diagnostic[]>;
 
@@ -474,6 +582,8 @@ export type DriverRequest =
     | { kind: "types"; id: number; path: string }
     | { kind: "mir"; id: number; path: string }
     | { kind: "mirSsa"; id: number; path: string }
+    | { kind: "wat"; id: number; path: string }
+    | { kind: "run"; id: number }
     | { kind: "diagnostics"; id: number; path: string }
     | { kind: "stats"; id: number };
 
@@ -629,6 +739,8 @@ export async function loadDriver(): Promise<Driver> {
         mir: (path) => ask<Mir | null>((id) => ({ kind: "mir", id, path })),
         mirSsa: (path) =>
             ask<Mir | null>((id) => ({ kind: "mirSsa", id, path })),
+        wat: (path) => ask<Wat | null>((id) => ({ kind: "wat", id, path })),
+        run: () => ask<Run>((id) => ({ kind: "run", id })),
         diagnostics: (path) =>
             ask<Diagnostic[]>((id) => ({ kind: "diagnostics", id, path })),
         stats: () => ask<Stats>((id) => ({ kind: "stats", id })),

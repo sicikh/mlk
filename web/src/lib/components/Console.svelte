@@ -14,14 +14,28 @@
         /** What the compiler said, oldest first. */
         lines: Line[];
 
-        /** What the program said, oldest first: running it has no code generator yet. */
+        /** What the program said, oldest first: what running it printed, and what happened. */
         program?: Line[];
+
+        /**
+         * Which console a host puts in front, when it has something to say in one of them.
+         *
+         * A person presses Run, and what they asked for is what the program says: the page
+         * says so here, and a console that is already in front stays where it is.
+         */
+        show?: "compiler" | "program";
     }
 
-    let { lines, program = [] }: Props = $props();
+    let { lines, program = [], show = "compiler" }: Props = $props();
 
     /** Which of the two consoles a person is reading. */
     let tab = $state<"compiler" | "program">("compiler");
+
+    // A host that asks for one of the consoles is heard after the component is up as well:
+    // the effect reads `show`, and a person picking a tab of their own is left where they are.
+    $effect(() => {
+        tab = show;
+    });
 
     let view = $state<HTMLDivElement | undefined>();
 
@@ -58,7 +72,7 @@
             <p class="empty">
                 {tab === "compiler"
                     ? "Nothing yet."
-                    : "Nothing yet: the program runs when the compiler can make one."}
+                    : "Nothing yet: run the program to read what it says."}
             </p>
         {/each}
     </div>

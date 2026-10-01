@@ -5,11 +5,12 @@
 //! file system --- in a browser there is none, and the driver never wanted one.
 //!
 //! The boundary is the driver's own: one method per value a host may ask for --- the concrete
-//! tree, the typed view, the HIR, the types of a module, and the diagnostics --- and a pull
-//! computes what it answers and nothing else. A host that shows the trees only when a person
-//! opens them asks for them only then, and the pipeline under the boundary recomputes nothing
-//! it already holds. No method bundles the others: what a host does not ask for is not built,
-//! and a host that speaks another protocol --- an editor, over LSP --- asks for the same pulls.
+//! tree, the typed view, the HIR, the types of a module, the MIR in both of its forms, the WASM
+//! a module assembles to, the manifest of a run, and the diagnostics --- and a pull computes
+//! what it answers and nothing else. A host that shows the trees only when a person opens them
+//! asks for them only then, and the pipeline under the boundary recomputes nothing it already
+//! holds. No method bundles the others: what a host does not ask for is not built, and a host
+//! that speaks another protocol --- an editor, over LSP --- asks for the same pulls.
 //!
 //! The standard library is the one thing a host does not push: it is part of the compiler, and
 //! a browser has nowhere to read it from, so a host asks the driver for it
@@ -23,8 +24,9 @@
 
 use std::sync::Arc;
 
-use mlkc_driver::{Driver, Lowered, Parse};
-use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, dump};
+use mlkc_codegen_wasm::compile_module;
+use mlkc_driver::{Driver, LinkPlan, Lowered, Parse, codegen_diagnostic};
+use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, Name, ProjectData, ProjectId, dump};
 use mlkc_hir_ty::Ty;
 use mlkc_line_index::LineIndex;
 use mlkc_mir::{Rvalue, Stmt, StmtKind, Terminator, ValueId, cfg::Cfg, dump as mir_dump};
@@ -33,6 +35,10 @@ use mlkc_syntax::{ModuleRoot, SyntaxNode, TextRange};
 use mlkc_vfs::{FileId, VfsPath};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+use wasm_encoder::{
+    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, HeapType,
+    ImportSection, Instruction, Module as ModuleEncoding, RefType, TypeSection, ValType,
+};
 
 /// The clock of the page, which is the clock a driver in a browser is measured by.
 ///
@@ -46,6 +52,12 @@ extern "C" {
     #[wasm_bindgen(js_namespace = performance)]
     fn now() -> f64;
 }
+
+/// The name of the project the editor's buffers are modules of.
+///
+/// A browser has one project rather than a manifest: every buffer an editor pushes is a module
+/// of this one, and the library is the other project of the world.
+const PROJECT: &str = "app";
 
 /// A driver a browser can own.
 #[wasm_bindgen]
@@ -80,9 +92,21 @@ impl WasmDriver {
     /// ([`mlkc_driver::Driver::set_clock`]).
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Self {
-            driver: timed_driver(),
-        }
+        let mut driver = timed_driver();
+
+        // The buffers an editor pushes are modules of the project of the page, and the project
+        // depends on the library: a path of it rooted at `std` resolves through the dependency
+        // the way a project of a manifest resolves one ([ADR-0016]).
+        //
+        // [adr-0016]: ../../docs/adr/0016-inter-module-resolution.md
+        let mut data = ProjectData::default();
+        data.dependencies.insert(
+            Name::new(mlkc_stdlib::PROJECT),
+            ProjectId::new(mlkc_stdlib::PROJECT),
+        );
+        driver.set_project(ProjectId::new(PROJECT), data);
+
+        Self { driver }
     }
 
     /// Records the standard library of the language in the driver, and hands over the files it
@@ -109,7 +133,20 @@ impl WasmDriver {
     /// and the editor around this module is written in JavaScript.
     #[wasm_bindgen(js_name = setText)]
     pub fn set_text(&mut self, path: &str, text: Option<String>) -> bool {
-        self.driver.set_file_text(path_of(path), text)
+        let path = path_of(path);
+        let changed = self.driver.set_file_text(path.clone(), text);
+
+        // What a host pushes is a module of the project of the page: the driver holds no
+        // manifest, and a buffer with no project would have no name another module could call
+        // it by ([ADR-0021]).
+        //
+        // [adr-0021]: ../../docs/adr/0021-translation-units.md
+        if let Some(file) = self.driver.file_id(&path) {
+            self.driver
+                .set_module_project(ModuleId(file), ProjectId::new(PROJECT));
+        }
+
+        changed
     }
 
     /// The concrete syntax tree of a buffer: lossless, tokens and trivia included.
@@ -166,6 +203,35 @@ impl WasmDriver {
     #[wasm_bindgen(js_name = mirSsa)]
     pub fn mir_ssa(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.mir_of(path, Form::Ssa)?)
+    }
+
+    /// The WASM the module in the buffer assembles to, as text ([ADR-0020]).
+    ///
+    /// The same bytes the link stage hands a host, printed as the WebAssembly text format:
+    /// the types, the imports, the exports, and the body of every function, which is what a
+    /// person reads a module by. `null` when there is nothing to compile.
+    ///
+    /// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+    pub fn wat(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.wat_of(path)?)
+    }
+
+    /// The program the buffers make, as the manifest of a run ([ADR-0021]).
+    ///
+    /// A run is of the whole project rather than of one buffer: every module of it is compiled,
+    /// the modules of the library it depends on included, and what comes back is what a host
+    /// needs to run it --- the modules in the order they are instantiated in, what each of them
+    /// imports and exports, the module of the host functions every extern is carried over the
+    /// boundary by, and the `#[entry]` a host calls to begin.
+    ///
+    /// Nothing is instantiated here: a module of the language is instantiated by the host that
+    /// runs the program, which wires the exports of a module to the imports of the next
+    /// ([ADR-0021]).
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    #[wasm_bindgen(js_name = run)]
+    pub fn run(&mut self) -> Result<JsValue, JsValue> {
+        to_js(&self.run_of()?)
     }
 
     /// What the stages of the pipeline reported, in the order they reported it.
@@ -250,6 +316,55 @@ impl WasmDriver {
         Ok(Some(Mir::of(&mut self.driver, &lowered, form)))
     }
 
+    /// The WASM of the module in the buffer, as text.
+    fn wat_of(&mut self, path: &str) -> Result<Option<Wat>, JsValue> {
+        let file = self.file(path)?;
+
+        // A module that is not whole has nothing to compile: the parse found no module, or a
+        // body of it is one the checker did not read clean ([ADR-0020]).
+        //
+        // [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+        let Some(module) = self.driver.mir_module(ModuleId(file)) else {
+            return Ok(None);
+        };
+
+        let (wasm, reports) = compile_module(&module);
+        let text = wasmprinter::print_bytes(&wasm.bytes)
+            .map_err(|error| failure(&format!("the module of {path} did not print: {error}")))?;
+        let index = self
+            .driver
+            .line_index(file)
+            .ok_or_else(|| failure(&format!("{path} has no lines to read")))?;
+        let diagnostics = reports
+            .iter()
+            .map(|report| Diagnostic::of(&codegen_diagnostic(report), &index))
+            .collect();
+
+        Ok(Some(Wat { text, diagnostics }))
+    }
+
+    /// The manifest of a run of the project of the page.
+    fn run_of(&mut self) -> Result<Run, JsValue> {
+        let plan = self.driver.link(&ProjectId::new(PROJECT)).ok_or_else(|| {
+            failure("the program does not link: fix what the compiler reported and run again")
+        })?;
+        let diagnostics = plan
+            .diagnostics
+            .iter()
+            .map(|diagnostic| self.render(diagnostic))
+            .collect();
+
+        Ok(run_manifest(&plan, diagnostics))
+    }
+
+    /// A diagnostic of the pipeline as a host reads it.
+    ///
+    /// A diagnostic of a run may point at more than one buffer — the two entries of a project
+    /// are two modules — so the lines of a label are read from the file it is in.
+    fn render(&mut self, diagnostic: &mlkc_diagnostics::Diagnostic) -> Diagnostic {
+        Diagnostic::of_files(diagnostic, |file| self.driver.line_index(file))
+    }
+
     /// What the stages of the pipeline reported.
     fn diagnostics_of(&mut self, path: &str) -> Result<Vec<Diagnostic>, JsValue> {
         let file = self.file(path)?;
@@ -289,6 +404,249 @@ impl Default for WasmDriver {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The WASM of one module, as a host reads it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Wat {
+    /// The module in the WebAssembly text format.
+    text: String,
+
+    /// What the back end reported about the bodies of the module.
+    diagnostics: Vec<Diagnostic>,
+}
+
+/// The manifest of a run: what a host instantiates, and where the program begins ([ADR-0021]).
+///
+/// A run is not a merged binary but a list: a host walks the modules in the order they are
+/// given, which is a provider before the modules that import it, hands the exports of a module
+/// to the imports of the next one, and calls the entry point. The host functions of the program
+/// are one module the host instantiates first, and their bytes are here with the rest: what
+/// crosses the boundary as an `i32` is a word taken apart ([`host_module`]).
+///
+/// [adr-0021]: ../../docs/adr/0021-translation-units.md
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Run {
+    /// The modules of the program, providers before the modules that import them.
+    modules: Vec<RunModule>,
+
+    /// The module of the host functions the externs of the program are implemented by.
+    host: Vec<u8>,
+
+    /// The module and the function a host calls to run the program, when it declares an entry.
+    entry: Option<RunEntry>,
+
+    /// What the code generator and the link stage reported about the program.
+    diagnostics: Vec<Diagnostic>,
+
+    /// What this host cannot do for the program: an extern none of its functions implements.
+    problems: Vec<String>,
+}
+
+/// One module of a run: its bytes, and what they import and export.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RunModule {
+    /// The canonical name of the module: the name the modules after it import it by, and the
+    /// name a stack trace shows.
+    name: String,
+
+    /// The bytes of the WASM module.
+    bytes: Vec<u8>,
+
+    /// The functions the module imports, in the order of their indices.
+    imports: Vec<RunImport>,
+
+    /// The functions the module exports, in the order it declares them.
+    exports: Vec<RunExport>,
+}
+
+/// One function a module of a run imports.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RunImport {
+    /// The canonical name of the module the function belongs to.
+    module: String,
+
+    /// The name of the function inside its module.
+    name: String,
+
+    /// Whether the function is declared `#[extern]`: a host implements it, not a module.
+    external: bool,
+
+    /// How many words the function takes; it gives back one.
+    arity: u32,
+}
+
+/// One function a module of a run exports.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RunExport {
+    /// The name of the function inside its module.
+    name: String,
+
+    /// How many words the function takes; it gives back one.
+    arity: u32,
+}
+
+/// Where a run begins: the module the entry is in, and the name it is exported by.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RunEntry {
+    /// The canonical name of the module the entry is in.
+    module: String,
+
+    /// The name the entry is exported by.
+    name: String,
+}
+
+/// The manifest of a run of `plan`, and what the host is told about it.
+fn run_manifest(plan: &LinkPlan, diagnostics: Vec<Diagnostic>) -> Run {
+    let mut modules = Vec::with_capacity(plan.order.len());
+    let mut problems = Vec::new();
+
+    for id in &plan.order {
+        let module = &plan.modules[id];
+        let mut imports = Vec::with_capacity(module.imports.len());
+
+        for import in &module.imports {
+            // An extern is what the host functions of a run implement, and nothing else is a
+            // host function: a program that imports another name is one this host cannot run.
+            if import.external && !HOST_FUNCTIONS.contains(&import.name.as_str()) {
+                problems.push(format!(
+                    "the host does not implement the extern `{}::{}`",
+                    import.module, import.name,
+                ));
+            }
+
+            imports.push(RunImport {
+                module: import.module.clone(),
+                name: import.name.clone(),
+                external: import.external,
+                arity: import.arity,
+            });
+        }
+
+        modules.push(RunModule {
+            name: plan.names[id].clone(),
+            bytes: module.bytes.clone(),
+            imports,
+            exports: module
+                .exports
+                .iter()
+                .map(|export| {
+                    RunExport {
+                        name: export.name.clone(),
+                        arity: export.arity,
+                    }
+                })
+                .collect(),
+        });
+    }
+
+    let entry = plan.entry.as_ref().map(|(module, name)| {
+        RunEntry {
+            module: plan.names[module].clone(),
+            name: name.clone(),
+        }
+    });
+
+    // An entry the link stage reported a mistake about is a diagnostic a host reads; an entry
+    // the project simply does not declare is not a mistake, and it is what a host is told here.
+    if entry.is_none() && diagnostics.is_empty() {
+        problems.push("the program declares no `#[entry]`".to_owned());
+    }
+
+    Run {
+        modules,
+        host: host_module(),
+        entry,
+        diagnostics,
+        problems,
+    }
+}
+
+/// The name of the module the host functions of a run are imported under.
+///
+/// The program never sees it: what a module of the language imports is the extern, and this is
+/// the module the shim asks a host for it from.
+const HOST_MODULE: &str = "host";
+
+/// The host functions a run implements, by the name a program imports them under.
+///
+/// The names are the ones the library declares `#[extern]` ([ADR-0015]); a program that imports
+/// any other one is a program this host cannot run, and the manifest says so rather than
+/// failing at instantiation.
+///
+/// [adr-0015]: ../../docs/adr/0015-standard-library.md
+const HOST_FUNCTIONS: &[&str] = &["print-int", "print-bool"];
+
+/// The module a host instantiates beside the program: the externs of the language, carried over
+/// the boundary as the plain numbers a host outside wasm has ([ADR-0018]).
+///
+/// A word of the language is an `i31` immediate or a reference, and a JavaScript host can make
+/// neither; what crosses this boundary is an `i32`. The module imports one function of the
+/// module `host` per extern, under the name of the extern, and exports the word signature the
+/// program imports it by: the export takes the word apart, calls the host with the number
+/// inside it, and answers the word `Unit` --- the zero immediate --- which is what a function
+/// that prints gives back.
+///
+/// [adr-0018]: ../../docs/adr/0018-values-as-words.md
+fn host_module() -> Vec<u8> {
+    let word = ValType::Ref(RefType::EQREF);
+    let mut types = TypeSection::new();
+
+    // The type of a function the host implements, and the type of the export carrying it over
+    // the boundary: a number in and a number out, a word in and a word out.
+    types.ty().function([ValType::I32], [ValType::I32]);
+    types.ty().function([word], [word]);
+
+    let mut imports = ImportSection::new();
+
+    for name in HOST_FUNCTIONS {
+        imports.import(HOST_MODULE, name, EntityType::Function(0));
+    }
+
+    // The imports take the indices before the functions the module defines, which is what the
+    // function index space of a module is.
+    let offset = HOST_FUNCTIONS.len() as u32;
+    let mut functions = FunctionSection::new();
+    let mut exports = ExportSection::new();
+
+    for (index, name) in HOST_FUNCTIONS.iter().enumerate() {
+        functions.function(1);
+        exports.export(name, ExportKind::Func, offset + index as u32);
+    }
+
+    let mut code = CodeSection::new();
+
+    for index in 0..offset {
+        let mut function = Function::new([]);
+
+        function.instruction(&Instruction::LocalGet(0));
+        function.instruction(&Instruction::RefCastNonNull(HeapType::I31));
+        function.instruction(&Instruction::I31GetS);
+        function.instruction(&Instruction::Call(index));
+        function.instruction(&Instruction::Drop);
+        function.instruction(&Instruction::I32Const(0));
+        function.instruction(&Instruction::RefI31);
+        function.instruction(&Instruction::End);
+
+        // `CodeSection::raw` writes the size prefix of the entry itself.
+        code.raw(&function.into_raw_body());
+    }
+
+    let mut wasm = ModuleEncoding::new();
+
+    wasm.section(&types);
+    wasm.section(&imports);
+    wasm.section(&functions);
+    wasm.section(&exports);
+    wasm.section(&code);
+
+    wasm.finish()
 }
 
 /// One file of the standard library, as a host reads it.
@@ -972,13 +1330,43 @@ struct Diagnostic {
 }
 
 impl Diagnostic {
-    /// Renders a diagnostic for a host.
+    /// Renders a diagnostic for a host, when every label of it is in the same buffer.
     ///
     /// The line and the column are counted from zero and in bytes,
     /// because that is what a byte offset turns into without reading the text again.
     /// An editor that speaks another unit — CodeMirror counts UTF-16 code units —
     /// converts the column of the line it already has.
     fn of(diagnostic: &mlkc_diagnostics::Diagnostic, index: &LineIndex) -> Self {
+        Self::rendered(diagnostic, |span| {
+            let at = index.line_col(span.range.start());
+
+            (at.line, at.col)
+        })
+    }
+
+    /// Renders a diagnostic whose labels may be in different buffers.
+    ///
+    /// Every label says where it is written, and a file the host has no lines for --- a
+    /// diagnostic about a file that is gone --- leaves the place at the first line of it.
+    fn of_files(
+        diagnostic: &mlkc_diagnostics::Diagnostic,
+        mut index_of: impl FnMut(FileId) -> Option<Arc<LineIndex>>,
+    ) -> Self {
+        Self::rendered(diagnostic, |span| {
+            let Some(index) = index_of(span.file) else {
+                return (0, 0);
+            };
+            let at = index.line_col(span.range.start());
+
+            (at.line, at.col)
+        })
+    }
+
+    /// Renders a diagnostic, reading the line and the column of a place from the file it is in.
+    fn rendered(
+        diagnostic: &mlkc_diagnostics::Diagnostic,
+        mut line_col: impl FnMut(Span) -> (u32, u32),
+    ) -> Self {
         Self {
             level: diagnostic.level.as_str().to_string(),
             category: diagnostic.category.as_str().to_string(),
@@ -989,11 +1377,13 @@ impl Diagnostic {
                 .labels
                 .iter()
                 .map(|label| {
+                    let (line, column) = line_col(label.span);
+
                     Label {
                         start: u32::from(label.span.range.start()),
                         end: u32::from(label.span.range.end()),
-                        line: index.line_col(label.span.range.start()).line,
-                        column: index.line_col(label.span.range.start()).col,
+                        line,
+                        column,
                         primary: label.primary,
                         message: label.message.clone(),
                     }
@@ -2040,6 +2430,228 @@ mod tests {
             json["blocks"][0]["stmts"][0]["range"].is_null(),
             "a synthesized node was written nowhere",
         );
+    }
+
+    #[test]
+    fn the_wat_of_a_buffer_crosses_the_boundary_as_text() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some("#[entry]\npub fun main(): Unit =\n    print-int(21 + 21)\n".to_string()),
+        );
+
+        let wat = driver
+            .wat_of("/main.mlk")
+            .expect("the file to be read")
+            .expect("the module to compile");
+
+        assert!(
+            wat.diagnostics.is_empty(),
+            "the module compiles cleanly: {}",
+            serde_json::to_string(&wat.diagnostics).unwrap_or_default(),
+        );
+        assert!(wat.text.contains("(module"), "{}", wat.text);
+        assert!(
+            wat.text.contains("app::main"),
+            "a module names itself in its name section",
+        );
+        assert!(
+            wat.text.contains("print-int"),
+            "what the module imports is what it calls",
+        );
+        assert!(
+            wat.text.contains("ref.i31"),
+            "an immediate is a word the module makes",
+        );
+    }
+
+    #[test]
+    fn a_buffer_that_does_not_check_has_no_wat() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+
+        // `+` reads two `Int`s, and the checker reports the boolean: a module that is not whole
+        // is not one the back end assembles.
+        driver.set_text(
+            "/main.mlk",
+            Some("fun main(): Int =\n    true + 1\n".to_string()),
+        );
+
+        assert!(
+            driver
+                .wat_of("/main.mlk")
+                .expect("the file to be read")
+                .is_none(),
+        );
+    }
+
+    #[test]
+    fn a_run_carries_the_modules_a_host_wires_together() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some(
+                "#[entry]\npub fun main(): Unit =\n    let flag = small(3) in\n    let noted = \
+                 print-bool(flag) in\n    print-int(21 + 21)\n\npub fun small(value: Int): Bool =\n    \
+                 value < 5\n"
+                    .to_string(),
+            ),
+        );
+
+        let run = driver.run_of().expect("the program to describe");
+        let entry = run.entry.as_ref().expect("the program to declare an entry");
+
+        assert_eq!(entry.module, "app::main");
+        assert_eq!(entry.name, "main");
+        assert!(run.problems.is_empty(), "{:?}", run.problems);
+        assert!(
+            run.diagnostics.is_empty(),
+            "{}",
+            serde_json::to_string(&run.diagnostics).unwrap_or_default(),
+        );
+        assert_eq!(
+            run.modules.last().map(|module| module.name.as_str()),
+            Some("app::main"),
+            "a provider comes before the modules that import it",
+        );
+        assert!(
+            run.modules
+                .iter()
+                .any(|module| module.name == "std::runtime"),
+            "the library is part of the program",
+        );
+
+        // The host of the test: the numbers the program prints, in the order it prints them.
+        let mut config = wasmtime::Config::new();
+
+        config.wasm_gc(true);
+        config.wasm_function_references(true);
+
+        let engine = wasmtime::Engine::new(&config).expect("the engine to start");
+        let mut store = wasmtime::Store::new(&engine, Vec::<String>::new());
+        let mut linker = wasmtime::Linker::new(&engine);
+
+        linker
+            .func_wrap(
+                "host",
+                "print-int",
+                |mut caller: wasmtime::Caller<'_, Vec<String>>, value: i32| -> i32 {
+                    caller.data_mut().push(value.to_string());
+
+                    0
+                },
+            )
+            .expect("the host function to be defined");
+        linker
+            .func_wrap(
+                "host",
+                "print-bool",
+                |mut caller: wasmtime::Caller<'_, Vec<String>>, value: i32| -> i32 {
+                    caller.data_mut().push((value != 0).to_string());
+
+                    0
+                },
+            )
+            .expect("the host function to be defined");
+
+        // The host functions come first, and what they export is what an extern resolves to:
+        // a module of the program imports an extern under the canonical name of the module that
+        // declares it, and a host stands in for that module.
+        let host = wasmtime::Module::new(&engine, &run.host).expect("the host module to compile");
+        let host = linker
+            .instantiate(&mut store, &host)
+            .expect("the host module to instantiate");
+        let mut externs = std::collections::BTreeSet::new();
+
+        for module in &run.modules {
+            for import in &module.imports {
+                if import.external {
+                    externs.insert((import.module.clone(), import.name.clone()));
+                }
+            }
+        }
+
+        for (module, name) in externs {
+            let function = host
+                .get_func(&mut store, &name)
+                .expect("the host function to be exported");
+
+            linker
+                .define(&store, &module, &name, function)
+                .expect("the extern to be defined");
+        }
+
+        let mut instances = std::collections::BTreeMap::new();
+
+        for module in &run.modules {
+            let compiled = wasmtime::Module::new(&engine, &module.bytes)
+                .unwrap_or_else(|error| panic!("`{}` to compile: {error}", module.name));
+            let instance = linker
+                .instantiate(&mut store, &compiled)
+                .unwrap_or_else(|error| panic!("`{}` to instantiate: {error}", module.name));
+
+            for export in &module.exports {
+                let function = instance
+                    .get_func(&mut store, &export.name)
+                    .unwrap_or_else(|| {
+                        panic!("`{}::{}` to be a function", module.name, export.name)
+                    });
+
+                linker
+                    .define(&store, &module.name, &export.name, function)
+                    .expect("the export to be defined");
+            }
+
+            instances.insert(module.name.clone(), instance);
+        }
+
+        let instance = instances.get(&entry.module).expect("the entry module");
+        let main = instance
+            .get_func(&mut store, &entry.name)
+            .expect("the entry to be exported");
+        let mut results = [wasmtime::Val::AnyRef(None)];
+
+        main.call(&mut store, &[], &mut results)
+            .expect("the entry point to run");
+
+        assert_eq!(store.into_data(), ["true", "42"]);
+    }
+
+    #[test]
+    fn a_program_without_an_entry_is_a_problem_a_host_reads() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some("pub fun twice(value: Int): Int =\n    value * 2\n".to_string()),
+        );
+
+        let run = driver.run_of().expect("the program to describe");
+
+        assert!(run.entry.is_none());
+        assert_eq!(run.problems, ["the program declares no `#[entry]`"]);
+    }
+
+    #[test]
+    fn an_extern_no_host_function_implements_is_a_problem() {
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text(
+            "/main.mlk",
+            Some(
+                "#[entry]\npub fun main(): Unit =\n    putchar(65)\n\n#[extern]\npub fun \
+                 putchar(value: Int): Unit\n"
+                    .to_string(),
+            ),
+        );
+
+        let run = driver.run_of().expect("the program to describe");
+
+        assert_eq!(run.problems, [
+            "the host does not implement the extern `app::main::putchar`"
+        ],);
     }
 
     /// The place a serialized row points at, in the bytes a host counts.

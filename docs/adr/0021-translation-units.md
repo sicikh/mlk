@@ -83,7 +83,8 @@ nor needed for what this record asks.
 pub struct WasmModule {
     /// The encoded module.
     pub bytes: Vec<u8>,
-    /// What it needs from other modules: the module, the name, and the arity.
+    /// What it needs from other modules and from the host:
+    /// the module, the name, the arity, and whether it is `#[extern]`.
     pub imports: Vec<ImportDecl>,
     /// What it offers: the module, the name, and the arity.
     pub exports: Vec<ExportDecl>,
@@ -199,13 +200,23 @@ a value a host can read,
 pub struct LinkPlan {
     pub order: Vec<ModuleId>,
     pub modules: BTreeMap<ModuleId, Arc<WasmModule>>,
+    /// The canonical name of every module, for the host and for a stack trace.
+    pub names: BTreeMap<ModuleId, String>,
     pub entry: Option<(ModuleId, String)>,
+    /// What the back end and the link stage reported.
+    pub diagnostics: Vec<Diagnostic>,
 }
 ```
 
 - In the browser, the host (the playground's worker) passes the exported functions
   of already-instantiated modules as the import object of the next,
   and calls the entry point.
+  A word is a GC reference, which a JavaScript host neither makes nor reads,
+  so the externs of the language cross that boundary as plain numbers:
+  the driver hands over, with the plan, a module of host functions,
+  one imported plain function per extern,
+  which takes an `i31` immediate apart and hands the host the number inside it.
+  Every other word crosses as an ordinary reference the host passes back untouched.
 - In `wasmtime`, the same plan is walked with a `Linker`.
 - In the CLI, the plan is written as `.wasm` files and a manifest.
 

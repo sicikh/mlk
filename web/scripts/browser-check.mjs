@@ -79,10 +79,11 @@ const VISIBLE =
  *
  * The first is what the second is measured by: the buffer was another module before it, so that
  * read is paid for whole, and the second changes one body and nothing a reader of the module
- * sees. The numbers are ones the buffer that was there before does not write.
+ * sees --- the signature of `main` is the same in both, which is what the surface of the module
+ * is a function of. The numbers are ones the buffer that was there before does not write.
  */
-const EDITED = "fun main(): Int =\n    80 + 80\n";
-const EDITED_AGAIN = "fun main(): Int =\n    90 + 90\n";
+const EDITED = "fun main(): Unit =\n    let x = 80 + 80 in\n    x\n";
+const EDITED_AGAIN = "fun main(): Unit =\n    let x = 90 + 90 in\n    x\n";
 
 /**
  * A buffer long enough that its end is not on the screen.
@@ -179,8 +180,8 @@ const STEPS = {
 			module: text(lines.find((it) => it.dataset.kind === 'module')).trim(),
 			item: lines.some((it) => it.dataset.kind === 'item' && text(it).includes('fun main')),
 			body: inspector().textContent.includes('BODY fun main in module #0'),
-			pat: lines.some((it) => it.dataset.kind === 'pat' && text(it).includes('bind value')),
-			path: lines.some((it) => it.dataset.kind === 'path' && text(it).includes('println-int'))
+			pat: lines.some((it) => it.dataset.kind === 'pat' && text(it).includes('bind n')),
+			path: lines.some((it) => it.dataset.kind === 'path' && text(it).includes('print-int'))
 		})`,
 
     // A line of the hir says which expression it is, and a pointer on it asks the editor to
@@ -195,9 +196,11 @@ const STEPS = {
 		return JSON.stringify({ count: parts.length, marked: parts.map((it) => it.textContent).join('') })`,
 
     // A path says what it names as well as what it is written as, and what it names is a place
-    // in the same buffer: a pointer on the line asks the editor to mark both.
+    // in the same buffer: a pointer on the line asks the editor to mark both. The path taken is
+    // the call of `fib`, which is a function of this buffer; a name of another module is written
+    // in a file this one is not marked against.
     hoverPath: `const row = [...document.querySelectorAll('[data-panel=inspector] [data-kind=path] .row')]
-			.find((it) => text(it.querySelector('.text')).includes('-> fun println-int'));
+			.find((it) => text(it.querySelector('.text')).trim().endsWith('-> fun fib'));
 		row.dispatchEvent(new MouseEvent('mouseenter'));
 		return JSON.stringify({ says: text(row.querySelector('.text')).trim() })`,
 
@@ -297,6 +300,25 @@ const STEPS = {
 
     ssa: MIR,
 
+    // The WASM of the buffer: the module the link stage hands a host, printed as text.
+    showWat: `show('wat'); return true`,
+
+    wat: `const module = inspector().querySelector('[data-wat]');
+		return JSON.stringify({
+			shown: module !== null,
+			text: text(module)
+		})`,
+
+    // The program: every buffer is compiled and linked, the modules are instantiated, and the
+    // entry point is called. `fib(5)` prints 5, which is what the program console holds.
+    run: `document.querySelector('[data-run]').click(); return true`,
+
+    ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
+		return JSON.stringify({
+			tab: document.querySelector('[data-console=program].active') !== null,
+			printed: lines.map((it) => text(it).trim())
+		})`,
+
     // A body with a choice in it: the tab reads it as the blocks it branches into.
     typeBranch: `const content = document.querySelector('.cm-content');
     	content.focus();
@@ -351,7 +373,8 @@ const STEPS = {
     showProgram: `document.querySelector('[data-console=program]').click(); return true`,
 
     program: `return JSON.stringify({
-    		empty: document.querySelector('[data-panel=console] .empty') !== null
+    		empty: document.querySelector('[data-panel=console] .empty') !== null,
+    		tab: document.querySelector('[data-console=program]') !== null
     	})`,
 
     showCompiler: `document.querySelector('[data-console=compiler]').click(); return true`,
@@ -493,7 +516,7 @@ const STEPS = {
 	    	number: colour('5'),
     		type: colour('Unit'),
     		name: colour('main'),
-    		attribute: colour('#[extern]'),
+    		attribute: colour('#[entry]'),
     		green,
     		marks: document.querySelectorAll('.cm-content [class*=cm-lintRange], .cm-content [class*=cm-lintPoint]').length
     	})`,
@@ -645,6 +668,10 @@ const WAITS = {
     branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
     unit: `return inspector().textContent.includes('const unit')`,
     unitSsa: `return inspector().textContent.includes('call fun log')`,
+    wat: `return inspector().querySelector('[data-wat]') !== null`,
+    ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
+		return document.querySelector('[data-console=program].active') !== null &&
+			lines.some((it) => text(it).trim() === '5')`,
     broken: `return diagnostics().length > 0`,
     bogus: `return inspector().textContent.includes('Bogus')`,
     long: `return inspector().textContent.includes('x79')`,
@@ -899,6 +926,18 @@ async function main() {
     await until(WAITS.ssa, "the ssa form of the buffer");
     const ssa = JSON.parse(await ask(STEPS.ssa));
 
+    // The module the link stage hands a host: the same bytes a run instantiates, printed as the
+    // WebAssembly text format.
+    await ask(STEPS.showWat);
+    await until(WAITS.wat, "the wasm of the buffer");
+    const wat = JSON.parse(await ask(STEPS.wat));
+
+    // And the program itself: the modules are instantiated in the order the link stage gives
+    // them, and the `#[entry]` is called. What `fib(5)` prints is what the program console holds.
+    await ask(STEPS.run);
+    await until(WAITS.ran, "the program to run");
+    const ran = JSON.parse(await ask(STEPS.ran));
+
     // A body with a choice in it: the CFG form reads the block that branches and the blocks the
     // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
     // they meet in. The buffer is typed into the one that is in front.
@@ -1070,6 +1109,8 @@ async function main() {
             branchWords,
             unit,
             unitSsa,
+            wat,
+            ran,
             program,
             width,
             made,
@@ -1144,10 +1185,16 @@ function report(page, problems, warnings, asked) {
     const diagnostic = page.broken?.[0] ?? {};
 
     // What the counters of a read come to, by pass and by row: what a check of one assertion
-    // asks about is stated over the rows and not over the rows of one pass.
-    const counted = (pass, field) =>
+    // asks about is stated over the rows and not over the rows of one pass. A unit is named
+    // when the assertion is about the buffer a person edited and not about every buffer the
+    // driver read around it.
+    const counted = (pass, field, unit) =>
         page.stats.rows
-            .filter((it) => it.pass === pass)
+            .filter(
+                (it) =>
+                    it.pass === pass &&
+                    (unit === undefined || it.unit === unit),
+            )
             .reduce((all, it) => all + (it[field] ?? 0), 0);
 
     const checks = [
@@ -1218,13 +1265,13 @@ function report(page, problems, warnings, asked) {
         ],
         [
             "a path of the hir marks the code it is written as",
-            page.pathHover.at === "println-int",
+            page.pathHover.at === "fib",
         ],
         [
             "and marks what the path resolved to",
-            // The declaration of a function is written with the attributes it carries:
-            // what a path leads to is the declaration, `#[extern]` and all.
-            page.pathHover.names.endsWith("fun println-int(_ : Int) : Unit"),
+            // What a path leads to is the declaration it names, which is a place in the same
+            // buffer: the path taken above is the call of `fib` in `main`.
+            page.pathHover.names.includes("fun fib(n : Int) : Int"),
         ],
         [
             "a type of a signature marks the type the declaration wrote",
@@ -1242,8 +1289,8 @@ function report(page, problems, warnings, asked) {
             ) &&
                 page.tc.surface.some(
                     (it) =>
-                        it.name === "fun println-int" &&
-                        it.ty === "(Int) -> Unit",
+                        it.name === "fun fib-aux" &&
+                        it.ty === "(Int, Int, Int) -> Int",
                 ) &&
                 page.tc.bodies === 3 &&
                 page.tc.nodes.some(
@@ -1297,7 +1344,7 @@ function report(page, problems, warnings, asked) {
             // The slots of the CFG form: the lowering binds every expression to one, and a slot
             // a pattern bound says the name it was bound under. The SSA form needs none.
             "the cfg tab reads the slots of the body, and the ssa tab has none",
-            page.mir.locals.some((it) => it.includes("(value)")) &&
+            page.mir.locals.some((it) => it.includes("(n)")) &&
                 page.mir.locals.every((it) => /^l\d/.test(it)) &&
                 page.ssa.locals.length === 0,
         ],
@@ -1380,7 +1427,25 @@ function report(page, problems, warnings, asked) {
             page.closed.open === 2 && page.closed.listed,
         ],
         ["a buffer can be dropped", page.dropped.file],
-        ["the console has a program tab", page.program.empty],
+        [
+            // The WASM the buffer assembles to, read as text: the module names itself, and what
+            // it imports is what it calls.
+            "the wat tab reads the module the buffer assembles to",
+            page.wat.shown &&
+                page.wat.text.includes("(module") &&
+                page.wat.text.includes("app::main") &&
+                page.wat.text.includes("print-int"),
+        ],
+        [
+            // The whole program: every buffer compiled and linked, the modules instantiated,
+            // and the entry point called. `fib(5)` is 5, and 5 is what was printed.
+            "running the program prints what it computes",
+            page.ran.tab && page.ran.printed.includes("5"),
+        ],
+        [
+            "the console has a program tab",
+            page.program.tab && page.program.empty,
+        ],
         ["a panel can be sized", page.width.files > 220],
         ["a clean buffer reports nothing", page.clean.diagnostics === 0],
         [
@@ -1426,7 +1491,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Files shows the files",
             page.phoneFiles.shown === "files" &&
-                page.phoneFiles.files === 3 &&
+                page.phoneFiles.files === 4 &&
                 !page.phoneFiles.overflows,
         ],
         [
@@ -1438,7 +1503,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Inspect shows the inspector",
             page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 8 &&
+                page.phoneInspector.tabs === 9 &&
                 !page.phoneInspector.overflows,
         ],
         [
@@ -1487,19 +1552,21 @@ function report(page, problems, warnings, asked) {
                 !page.refusedStdPath.made,
         ],
         [
-            // An edit of a body is read out of what the driver held: the parse of the buffer is
-            // a stale read and never a miss, and nothing that was held was dropped.
+            // An edit of a body is read out of what the driver held: the parse of the edited
+            // buffer is a stale read and never a miss, and nothing that was held was dropped.
+            // How many looks the two edits are read in is the editor's to decide, so what is
+            // asked is that the edit was read rather than that it was read exactly once.
             "an edit of a body is paid for out of what the driver held",
-            counted("parse", "stales") === 1 &&
-                counted("parse", "misses") === 0 &&
+            counted("parse", "stales", "/main.mlk") >= 1 &&
+                counted("parse", "misses", "/main.mlk") === 0 &&
                 page.stats.rows.every((it) => it.dropped === 0),
         ],
         [
             // What a module shows is a function of its own text and of no body, so the edit
             // reads the surface of it again and keeps the types it had.
             "the signature surface of an edited module is read again and kept",
-            counted("signatures", "stales") >= 1 &&
-                counted("signatures", "kept") >= 1,
+            counted("signatures", "stales", "/main.mlk") >= 1 &&
+                counted("signatures", "kept", "/main.mlk") >= 1,
         ],
         [
             "the body that was edited is checked again",
@@ -1569,6 +1636,9 @@ function report(page, problems, warnings, asked) {
         `a choice without an else reads ${page.unit.stmts.filter((it) => it.includes("const unit")).length} unit(s) in its ${page.unit.blocks.length} block(s)`,
     );
     console.log(
+        `the module assembles to ${page.wat.text.split("\n").length} line(s) of wasm text, and the program printed ${JSON.stringify(page.ran.printed)}`,
+    );
+    console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,
     );
     console.log(
@@ -1588,6 +1658,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a read of an edited body took ${page.stats.took} ms, of which ${counted("check", "stales")} check(s) read again and ${page.stats.rows.filter((it) => it.took > 0).length} pass(es) timed`,
+    );
+    console.log(
+        `the rows of that read: ${page.stats.rows.map((it) => `${it.pass}(${it.unit}) ${it.hits}/${it.misses}/${it.stales}/${it.kept}/${it.dropped}`).join(" ")}`,
     );
 
     if (diagnostic.whole)

@@ -20,7 +20,13 @@
 
 import init, { WasmDriver } from "@mlk/wasm";
 
-import type { DriverRequest, DriverResponse } from "./driver";
+import type {
+    DriverRequest,
+    DriverResponse,
+    Program,
+    Run,
+    RunEntry,
+} from "./driver";
 
 /**
  * The scope of this worker.
@@ -105,9 +111,131 @@ function answer(
             return driver.mir(request.path);
         case "mirSsa":
             return driver.mirSsa(request.path);
+        case "wat":
+            return driver.wat(request.path);
+        case "run":
+            return run(driver.run());
         case "diagnostics":
             return driver.diagnostics(request.path);
         case "stats":
             return driver.stats();
     }
+}
+
+/**
+ * Runs the program the driver holds, in the WebAssembly of the browser ([ADR-0021]).
+ *
+ * The manifest is the driver's: this is the host [ADR-0021] describes, and it does what a host
+ * does. The module of the host functions is instantiated first over the numbers a browser has;
+ * every module of the program is instantiated in the order it is given, with the exports of the
+ * modules before it handed to its imports; and the entry point is called. What the program
+ * printed is what the host functions were handed, which is why they are the only place a word
+ * of the language crosses this boundary.
+ *
+ * [adr-0021]: ../../docs/adr/0021-translation-units.md
+ */
+function run(program: Program): Run {
+    const printed: string[] = [];
+    const result: Run = {
+        entry: program.entry,
+        printed,
+        error: null,
+        diagnostics: program.diagnostics,
+    };
+
+    // What the compiler cannot do for the program is a run that does not begin, and the reason
+    // is the compiler's: a host function the host does not have, or an entry it does not
+    // declare.
+    if (program.problems.length > 0) {
+        result.error = program.problems.join("; ");
+
+        return result;
+    }
+
+    if (!program.entry) {
+        result.error = "the program declares no `#[entry]`";
+
+        return result;
+    }
+
+    try {
+        const host = instantiate(program.host, {
+            host: {
+                "print-int": (value: number) => {
+                    printed.push(String(value));
+
+                    return 0;
+                },
+                "print-bool": (value: number) => {
+                    printed.push(value !== 0 ? "true" : "false");
+
+                    return 0;
+                },
+            },
+        });
+        const instances = new Map<string, WebAssembly.Instance>();
+
+        for (const module of program.modules) {
+            const imports: WebAssembly.Imports = {};
+
+            for (const it of module.imports) {
+                const provider = it.external
+                    ? host.exports
+                    : instances.get(it.module)?.exports;
+                const fn = provider?.[it.name];
+
+                if (typeof fn !== "function") {
+                    throw new Error(
+                        `the program imports \`${it.module}::${it.name}\`, and nothing provides it`,
+                    );
+                }
+
+                (imports[it.module] ??= {})[it.name] = fn;
+            }
+
+            instances.set(module.name, instantiate(module.bytes, imports));
+        }
+
+        const main = instance(instances, program.entry);
+
+        // The entry is `() -> Unit`: it takes nothing, and the word it gives back is the unit
+        // of the language, which a host reads as nothing at all.
+        main();
+    } catch (error) {
+        result.error = String(error);
+    }
+
+    return result;
+}
+
+/** The instance of a module of the program, by the canonical name of the module. */
+function instance(
+    instances: Map<string, WebAssembly.Instance>,
+    entry: RunEntry,
+): CallableFunction {
+    const main = instances.get(entry.module)?.exports[entry.name];
+
+    if (typeof main !== "function") {
+        throw new Error(
+            `the program begins in \`${entry.module}::${entry.name}\`, and no module exports it`,
+        );
+    }
+
+    return main as CallableFunction;
+}
+
+/**
+ * Instantiates a module over an import object.
+ *
+ * The bytes cross the boundary as an array of numbers — the same bytes a browser compiles —
+ * and `Uint8Array` is what `WebAssembly.Module` reads.
+ */
+function instantiate(
+    bytes: Uint8Array | number[],
+    imports: WebAssembly.Imports,
+): WebAssembly.Instance {
+    return new WebAssembly.Instance(
+        new WebAssembly.Module(new Uint8Array(bytes)),
+        imports,
+    );
 }

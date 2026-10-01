@@ -16,10 +16,7 @@ use std::{
     sync::Arc,
 };
 
-use mlkc_codegen_wasm::{
-    CodegenDiag, DebugLevel, FnSignature, FunctionCtx, ModuleMir, WasmModule, assemble_module,
-    emit_function, layout,
-};
+use mlkc_codegen_wasm::{CodegenDiag, FnSignature, ModuleMir, WasmModule, compile_module};
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Label, Level};
 use mlkc_hir_def::{
     BodyLoc, EntityData, EntityLoc, FunctionLoc, ItemLoc, ModuleId, ProjectGraph, ProjectId,
@@ -322,23 +319,7 @@ fn link_plan(inputs: &LinkInputs) -> LinkPlan {
     let mut modules = BTreeMap::new();
 
     for (id, mir) in &inputs.modules {
-        let layout = layout(mir);
-        let mut artifacts = Vec::new();
-
-        for function in &mir.functions {
-            let ctx = FunctionCtx {
-                name: &function.name,
-                signature: &function.signature,
-                param_names: &function.param_names,
-                layout: &layout,
-            };
-            let (artifact, reports) = emit_function(&function.body, &ctx);
-
-            artifacts.push(artifact);
-            diagnostics.extend(reports.iter().map(codegen_diagnostic));
-        }
-
-        let (wasm, reports) = assemble_module(mir, &artifacts, DebugLevel::Full);
+        let (wasm, reports) = compile_module(mir);
 
         diagnostics.extend(reports.iter().map(codegen_diagnostic));
         modules.insert(*id, Arc::new(wasm));
@@ -477,7 +458,10 @@ fn entry_of(inputs: &LinkInputs, diagnostics: &mut Vec<Diagnostic>) -> Option<(M
 }
 
 /// The diagnostic of what the code generator reported about a body.
-fn codegen_diagnostic(report: &CodegenDiag) -> Diagnostic {
+///
+/// The message and the place are the code generator's; the level and the category are the
+/// driver's, because a host reads a diagnostic by the stage that reported it.
+pub fn codegen_diagnostic(report: &CodegenDiag) -> Diagnostic {
     let code = match report {
         CodegenDiag::Unsupported { .. } => "01",
         CodegenDiag::Unexpected { .. } => "02",

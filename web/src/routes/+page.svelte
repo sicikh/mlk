@@ -70,12 +70,21 @@
             path: "/main.mlk",
             // The names of the prelude are the module's without it writing them: `Int` and
             // `Unit` are imports the compiler makes (`#[no-prelude]` refuses them).
-            text: `#[extern]
-pub fun println-int(x: Int): Unit
+            text: `fun fib(n : Int) : Int =
+    fib-aux(n, 0, 1)
 
-fun main(): Unit =
-    let x = 42 * 2 - 10 in
-    println-int(x + 20)
+fun fib-aux(n : Int, a : Int, b : Int) : Int =
+    if n == 0 then
+        a
+    else
+        fib-aux(n - 1, b, a + b)
+
+#[extern]
+fun println-int(_ : Int) : Unit
+
+fun main() : Unit =
+    let value = fib(5) in
+    println-int(value)
 `,
         },
     ];

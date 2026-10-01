@@ -179,7 +179,7 @@ const STEPS = {
 			module: text(lines.find((it) => it.dataset.kind === 'module')).trim(),
 			item: lines.some((it) => it.dataset.kind === 'item' && text(it).includes('fun main')),
 			body: inspector().textContent.includes('BODY fun main in module #0'),
-			pat: lines.some((it) => it.dataset.kind === 'pat' && text(it).includes('bind x')),
+			pat: lines.some((it) => it.dataset.kind === 'pat' && text(it).includes('bind value')),
 			path: lines.some((it) => it.dataset.kind === 'path' && text(it).includes('println-int'))
 		})`,
 
@@ -187,7 +187,7 @@ const STEPS = {
     // mark the code that expression was written as. An expression is not a token: what it
     // covers is what the lowering recorded for it.
     hoverHir: `const row = [...document.querySelectorAll('[data-panel=inspector] [data-kind=expr] .row')]
-			.find((it) => text(it.querySelector('.text')).includes('literal 42'));
+			.find((it) => text(it.querySelector('.text')).includes('literal 5'));
 		row.dispatchEvent(new MouseEvent('mouseenter'));
 		return JSON.stringify({ says: text(row.querySelector('.text')) })`,
 
@@ -283,7 +283,7 @@ const STEPS = {
     // A line of a body stands for the expression it was lowered from: a pointer on it asks the
     // editor to mark that expression in the buffer.
     hoverMir: `const row = [...inspector().querySelectorAll('[data-line=stmt]')]
-    		.find((it) => text(it).includes('const 42'));
+    		.find((it) => text(it).includes('const 5'));
     	row.dispatchEvent(new MouseEvent('mouseenter'));
     	return JSON.stringify({ says: text(row) })`,
 
@@ -490,7 +490,7 @@ const STEPS = {
     	probe.remove();
     	return JSON.stringify({
     		keyword: colour('fun'),
-    		number: colour('42'),
+	    	number: colour('5'),
     		type: colour('Unit'),
     		name: colour('main'),
     		attribute: colour('#[extern]'),
@@ -1213,8 +1213,8 @@ function report(page, problems, warnings, asked) {
         ],
         [
             "the mark is the code the line says it stands for",
-            page.hirHover.says.includes("literal 42") &&
-                page.hirHover.marked.trim() === "42",
+            page.hirHover.says.includes("literal 5") &&
+                page.hirHover.marked.trim() === "5",
         ],
         [
             "a path of the hir marks the code it is written as",
@@ -1224,7 +1224,7 @@ function report(page, problems, warnings, asked) {
             "and marks what the path resolved to",
             // The declaration of a function is written with the attributes it carries:
             // what a path leads to is the declaration, `#[extern]` and all.
-            page.pathHover.names.endsWith("fun println-int(x: Int): Unit"),
+            page.pathHover.names.endsWith("fun println-int(_ : Int) : Unit"),
         ],
         [
             "a type of a signature marks the type the declaration wrote",
@@ -1245,15 +1245,15 @@ function report(page, problems, warnings, asked) {
                         it.name === "fun println-int" &&
                         it.ty === "(Int) -> Unit",
                 ) &&
-                page.tc.bodies === 1 &&
+                page.tc.bodies === 3 &&
                 page.tc.nodes.some(
                     (it) =>
-                        it.kind === "pat" && it.code === "x" && it.ty === "Int",
+                        it.kind === "pat" && it.code === "n" && it.ty === "Int",
                 ) &&
                 page.tc.nodes.some(
                     (it) =>
                         it.kind === "expr" &&
-                        it.code === "42" &&
+                        it.code === "5" &&
                         it.ty === "Int",
                 ) &&
                 page.tc.errors === 0,
@@ -1263,42 +1263,55 @@ function report(page, problems, warnings, asked) {
             page.tcHover.count === 1 && page.tcHover.marked !== "",
         ],
         [
+            // The example holds three bodies, and the choice in `fib-aux` is what makes one of
+            // them more than one block: the entry is the block that branches, every arm writes
+            // the slot the expression is, and the value is read where the arms meet.
             "the cfg tab reads a body of the buffer as its blocks",
             page.mir.form === "cfg" &&
+                page.mir.owners.some((it) => it.includes("fun fib")) &&
                 page.mir.owners.some((it) => it.includes("fun main")) &&
-                page.mir.blocks.length === 1 &&
-                page.mir.blocks[0] === "b0" &&
-                page.mir.entry === 1,
+                page.mir.blocks.length === 6 &&
+                page.mir.entry === 3 &&
+                page.mir.branches === 1 &&
+                page.mir.stmts.some((it) => it.includes("const 5")) &&
+                page.mir.term.some((it) => it.startsWith("return l")) &&
+                page.mir.blockParams.length === 0,
         ],
         [
-            // The CFG form is the lowering as it leaves it: every expression is a slot of its
-            // own, and the body ends by giving one back.
+            // The CFG form is the lowering as it leaves it: an assignment writes a slot, a
+            // branch reads one, and a body with no choice in it ends by giving one back.
             "the cfg tab reads the slots of the lowering",
-            page.mir.stmts.some((it) => it.includes("const 42")) &&
-                page.mir.stmts.every((it) => /^l\d/.test(it)) &&
-                page.mir.term.every((it) => it.startsWith("return l")),
+            page.mir.stmts.every((it) => /^l\d/.test(it)) &&
+                page.mir.term.every(
+                    (it) =>
+                        it.startsWith("return l") ||
+                        it.startsWith("branch l") ||
+                        it.startsWith("goto b"),
+                ),
         ],
         [
             "a line of the cfg marks the code it was read from",
-            page.mirHover.count === 1 && page.mirHover.marked.trim() === "42",
+            page.mirHover.count === 1 && page.mirHover.marked.trim() === "5",
         ],
         [
             // The slots of the CFG form: the lowering binds every expression to one, and a slot
             // a pattern bound says the name it was bound under. The SSA form needs none.
             "the cfg tab reads the slots of the body, and the ssa tab has none",
-            page.mir.locals.some((it) => it.includes("(x)")) &&
+            page.mir.locals.some((it) => it.includes("(value)")) &&
                 page.mir.locals.every((it) => /^l\d/.test(it)) &&
                 page.ssa.locals.length === 0,
         ],
         [
-            // The SSA form is built from the CFG form: the same body, with a value of its own
-            // in place of every slot.
+            // The SSA form is built from the CFG form: the same bodies, with a value of its own
+            // in place of every slot, and the value `fib-aux` selects is born at the join its
+            // arms branch into.
             "the ssa tab reads the same body with values in place of slots",
             page.ssa.form === "ssa" &&
                 page.ssa.blocks.length === page.mir.blocks.length &&
-                page.ssa.stmts.some((it) => it.includes("const 42")) &&
+                page.ssa.stmts.some((it) => it.includes("const 5")) &&
                 page.ssa.stmts.every((it) => /^v\d/.test(it)) &&
-                page.ssa.term.every((it) => it.startsWith("return v")),
+                page.ssa.blockParams.length === 1 &&
+                page.ssa.term.some((it) => it.startsWith("return v")),
         ],
         [
             // A choice is what makes a body more than one block: the entry evaluates the

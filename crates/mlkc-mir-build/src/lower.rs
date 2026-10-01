@@ -24,9 +24,9 @@ use mlkc_mir::{
     Block, Body as MirBody, BodyBuilder, Callee, Const, LocalData, LocalId, Operand, Place, PrimOp,
     Rvalue, Stmt, StmtKind, Terminator, ValueData,
 };
-use mlkc_resolve::Resolution;
+use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
-use mlkc_typeck::{CheckDeps, PathResolver};
+use mlkc_typeck::CheckDeps;
 
 use crate::diagnostic::{MirDiag, MirError, Operator};
 
@@ -42,7 +42,7 @@ const INT_MAX: i64 = (1 << 30) - 1;
 /// the body are of one module, and reads nothing else of it. `source_map` is where the nodes of
 /// the HIR body are written ([`BodySourceMap`]), `checked` is what the check of the body left
 /// behind, and `resolution` and `deps` are what the check read: a path of a call is resolved
-/// with the same [`PathResolver`] the check used, so the two read it the same way
+/// with the same walk the check used ([`Walk::entity_of`]), so the two read it the same way
 /// ([ADR-0019][adr-0019]).
 ///
 /// [adr-0019]: ../../docs/adr/0019-mir.md
@@ -62,7 +62,7 @@ pub fn lower_body(
     );
 
     let module = owner.module();
-    let resolver = PathResolver::new(module, resolution, deps);
+    let walk = Walk::of(deps.graph(), deps.closure());
 
     let lowerer = Lowerer {
         module,
@@ -70,7 +70,8 @@ pub fn lower_body(
         source_map,
         checked,
         deps,
-        resolver,
+        resolution,
+        walk,
         builder: BodyBuilder::new(owner.clone()),
         slots: ArenaMap::default(),
         pat_slots: ArenaMap::default(),
@@ -94,8 +95,10 @@ struct Lowerer<'a> {
     /// What the check read: the projects, the closure, the surfaces, and the classes of the
     /// language.
     deps: &'a CheckDeps,
-    /// What resolves the paths of a call.
-    resolver: PathResolver<'a>,
+    /// What the resolution of the module left: what each import resolved to.
+    resolution: &'a Resolution,
+    /// The walk over the closure the check was handed: what resolves the path of a call.
+    walk: Walk<'a>,
     /// The MIR body under construction.
     builder: BodyBuilder,
     /// The slot of every expression, once it is lowered.
@@ -262,7 +265,9 @@ impl Lowerer<'_> {
             },
             // A name of the project: what the check resolved it to, read the same way here.
             PathAnchor::Item(_) | PathAnchor::Use(_) | PathAnchor::Project(_) => {
-                let (entity, _) = self.resolver.entity_of(path, Namespace::Value);
+                let (entity, _) =
+                    self.walk
+                        .entity_of(self.module, self.resolution, path, Namespace::Value);
 
                 match entity {
                     // A function, a constant, or a class written where a value belongs: the
@@ -312,7 +317,9 @@ impl Lowerer<'_> {
                 Callee::Indirect(Operand::Const(Const::Unit))
             },
             _ => {
-                let (entity, _) = self.resolver.entity_of(&path, Namespace::Value);
+                let (entity, _) =
+                    self.walk
+                        .entity_of(self.module, self.resolution, &path, Namespace::Value);
 
                 match entity {
                     Some(entity) => {

@@ -78,6 +78,22 @@ pub enum ResolveError {
         /// The name written where a type belongs.
         name: Name,
     },
+    /// A name is written where a value belongs, and something else is what it denotes.
+    ///
+    /// The other half of [`ResolveError::NotAType`]: a name that denotes a type --- or a module,
+    /// or the prefix of one --- is not a value, however the path around it is written.
+    NotAValue {
+        /// The name written where a value belongs.
+        name: Name,
+    },
+    /// A name is written after an entity: a member of it, and the language has no members yet.
+    ///
+    /// What a place denotes is where the names after it are read, and a name after an entity
+    /// is a name *inside* it: the language has no such names yet, so the path denotes nothing.
+    NestedName {
+        /// The name written after the entity.
+        name: Name,
+    },
 }
 
 impl ResolveError {
@@ -106,7 +122,15 @@ impl ResolveError {
                 format!("the name `{name}` resolves to nothing and is not a name of this module")
             },
             Self::NotAType { name } => {
-                format!("the name `{name}` is a value of this module, and a type belongs here")
+                format!("the name `{name:?}` is a value of this module, and a type belongs here")
+            },
+            Self::NotAValue { name } => {
+                format!("the name `{name:?}` does not denote a value, and a value belongs here")
+            },
+            Self::NestedName { name } => {
+                format!(
+                    "the name `{name:?}` is written after an entity, and the language has no members yet"
+                )
             },
         }
     }
@@ -136,6 +160,8 @@ impl DiagKind for ResolveError {
             Self::UnresolvedName { .. } => "06",
             Self::NotAType { .. } => "07",
             Self::HiddenName { .. } => "08",
+            Self::NotAValue { .. } => "09",
+            Self::NestedName { .. } => "10",
         }
     }
 }

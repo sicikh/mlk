@@ -8,32 +8,32 @@
 //! and a name after a module is read inside it.
 //!
 //! A path of the *surface* of a module that does not resolve was reported by the resolution of
-//! the module, which walked the same paths; a path of a *body* is walked here for the first
-//! time, and what the walk found is the check's to report.
+//! the module, which walked the same paths. A path of a *body* is walked by the resolver with
+//! [`Walk::entity_of`]: what a name denotes is the resolver's to find, and what the check makes
+//! of the answer --- a type, and the check's own words for a name that denotes nothing --- is
+//! this module's.
 //!
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 
-use mlkc_hir_def::{ClassLoc, EntityLoc, ModuleId, Name, Namespace, PathAnchor, PathData, TypeRef};
+use mlkc_hir_def::{ClassLoc, EntityLoc, ModuleId, Namespace, PathAnchor, PathData, TypeRef};
 use mlkc_hir_ty::Ty;
-use mlkc_resolve::{Resolution, ResolveError, Target, Walk};
+use mlkc_resolve::{Resolution, ResolveError, Walk};
 
 use crate::{check::CheckDeps, diagnostic::TypeError};
 
 /// The type a written type denotes, and what could not be resolved.
-pub type ResolvedType = (Ty, Vec<TypeError>);
+pub(crate) type ResolvedType = (Ty, Vec<TypeError>);
 
 /// The entity a path denotes, and what could not be resolved.
-pub type ResolvedEntity = (Option<EntityLoc>, Vec<TypeError>);
+pub(crate) type ResolvedEntity = (Option<EntityLoc>, Vec<TypeError>);
 
-/// What resolves the paths of one module.
+/// What resolves the paths of one module for the check.
 ///
-/// A stage that reads a path of a body --- the check first, and the MIR lowering after it ---
-/// reads it with this resolver, so that both read the same path the same way: the anchor the
-/// lowering left, the imports the resolution resolved, and the walk of the closure the stage
-/// was handed ([ADR-0016]).
-///
-/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
-pub struct PathResolver<'a> {
+/// The anchors of a path and the walk over the closure are the resolver's: [`Walk::entity_of`]
+/// answers the same for the check and for the MIR lowering. What this type adds is the check's
+/// half --- a written type read as a [`Ty`], and the check's words for what a path denotes
+/// ([`entity_of`](Self::entity_of)).
+pub(crate) struct PathResolver<'a> {
     /// The module whose paths are resolved.
     module: ModuleId,
     /// What each name of the module denotes, and what each import resolved to.
@@ -44,7 +44,7 @@ pub struct PathResolver<'a> {
 
 impl<'a> PathResolver<'a> {
     /// A resolver of the paths of `module`, over what the resolution and the deps hold.
-    pub fn new(module: ModuleId, resolution: &'a Resolution, deps: &'a CheckDeps) -> Self {
+    pub(crate) fn new(module: ModuleId, resolution: &'a Resolution, deps: &'a CheckDeps) -> Self {
         Self {
             module,
             resolution,
@@ -53,7 +53,7 @@ impl<'a> PathResolver<'a> {
     }
 
     /// The type a written type denotes.
-    pub fn type_of(&mut self, ty: &TypeRef) -> ResolvedType {
+    pub(crate) fn type_of(&mut self, ty: &TypeRef) -> ResolvedType {
         match ty {
             // A mistake is the parser's and the lowering's to report; the type of it is the
             // error type, which absorbs whatever it meets. `_` is a type to infer, and a
@@ -66,67 +66,20 @@ impl<'a> PathResolver<'a> {
     /// The entity a path denotes in `namespace`.
     ///
     /// A path whose names a body binds is not resolved here: the check knows the bindings of the
-    /// body it is checking, and this resolver does not.
-    pub fn entity_of(&mut self, path: &PathData, namespace: Namespace) -> ResolvedEntity {
-        match path.anchor.clone() {
-            // An entity of the module: what the lowering anchored. A name written after it is
-            // the name of a member, and the language has no members yet.
-            PathAnchor::Item(entity) => {
-                match path.segments.first() {
-                    Some(segment) => {
-                        (None, vec![TypeError::NestedName {
-                            name: segment.name.clone(),
-                        }])
-                    },
-                    None => (Some(entity), Vec::new()),
-                }
-            },
-            // An entry of the import table: what the resolution resolved the import to.
-            PathAnchor::Use(import) => {
-                let target = self.resolution.imports().get(&import).cloned();
+    /// body it is checking, and the resolver does not.
+    pub(crate) fn entity_of(&mut self, path: &PathData, namespace: Namespace) -> ResolvedEntity {
+        let (entity, errors) = self
+            .walk
+            .entity_of(self.module, self.resolution, path, namespace);
 
-                match target {
-                    // An import that resolved to nothing is what the resolution reported.
-                    None => (None, Vec::new()),
-                    Some(target) => self.continue_from(target, path, namespace),
-                }
-            },
-            // A path rooted at a project: the names after the root are the modules of it, and
-            // the walk of the whole path is the walk of those names.
-            PathAnchor::Project(project) => {
-                let project = project.or_else(|| self.walk.project_of(self.module));
-                let Some(project) = project else {
-                    return (None, vec![TypeError::Unresolved {
-                        error: ResolveError::NoProject,
-                    }]);
-                };
-
-                let names: Vec<Name> = path
-                    .segments
-                    .iter()
-                    .map(|segment| segment.name.clone())
-                    .collect();
-                let mut seen = Vec::new();
-
-                match self.walk.walk_in(&project, &names, &mut seen) {
-                    Ok(target) => take(&target, namespace, path.name()),
-                    Err(error) => (None, vec![TypeError::Unresolved { error }]),
-                }
-            },
-            // A binding, an entity of the body, a type variable: the check resolves those
-            // itself, and a name nothing resolved is what the lowering reported.
-            PathAnchor::Binding(_)
-            | PathAnchor::Local(_)
-            | PathAnchor::TypeVar(_)
-            | PathAnchor::Unresolved => (None, Vec::new()),
-        }
+        (entity, errors.into_iter().map(type_error).collect())
     }
 
     /// The arguments a path is applied to, resolved as types.
     ///
     /// The language has no generics yet, so a path with arguments is reported; the arguments are
     /// resolved all the same, so that a mistake inside one is reported as the mistake it is.
-    pub fn arguments_of(&mut self, path: &PathData) -> (Vec<Ty>, Vec<TypeError>) {
+    pub(crate) fn arguments_of(&mut self, path: &PathData) -> (Vec<Ty>, Vec<TypeError>) {
         let mut args = Vec::new();
         let mut errors = Vec::new();
 
@@ -182,67 +135,18 @@ impl<'a> PathResolver<'a> {
             },
         }
     }
-
-    /// The entity a path denotes, given what a walk found where the path stands.
-    fn continue_from(
-        &mut self,
-        target: Target,
-        path: &PathData,
-        namespace: Namespace,
-    ) -> ResolvedEntity {
-        if path.segments.is_empty() {
-            return take(&target, namespace, path.name());
-        }
-
-        // A name written after an entity is the name of a member of it, and the language has no
-        // members yet.
-        if target.ty().is_some() || target.value().is_some() {
-            return (None, vec![TypeError::NestedName {
-                name: path.segments[0].name.clone(),
-            }]);
-        }
-
-        // A name written after a module is read inside it; a name written after nothing at all
-        // is what the walk reported.
-        let (Some((project, base)), Some(locator)) = (target.place(), target.module()) else {
-            return (None, Vec::new());
-        };
-
-        let names: Vec<Name> = path
-            .segments
-            .iter()
-            .map(|segment| segment.name.clone())
-            .collect();
-        let mut seen = Vec::new();
-
-        match self
-            .walk
-            .walk_after(project, base, locator, &names, &mut seen)
-        {
-            Ok(found) => take(&found, namespace, path.name()),
-            Err(error) => (None, vec![TypeError::Unresolved { error }]),
-        }
-    }
 }
 
-/// What a target denotes in the namespace a place asks for.
-fn take(target: &Target, namespace: Namespace, name: Name) -> ResolvedEntity {
-    let entity = match namespace {
-        Namespace::Ty => target.ty(),
-        Namespace::Value => target.value(),
-        Namespace::Module => None,
-    };
-
-    match entity {
-        Some(entity) => (Some(entity.clone()), Vec::new()),
-        // A name that denotes nothing at all was reported by the resolution; one that denotes
-        // something else --- a module, or an entity of the other namespace --- is reported here.
-        None if target.is_empty() => (None, Vec::new()),
-        None => {
-            (None, vec![match namespace {
-                Namespace::Value => TypeError::NotAValue { name },
-                _ => TypeError::NotAType { name },
-            }])
-        },
+/// The check's error for what the resolver found wrong with a path.
+///
+/// What a path denotes is the resolver's to find; how a body is told about it is the check's.
+/// The three facts a stage that reads a body has words of its own for are the check's errors,
+/// and everything else is the walk's report, read as it is.
+fn type_error(error: ResolveError) -> TypeError {
+    match error {
+        ResolveError::NotAType { name } => TypeError::NotAType { name },
+        ResolveError::NotAValue { name } => TypeError::NotAValue { name },
+        ResolveError::NestedName { name } => TypeError::NestedName { name },
+        error => TypeError::Unresolved { error },
     }
 }

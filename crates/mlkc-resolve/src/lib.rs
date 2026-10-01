@@ -36,6 +36,15 @@
 //! wrote it. A chain that returns to where it started resolves to nothing, and is reported: the
 //! walk is a loop inside one pass, and no fixpoint is needed to follow it.
 //!
+//! # A path written in a body
+//!
+//! The paths a [`Resolution`] is about are the paths of the *surface* of a module, and the pass
+//! itself never reads a body ([ADR-0004], [ADR-0016]). A path written in a *body* is read by
+//! [`Walk::entity_of`]: the anchor the lowering left, the imports the resolution resolved, and
+//! the names after them, walked the same way. The stages that own bodies are what ask --- the
+//! check, and the MIR lowering after it --- and what they make of the answer is theirs.
+//!
+//! [ADR-0004]: ../../docs/adr/0004-module-system.md
 //! [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 //! [ADR-0009]: ../../docs/adr/0009-pass-contract.md
 

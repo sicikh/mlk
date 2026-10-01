@@ -127,8 +127,8 @@ What [ADR-0004][0004-module-system.md] decided about that pass —
 that it sees surfaces and never bodies — stands.
 
 The paths inside a _body_ are not resolved here.
-A body is a unit of its own, and the stage that reads it — the check —
-resolves its paths against the same values with the same function.
+A body is a unit of its own, and the stages that read it — the check, and the MIR
+lowering after it — resolve its paths against the same values with the same function.
 What the lowering of a body does read is the names the paths of it are rooted at — the paths of
 its expressions, and the types they are written with: a binding of the body, a name of the module,
 and the name of a project are what such a name may be, and a name that is none of them is

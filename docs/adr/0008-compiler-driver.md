@@ -181,15 +181,15 @@ an arena lives with the smallest owner whose invalidation unit contains it,
 and the driver's slots mirror that hierarchy.
 Each slot holds one value of [ADR-0005][0005-compiler-pipeline.md]'s pipeline.
 
-| Unit                              | Value                                                                        | Depends on                                                                  |
-| --------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `Parse(file)`                     | the CST and the parse errors                                                 | text                                                                        |
-| `Module(module)`                  | the `ItemTree`, the `Interface`                                              | the CST                                                                     |
-| `Body(owner)`                     | the lowered HIR of one body, its diagnostics                                 | the `ItemTree`, the body's syntax                                           |
-| `Check(owner)`                    | the inference result, its diagnostics                                        | the `Body`, the interfaces it consults                                      |
-| `DefMap(project)`                 | the joined scopes (see below)                                                | every module's interface                                                    |
-| `Mir(body)`, `MirSsa(body)`       | the body in the CFG form and in the SSA form, and the lowering's diagnostics | the `Body`, the interfaces it consults, its check ([ADR-0019][0019-mir.md]) |
-| `Codegen(function)`, `Link(unit)` | —                                                                            | not designed yet ([ADR-0005][0005-compiler-pipeline.md])                    |
+| Unit                              | Value                                        | Depends on                                                                  |
+| --------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------- |
+| `Parse(file)`                     | the CST and the parse errors                 | text                                                                        |
+| `Module(module)`                  | the `ItemTree`, the `Interface`              | the CST                                                                     |
+| `Body(owner)`                     | the lowered HIR of one body, its diagnostics | the `ItemTree`, the body's syntax                                           |
+| `Check(owner)`                    | the inference result, its diagnostics        | the `Body`, the interfaces it consults                                      |
+| `DefMap(project)`                 | the joined scopes (see below)                | every module's interface                                                    |
+| `Mir(body)`, `MirSsa(body)`       | the body in the CFG form and in the SSA form | the `Body`, the interfaces it consults, its check ([ADR-0019][0019-mir.md]) |
+| `Codegen(function)`, `Link(unit)` | —                                            | not designed yet ([ADR-0005][0005-compiler-pipeline.md])                    |
 
 Three properties of the table:
 

@@ -33,6 +33,11 @@ ITEM TREE
     visibility: private
     param: Int[Bool -> use Bool] -> use Int
     ret: Int[Bool -> use Bool] -> use Int
+  fun no-equality  @2.7
+    visibility: private
+    param: String -> use String
+    param: String -> use String
+    ret: Bool -> use Bool
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -150,6 +155,27 @@ paths
   path#0  value -> binding pat#0
 ```
 
+`fun no-equality`
+
+```
+BODY fun no-equality in module #2
+
+root expr#2
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 == expr#1
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+  path#1  right -> binding pat#1
+```
+
 ### Resolution
 
 ```
@@ -168,6 +194,8 @@ SCOPE
     value: fun not-callable in module #2 (private)
   applied
     value: fun applied in module #2 (private)
+  no-equality
+    value: fun no-equality in module #2 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -189,6 +217,7 @@ MODULE TYPES
   fun extra-argument: () -> Int
   fun not-callable: () -> Int
   fun applied: (Int[Bool]) -> Int[Bool]
+  fun no-equality: (String, String) -> Bool
 ```
 
 ### Checked Bodies
@@ -254,11 +283,22 @@ CHECKED BODY
   pat #0: Int[Bool]
 ```
 
+`fun no-equality`
+
+```
+CHECKED BODY
+  expr #0: String
+  expr #1: String
+  expr #2: Bool
+  pat #0: String
+  pat #1: String
+```
+
 ### MIR
 
 `fun one`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun takes`
 
@@ -286,19 +326,19 @@ fun takes (entry b0)
 
 `fun wrong-argument`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun wrong-arity`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun extra-argument`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun not-callable`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun applied`
 
@@ -324,6 +364,10 @@ fun applied (entry b0)
     return v2
 ```
 
+`fun no-equality`
+
+Not lowered: the front end reported a mistake.
+
 ### Diagnostics
 
 typechecker[04]: the name `Int` is applied to type arguments  @274..283 (a class takes no arguments)
@@ -335,3 +379,5 @@ typechecker[09]: a value of type `String` is where a value of type `Int` belongs
 typechecker[07]: the function takes 1 argument, and the call passes 0 arguments  @141..146 (expected 1 argument, found 0 arguments)
 typechecker[07]: the function takes 1 argument, and the call passes 2 arguments  @182..187 (expected 1 argument, found 2 arguments)
 typechecker[06]: a value of type `Int` is called, and a function is what a call calls  @246..251 (`Int` is not a function)
+typechecker[14]: the language has no equality for two values of `String` yet  @366..379 (this type has no equality yet)
+  note: `Int` and `Bool` are the types with equality for now

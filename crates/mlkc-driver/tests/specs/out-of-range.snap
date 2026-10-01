@@ -75,24 +75,9 @@ CHECKED BODY
 
 `fun big`
 
-CFG form:
-
-```
-fun big (entry b0)
-  b0:
-    l0 = const 0
-    return l0
-```
-
-SSA form:
-
-```
-fun big (entry b0)
-  b0:
-    v0 = const 0
-    return v0
-```
+Not lowered: the front end reported a mistake.
 
 ### Diagnostics
 
-mir[01]: the integer literal `1099511627776` is outside the 31-bit range of `Int`  @21..34
+typechecker[13]: the integer literal `1099511627776` is outside the 31-bit range of `Int`  @21..34 (outside the range of `Int`)
+  note: `Int` is limited to 31 bits until boxed integers are designed

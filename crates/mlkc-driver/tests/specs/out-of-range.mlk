@@ -1,7 +1,6 @@
-// What the construction of MIR reports about a body the checker accepted: an integer literal
-// outside the 31-bit range of the word ([ADR-0018]). The check is about types, and the range of
-// `Int` is the representation's business, so the mistake is MIR's to report --- and the body is
-// lowered all the same.
+// What the check reports about a literal of a type whose range the language knows: an integer
+// outside the 31-bit range of the word ([ADR-0018]). The range of a literal is the meaning of
+// the type it is written with, so the mistake is the check's --- and the body has no MIR.
 
 //- /main.mlk
 fun big(): Int =

@@ -23,23 +23,18 @@ ITEM TREE
     param: Int -> use Int
     param: Int -> use Int
     ret: Bool -> use Bool
-  fun same  @2.3
-    visibility: private
-    param: String -> use String
-    param: String -> use String
-    ret: Bool -> use Bool
-  fun different  @2.4
+  fun different  @2.3
     visibility: private
     param: Int -> use Int
     param: Int -> use Int
     ret: Bool -> use Bool
-  fun text  @2.5
+  fun text  @2.4
     visibility: private
     ret: String -> use String
-  fun call  @2.6
+  fun call  @2.5
     visibility: private
     ret: Unit -> use Unit
-  fun bound  @2.7
+  fun bound  @2.6
     visibility: private
     ret: Int -> use Int
   use Int  prelude
@@ -103,27 +98,6 @@ exprs
   expr#12  path path#1
   expr#13  binary expr#11 >= expr#12
   expr#14  binary expr#10 || expr#13
-pats
-  pat#0  bind left
-  pat#1  bind right
-paths
-  path#0  left -> binding pat#0
-  path#1  right -> binding pat#1
-```
-
-`fun same`
-
-```
-BODY fun same in module #2
-
-root expr#2
-params
-  pat#0
-  pat#1
-exprs
-  expr#0  path path#0
-  expr#1  path path#1
-  expr#2  binary expr#0 == expr#1
 pats
   pat#0  bind left
   pat#1  bind right
@@ -211,8 +185,6 @@ SCOPE
     value: fun signed in module #2 (private)
   ordered
     value: fun ordered in module #2 (private)
-  same
-    value: fun same in module #2 (private)
   different
     value: fun different in module #2 (private)
   text
@@ -238,7 +210,6 @@ MODULE TYPES
   fun print: (String) -> Unit
   fun signed: () -> Int
   fun ordered: (Int, Int) -> Bool
-  fun same: (String, String) -> Bool
   fun different: (Int, Int) -> Bool
   fun text: () -> String
   fun call: () -> Unit
@@ -285,17 +256,6 @@ CHECKED BODY
   expr #14: Bool
   pat #0: Int
   pat #1: Int
-```
-
-`fun same`
-
-```
-CHECKED BODY
-  expr #0: String
-  expr #1: String
-  expr #2: Bool
-  pat #0: String
-  pat #1: String
 ```
 
 `fun different`
@@ -438,36 +398,6 @@ fun ordered (entry b0)
     return v18
 ```
 
-`fun same`
-
-CFG form:
-
-```
-fun same (entry b0)
-  params: v0: String, v1: String
-  b0:
-    l0(left) = use v0
-    l1(right) = use v1
-    l3 = use l0
-    l4 = use l1
-    l2 = use l3
-    return l2
-```
-
-SSA form:
-
-```
-fun same (entry b0)
-  params: v0: String, v1: String
-  b0:
-    v2 = use v0
-    v3 = use v1
-    v4 = use v2
-    v5 = use v3
-    v6 = use v4
-    return v6
-```
-
 `fun different`
 
 CFG form:
@@ -582,4 +512,4 @@ fun bound (entry b0)
 
 ### Diagnostics
 
-mir[07]: the language has no comparison for two values of `String` yet  @248..261
+No diagnostics.

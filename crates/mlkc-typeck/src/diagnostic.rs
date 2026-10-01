@@ -96,6 +96,21 @@ pub enum TypeError {
     ///
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
     MissingSignature,
+    /// An integer literal does not fit the 31-bit representation of `Int` ([ADR-0018]).
+    ///
+    /// The range of a literal is the meaning of the type it is written with, so it is the check
+    /// that reports it, and the construction of MIR reads it as an invariant.
+    ///
+    /// [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+    IntOutOfRange {
+        /// The literal as the module wrote it.
+        value: i64,
+    },
+    /// Equality is applied to values whose type the language has no equality for yet.
+    NoEquality {
+        /// The type of the operands.
+        ty: Ty,
+    },
 }
 
 impl TypeError {
@@ -151,6 +166,12 @@ impl TypeError {
                  types of a module are resolved before its bodies are checked"
                     .to_owned()
             },
+            Self::IntOutOfRange { value } => {
+                format!("the integer literal `{value}` is outside the 31-bit range of `Int`")
+            },
+            Self::NoEquality { ty } => {
+                format!("the language has no equality for two values of `{ty}` yet")
+            },
         }
     }
 
@@ -190,6 +211,8 @@ impl TypeError {
                 format!("expected `{expected}`, found `{found}`")
             },
             Self::RecursiveType => "this type contains itself".to_owned(),
+            Self::IntOutOfRange { .. } => "outside the range of `Int`".to_owned(),
+            Self::NoEquality { .. } => "this type has no equality yet".to_owned(),
             Self::Unresolved { .. } | Self::MissingSignature => String::new(),
         }
     }
@@ -206,6 +229,12 @@ impl TypeError {
             },
             Self::TypeArguments { .. } => {
                 vec!["the language has no generics yet".to_owned()]
+            },
+            Self::IntOutOfRange { .. } => {
+                vec!["`Int` is limited to 31 bits until boxed integers are designed".to_owned()]
+            },
+            Self::NoEquality { .. } => {
+                vec!["`Int` and `Bool` are the types with equality for now".to_owned()]
             },
             _ => Vec::new(),
         }
@@ -248,6 +277,8 @@ impl DiagKind for TypeError {
             Self::RecursiveType => "10",
             Self::Unresolved { .. } => "11",
             Self::MissingSignature => "12",
+            Self::IntOutOfRange { .. } => "13",
+            Self::NoEquality { .. } => "14",
         }
     }
 }

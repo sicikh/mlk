@@ -11,13 +11,15 @@
 //!
 //! A body whose check reported a mistake is not lowered: a `Ty::Error` expression has no
 //! meaning to lower, and the driver is what asks for MIR only when the body checks clean. The
-//! walk is total all the same: a node it cannot read is a [`MirDiag`], not a panic.
+//! walk is total over such a body: what it cannot lower is a mistake the check should have
+//! reported, so it is an internal compiler exception and not a diagnostic ([adr-0019]).
 
+use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, FunctionLoc, ItemTree,
     Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathData, UnaryOp,
 };
-use mlkc_hir_ty::{CheckedBody, Ty};
+use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, Ty};
 use mlkc_la_arena::ArenaMap;
 use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
@@ -28,14 +30,6 @@ use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
 use mlkc_typeck::CheckDeps;
 
-use crate::diagnostic::{MirDiag, MirError, Operator};
-
-/// The smallest and the largest `Int`, as [ADR-0018][adr-0018] fixes them.
-///
-/// [adr-0018]: ../../docs/adr/0018-values-as-words.md
-const INT_MIN: i64 = -(1 << 30);
-const INT_MAX: i64 = (1 << 30) - 1;
-
 /// Lowers the checked body of an entity into the CFG form of MIR.
 ///
 /// `tree` is the surface of the module the body is of: the lowering checks that the entity and
@@ -44,6 +38,11 @@ const INT_MAX: i64 = (1 << 30) - 1;
 /// behind, and `resolution` and `deps` are what the check read: a path of a call is resolved
 /// with the same walk the check used ([`Walk::entity_of`]), so the two read it the same way
 /// ([ADR-0019][adr-0019]).
+///
+/// The pass reports nothing: semantics is checked in the checker, and every node of a body the
+/// check accepted has a meaning this walk can lower. A node it cannot lower is a gap of the
+/// check, and the pass says so by stopping with an internal compiler exception --- it never
+/// manufactures a body out of a construct the language does not have.
 ///
 /// [adr-0019]: ../../docs/adr/0019-mir.md
 pub fn lower_body(
@@ -54,7 +53,7 @@ pub fn lower_body(
     checked: &CheckedBody,
     resolution: &Resolution,
     deps: &CheckDeps,
-) -> (MirBody, Vec<MirDiag>) {
+) -> MirBody {
     debug_assert_eq!(
         owner.module(),
         tree.module(),
@@ -76,7 +75,6 @@ pub fn lower_body(
         slots: ArenaMap::default(),
         pat_slots: ArenaMap::default(),
         stmts: Vec::new(),
-        diags: Vec::new(),
     };
 
     lowerer.run()
@@ -107,13 +105,11 @@ struct Lowerer<'a> {
     pat_slots: ArenaMap<PatId, LocalId>,
     /// The statements of the entry block, in the order they were lowered.
     stmts: Vec<Stmt>,
-    /// What the lowering found.
-    diags: Vec<MirDiag>,
 }
 
 impl Lowerer<'_> {
     /// Lowers the body and finishes it.
-    fn run(mut self) -> (MirBody, Vec<MirDiag>) {
+    fn run(mut self) -> MirBody {
         for pat in self.body.params() {
             self.parameter(*pat);
         }
@@ -130,9 +126,7 @@ impl Lowerer<'_> {
             },
         });
 
-        let body = self.builder.finish(entry);
-
-        (body, self.diags)
+        self.builder.finish(entry)
     }
 
     /// Lowers one expression into a slot of its own, and answers that slot.
@@ -145,7 +139,7 @@ impl Lowerer<'_> {
         let ty = self.checked.expr_type(expr).cloned().unwrap_or(Ty::Error);
         let slot = self.slot(span, None, ty);
         let node = self.body[expr].clone();
-        let rvalue = self.rvalue(&node, span);
+        let rvalue = self.rvalue(&node);
 
         self.assign(Place::Local(slot), rvalue, span);
         self.slots.insert(expr, slot);
@@ -154,23 +148,27 @@ impl Lowerer<'_> {
     }
 
     /// Lowers one node of the HIR.
-    fn rvalue(&mut self, node: &Expr, span: Span) -> Rvalue {
+    ///
+    /// Every arm is a node the check accepted: a node the language does not have is one the
+    /// check reported, and a body it reported about is not lowered.
+    fn rvalue(&mut self, node: &Expr) -> Rvalue {
         match node {
             Expr::Missing => {
-                self.report(MirError::Missing, span);
-                Rvalue::Const(Const::Unit)
+                ice!("the lowering met an expression that is not there, and the body checks clean")
             },
             Expr::Path(path) => {
                 let path = self.body[*path].clone();
-                self.value_path(&path, span)
+                self.value_path(&path)
             },
             Expr::Literal(Literal::Int(value)) => {
-                if (INT_MIN..=INT_MAX).contains(value) {
-                    Rvalue::Const(Const::Int(*value as i32))
-                } else {
-                    self.report(MirError::IntOutOfRange { value: *value }, span);
-                    Rvalue::Const(Const::Int(0))
+                if !(INT_MIN..=INT_MAX).contains(value) {
+                    ice!(
+                        "the lowering met the `Int` literal `{value}`, which does not fit the \
+                         31-bit representation, and the check accepted it"
+                    );
                 }
+
+                Rvalue::Const(Const::Int(*value as i32))
             },
             Expr::Literal(Literal::Str(value)) => Rvalue::Const(Const::Str(value.clone())),
             Expr::Call { callee, args } => {
@@ -180,7 +178,7 @@ impl Lowerer<'_> {
                     lowered.push(Operand::Local(self.expr(*arg)));
                 }
 
-                let callee = self.callee(*callee, span);
+                let callee = self.callee(*callee);
 
                 Rvalue::Call {
                     callee,
@@ -188,17 +186,13 @@ impl Lowerer<'_> {
                 }
             },
             Expr::Field { field, .. } => {
-                self.report(
-                    MirError::Field {
-                        name: field.clone(),
-                    },
-                    span,
-                );
-
-                Rvalue::Const(Const::Unit)
+                ice!(
+                    "the lowering met a read of the field `{field:?}`, and the language has no \
+                     fields"
+                )
             },
-            Expr::Binary { lhs, op, rhs } => self.binary(*lhs, *op, *rhs, span),
-            Expr::Unary { op, operand } => self.unary(*op, *operand, span),
+            Expr::Binary { lhs, op, rhs } => self.binary(*lhs, *op, *rhs),
+            Expr::Unary { op, operand } => self.unary(*op, *operand),
             Expr::Let { pat, expr, body } => {
                 let bound = self.expr(*expr);
                 self.bind(*pat, bound);
@@ -238,30 +232,40 @@ impl Lowerer<'_> {
                 self.pat_slots.insert(pat, slot);
             },
             Pat::Wildcard => {},
-            Pat::Missing => self.report(MirError::Missing, span),
+            Pat::Missing => {
+                ice!("the lowering met a pattern that is not there, and the body checks clean")
+            },
         }
     }
 
     /// Lowers a path written where a value belongs.
-    fn value_path(&mut self, path: &PathData, span: Span) -> Rvalue {
+    ///
+    /// The check resolves the paths of a body, and a body it reported about is not lowered: a
+    /// path here is one whose root and whose imports the check already read, and what the walk
+    /// answers is what the check answered.
+    fn value_path(&mut self, path: &PathData) -> Rvalue {
         match path.anchor.clone() {
             // A binding of the body: the slot the binding was given.
             PathAnchor::Binding(pat) => {
                 match self.pat_slots.get(pat) {
                     Some(slot) => Rvalue::Use(Operand::Local(*slot)),
                     None => {
-                        self.report(MirError::Unresolved { name: path.name() }, span);
-
-                        Rvalue::Const(Const::Unit)
+                        ice!(
+                            "the lowering met a read of the binding `{}`, which no pattern of the body \
+                     binds",
+                            path.name(),
+                        )
                     },
                 }
             },
-            // An entity declared inside the body, and a type variable: not values the language
-            // has, and a name of another namespace is what the check reported.
+            // A type variable and an entity declared inside the body are not values the
+            // language has, and a name of another namespace is what the check reported.
             PathAnchor::TypeVar(_) | PathAnchor::Local(_) => {
-                self.report(MirError::NotAValue { name: path.name() }, span);
-
-                Rvalue::Const(Const::Unit)
+                ice!(
+                    "the lowering met the path `{}` where a value belongs, and the check accepted \
+                 it",
+                    path.name(),
+                )
             },
             // A name of the project: what the check resolved it to, read the same way here.
             PathAnchor::Item(_) | PathAnchor::Use(_) | PathAnchor::Project(_) => {
@@ -271,27 +275,37 @@ impl Lowerer<'_> {
 
                 match entity {
                     // A function, a constant, or a class written where a value belongs: the
-                    // language has no value of an entity yet.
-                    Some(_) => {
-                        self.report(MirError::NotAValue { name: path.name() }, span);
+                    // check rejects a name that denotes no value, and the language has no value
+                    // of an entity yet.
+                    Some(entity) => {
+                        ice!(
+                            "the lowering met the path `{}`, which resolves to `{:?}`, where a value \
+                         belongs",
+                            path.name(),
+                            entity.item,
+                        )
                     },
                     None => {
-                        self.report(MirError::Unresolved { name: path.name() }, span);
+                        ice!(
+                            "the lowering met the path `{}`, which resolves to nothing, and the \
+                         check accepted it",
+                            path.name(),
+                        )
                     },
                 }
-
-                Rvalue::Const(Const::Unit)
             },
             PathAnchor::Unresolved => {
-                self.report(MirError::Unresolved { name: path.name() }, span);
-
-                Rvalue::Const(Const::Unit)
+                ice!(
+                    "the lowering met the path `{}`, which the lowering anchored to nothing, and the \
+                 check accepted it",
+                    path.name(),
+                )
             },
         }
     }
 
     /// Resolves the callee of a call.
-    fn callee(&mut self, expr: ExprId, span: Span) -> Callee {
+    fn callee(&mut self, expr: ExprId) -> Callee {
         let Expr::Path(path) = self.body[expr].clone() else {
             // A callee that is not a name is a value that is called: a word held in a slot.
             return Callee::Indirect(Operand::Local(self.expr(expr)));
@@ -304,17 +318,20 @@ impl Lowerer<'_> {
                 match self.pat_slots.get(pat) {
                     Some(slot) => Callee::Indirect(Operand::Local(*slot)),
                     None => {
-                        self.report(MirError::Unresolved { name: path.name() }, span);
-
-                        Callee::Indirect(Operand::Const(Const::Unit))
+                        ice!(
+                            "the lowering met a call of the binding `{}`, which no pattern of the body \
+                     binds",
+                            path.name(),
+                        )
                     },
                 }
             },
             PathAnchor::Local(LocalDefId::Function(local)) => Callee::Local(local),
             PathAnchor::Local(LocalDefId::Const(_)) => {
-                self.report(MirError::NotCallable { name: path.name() }, span);
-
-                Callee::Indirect(Operand::Const(Const::Unit))
+                ice!(
+                    "the lowering met a call of the constant `{}`, and the check accepted it",
+                    path.name(),
+                )
             },
             _ => {
                 let (entity, _) =
@@ -331,16 +348,20 @@ impl Lowerer<'_> {
                                 })
                             },
                             Err(_) => {
-                                self.report(MirError::NotCallable { name: path.name() }, span);
-
-                                Callee::Indirect(Operand::Const(Const::Unit))
+                                ice!(
+                                    "the lowering met a call of `{}`, which is not a function, and the \
+                             check accepted it",
+                                    path.name(),
+                                )
                             },
                         }
                     },
                     None => {
-                        self.report(MirError::Unresolved { name: path.name() }, span);
-
-                        Callee::Indirect(Operand::Const(Const::Unit))
+                        ice!(
+                            "the lowering met a call of `{}`, which resolves to nothing, and the \
+                         check accepted it",
+                            path.name(),
+                        )
                     },
                 }
             },
@@ -348,7 +369,7 @@ impl Lowerer<'_> {
     }
 
     /// Lowers a binary operation into a primitive.
-    fn binary(&mut self, lhs: ExprId, op: BinaryOp, rhs: ExprId, span: Span) -> Rvalue {
+    fn binary(&mut self, lhs: ExprId, op: BinaryOp, rhs: ExprId) -> Rvalue {
         let left = self.expr(lhs);
         let right = self.expr(rhs);
         let args = vec![Operand::Local(left), Operand::Local(right)];
@@ -357,25 +378,27 @@ impl Lowerer<'_> {
             self.checked.expr_type(lhs).cloned(),
             self.checked.expr_type(rhs).cloned(),
         ) else {
-            self.report(MirError::MissingType, span);
-            return Rvalue::Use(Operand::Local(left));
+            ice!("the lowering met `{op}` on operands the check left no type for")
         };
 
-        match self.binary_prim(op, &lhs_ty, &rhs_ty, span) {
-            Some(op) => Rvalue::Prim { op, args },
-            // A mistake was reported; the copy keeps the body in one piece.
-            None => Rvalue::Use(Operand::Local(left)),
+        Rvalue::Prim {
+            op: self.binary_prim(op, &lhs_ty, &rhs_ty),
+            args,
         }
     }
 
-    /// The primitive of a binary operator, if the language has one for these operands.
-    fn binary_prim(&mut self, op: BinaryOp, lhs: &Ty, rhs: &Ty, span: Span) -> Option<PrimOp> {
+    /// The primitive of a binary operator.
+    ///
+    /// Every operator of the language is a rule of the check for now, and the rule is what
+    /// picks the primitive: a pair of operands the check accepted has one, and a pair without
+    /// one is a gap of the check.
+    fn binary_prim(&mut self, op: BinaryOp, lhs: &Ty, rhs: &Ty) -> PrimOp {
         let int = self.deps.builtins().int().clone();
         let boolean = self.deps.builtins().boolean().clone();
         let ints = is_class(lhs, &int) && is_class(rhs, &int);
         let booleans = is_class(lhs, &boolean) && is_class(rhs, &boolean);
 
-        let prim = match op {
+        match op {
             BinaryOp::Add if ints => PrimOp::IntAdd,
             BinaryOp::Sub if ints => PrimOp::IntSub,
             BinaryOp::Mul if ints => PrimOp::IntMul,
@@ -390,52 +413,44 @@ impl Lowerer<'_> {
             BinaryOp::Ne if booleans => PrimOp::BoolNe,
             BinaryOp::And if booleans => PrimOp::BoolAnd,
             BinaryOp::Or if booleans => PrimOp::BoolOr,
-            BinaryOp::Eq | BinaryOp::Ne => {
-                self.report(MirError::Equality { ty: lhs.clone() }, span);
-                return None;
-            },
             op => {
-                self.report(
-                    MirError::Operator {
-                        op: Operator::Binary(op),
-                    },
-                    span,
-                );
-
-                return None;
+                ice!(
+                    "the lowering met `{op}` on `{lhs}` and `{rhs}`, and the language has no \
+                 primitive for it",
+                )
             },
-        };
-
-        Some(prim)
+        }
     }
 
     /// Lowers a unary operation.
-    fn unary(&mut self, op: UnaryOp, operand: ExprId, span: Span) -> Rvalue {
+    fn unary(&mut self, op: UnaryOp, operand: ExprId) -> Rvalue {
         let value = self.expr(operand);
 
         match op {
             // A sign that keeps the value is the value.
             UnaryOp::Pos => Rvalue::Use(Operand::Local(value)),
             UnaryOp::Neg => {
-                let Some(ty) = self.checked.expr_type(operand).cloned() else {
-                    self.report(MirError::MissingType, span);
-                    return Rvalue::Use(Operand::Local(value));
-                };
+                let ty = self.checked.expr_type(operand).cloned();
 
-                if is_class(&ty, self.deps.builtins().int()) {
-                    Rvalue::Prim {
-                        op: PrimOp::IntNeg,
-                        args: vec![Operand::Local(value)],
-                    }
-                } else {
-                    self.report(
-                        MirError::Operator {
-                            op: Operator::Unary(op),
-                        },
-                        span,
-                    );
-
-                    Rvalue::Use(Operand::Local(value))
+                match ty {
+                    Some(ty) if is_class(&ty, self.deps.builtins().int()) => {
+                        Rvalue::Prim {
+                            op: PrimOp::IntNeg,
+                            args: vec![Operand::Local(value)],
+                        }
+                    },
+                    Some(ty) => {
+                        ice!(
+                            "the lowering met `{op}` on `{ty}`, and the language has no primitive \
+                         for it",
+                        )
+                    },
+                    None => {
+                        ice!(
+                            "the lowering met `{op}` on an operand the check left no type \
+                                  for"
+                        )
+                    },
                 }
             },
         }
@@ -466,11 +481,6 @@ impl Lowerer<'_> {
         self.source_map
             .pat(pat)
             .map_or_else(Span::dummy, |range| Span::new(self.module.0, range))
-    }
-
-    /// Reports what the lowering cannot lower.
-    fn report(&mut self, error: MirError, span: Span) {
-        self.diags.push(MirDiag::new(error, span));
     }
 }
 
@@ -565,9 +575,8 @@ mod tests {
         }
     }
 
-    /// Checks the first body of `source`, lowers it, and answers the MIR, the diagnostics of
-    /// the lowering, and the SSA form of it.
-    fn lower(source: &str) -> (MirBody, Vec<MirDiag>, MirBody) {
+    /// Checks the first body of `source`, lowers it, and answers the MIR and the SSA form of it.
+    fn lower(source: &str) -> (MirBody, MirBody) {
         let fixture = fixture(source);
         let (owner, body) = fixture.bodies.first().expect("a body of the fixture");
         let (checked, diagnostics) = check_body(
@@ -579,7 +588,7 @@ mod tests {
         );
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let (mir, diagnostics) = lower_body(
+        let mir = lower_body(
             owner.clone(),
             &fixture.tree,
             &body.body,
@@ -590,15 +599,14 @@ mod tests {
         );
         let ssa = construct_ssa(&mir);
 
-        (mir, diagnostics, ssa)
+        (mir, ssa)
     }
 
     #[test]
     fn a_body_of_one_expression_lowers_into_slots() {
         let source = format!("{CLASSES}fun double(value: Int): Int = value + value\n");
-        let (mir, diagnostics, ssa) = lower(&source);
+        let (mir, ssa) = lower(&source);
 
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(mir.validate_cfg(), Ok(()));
         assert_eq!(
             dump_of(&mir),
@@ -615,28 +623,11 @@ mod tests {
     #[test]
     fn a_let_binds_a_slot_for_the_scope_of_its_body() {
         let source = format!("{CLASSES}fun identity(value: Int): Int = let x = value in x\n");
-        let (mir, diagnostics, _) = lower(&source);
+        let (mir, _) = lower(&source);
 
-        assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(
             dump_of(&mir),
             "fun identity (entry b0)\n  params: v0: Int\n  b0:\n    l0(value) = use v0\n    l2 = use l0\n    l3(x) = use l2\n    l4 = use l3\n    l1 = use l4\n    return l1\n",
-        );
-    }
-
-    #[test]
-    fn an_int_out_of_the_range_of_the_word_is_reported() {
-        let source = format!("{CLASSES}fun big(): Int = 1099511627776\n");
-        let (mir, diagnostics, _) = lower(&source);
-
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].error(), &MirError::IntOutOfRange {
-            value: 1_099_511_627_776,
-        },);
-        assert_eq!(mir.validate_cfg(), Ok(()));
-        assert_eq!(
-            dump_of(&mir),
-            "fun big (entry b0)\n  b0:\n    l0 = const 0\n    return l0\n",
         );
     }
 

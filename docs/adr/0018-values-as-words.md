@@ -106,8 +106,10 @@ and the first implementation makes that a property of the language:
 - `Int` holds `[-2^30, 2^30 - 1]`;
 - arithmetic wraps modulo `2^31`,
   which is what `ref.i31` does when it truncates;
-- a literal outside the range is a lowering diagnostic,
-  not a silent truncation.
+- a literal outside the range is a type error,
+  which the checker reports: the range of a literal is the meaning of the type
+  it is written with ([ADR-0017][0017-resolved-types.md]),
+  and the construction of MIR reads it as an invariant ([ADR-0019][0019-mir.md]).
 
 The alternative — `Int` as a full 64-bit value with a boxed escape —
 is deliberately not taken now:
@@ -256,6 +258,7 @@ the payload says which immediate or which object.
 
 - WASM back end: [0020-wasm-backend.md]
 - Translation units and the ABI: [0021-translation-units.md]
+- MIR, which the words are lowered to: [0019-mir.md]
 - Resolved types: [0017-resolved-types.md]
 - Stable identity, which makes an entity's name a value: [0010-stable-entity-identity.md]
 - The pipeline MIR belongs to: [0005-compiler-pipeline.md]
@@ -266,5 +269,6 @@ the payload says which immediate or which object.
 [0005-compiler-pipeline.md]: 0005-compiler-pipeline.md
 [0010-stable-entity-identity.md]: 0010-stable-entity-identity.md
 [0017-resolved-types.md]: 0017-resolved-types.md
+[0019-mir.md]: 0019-mir.md
 [0020-wasm-backend.md]: 0020-wasm-backend.md
 [0021-translation-units.md]: 0021-translation-units.md

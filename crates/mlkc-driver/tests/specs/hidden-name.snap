@@ -235,15 +235,15 @@ CHECKED BODY
 
 `fun call`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun make`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 `fun gone`
 
-Not lowered: the body does not check clean.
+Not lowered: the front end reported a mistake.
 
 ### Diagnostics
 

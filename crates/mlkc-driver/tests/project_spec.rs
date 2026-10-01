@@ -11,8 +11,8 @@
 //!
 //! The snapshot holds, for every module of the project, the surface it was lowered to, the scope
 //! it resolved to, the types its signatures and bodies were checked to, the MIR of every body
-//! that checks clean, in both of its forms, and what the stages reported. A snapshot is part of
-//! changing how a project is read:
+//! the front end read clean, in both of its forms, and what the stages reported. A snapshot is
+//! part of changing how a project is read:
 //! `INSTA_UPDATE=always cargo test -p mlkc-driver` rewrites them, and the diff of the snapshots
 //! is what a review reads ([ADR-0006], [ADR-0016], [ADR-0017], [ADR-0019]).
 //!
@@ -158,10 +158,10 @@ pub(crate) fn run(fixture: &str) {
                     .expect("writing to a string to never fail");
                 snapshot.push('\n');
 
-                // A body whose check reported a mistake is not lowered, and a host is told so
-                // by the diagnostics of the file ([ADR-0019]).
+                // A body the front end or the check reported a mistake about is not lowered,
+                // and a host is told so by the diagnostics of the file ([ADR-0019]).
                 let Some(mir) = driver.mir(body.owner()) else {
-                    snapshot.push_str("Not lowered: the body does not check clean.\n\n");
+                    snapshot.push_str("Not lowered: the front end reported a mistake.\n\n");
                     continue;
                 };
 

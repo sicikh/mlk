@@ -1,6 +1,6 @@
 // What the checker reports about a body and about a written type: a value where another one
-// belongs, a callee that is not a function, a call of the wrong arity, and a class applied to
-// arguments.
+// belongs, a callee that is not a function, a call of the wrong arity, a class applied to
+// arguments, and equality over a type that has none.
 
 //- /main.mlk
 fun one(): Unit =
@@ -24,3 +24,6 @@ fun not-callable(): Int =
 
 fun applied(value: Int[Bool]): Int[Bool] =
     value
+
+fun no-equality(left: String, right: String): Bool =
+    left == right

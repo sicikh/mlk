@@ -29,4 +29,8 @@ pub mod dump;
 pub mod module_types;
 pub mod ty;
 
-pub use crate::{checked::CheckedBody, module_types::ModuleTypes, ty::Ty};
+pub use crate::{
+    checked::CheckedBody,
+    module_types::ModuleTypes,
+    ty::{INT_MAX, INT_MIN, Ty},
+};

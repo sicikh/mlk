@@ -12,9 +12,6 @@ fun signed(): Int =
 fun ordered(left: Int, right: Int): Bool =
     left < right && left <= right || left > right || left >= right
 
-fun same(left: String, right: String): Bool =
-    left == right
-
 fun different(left: Int, right: Int): Bool =
     left != right
 

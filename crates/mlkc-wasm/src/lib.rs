@@ -961,7 +961,7 @@ mod tests {
     }
 
     #[test]
-    fn a_mir_mistake_crosses_the_boundary_as_a_diagnostic() {
+    fn a_literal_out_of_the_range_of_int_crosses_the_boundary_as_a_mistake() {
         const SOURCE: &str = "fun big(): Int =\n    1099511627776\n";
 
         let mut driver = WasmDriver::new();
@@ -972,19 +972,21 @@ mod tests {
         let json = serde_json::to_value(&analysis).expect("the analysis to serialize");
         let diagnostics = json["diagnostics"].as_array().expect("diagnostics");
 
+        // The range of a literal is the meaning of the type it is written with, so the check is
+        // what reports it ([ADR-0018]).
+        //
+        // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-        assert_eq!(diagnostics[0]["category"], "mir");
-        assert_eq!(
-            diagnostics[0]["categoryCode"], "06",
-            "the construction of MIR is the sixth stage of the pipeline"
-        );
-        assert_eq!(diagnostics[0]["code"], "01");
+        assert_eq!(diagnostics[0]["category"], "typechecker");
+        assert_eq!(diagnostics[0]["categoryCode"], "05");
+        assert_eq!(diagnostics[0]["code"], "13");
         assert_eq!(
             diagnostics[0]["message"],
             "the integer literal `1099511627776` is outside the 31-bit range of `Int`"
         );
 
-        // A MIR diagnostic carries its own span, and what a host is handed is that span.
+        // The place of the label is the literal, and what it says is what an editor shows under
+        // the caret.
         let label = &diagnostics[0]["labels"][0];
         let start = SOURCE
             .find("1099511627776")
@@ -993,7 +995,7 @@ mod tests {
         assert_eq!(label["primary"], true);
         assert_eq!(label["start"], start);
         assert_eq!(label["end"], start + "1099511627776".len() as u64);
-        assert_eq!(label["message"], "");
+        assert_eq!(label["message"], "outside the range of `Int`");
     }
 
     #[test]

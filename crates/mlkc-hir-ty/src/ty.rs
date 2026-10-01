@@ -4,6 +4,16 @@ use std::fmt;
 
 use mlkc_hir_def::{ClassLoc, EntityLoc, ItemLocLike, TypeVarId};
 
+/// The smallest `Int`: the payload of `i31ref` is 31 bits ([ADR-0018][adr-0018]).
+///
+/// [adr-0018]: ../../docs/adr/0018-values-as-words.md
+pub const INT_MIN: i64 = -(1 << 30);
+
+/// The largest `Int`: the payload of `i31ref` is 31 bits ([ADR-0018][adr-0018]).
+///
+/// [adr-0018]: ../../docs/adr/0018-values-as-words.md
+pub const INT_MAX: i64 = (1 << 30) - 1;
+
 /// A type, resolved: no path is left unresolved, and no inference variable survives.
 ///
 /// A `Ty` owns everything it names, so it is a value of its own: it clones, compares, and

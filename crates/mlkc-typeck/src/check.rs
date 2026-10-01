@@ -18,10 +18,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, ItemLoc, ItemTree, Literal,
-    ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId, ProjectGraph, UnaryOp,
+    BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, ItemKind, ItemLoc,
+    ItemLocLike, ItemTree, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId,
+    ProjectGraph, UnaryOp,
 };
-use mlkc_hir_ty::{CheckedBody, ModuleTypes, Ty};
+use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
 use mlkc_resolve::{Closure, Resolution};
 use rustc_hash::FxHashMap;
 
@@ -187,6 +188,20 @@ pub fn check_body(
     checker.finish()
 }
 
+/// Which position an expression is read in.
+///
+/// A function is not a value the language has: the name of one is what a call calls, and a
+/// name read anywhere else denotes no value ([ADR-0019] closures).
+///
+/// [ADR-0019]: ../../docs/adr/0019-mir.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Position {
+    /// Where a value belongs.
+    Value,
+    /// The callee of a call.
+    Callee,
+}
+
 /// What a builtin expression needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Builtin {
@@ -278,15 +293,15 @@ impl Checker<'_> {
 
         let ty = match node {
             Expr::Missing => InferTy::Error,
-            Expr::Literal(literal) => self.literal(&literal),
-            Expr::Path(path) => self.value_path(expr, path),
+            Expr::Literal(literal) => self.literal(expr, &literal),
+            Expr::Path(path) => self.value_path(expr, path, Position::Value),
             Expr::Call { callee, args } => self.call(callee, &args),
             Expr::Field { field, .. } => {
                 // The names inside a value are not a thing the language has yet.
                 self.report(TypeError::NestedName { name: field }, expr);
                 InferTy::Error
             },
-            Expr::Binary { lhs, op, rhs } => self.binary(lhs, op, rhs),
+            Expr::Binary { lhs, op, rhs } => self.binary(expr, lhs, op, rhs),
             Expr::Unary { op, operand } => self.unary(op, operand),
             Expr::Let {
                 pat,
@@ -340,15 +355,26 @@ impl Checker<'_> {
     }
 
     /// The type of a literal: an integer is `Int`, and a string is `String`.
-    fn literal(&self, literal: &Literal) -> InferTy {
+    ///
+    /// An integer literal that does not fit the 31-bit representation of `Int` is the check's to
+    /// report: the representation is what the type means ([ADR-0018]).
+    ///
+    /// [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+    fn literal(&mut self, expr: ExprId, literal: &Literal) -> InferTy {
         match literal {
-            Literal::Int(_) => self.builtin(Builtin::Int),
+            Literal::Int(value) => {
+                if !(INT_MIN..=INT_MAX).contains(value) {
+                    self.report(TypeError::IntOutOfRange { value: *value }, expr);
+                }
+
+                self.builtin(Builtin::Int)
+            },
             Literal::Str(_) => self.builtin(Builtin::String),
         }
     }
 
     /// The type of a path written where a value belongs.
-    fn value_path(&mut self, expr: ExprId, path: PathId) -> InferTy {
+    fn value_path(&mut self, expr: ExprId, path: PathId, position: Position) -> InferTy {
         let path = self.body[path].clone();
 
         // A path applied to arguments is a path of a value the language cannot have yet, and a
@@ -397,6 +423,16 @@ impl Checker<'_> {
                 errors.append(&mut found);
 
                 match entity {
+                    // The language has no value of a function yet: the name of one is what a
+                    // call calls, and anywhere else it denotes no value.
+                    Some(entity)
+                        if position == Position::Value
+                            && entity.item.kind() == ItemKind::Function =>
+                    {
+                        errors.push(TypeError::NotAValue { name: path.name() });
+
+                        InferTy::Error
+                    },
                     Some(entity) => self.entity_value(&entity),
                     None => InferTy::Error,
                 }
@@ -433,7 +469,7 @@ impl Checker<'_> {
     /// The type of a call: the callee's parameters check the arguments, and its result is the
     /// type of the call.
     fn call(&mut self, callee: ExprId, args: &[ExprId]) -> InferTy {
-        let callee_ty = self.infer(callee);
+        let callee_ty = self.callee_value(callee);
         let (params, ret) = self.function_of(callee, callee_ty, args.len());
 
         for (index, arg) in args.iter().enumerate() {
@@ -442,6 +478,21 @@ impl Checker<'_> {
         }
 
         ret
+    }
+
+    /// The type of the expression a call calls.
+    ///
+    /// A path is read as a callee: a function the name denotes is what the call calls, and not
+    /// a mistake. Any other expression is a value like any other.
+    fn callee_value(&mut self, expr: ExprId) -> InferTy {
+        let Expr::Path(path) = self.body[expr].clone() else {
+            return self.infer(expr);
+        };
+
+        let ty = self.value_path(expr, path, Position::Callee);
+        self.record_expr(expr, ty.clone());
+
+        ty
     }
 
     /// The parameters and the result of a value that is called, invented where the value is a
@@ -497,7 +548,7 @@ impl Checker<'_> {
     /// are over `Int`, equality compares two values of one type, and `&&` and `||` are over
     /// `Bool`. When `impl`s arrive, the rules become the types of the `impl`s, and no type
     /// changes.
-    fn binary(&mut self, lhs: ExprId, op: BinaryOp, rhs: ExprId) -> InferTy {
+    fn binary(&mut self, expr: ExprId, lhs: ExprId, op: BinaryOp, rhs: ExprId) -> InferTy {
         match op {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
                 let int = self.builtin(Builtin::Int);
@@ -509,6 +560,7 @@ impl Checker<'_> {
             BinaryOp::Eq | BinaryOp::Ne => {
                 let lhs_ty = self.infer(lhs);
                 self.check(rhs, &lhs_ty);
+                self.equality(expr, rhs, &lhs_ty);
                 self.builtin(Builtin::Boolean)
             },
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
@@ -533,6 +585,38 @@ impl Checker<'_> {
         self.check(operand, &int);
 
         int
+    }
+
+    /// Reports equality over a type the language has no equality for yet.
+    ///
+    /// Equality is over `Int` and `Bool` for now, and becomes a class of its own when the
+    /// language has `impl`s ([ADR-0019]). A mistake absorbs the report: the mistake was reported
+    /// where it was made, and one expression is one mistake.
+    ///
+    /// [ADR-0019]: ../../docs/adr/0019-mir.md
+    fn equality(&mut self, expr: ExprId, rhs: ExprId, ty: &InferTy) {
+        // The right side is the error type when it did not check against the left one, and the
+        // mismatch it reported is the mistake here.
+        if matches!(self.expr_types.get(&rhs), Some(InferTy::Error)) {
+            return;
+        }
+
+        let represented = self.engine.repr(ty);
+
+        let supported = match &represented {
+            InferTy::Error | InferTy::Var(_) => return,
+            InferTy::Class { class, args } => {
+                args.is_empty()
+                    && (class == self.deps.builtins().int()
+                        || class == self.deps.builtins().boolean())
+            },
+            InferTy::Fn { .. } | InferTy::Param(_) => false,
+        };
+
+        if !supported {
+            let ty = self.engine.zonk(&represented);
+            self.report(TypeError::NoEquality { ty }, expr);
+        }
     }
 
     /// The type of a `let`: the right side is inferred, generalized, and bound to the pattern,
@@ -846,6 +930,113 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(checked.expr_type(body.root()), Some(&boolean));
+    }
+
+    #[test]
+    fn a_literal_out_of_the_range_of_int_is_reported() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun big(): Int = 1099511627776\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // The range of a literal is the meaning of the type it is written with, so the check is
+        // what reports it ([ADR-0018]).
+        //
+        // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(matches!(
+            diagnostics[0].error(),
+            TypeError::IntOutOfRange { value } if *value == 1_099_511_627_776
+        ));
+
+        // The literal is still an `Int`: what is wrong is the value, and not the type.
+        let int = Ty::class(class(&tree, "Int"));
+        assert_eq!(checked.expr_type(body.root()), Some(&int));
+    }
+
+    #[test]
+    fn equality_is_over_int_and_bool_for_now() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\n\
+             fun ints(left: Int, right: Int): Bool = left != right\n\
+             fun booleans(left: Bool, right: Bool): Bool = left == right\n\
+             fun strings(left: String, right: String): Bool = left == right\n\
+             fun mixed(left: String, right: Int): Bool = left == right\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let check = |index: usize| {
+            let (owner, body) = &bodies[index];
+            check_body(owner.clone(), &tree, body, &resolution, &deps)
+        };
+
+        // Equality is over `Int` and `Bool`: the primitive of MIR exists for the two.
+        assert!(check(0).1.is_empty(), "{:?}", check(0).1);
+        assert!(check(1).1.is_empty(), "{:?}", check(1).1);
+
+        // A `String` has no equality yet, and the check is what says so.
+        let (_, diagnostics) = check(2);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(matches!(
+            diagnostics[0].error(),
+            TypeError::NoEquality { ty } if *ty == Ty::class(class(&tree, "String"))
+        ));
+
+        // Two operands that do not check against each other are one mismatch, and not a mismatch
+        // and a missing equality: a mistake is reported once.
+        let (_, diagnostics) = check(3);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(matches!(
+            diagnostics[0].error(),
+            TypeError::TypeMismatch { .. }
+        ));
+    }
+
+    #[test]
+    fn a_function_is_not_a_value() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\n\
+             fun id(x: Int): Int = x\n\
+             fun bound(): Int = let f = id in f(1)\n\
+             fun called(): Int = id(1)\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        // The name of a function in the position of a callee is what a call calls.
+        let (owner, body) = &bodies[2];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        // The same name bound like a value denotes no value: the language has no function
+        // value yet, and MIR has nothing to lower one to ([ADR-0019]).
+        //
+        // [ADR-0019]: ../../docs/adr/0019-mir.md
+        let (owner, body) = &bodies[1];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(matches!(
+            diagnostics[0].error(),
+            TypeError::NotAValue { name } if name == &Name::new("id")
+        ));
     }
 
     #[test]

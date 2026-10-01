@@ -1,7 +1,14 @@
+//! The internal compiler exception: what a pass says when its input breaks its contract.
+
+/// Stops the compiler with an internal compiler exception.
+///
+/// A pass that meets what its contract says it cannot meet says so with this: the input is one
+/// a stage before it should have rejected, so it is a bug of the compiler and not of the program,
+/// and the process ends with where the bug is.
 #[macro_export]
 macro_rules! ice {
     ($($arg:tt)*) => {{
-        $crate::diag::ice_impl(
+        $crate::ice_impl(
             format!($($arg)*),
             file!(),
             line!(),

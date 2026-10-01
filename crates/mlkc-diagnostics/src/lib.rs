@@ -6,6 +6,8 @@ mod render;
 use mlkc_span::TextRange;
 
 pub use crate::diagnostic::{Category, DiagKind, Diagnostic, Label, Level};
+#[doc(hidden)]
+pub use crate::ice::ice_impl;
 
 /// Conversion of a range-like value into an optional [TextRange].
 pub trait AsRange {

@@ -170,6 +170,17 @@ impl PathData {
         }
     }
 
+    /// The name a message reads the path by: the name it is rooted at, or the last of its
+    /// names when the root is the keyword `project`; a path that names nothing at all reads as
+    /// the missing name.
+    pub fn name(&self) -> Name {
+        self.root
+            .name()
+            .or_else(|| self.segments.last().map(|segment| &segment.name))
+            .cloned()
+            .unwrap_or_else(Name::missing)
+    }
+
     /// Resolves the base of the path against the names of one module and the projects it may
     /// name, and its arguments.
     ///

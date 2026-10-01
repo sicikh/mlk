@@ -112,14 +112,6 @@ impl<I> EntityLoc<I> {
     }
 }
 
-/// The number of a node in the arena it lives in, counted from zero.
-///
-/// This is the label a dump gives a node; it is not an identity of anything,
-/// and it changes when a node is allocated before it.
-pub(crate) fn arena_index<T>(id: Idx<T>) -> u32 {
-    id.into_raw().into_u32() - 1
-}
-
 /// The name of an entity that owns a body, in the project.
 pub type BodyEntityLoc = EntityLoc<BodyLoc>;
 
@@ -289,7 +281,7 @@ pub struct LocalFunctionId(pub(crate) Idx<LocalFunctionData>);
 
 impl std::fmt::Debug for LocalFunctionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fun#{}", arena_index(self.0))
+        write!(f, "fun#{}", self.0.index())
     }
 }
 
@@ -311,7 +303,7 @@ pub struct LocalConstId(pub(crate) Idx<LocalConstData>);
 
 impl std::fmt::Debug for LocalConstId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "const#{}", arena_index(self.0))
+        write!(f, "const#{}", self.0.index())
     }
 }
 

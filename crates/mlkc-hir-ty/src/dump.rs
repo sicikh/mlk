@@ -48,14 +48,14 @@ pub fn checked_body(body: &CheckedBody) -> String {
     for (id, ty) in exprs {
         // An id counts from one, and the label a person reads a node by counts from zero, as the
         // HIR dump counts.
-        let _ = write!(out, "\n  expr #{}: {ty}", id.into_raw().into_u32() - 1);
+        let _ = write!(out, "\n  expr #{}: {ty}", id.index());
     }
 
     let mut pats: Vec<_> = body.pat_types().collect();
     pats.sort_by_key(|(id, _)| *id);
 
     for (id, ty) in pats {
-        let _ = write!(out, "\n  pat #{}: {ty}", id.into_raw().into_u32() - 1);
+        let _ = write!(out, "\n  pat #{}: {ty}", id.index());
     }
 
     let mut locals: Vec<_> = body.local_types().collect();

@@ -1,0 +1,438 @@
+//! The MIR of one body: a uniform control-flow graph over words.
+//!
+//! One set of types serves the two forms of [ADR-0019][adr-0019]: the CFG form, where an
+//! assignment writes a slot and a join is a slot the predecessors assigned, and the SSA form,
+//! where every value is defined once and a join is a block parameter. What tells them apart is
+//! their invariants ([`crate::verify`]), never their types.
+//!
+//! [adr-0019]: ../../docs/adr/0019-mir.md
+
+use mlkc_hir_def::{BodyEntityLoc, EntityLoc, FunctionLoc, LocalFunctionId, Name};
+use mlkc_hir_ty::Ty;
+use mlkc_intern::Interned;
+use mlkc_la_arena::{Arena, Idx};
+use mlkc_span::Span;
+
+/// The id of a block inside one body.
+pub type BlockId = Idx<Block>;
+
+/// The id of a value inside one body.
+pub type ValueId = Idx<ValueData>;
+
+/// The id of a slot inside one body.
+pub type LocalId = Idx<LocalData>;
+
+/// The MIR of one body.
+///
+/// The body of an entity that owns one is addressed by the entity's name; a function declared
+/// inside a body has [`Body::local`] set, and its owner is the entity that declares it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Body {
+    /// The entity whose body this is.
+    pub owner: BodyEntityLoc,
+    /// The function declared inside a body this body is, if it is one.
+    pub local: Option<LocalFunctionId>,
+    /// The values the owner is entered with: one per parameter, in the order they are declared.
+    ///
+    /// A parameter is a value and not a slot: the first statements of the entry block bind the
+    /// parameter slots to it, and no form moves the list.
+    pub params: Vec<ValueId>,
+    /// The block a body enters.
+    pub entry: BlockId,
+    /// The blocks.
+    pub blocks: Arena<Block>,
+    /// The values: the parameters of the body, and the definitions of the statements.
+    pub values: Arena<ValueData>,
+    /// The slots of the CFG form; empty once the SSA pass has run.
+    pub locals: Arena<LocalData>,
+}
+
+/// One block: its parameters, its statements, and the terminator it ends in.
+///
+/// A block is entered through its parameters and ends in exactly one terminator;
+/// there are no fall-throughs and no implicit joins.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Block {
+    /// The block parameters: where a value coming from several predecessors is born.
+    ///
+    /// The CFG form has none; the SSA form has one per value born at a join.
+    pub params: Vec<ValueId>,
+    /// The statements, in the order they run.
+    pub stmts: Vec<Stmt>,
+    /// The terminator: where control goes.
+    pub term: Terminator,
+}
+
+/// What a value is, for a dump, a verifier, and a debugger.
+///
+/// A value carries what a stage computes and nothing else: the span is where it was read, and
+/// the type is what the checker gave the expression it is a value of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValueData {
+    /// Where the value is written.
+    pub span: Span,
+    /// The source type the checker gave the expression this value is.
+    pub ty: Ty,
+}
+
+/// What a slot is, for a dump, a verifier, and a debugger.
+///
+/// A slot is a name of the CFG form: it is assigned any number of times, and it disappears
+/// when the SSA form gives every value a definition of its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalData {
+    /// Where the slot is bound.
+    pub span: Span,
+    /// The name the slot was bound under, if it was bound under one.
+    pub name: Option<Name>,
+    /// The source type of what the slot holds.
+    pub ty: Ty,
+}
+
+/// One statement, and where it is written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stmt {
+    /// What the statement does.
+    pub kind: StmtKind,
+    /// Where the statement is written.
+    pub span: Span,
+}
+
+/// What a statement does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StmtKind {
+    /// `place = rvalue`.
+    Assign {
+        /// What is written.
+        place: Place,
+        /// What is computed.
+        rvalue: Rvalue,
+    },
+}
+
+/// What an assignment writes: a slot of the CFG form, or a value of the SSA form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// A slot of the CFG form; it may be assigned many times.
+    Local(LocalId),
+    /// An SSA value; it is defined exactly once, by its statement.
+    Value(ValueId),
+}
+
+/// What an operand reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Operand {
+    /// A value: what an SSA body passes and reads.
+    Value(ValueId),
+    /// A read of a slot; only in the CFG form.
+    Local(LocalId),
+    /// A constant.
+    Const(Const),
+}
+
+/// What a statement computes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Rvalue {
+    /// A copy of an operand.
+    Use(Operand),
+    /// A constant.
+    Const(Const),
+    /// A call.
+    Call {
+        /// What is called.
+        callee: Callee,
+        /// The arguments, in the order they are passed; each is a word.
+        args: Vec<Operand>,
+    },
+    /// A word-level primitive; the operator says which.
+    Prim {
+        /// The operator.
+        op: PrimOp,
+        /// The operands, in the order the operator takes them.
+        args: Vec<Operand>,
+    },
+}
+
+/// What a call calls.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Callee {
+    /// A function of the project, in this module or in another.
+    Entity(EntityLoc<FunctionLoc>),
+    /// A function declared inside the enclosing body.
+    Local(LocalFunctionId),
+    /// A function held in an operand: later, when functions become values.
+    Indirect(Operand),
+}
+
+/// A constant of the language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Const {
+    /// A signed 31-bit integer; the range invariant of [ADR-0018][adr-0018].
+    ///
+    /// [adr-0018]: ../../docs/adr/0018-values-as-words.md
+    Int(i32),
+    /// A boolean.
+    Bool(bool),
+    /// The unit value.
+    Unit,
+    /// A string, which is a reference to a GC array.
+    Str(Interned<str>),
+}
+
+/// A word-level primitive, named by its semantics and not by an instruction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrimOp {
+    /// The wrapping addition of two immediates.
+    IntAdd,
+    /// The wrapping subtraction of two immediates.
+    IntSub,
+    /// The wrapping multiplication of two immediates.
+    IntMul,
+    /// The division of two immediates; a zero divisor traps, and the one case that leaves the
+    /// range wraps.
+    IntDiv,
+    /// The negation of an immediate; the one case that leaves the range wraps.
+    IntNeg,
+    /// Whether two immediates are equal.
+    IntEq,
+    /// Whether two immediates are not equal.
+    IntNe,
+    /// Whether the first immediate is less than the second.
+    IntLt,
+    /// Whether the first immediate is less than or equal to the second.
+    IntLe,
+    /// Whether the first immediate is greater than the second.
+    IntGt,
+    /// Whether the first immediate is greater than or equal to the second.
+    IntGe,
+    /// Whether both booleans are true.
+    BoolAnd,
+    /// Whether either boolean is true.
+    BoolOr,
+    /// The negation of a boolean.
+    BoolNot,
+    /// Whether two booleans are equal.
+    BoolEq,
+    /// Whether two booleans are not equal.
+    BoolNe,
+    /// The identity of two references.
+    RefEq,
+}
+
+impl PrimOp {
+    /// The operator as a dump reads it.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::IntAdd => "int-add",
+            Self::IntSub => "int-sub",
+            Self::IntMul => "int-mul",
+            Self::IntDiv => "int-div",
+            Self::IntNeg => "int-neg",
+            Self::IntEq => "int-eq",
+            Self::IntNe => "int-ne",
+            Self::IntLt => "int-lt",
+            Self::IntLe => "int-le",
+            Self::IntGt => "int-gt",
+            Self::IntGe => "int-ge",
+            Self::BoolAnd => "bool-and",
+            Self::BoolOr => "bool-or",
+            Self::BoolNot => "bool-not",
+            Self::BoolEq => "bool-eq",
+            Self::BoolNe => "bool-ne",
+            Self::RefEq => "ref-eq",
+        }
+    }
+}
+
+/// Where a block ends, and where control goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Terminator {
+    /// Control goes to one block.
+    Goto {
+        /// Where it goes.
+        target: BlockTarget,
+        /// Where the terminator is written.
+        span: Span,
+    },
+    /// Control goes to one of two blocks, by a condition.
+    Branch {
+        /// The condition: a word the language reads as a boolean.
+        cond: Operand,
+        /// Where control goes when the condition holds.
+        then_: BlockTarget,
+        /// Where control goes when it does not.
+        else_: BlockTarget,
+        /// Where the terminator is written.
+        span: Span,
+    },
+    /// Control goes to one of several blocks, by what a word is.
+    Switch {
+        /// The word that decides.
+        scrutinee: Operand,
+        /// The constants and where control goes for each of them.
+        arms: Vec<(Const, BlockTarget)>,
+        /// Where control goes when no arm matches.
+        otherwise: BlockTarget,
+        /// Where the terminator is written.
+        span: Span,
+    },
+    /// The body gives back a word.
+    Return {
+        /// The word.
+        value: Operand,
+        /// Where the terminator is written.
+        span: Span,
+    },
+    /// Control that is not meant to be reached.
+    Unreachable {
+        /// Where the terminator is written.
+        span: Span,
+    },
+}
+
+/// A block an edge goes to, and the arguments the edge passes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockTarget {
+    /// The block.
+    pub block: BlockId,
+    /// The arguments: one per parameter of the block, in the order of the parameters.
+    ///
+    /// The CFG form passes none, because no block of it has parameters.
+    pub args: Vec<Operand>,
+}
+
+/// Builds one body.
+///
+/// The builder owns the arenas, so that a stage allocates blocks, values, and slots in the
+/// order it meets them, and refers to a block it has not filled yet by its id.
+#[derive(Debug, Default)]
+pub struct BodyBuilder {
+    owner: Option<BodyEntityLoc>,
+    local: Option<LocalFunctionId>,
+    params: Vec<ValueId>,
+    blocks: Arena<Block>,
+    values: Arena<ValueData>,
+    locals: Arena<LocalData>,
+}
+
+impl BodyBuilder {
+    /// A builder of the body of `owner`.
+    pub fn new(owner: BodyEntityLoc) -> Self {
+        Self {
+            owner: Some(owner),
+            ..Self::default()
+        }
+    }
+
+    /// Sets the function declared inside a body that the body is.
+    pub fn local_function(mut self, local: LocalFunctionId) -> Self {
+        self.local = Some(local);
+        self
+    }
+
+    /// Allocates a parameter of the body, in the order the parameters are declared.
+    pub fn param(&mut self, data: ValueData) -> ValueId {
+        let value = self.values.alloc(data);
+        self.params.push(value);
+        value
+    }
+
+    /// Allocates a value.
+    pub fn value(&mut self, data: ValueData) -> ValueId {
+        self.values.alloc(data)
+    }
+
+    /// Allocates a slot.
+    pub fn local(&mut self, data: LocalData) -> LocalId {
+        self.locals.alloc(data)
+    }
+
+    /// Allocates a block.
+    pub fn block(&mut self, block: Block) -> BlockId {
+        self.blocks.alloc(block)
+    }
+
+    /// The block with this id, to fill it after it was referred to.
+    pub fn block_mut(&mut self, id: BlockId) -> &mut Block {
+        &mut self.blocks[id]
+    }
+
+    /// Finishes the body, entered at `entry`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the builder was made without an owner, which [`BodyBuilder::new`] does not
+    /// let a caller do.
+    pub fn finish(self, entry: BlockId) -> Body {
+        Body {
+            owner: self.owner.expect("a body has an owner"),
+            local: self.local,
+            params: self.params,
+            entry,
+            blocks: self.blocks,
+            values: self.values,
+            locals: self.locals,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_body_reads_back_what_the_builder_allocated() {
+        let owner = crate::test_support::owner();
+        let mut builder = BodyBuilder::new(owner.clone());
+        let param = builder.param(ValueData {
+            span: Span::dummy(),
+            ty: Ty::Error,
+        });
+        let slot = builder.local(LocalData {
+            span: Span::dummy(),
+            name: Some(Name::new("value")),
+            ty: Ty::Error,
+        });
+        let value = builder.value(ValueData {
+            span: Span::dummy(),
+            ty: Ty::Error,
+        });
+        let block = builder.block(Block {
+            params: Vec::new(),
+            stmts: vec![
+                Stmt {
+                    kind: StmtKind::Assign {
+                        place: Place::Local(slot),
+                        rvalue: Rvalue::Use(Operand::Value(param)),
+                    },
+                    span: Span::dummy(),
+                },
+                Stmt {
+                    kind: StmtKind::Assign {
+                        place: Place::Value(value),
+                        rvalue: Rvalue::Prim {
+                            op: PrimOp::IntNeg,
+                            args: vec![Operand::Local(slot)],
+                        },
+                    },
+                    span: Span::dummy(),
+                },
+            ],
+            term: Terminator::Return {
+                value: Operand::Value(value),
+                span: Span::dummy(),
+            },
+        });
+        let body = builder.finish(block);
+
+        assert_eq!(body.owner, owner);
+        assert_eq!(body.params, [param]);
+        assert_eq!(body.entry, block);
+        assert_eq!(body.blocks[block].stmts.len(), 2);
+        assert_eq!(body.locals[slot].name, Some(Name::new("value")));
+        assert_eq!(body.blocks[block].term, Terminator::Return {
+            value: Operand::Value(value),
+            span: Span::dummy(),
+        },);
+    }
+}

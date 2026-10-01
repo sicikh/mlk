@@ -201,6 +201,16 @@ impl<T> Idx<T> {
     pub const fn into_raw(self) -> RawIdx {
         self.raw
     }
+
+    /// The position of this id in the arena it was allocated in, counted from zero.
+    ///
+    /// An id carries the position plus one, which is what makes `Option<Idx<T>>` the size of
+    /// an `Idx<T>` ([`RawIdx`]); this is the position itself --- what a dump labels a node
+    /// with, and what an algorithm over a graph indexes by.
+    #[inline]
+    pub const fn index(self) -> usize {
+        self.raw.to_index() as usize
+    }
 }
 
 /// A range of densely allocated arena values.

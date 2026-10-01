@@ -25,7 +25,7 @@ use std::fmt::{self, Write as _};
 use crate::{
     body::{Body, Expr, ExprId, Literal, Pat, PatId},
     def_map::{ModuleScope, PerNs, ProjectDefMap},
-    id::{BodyEntityLoc, EntityLoc, ItemLoc, LocalConstId, LocalFunctionId, ModuleId, arena_index},
+    id::{BodyEntityLoc, EntityLoc, ItemLoc, LocalConstId, LocalFunctionId, ModuleId},
     item_data::{Attributes, EntityData, ModuleAttributes, Signature, Visibility},
     item_tree::{Entity, ItemTree},
     name::Name,
@@ -943,27 +943,27 @@ fn pat_text(pat: &Pat) -> String {
 
 /// The name of an expression or a pattern in the arena of a body.
 fn expr_ref(id: crate::body::ExprId) -> String {
-    format!("expr#{}", arena_index(id))
+    format!("expr#{}", id.index())
 }
 
 /// The name of a pattern in the arena of a body.
 fn pat_ref(id: crate::body::PatId) -> String {
-    format!("pat#{}", arena_index(id))
+    format!("pat#{}", id.index())
 }
 
 /// The name of a path in the arena of a body.
 fn path_ref(id: crate::path::PathId) -> String {
-    format!("path#{}", arena_index(id))
+    format!("path#{}", id.index())
 }
 
 /// The name of a function declared inside a body.
 fn local_function_ref(id: mlkc_la_arena::Idx<crate::body::LocalFunctionData>) -> String {
-    format!("fun#{}", arena_index(id))
+    format!("fun#{}", id.index())
 }
 
 /// The name of a constant declared inside a body.
 fn local_const_ref(id: mlkc_la_arena::Idx<crate::body::LocalConstData>) -> String {
-    format!("const#{}", arena_index(id))
+    format!("const#{}", id.index())
 }
 
 /// The root of an entity declared inside a body, which every one of them has.

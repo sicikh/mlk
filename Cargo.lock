@@ -731,6 +731,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlkc-mir"
+version = "0.1.0"
+dependencies = [
+ "mlkc-hir-def",
+ "mlkc-hir-ty",
+ "mlkc-intern",
+ "mlkc-la-arena",
+ "mlkc-span",
+ "mlkc-vfs",
+]
+
+[[package]]
+name = "mlkc-mir-build"
+version = "0.1.0"
+dependencies = [
+ "mlkc-diagnostics",
+ "mlkc-hir-def",
+ "mlkc-hir-ty",
+ "mlkc-la-arena",
+ "mlkc-lower",
+ "mlkc-mir",
+ "mlkc-parser",
+ "mlkc-resolve",
+ "mlkc-span",
+ "mlkc-syntax",
+ "mlkc-typeck",
+ "mlkc-vfs",
+ "rustc-hash",
+]
+
+[[package]]
 name = "mlkc-parser"
 version = "0.1.0"
 dependencies = [

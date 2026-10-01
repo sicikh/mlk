@@ -11,6 +11,7 @@ pub enum Category {
     Lowering,
     Resolver,
     TypeChecker,
+    Mir,
     Codegen,
 }
 
@@ -22,6 +23,7 @@ impl Category {
             Category::Lowering => "lowering",
             Category::Resolver => "resolver",
             Category::TypeChecker => "typechecker",
+            Category::Mir => "mir",
             Category::Codegen => "codegen",
         }
     }
@@ -35,7 +37,8 @@ impl Category {
             Category::Lowering => "03",
             Category::Resolver => "04",
             Category::TypeChecker => "05",
-            Category::Codegen => "06",
+            Category::Mir => "06",
+            Category::Codegen => "07",
         }
     }
 }

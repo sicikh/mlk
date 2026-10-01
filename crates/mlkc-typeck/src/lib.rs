@@ -50,5 +50,6 @@ mod signatures;
 pub use crate::{
     check::{Builtins, CheckDeps, check_body},
     diagnostic::{TypeDiag, TypeError, TypePlace},
+    resolve::{PathResolver, ResolvedEntity, ResolvedType},
     signatures::resolve_module_types,
 };

@@ -493,6 +493,7 @@ fn is_class(ty: &Ty, class: &EntityLoc<ClassLoc>) -> bool {
 mod tests {
     use std::{collections::BTreeMap, sync::Arc};
 
+    use mlkc_diagnostics::Ice;
     use mlkc_hir_def::{
         BodyEntityLoc, ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name,
         Prelude, ProjectGraph,
@@ -629,6 +630,43 @@ mod tests {
             dump_of(&mir),
             "fun identity (entry b0)\n  params: v0: Int\n  b0:\n    l0(value) = use v0\n    l2 = use l0\n    l3(x) = use l2\n    l4 = use l3\n    l1 = use l4\n    return l1\n",
         );
+    }
+
+    #[test]
+    fn a_body_the_check_rejected_is_a_bug_and_not_a_diagnostic() {
+        let source = format!("{CLASSES}fun big(): Int = 1099511627776\n");
+        let fixture = fixture(&source);
+        let (owner, body) = fixture.bodies.first().expect("a body of the fixture");
+        let (checked, diagnostics) = check_body(
+            owner.clone(),
+            &fixture.tree,
+            &body.body,
+            &fixture.resolution,
+            &fixture.deps,
+        );
+        assert_eq!(diagnostics.len(), 1, "the check reports the literal");
+
+        // The driver is what keeps a body the check rejected away from the lowering; a caller
+        // that hands one over breaks the contract, and the pass says so with an internal compiler
+        // exception a host can read --- never with a diagnostic of its own.
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            lower_body(
+                owner.clone(),
+                &fixture.tree,
+                &body.body,
+                &body.source_map,
+                &checked,
+                &fixture.resolution,
+                &fixture.deps,
+            )
+        }))
+        .expect_err("the lowering to be an exception");
+
+        let ice = payload
+            .downcast_ref::<Ice>()
+            .expect("the payload to be an exception");
+
+        assert!(ice.message().contains("1099511627776"), "{ice}");
     }
 
     /// The dump of a body, which the tests read the lowering and the SSA form by.

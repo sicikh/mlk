@@ -50,6 +50,15 @@
 //!
 //! [ADR-0019]: ../../docs/adr/0019-mir.md
 //!
+//! # Internal compiler exceptions
+//!
+//! A pass the driver calls is one the earlier stages made total input for, and a panic in one is
+//! a bug of the compiler and not of the program ([`mlkc_diagnostics::Ice`]). The driver calls a
+//! pass in a guarded way: the pull answers as if the value were not there, the first exception is
+//! held with what the driver was computing while it happened ([`IceReport`]), and [`Driver::ice`]
+//! is what a host reads to tell a person to file it. A host that would rather die on the spot
+//! gets the same report from the panic it catches itself.
+//!
 //! # The types of a file
 //!
 //! The types of a module are resolved from the signatures it writes, and before the bodies of
@@ -134,14 +143,16 @@
 
 use std::{
     collections::BTreeMap,
+    fmt,
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, OnceLock},
 };
 
-use mlkc_diagnostics::Diagnostic;
+use mlkc_diagnostics::{Diagnostic, Ice};
 use mlkc_hir_def::{
-    Body, BodyEntityLoc, ClassLoc, EntityData, EntityLoc, Interface, ItemLoc, ItemTree, ModuleId,
-    ModuleIndex, Name, PathAnchor, Prelude, ProjectData, ProjectDefMap, ProjectGraph, ProjectId,
-    dump::TypePlace as DeclaredType,
+    Body, BodyEntityLoc, ClassLoc, EntityData, EntityLoc, Interface, ItemLoc, ItemLocLike,
+    ItemTree, ModuleId, ModuleIndex, Name, PathAnchor, Prelude, ProjectData, ProjectDefMap,
+    ProjectGraph, ProjectId, dump::TypePlace as DeclaredType,
 };
 use mlkc_hir_ty::{CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
@@ -214,6 +225,8 @@ pub struct Driver {
     type_diagnostics: FxHashMap<ModuleId, TypeDiagnosticsSlot>,
     /// The line index of every file whose positions have been read.
     line_indices: FxHashMap<FileId, TextSlot<LineIndex>>,
+    /// The first internal compiler exception a pass raised, and what the driver was computing.
+    ice: Option<Arc<IceReport>>,
 }
 
 /// The shape of a slot whose input is the text of one file.
@@ -1406,7 +1419,11 @@ impl Driver {
             return Some(slot.value.clone());
         }
 
-        let value = Arc::new(construct_ssa(&cfg));
+        let value = self.guarded(
+            |driver| format!("building the SSA form of {}", driver.body_context(owner)),
+            || construct_ssa(&cfg),
+        )?;
+        let value = Arc::new(value);
 
         // An SSA form equal to the one the driver holds is the value it holds ([ADR-0008]).
         //
@@ -1445,16 +1462,23 @@ impl Driver {
             return None;
         }
 
-        let held = self.mirs.get(owner);
+        // What the driver holds for this body, when its key still says it was built from what
+        // this pull read: the value is cloned out of the slot so that the borrow of the table
+        // ends before the pass runs.
+        let held = self
+            .mirs
+            .get(owner)
+            .filter(|slot| {
+                Arc::ptr_eq(&slot.lowered, &inputs.lowered)
+                    && Arc::ptr_eq(&slot.resolution, &inputs.resolution)
+                    && slot.closure.reads_the_same_as(&inputs.closure)
+                    && slot.builtins == inputs.builtins
+                    && slot.checked.reads_the_same_as(&checked)
+            })
+            .map(|slot| slot.value.clone());
 
-        if let Some(slot) = held
-            && Arc::ptr_eq(&slot.lowered, &inputs.lowered)
-            && Arc::ptr_eq(&slot.resolution, &inputs.resolution)
-            && slot.closure.reads_the_same_as(&inputs.closure)
-            && slot.builtins == inputs.builtins
-            && slot.checked.reads_the_same_as(&checked)
-        {
-            return Some(slot.value.clone());
+        if let Some(value) = held {
+            return Some(value);
         }
 
         let body = inputs
@@ -1475,20 +1499,26 @@ impl Driver {
             .with_graph(Arc::clone(&self.projects))
             .with_closure(inputs.closure.clone());
 
-        let value = Arc::new(lower_mir(
-            owner.clone(),
-            inputs.lowered.item_tree(),
-            &body.body().body,
-            &body.body().source_map,
-            &checked.value,
-            &inputs.resolution,
-            &deps,
-        ));
+        let value = self.guarded(
+            |driver| format!("lowering {}", driver.body_context(owner)),
+            || {
+                lower_mir(
+                    owner.clone(),
+                    inputs.lowered.item_tree(),
+                    &body.body().body,
+                    &body.body().source_map,
+                    &checked.value,
+                    &inputs.resolution,
+                    &deps,
+                )
+            },
+        )?;
+        let value = Arc::new(value);
 
         // MIR that ends up equal to the one the driver holds is the one it holds ([ADR-0008]).
         //
         // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
-        let value = match held {
+        let value = match self.mirs.get(owner) {
             Some(slot) if *slot.value == *value => slot.value.clone(),
             _ => value,
         };
@@ -1982,6 +2012,54 @@ impl Driver {
         self.vfs.take_changes().into_values().collect()
     }
 
+    /// The first internal compiler exception a pass raised, if one has.
+    ///
+    /// `None` is a healthy compiler. `Some` means a pull answered with no value where a pass
+    /// bugged instead of computing one: the report is what a host shows, and a host that would
+    /// rather stop can stop on it. The driver keeps the first and never overwrites it --- what
+    /// follows a bug is its wake.
+    pub fn ice(&self) -> Option<Arc<IceReport>> {
+        self.ice.clone()
+    }
+
+    /// Runs a pass that may bug, holding the report and answering `None` instead of unwinding.
+    ///
+    /// A slot is written only when its value is complete, so a pull a panic travels out of leaves
+    /// the table as valid as it found it ([ADR-0008]), and its caller reads the answer as "no
+    /// value". `context` is what the driver was computing, read only when a bug happens.
+    ///
+    /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+    fn guarded<T>(
+        &mut self,
+        context: impl FnOnce(&Self) -> String,
+        run: impl FnOnce() -> T,
+    ) -> Option<T> {
+        match catch_unwind(AssertUnwindSafe(run)) {
+            Ok(value) => Some(value),
+            Err(payload) => {
+                let report = Arc::new(IceReport::new(Ice::of(payload), context(self)));
+
+                if self.ice.is_none() {
+                    self.ice = Some(report);
+                }
+
+                None
+            },
+        }
+    }
+
+    /// The body a report is about, as a person reads it: the name of the entity that owns it and
+    /// the path of the file it is written in.
+    fn body_context(&self, owner: &BodyEntityLoc) -> String {
+        let name = owner
+            .item
+            .name()
+            .map_or_else(|| format!("{:?}", owner.item), ToString::to_string);
+        let path = self.file_path(owner.module().0);
+
+        format!("the body of `{name}` in `{path}`")
+    }
+
     /// The value of a slot keyed by the version of a file,
     /// computed when the slot is missing or stale and remembered otherwise.
     ///
@@ -2166,6 +2244,50 @@ impl Diagnostics {
             && self.lowering.is_empty()
             && self.resolution.is_empty()
             && self.types.is_empty()
+    }
+}
+
+/// The report of an internal compiler exception: the bug, and what the driver was computing.
+///
+/// A pass that raises one was handed input the earlier stages should have kept out
+/// ([`mlkc_diagnostics::Ice`]), and the driver is what knows which module and which body it was
+/// asked about: the report is the exception with that context. It is held rather than raised ---
+/// [`Driver::ice`] is how a host tells a person to file it --- and the pull that met the bug
+/// answered as if the value were not there, so the rest of the compiler keeps working.
+#[derive(Debug)]
+pub struct IceReport {
+    /// The exception itself: what the pass assumed, where it was raised, and its backtrace.
+    ice: Ice,
+    /// What the driver was computing when the pass raised it.
+    context: String,
+}
+
+impl IceReport {
+    /// A report of `ice`, raised while the driver was doing `context`.
+    fn new(ice: Ice, context: String) -> Self {
+        Self { ice, context }
+    }
+
+    /// The exception itself.
+    pub fn ice(&self) -> &Ice {
+        &self.ice
+    }
+
+    /// What the driver was computing: the pass, the body, and where it is written.
+    pub fn context(&self) -> &str {
+        &self.context
+    }
+}
+
+impl fmt::Display for IceReport {
+    /// The report as a person reads it: what the driver was doing, and the exception itself.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "internal compiler error: while {}, the compiler bugged:",
+            self.context,
+        )?;
+        write!(f, "{}", self.ice)
     }
 }
 
@@ -2443,6 +2565,65 @@ fun get(): Point = get()
             .expect("the root of a module to be a module");
 
         assert_eq!(root.items().len(), 2);
+    }
+
+    #[test]
+    fn a_bug_of_a_pass_is_a_report_and_the_pull_has_no_value() {
+        let mut driver = Driver::new();
+
+        let value = driver.guarded(
+            |_| "doing something for a test".to_owned(),
+            || -> u32 { mlkc_diagnostics::ice!("a pass that bugged") },
+        );
+
+        assert!(value.is_none(), "a bugged pass to answer no value");
+
+        let report = driver.ice().expect("the driver to hold the report");
+
+        assert_eq!(report.context(), "doing something for a test");
+        assert!(report.ice().message().contains("a pass that bugged"));
+
+        // The report reads as a crash a person can file: what the driver was doing, the
+        // exception, where it was raised, and the note that the bug is the compiler's.
+        let text = report.to_string();
+        assert!(text.contains("internal compiler error"), "{text}");
+        assert!(text.contains("crates/mlkc-driver/src/lib.rs"), "{text}");
+        assert!(text.contains("not of your program"), "{text}");
+
+        // The first exception is the one held: what follows a bug is its wake.
+        let _ = driver.guarded(
+            |_| "again".to_owned(),
+            || -> () { mlkc_diagnostics::ice!("another pass that bugged") },
+        );
+
+        assert_eq!(
+            driver.ice().expect("the report to stay").context(),
+            "doing something for a test",
+        );
+    }
+
+    #[test]
+    fn a_panic_the_compiler_did_not_raise_is_a_report_too() {
+        let mut driver = Driver::new();
+
+        let value = driver.guarded(
+            |_| "calling something that broke".to_owned(),
+            || -> () { panic!("an assertion inside a pass") },
+        );
+
+        assert!(value.is_none(), "a bugged pass to answer no value");
+
+        // A payload of `ice!` is the exception itself; any other panic is read the way the
+        // standard library writes it, and its location is what the hook printed.
+        let report = driver.ice().expect("the driver to hold the report");
+
+        assert!(
+            report
+                .ice()
+                .message()
+                .contains("an assertion inside a pass")
+        );
+        assert_eq!(report.ice().location(), "<unknown>:0:0");
     }
 
     #[test]

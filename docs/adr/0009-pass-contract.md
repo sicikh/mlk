@@ -97,6 +97,17 @@ A pass is:
   parallelism is the driver dispatching one pass over a set of units,
   not a pass spawning work.
 
+What a pass is handed is input an earlier stage made meaningful:
+the parser sees any text, the lowering sees the tree the parser accepted,
+and the construction of MIR sees a body the check accepted ([ADR-0019][0019-mir.md]).
+A pass that meets what its contract says cannot be there is a bug of the compiler and not a
+mistake of the program, and it says so with an internal compiler exception:
+an ordinary panic whose payload says what was assumed, where, and with what backtrace
+(the `ice!` macro of `mlkc-diagnostics`).
+The driver calls the passes of a unit in a guarded way,
+holds the first exception together with what it was computing,
+and answers the pull as if the value were not there ([ADR-0008][0008-compiler-driver.md]).
+
 Two conveniences are deliberate:
 
 - the input is cheap to build — it is `Arc`s and small maps, not a deep copy;
@@ -297,3 +308,4 @@ The pass runs until it needs a value, returns the request, and resumes with the 
 [0006-snapshot-testing.md]: 0006-snapshot-testing.md
 [0007-vfs-file-state.md]: 0007-vfs-file-state.md
 [0008-compiler-driver.md]: 0008-compiler-driver.md
+[0019-mir.md]: 0019-mir.md

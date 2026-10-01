@@ -188,6 +188,12 @@ pub(crate) fn run(fixture: &str) {
         write_diagnostics(&mut snapshot, &diagnostics);
     }
 
+    // A compiler that bugged has no business writing a snapshot: the report says what was being
+    // computed when the pass panicked, and failing here is how a review sees it.
+    if let Some(report) = driver.ice() {
+        panic!("the driver bugged:\n{report}");
+    }
+
     insta::with_settings!({
         prepend_module_to_snapshot => false,
         snapshot_path => SPECS_DIR,

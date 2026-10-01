@@ -153,6 +153,8 @@ impl Driver {
     pub fn file_version(&self, file: FileId) -> FileVersion;
     pub fn file_state(&self, file: FileId) -> FileState;
     pub fn file_path(&self, file: FileId) -> &VfsPath;
+    // The first internal compiler exception a pass raised, with what the driver was computing.
+    pub fn ice(&self) -> Option<Arc<IceReport>>;
 }
 ```
 
@@ -160,6 +162,14 @@ A pull answers `None` when the driver holds nothing to compute from,
 which for the parse means no text: the file was never pushed, it is gone, or it is not text.
 The `file_state` read tells those apart, and a host that needs the net changes of its pushes
 can drain `take_changes` on the `Vfs` ([ADR-0007][0007-vfs-file-state.md]).
+
+A pull may also meet a bug: a pass is one the stages before it made total input for
+([ADR-0009][0009-pass-contract.md]), and a panic in one is an internal compiler exception.
+The driver calls a pass in a guarded way, holds the first exception together with what it was
+computing ([`IceReport`]), and answers the pull as if the value were not there ---
+so a host that compiles thousands of buffers does not die of the one that found a compiler bug.
+A pull that met a bug and a pull that had nothing to compute from are told apart by `ice`;
+a host that would rather die on the spot gets the same report from the panic it catches itself.
 
 Three consequences fall out of this shape:
 

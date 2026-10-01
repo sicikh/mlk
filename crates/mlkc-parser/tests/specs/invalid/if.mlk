@@ -1,0 +1,15 @@
+// What is wrong with an `if` as syntax: a condition that is not there, a `then` that is not
+// there, and an `elif` whose condition and expression are not there. The declaration after a
+// broken `if` is read as the declaration it is, and not as part of the expression.
+
+fun missing_condition(): Int =
+    if then 1 else 2
+
+fun missing_then(): Int =
+    if 1 == 2 3 else 4
+
+fun broken_elif(): Int =
+    if 1 == 2 then 3 elif else 7
+
+fun after_a_broken_if(): Int =
+    1

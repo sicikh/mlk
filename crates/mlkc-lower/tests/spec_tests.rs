@@ -87,6 +87,11 @@ spec_tests! {
     // and every `_` is a path to that binding.
     pipelines: "valid/pipelines.mlk",
 
+    // A choice between expressions: the condition, the expression it selects, the arms written
+    // after it, and the expression selected when no condition holds, each of them an
+    // expression of the body.
+    if_expr: "valid/if.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",

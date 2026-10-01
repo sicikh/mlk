@@ -1761,6 +1761,143 @@ mod tests {
     }
 
     #[test]
+    fn the_mir_of_a_choice_crosses_the_boundary_with_the_blocks_it_branches_into() {
+        const SOURCE: &str =
+            "fun pick(flag: Bool): Int =\n    if flag then 1 elif flag then 2 else 3\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+
+        // The CFG form reads the choice as the blocks it branches into: the entry evaluates
+        // the first condition, the block of every arm that fails evaluates the next one, and
+        // the blocks the arms are meet where the value of the expression is read.
+        let cfg = driver
+            .mir_of("/main.mlk", Form::Cfg)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&cfg).expect("the MIR to serialize");
+        let blocks = json["bodies"][0]["blocks"]
+            .as_array()
+            .expect("the blocks of the body");
+
+        assert_eq!(blocks.len(), 6);
+        assert_eq!(json["bodies"][0]["entry"], 0);
+        assert_eq!(blocks[0]["term"]["kind"], "branch");
+        assert_eq!(
+            blocks[0]["successors"],
+            serde_json::json!([1, 2]),
+            "the entry goes to the first arm and to the condition after it",
+        );
+        assert_eq!(blocks[2]["term"]["kind"], "branch");
+        assert_eq!(blocks[2]["successors"], serde_json::json!([3, 4]));
+        assert_eq!(
+            blocks[5]["predecessors"],
+            serde_json::json!([1, 3, 4]),
+            "the block the arms meet in is entered from every arm",
+        );
+        assert_eq!(blocks[5]["term"]["kind"], "return");
+
+        // The branch of the entry is about the condition it read, and a host marks it by the
+        // place the condition is written at.
+        let (from, to) = range(&blocks[0]["term"]);
+
+        assert_eq!(&SOURCE[from..to], "flag");
+        assert_eq!(blocks[0]["term"]["text"], "branch l2 -> b1, b2");
+
+        // The SSA form gives the value the arms agree on a parameter of the block they meet in,
+        // and every arm passes its own value to it.
+        let ssa = driver
+            .mir_of("/main.mlk", Form::Ssa)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&ssa).expect("the MIR to serialize");
+        let blocks = json["bodies"][0]["blocks"]
+            .as_array()
+            .expect("the blocks of the body");
+        let join = &blocks[5];
+
+        assert_eq!(
+            join["params"].as_array().map(Vec::len),
+            Some(1),
+            "the value the arms agree on is born at the join",
+        );
+        assert_eq!(join["params"][0]["ty"], "Int");
+
+        for arm in [1, 3, 4] {
+            let text = blocks[arm]["term"]["text"]
+                .as_str()
+                .expect("a terminator line");
+
+            assert!(
+                text.starts_with("goto b5("),
+                "every arm passes its value to the join: {text}",
+            );
+        }
+
+        // The value born at the join is the expression the arms are: a host marks the whole
+        // choice where the value is written.
+        let (from, to) = range(&join["params"][0]);
+
+        assert_eq!(&SOURCE[from..to], "if flag then 1 elif flag then 2 else 3");
+    }
+
+    #[test]
+    fn the_mir_of_a_choice_without_an_else_crosses_the_boundary_as_a_unit() {
+        const SOURCE: &str = "fun log(flag: Bool): Unit =\n    if flag then\n        log(flag)\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+
+        // The choice selects no value when it has no `else`: the block control falls into writes
+        // the unit it is, and a host reads it as the arm that is not written.
+        let cfg = driver
+            .mir_of("/main.mlk", Form::Cfg)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&cfg).expect("the MIR to serialize");
+        let blocks = json["bodies"][0]["blocks"]
+            .as_array()
+            .expect("the blocks of the body");
+
+        assert_eq!(blocks.len(), 4);
+        assert_eq!(blocks[0]["successors"], serde_json::json!([1, 2]));
+        assert!(
+            blocks[2]["stmts"]
+                .as_array()
+                .expect("the statements of the fall-through")
+                .iter()
+                .any(|it| it["text"] == "l1 = const unit"),
+            "the arm that is not written writes the unit: {}",
+            blocks[2]["stmts"],
+        );
+        assert_eq!(blocks[3]["predecessors"], serde_json::json!([1, 2]));
+
+        // The SSA form gives the unit a parameter of the block the arms meet in like any other
+        // value, and the arm that is not written passes it like any other arm.
+        let ssa = driver
+            .mir_of("/main.mlk", Form::Ssa)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&ssa).expect("the MIR to serialize");
+        let blocks = json["bodies"][0]["blocks"]
+            .as_array()
+            .expect("the blocks of the body");
+
+        assert_eq!(blocks[3]["params"].as_array().map(Vec::len), Some(1));
+        assert_eq!(blocks[3]["params"][0]["ty"], "Unit");
+        assert!(
+            blocks[2]["term"]["text"]
+                .as_str()
+                .expect("a terminator line")
+                .starts_with("goto b3("),
+            "the arm that is not written passes the unit to the join: {}",
+            blocks[2]["term"]["text"],
+        );
+    }
+
+    #[test]
     fn a_body_of_a_join_crosses_the_boundary_with_its_parameters_and_edges() {
         use mlkc_hir_def::{
             Attributes, BodyEntityLoc, BodyLoc, EntityData, FunctionData, ItemSyntaxLoc,

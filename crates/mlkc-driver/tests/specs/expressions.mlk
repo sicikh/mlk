@@ -18,6 +18,15 @@ fun different(left: Int, right: Int): Bool =
 fun text(): String =
     "hello"
 
+fun truth(): Bool =
+    true
+
+fun untruth(): Bool =
+    false
+
+fun both(): Bool =
+    true && false
+
 fun call(): Unit =
     print("hello")
 

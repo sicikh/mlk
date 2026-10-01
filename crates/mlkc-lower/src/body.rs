@@ -6,16 +6,17 @@
 //! against the names of the module.
 
 use mlkc_hir_def::{
-    BinaryOp, BodyBuilder, Expr, ExprId, ItemTree, Literal, Name, Namespace, Pat, PatId,
+    BinaryOp, BodyBuilder, Expr, ExprId, IfArm, ItemTree, Literal, Name, Namespace, Pat, PatId,
     PathAnchor, PathData, UnaryOp,
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
 use mlkc_span::Span;
 use mlkc_syntax::{
-    BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, LetExpr, Literal as LiteralSyntax,
-    Pat as PatSyntax, Path as PathSyntax, PathExpr, PipeExpr, PlaceholderExpr, SyntaxKind,
-    SyntaxToken, TextRange, TextSize, UfcsCall, UnaryExpr, inner_string_text,
+    BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, IfArm as IfArmSyntax,
+    IfExpr as IfExprSyntax, LetExpr, Literal as LiteralSyntax, Pat as PatSyntax,
+    Path as PathSyntax, PathExpr, PipeExpr, PlaceholderExpr, SyntaxKind, SyntaxToken, TextRange,
+    TextSize, UfcsCall, UnaryExpr, inner_string_text,
 };
 use mlkc_vfs::FileId;
 
@@ -133,6 +134,7 @@ impl BodyLowering<'_> {
             ExprSyntax::BinExpr(binary) => self.binary(binary),
             ExprSyntax::PipeExpr(pipe) => self.pipe_expr(pipe),
             ExprSyntax::PlaceholderExpr(place) => self.placeholder(place),
+            ExprSyntax::IfExpr(if_expr) => self.if_expr(if_expr),
             ExprSyntax::LetExpr(let_expr) => self.let_expr(let_expr),
             // A parenthesized expression is the expression it holds: how the source is
             // grouped is the parser's business, and what it hands over is a tree already.
@@ -459,6 +461,38 @@ impl BodyLowering<'_> {
         self.builder.alloc_expr(Expr::Binary { lhs, op, rhs })
     }
 
+    /// Lowers an `if`: the condition, the expression it selects, the `elif` arms written after
+    /// it, and the expression selected when no condition holds.
+    ///
+    /// Nothing of the spelling is kept but the choices: every part is an expression, and what
+    /// a value is chosen by is a question about types, which the HIR does not answer.
+    fn if_expr(&mut self, if_expr: &IfExprSyntax) -> ExprId {
+        let cond = self.optional(if_expr.condition().ok());
+        let then_ = self.optional(if_expr.then_branch().ok());
+        let arms = if_expr
+            .arms()
+            .syntax()
+            .children()
+            .filter_map(IfArmSyntax::cast)
+            .map(|arm| {
+                IfArm {
+                    cond: self.optional(arm.condition().ok()),
+                    body: self.optional(arm.body().ok()),
+                }
+            })
+            .collect();
+        let otherwise = if_expr
+            .else_branch()
+            .map(|branch| self.optional(branch.expr().ok()));
+
+        self.builder.alloc_expr(Expr::If {
+            cond,
+            then_,
+            arms,
+            otherwise,
+        })
+    }
+
     /// Lowers a `let`: the pattern it binds, the expression it is bound to, and the body the
     /// binding is visible in.
     fn let_expr(&mut self, let_expr: &LetExpr) -> ExprId {
@@ -525,6 +559,19 @@ impl BodyLowering<'_> {
                 let value = self.string_value(&token);
 
                 Expr::Literal(Literal::Str(Interned::new_str(&value)))
+            },
+            LiteralSyntax::BoolLiteral(boolean) => {
+                let value = match boolean.value().map(|token| token.kind()) {
+                    Ok(SyntaxKind::TRUE_KW) => true,
+                    Ok(SyntaxKind::FALSE_KW) => false,
+                    // A truth value is built around the word it is written with, so a tree
+                    // without one is not a tree the parser makes: a reader of the HIR is handed
+                    // an expression that is not there rather than a value the source does not
+                    // have.
+                    _ => return self.missing(),
+                };
+
+                Expr::Literal(Literal::Bool(value))
             },
         };
 

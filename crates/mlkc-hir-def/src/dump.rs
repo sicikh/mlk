@@ -589,6 +589,24 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
             children.push(expr_node(body, module, *expr));
             children.push(expr_node(body, module, *inner));
         },
+        Expr::If {
+            cond,
+            then_,
+            arms,
+            otherwise,
+        } => {
+            children.push(expr_node(body, module, *cond));
+            children.push(expr_node(body, module, *then_));
+
+            for arm in arms {
+                children.push(expr_node(body, module, arm.cond));
+                children.push(expr_node(body, module, arm.body));
+            }
+
+            if let Some(otherwise) = otherwise {
+                children.push(expr_node(body, module, *otherwise));
+            }
+        },
     }
 
     let mut node = Node::marked(
@@ -906,6 +924,7 @@ fn expr_text(expr: &Expr) -> String {
         Expr::Missing => "missing".to_owned(),
         Expr::Path(id) => format!("path {}", path_ref(*id)),
         Expr::Literal(Literal::Int(value)) => format!("literal {value}"),
+        Expr::Literal(Literal::Bool(value)) => format!("literal {value}"),
         Expr::Literal(Literal::Str(value)) => {
             let value: &str = value;
             format!("literal {value:?}")
@@ -928,6 +947,29 @@ fn expr_text(expr: &Expr) -> String {
                 expr_ref(*expr),
                 expr_ref(*body),
             )
+        },
+        Expr::If {
+            cond,
+            then_,
+            arms,
+            otherwise,
+        } => {
+            let mut text = format!("if {} then {}", expr_ref(*cond), expr_ref(*then_));
+
+            for arm in arms {
+                let _ = write!(
+                    text,
+                    " elif {} then {}",
+                    expr_ref(arm.cond),
+                    expr_ref(arm.body),
+                );
+            }
+
+            if let Some(otherwise) = otherwise {
+                let _ = write!(text, " else {}", expr_ref(*otherwise));
+            }
+
+            text
         },
     }
 }

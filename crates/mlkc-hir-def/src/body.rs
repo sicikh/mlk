@@ -84,6 +84,29 @@ pub enum Expr {
         /// The expression the binding is visible in.
         body: ExprId,
     },
+    /// A choice between expressions: a condition, the expression it selects, the `elif` arms
+    /// written after it, and the expression selected when no condition holds.
+    If {
+        /// The condition, which is a `Bool`.
+        cond: ExprId,
+        /// The expression selected when the condition holds.
+        then_: ExprId,
+        /// The `elif` arms, in the order they are written.
+        arms: Vec<IfArm>,
+        /// The expression selected when no condition holds.
+        ///
+        /// An `if` without one selects no value: its arms are `Unit`, and so it is.
+        otherwise: Option<ExprId>,
+    },
+}
+
+/// One `elif` arm of an [`Expr::If`]: its own condition and the expression it selects.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IfArm {
+    /// The condition, which is a `Bool`.
+    pub cond: ExprId,
+    /// The expression selected when the condition holds.
+    pub body: ExprId,
 }
 
 /// A binary operator, as the language spells it.
@@ -182,6 +205,8 @@ pub enum Pat {
 pub enum Literal {
     /// An integer literal, with the value the source wrote.
     Int(i64),
+    /// A truth value, with the value the word it is written with means.
+    Bool(bool),
     /// A string literal, with the value its escapes decode to.
     Str(Interned<str>),
 }

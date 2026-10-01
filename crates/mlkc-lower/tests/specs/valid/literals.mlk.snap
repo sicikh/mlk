@@ -5,14 +5,18 @@ expression: snapshot
 ## Input
 
 ```mlk
-// The shape of a literal: an integer, a string, and a subtraction, which is an operator
-// rather than the sign of a number. What a string holds is what its escapes decode to.
+// The shape of a literal: an integer, a string, a truth value, and a subtraction, which is an
+// operator rather than the sign of a number. What a string holds is what its escapes decode
+// to.
 
 #[builtin]
 type Int
 
 #[builtin]
 type String
+
+#[builtin]
+type Bool
 
 fun positive(): Int =
     42
@@ -22,6 +26,12 @@ fun text(): String =
 
 fun escaped(): String =
     "a \"quote\", a \\ backslash, a line break \n, and a tab \t"
+
+fun truth(): Bool =
+    true
+
+fun untruth(): Bool =
+    false
 
 fun subtracted(): Int =
     1 - 2
@@ -40,16 +50,25 @@ ITEM TREE
   type String  @2.1
     attributes: #[builtin]
     visibility: private
-  fun positive  @2.2
+  type Bool  @2.2
+    attributes: #[builtin]
+    visibility: private
+  fun positive  @2.3
     visibility: private
     ret: Int -> type Int
-  fun text  @2.3
+  fun text  @2.4
     visibility: private
     ret: String -> type String
-  fun escaped  @2.4
+  fun escaped  @2.5
     visibility: private
     ret: String -> type String
-  fun subtracted  @2.5
+  fun truth  @2.6
+    visibility: private
+    ret: Bool -> type Bool
+  fun untruth  @2.7
+    visibility: private
+    ret: Bool -> type Bool
+  fun subtracted  @2.8
     visibility: private
     ret: Int -> type Int
   use Int  prelude
@@ -90,6 +109,22 @@ BODY fun escaped in module #0
 root expr#0
 exprs
   expr#0  literal "a \"quote\", a \\ backslash, a line break \n, and a tab \t"
+```
+
+```
+BODY fun truth in module #0
+
+root expr#0
+exprs
+  expr#0  literal true
+```
+
+```
+BODY fun untruth in module #0
+
+root expr#0
+exprs
+  expr#0  literal false
 ```
 
 ```

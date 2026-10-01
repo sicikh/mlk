@@ -23,6 +23,11 @@ pub fn bin_expr(lhs: Expr, operator_token_token: SyntaxToken, rhs: Expr) -> BinE
         Some(SyntaxElement::Node(rhs.into_syntax())),
     ]))
 }
+pub fn bool_literal(value_token: SyntaxToken) -> BoolLiteral {
+    BoolLiteral::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOOL_LITERAL, [Some(
+        SyntaxElement::Token(value_token),
+    )]))
+}
 pub fn call_expr(
     function: Expr,
     l_paren_token: SyntaxToken,
@@ -34,6 +39,12 @@ pub fn call_expr(
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(arguments.into_syntax())),
         Some(SyntaxElement::Token(r_paren_token)),
+    ]))
+}
+pub fn else_branch(else_token: SyntaxToken, expr: Expr) -> ElseBranch {
+    ElseBranch::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::ELSE_BRANCH, [
+        Some(SyntaxElement::Token(else_token)),
+        Some(SyntaxElement::Node(expr.into_syntax())),
     ]))
 }
 pub fn field_expr(receiver: Expr, at_token: SyntaxToken, field: Name) -> FieldExpr {
@@ -121,6 +132,60 @@ pub fn ident_pat(name: Name) -> IdentPat {
     IdentPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::IDENT_PAT, [Some(
         SyntaxElement::Node(name.into_syntax()),
     )]))
+}
+pub fn if_arm(
+    elif_token: SyntaxToken,
+    condition: Expr,
+    then_token: SyntaxToken,
+    body: Expr,
+) -> IfArm {
+    IfArm::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::IF_ARM, [
+        Some(SyntaxElement::Token(elif_token)),
+        Some(SyntaxElement::Node(condition.into_syntax())),
+        Some(SyntaxElement::Token(then_token)),
+        Some(SyntaxElement::Node(body.into_syntax())),
+    ]))
+}
+pub fn if_expr(
+    if_token: SyntaxToken,
+    condition: Expr,
+    then_token: SyntaxToken,
+    then_branch: Expr,
+    arms: IfArmList,
+) -> IfExprBuilder {
+    IfExprBuilder {
+        if_token,
+        condition,
+        then_token,
+        then_branch,
+        arms,
+        else_branch: None,
+    }
+}
+pub struct IfExprBuilder {
+    if_token: SyntaxToken,
+    condition: Expr,
+    then_token: SyntaxToken,
+    then_branch: Expr,
+    arms: IfArmList,
+    else_branch: Option<ElseBranch>,
+}
+impl IfExprBuilder {
+    pub fn with_else_branch(mut self, else_branch: ElseBranch) -> Self {
+        self.else_branch = Some(else_branch);
+        self
+    }
+    pub fn build(self) -> IfExpr {
+        IfExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::IF_EXPR, [
+            Some(SyntaxElement::Token(self.if_token)),
+            Some(SyntaxElement::Node(self.condition.into_syntax())),
+            Some(SyntaxElement::Token(self.then_token)),
+            Some(SyntaxElement::Node(self.then_branch.into_syntax())),
+            Some(SyntaxElement::Node(self.arms.into_syntax())),
+            self.else_branch
+                .map(|token| SyntaxElement::Node(token.into_syntax())),
+        ]))
+    }
 }
 pub fn infer_type(underscore_token: SyntaxToken) -> InferType {
     InferType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::INFER_TYPE, [Some(
@@ -469,6 +534,18 @@ where
 {
     AttributeList::unwrap_cast(SyntaxNode::new_detached(
         SyntaxKind::ATTRIBUTE_LIST,
+        items
+            .into_iter()
+            .map(|item| Some(item.into_syntax().into())),
+    ))
+}
+pub fn if_arm_list<I>(items: I) -> IfArmList
+where
+    I: IntoIterator<Item = IfArm>,
+    I::IntoIter: ExactSizeIterator,
+{
+    IfArmList::unwrap_cast(SyntaxNode::new_detached(
+        SyntaxKind::IF_ARM_LIST,
         items
             .into_iter()
             .map(|item| Some(item.into_syntax().into())),

@@ -1,6 +1,8 @@
 // What the checker reports about a body and about a written type: a value where another one
 // belongs, a callee that is not a function, a call of the wrong arity, a class applied to
-// arguments, and equality over a type that has none.
+// arguments, equality over a type that has none, and a choice whose condition or branch is
+// not a value the choice can take --- a choice without an `else` included, which selects a
+// `Unit`.
 
 //- /main.mlk
 fun one(): Unit =
@@ -27,3 +29,12 @@ fun applied(value: Int[Bool]): Int[Bool] =
 
 fun no-equality(left: String, right: String): Bool =
     left == right
+
+fun condition-not-a-bool(value: Int): Int =
+    if value then 1 else 2
+
+fun branch-of-another-type(): Int =
+    if 1 == 2 then 1 else "text"
+
+fun arm-of-another-type(flag: Bool): Unit =
+    if flag then 1

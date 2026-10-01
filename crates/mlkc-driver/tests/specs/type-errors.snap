@@ -38,6 +38,17 @@ ITEM TREE
     param: String -> use String
     param: String -> use String
     ret: Bool -> use Bool
+  fun condition-not-a-bool  @2.8
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun branch-of-another-type  @2.9
+    visibility: private
+    ret: Int -> use Int
+  fun arm-of-another-type  @2.10
+    visibility: private
+    param: Bool -> use Bool
+    ret: Unit -> use Unit
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -176,6 +187,58 @@ paths
   path#1  right -> binding pat#1
 ```
 
+`fun condition-not-a-bool`
+
+```
+BODY fun condition-not-a-bool in module #2
+
+root expr#3
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  literal 2
+  expr#3  if expr#0 then expr#1 else expr#2
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun branch-of-another-type`
+
+```
+BODY fun branch-of-another-type in module #2
+
+root expr#5
+exprs
+  expr#0  literal 1
+  expr#1  literal 2
+  expr#2  binary expr#0 == expr#1
+  expr#3  literal 1
+  expr#4  literal "text"
+  expr#5  if expr#2 then expr#3 else expr#4
+```
+
+`fun arm-of-another-type`
+
+```
+BODY fun arm-of-another-type in module #2
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  if expr#0 then expr#1
+pats
+  pat#0  bind flag
+paths
+  path#0  flag -> binding pat#0
+```
+
 ### Resolution
 
 ```
@@ -196,6 +259,12 @@ SCOPE
     value: fun applied in module #2 (private)
   no-equality
     value: fun no-equality in module #2 (private)
+  condition-not-a-bool
+    value: fun condition-not-a-bool in module #2 (private)
+  branch-of-another-type
+    value: fun branch-of-another-type in module #2 (private)
+  arm-of-another-type
+    value: fun arm-of-another-type in module #2 (private)
   Int
     ty: type Int in module #0 (private)
   Unit
@@ -218,6 +287,9 @@ MODULE TYPES
   fun not-callable: () -> Int
   fun applied: (Int[Bool]) -> Int[Bool]
   fun no-equality: (String, String) -> Bool
+  fun condition-not-a-bool: (Int) -> Int
+  fun branch-of-another-type: () -> Int
+  fun arm-of-another-type: (Bool) -> Unit
 ```
 
 ### Checked Bodies
@@ -294,6 +366,39 @@ CHECKED BODY
   pat #1: String
 ```
 
+`fun condition-not-a-bool`
+
+```
+CHECKED BODY
+  expr #0: {error}
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  pat #0: Int
+```
+
+`fun branch-of-another-type`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  expr #3: Int
+  expr #4: {error}
+  expr #5: Int
+```
+
+`fun arm-of-another-type`
+
+```
+CHECKED BODY
+  expr #0: Bool
+  expr #1: {error}
+  expr #2: Unit
+  pat #0: Bool
+```
+
 ### MIR
 
 `fun one`
@@ -368,6 +473,18 @@ fun applied (entry b0)
 
 Not lowered: the front end reported a mistake.
 
+`fun condition-not-a-bool`
+
+Not lowered: the front end reported a mistake.
+
+`fun branch-of-another-type`
+
+Not lowered: the front end reported a mistake.
+
+`fun arm-of-another-type`
+
+Not lowered: the front end reported a mistake.
+
 ### Diagnostics
 
 typechecker[04]: the name `Int` is applied to type arguments  @274..283 (a class takes no arguments)
@@ -381,3 +498,6 @@ typechecker[07]: the function takes 1 argument, and the call passes 2 arguments 
 typechecker[06]: a value of type `Int` is called, and a function is what a call calls  @246..251 (`Int` is not a function)
 typechecker[14]: the language has no equality for two values of `String` yet  @366..379 (this type has no equality yet)
   note: `Int` and `Bool` are the types with equality for now
+typechecker[09]: a value of type `Int` is where a value of type `Bool` belongs  @432..437 (expected `Bool`, found `Int`)
+typechecker[09]: a value of type `String` is where a value of type `Int` belongs  @515..521 (expected `Int`, found `String`)
+typechecker[09]: a value of type `Int` is where a value of type `Unit` belongs  @584..585 (expected `Unit`, found `Int`)

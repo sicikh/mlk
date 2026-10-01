@@ -70,8 +70,16 @@ enum Tok {
 
     #[token("as")]
     AsKw,
+    #[token("elif")]
+    ElifKw,
+    #[token("else")]
+    ElseKw,
+    #[token("false")]
+    FalseKw,
     #[token("fun")]
     FunKw,
+    #[token("if")]
+    IfKw,
     #[token("in")]
     InKw,
     #[token("let")]
@@ -82,6 +90,10 @@ enum Tok {
     ProjectKw,
     #[token("pub")]
     PubKw,
+    #[token("then")]
+    ThenKw,
+    #[token("true")]
+    TrueKw,
     #[token("type")]
     TypeKw,
     #[token("use")]
@@ -175,12 +187,18 @@ impl Tok {
             Self::Comment => COMMENT,
             Self::MultilineComment => MULTILINE_COMMENT,
             Self::AsKw => AS_KW,
+            Self::ElifKw => ELIF_KW,
+            Self::ElseKw => ELSE_KW,
+            Self::FalseKw => FALSE_KW,
             Self::FunKw => FUN_KW,
+            Self::IfKw => IF_KW,
             Self::InKw => IN_KW,
             Self::LetKw => LET_KW,
             Self::ModuleKw => MODULE_KW,
             Self::ProjectKw => PROJECT_KW,
             Self::PubKw => PUB_KW,
+            Self::ThenKw => THEN_KW,
+            Self::TrueKw => TRUE_KW,
             Self::TypeKw => TYPE_KW,
             Self::UseKw => USE_KW,
             Self::IntLiteral => INT_LITERAL,

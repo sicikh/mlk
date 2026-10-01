@@ -192,6 +192,7 @@ Expr =
     | BinExpr
     | PipeExpr
     | PlaceholderExpr
+    | IfExpr
     | LetExpr
     | ParenExpr
     | BogusExpr
@@ -199,9 +200,14 @@ Expr =
 IntLiteral = value: 'int_literal'
 StringLiteral = value: 'string_literal'
 
+// A truth value: `true` or `false`. Both are keywords of the language, and the token the
+// literal holds is the one it is written with.
+BoolLiteral = value: ('true' | 'false')
+
 Literal =
     IntLiteral
     | StringLiteral
+    | BoolLiteral
 
 // A path written where a value belongs: a name the body binds, a name the module declares,
 // or a path that starts with a name of the project.
@@ -274,6 +280,33 @@ LetExpr =
     '='
     expr: Expr
     'in'
+    body: Expr
+
+// A choice between expressions: a condition, the expression it selects, the `elif` arms
+// written after it, and the expression selected when no condition holds.
+//
+// Every condition is a `Bool`, the arms are read in the order they are written, and the
+// expression is one value: the arms are expressions of one type. The `else` may be left
+// unwritten, and an `if` without one selects no value: its arms are `Unit`, and so it is.
+IfExpr =
+    'if'
+    condition: Expr
+    'then'
+    then_branch: Expr
+    arms: IfArmList
+    else_branch: ElseBranch?
+
+ElseBranch =
+    'else'
+    expr: Expr
+
+IfArmList = IfArm*
+
+// One `elif` arm of an `if`: its own condition and the expression it selects.
+IfArm =
+    'elif'
+    condition: Expr
+    'then'
     body: Expr
 
 ParenExpr =

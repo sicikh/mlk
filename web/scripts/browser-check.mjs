@@ -106,6 +106,22 @@ const LONG =
 const WRITTEN = "fun main(): Unit =\n    x\n";
 
 /**
+ * What is typed to watch the MIR of a choice: a body with an `if`, so that the CFG form reads
+ * a block that branches and the arms meeting in a block of their own, and the SSA form reads the
+ * value the arms agree on as a parameter of the block they meet in.
+ */
+const BRANCH =
+    "fun pick(flag: Bool): Int =\n    if flag && true then 1 else 2\n";
+
+/**
+ * What is typed to watch the MIR of a choice that selects nothing: an `if` without an `else`,
+ * whose arms are `Unit`. The block control falls into when no condition holds writes the unit
+ * the choice is, and the SSA form passes it to the join like any other value.
+ */
+const UNIT =
+    "fun log(flag: Bool): Unit =\n    if flag then\n        log(flag)\n";
+
+/**
  * What a tab of the MIR reads: which form it shows, the bodies, and the lines of their blocks.
  *
  * The lines are read as a person reads them: the text of every statement and terminator, which
@@ -119,7 +135,9 @@ const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 		entry: inspector().querySelectorAll('[data-entry=true]').length,
 		stmts: lines('stmt'),
 		term: lines('term'),
-		locals: lines('local')
+		locals: lines('local'),
+		blockParams: [...inspector().querySelectorAll('[data-block] [data-line=value]')].map((it) => text(it)),
+		branches: [...inspector().querySelectorAll('[data-line=term][data-kind=branch]')].length
 	})`;
 
 /** The questions themselves, each answered by one round trip. */
@@ -278,6 +296,37 @@ const STEPS = {
     showSsa: `show('mir-ssa'); return true`,
 
     ssa: MIR,
+
+    // A body with a choice in it: the tab reads it as the blocks it branches into.
+    typeBranch: `const content = document.querySelector('.cm-content');
+    	content.focus();
+    	content.textContent = ${JSON.stringify(BRANCH)};
+    	content.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
+    // The same with a choice that selects no value.
+    typeUnit: `const content = document.querySelector('.cm-content');
+    	content.focus();
+    	content.textContent = ${JSON.stringify(UNIT)};
+    	content.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
+    // The keywords of a choice are the words of the language, and a truth value is a literal:
+    // the editor paints the first as it paints every keyword, and the second as it paints a
+    // number.
+    branchWords: `const spans = [...document.querySelectorAll('.cm-content .cm-line span')];
+    	const colour = (text) => {
+    		const span = spans.find((it) => it.textContent === text);
+    		return span ? getComputedStyle(span).color : '';
+    	};
+    	return JSON.stringify({
+    		keyword: colour('fun'),
+    		if: colour('if'),
+    		then: colour('then'),
+    		else: colour('else'),
+    		number: colour('1'),
+    		truth: colour('true')
+    	})`,
 
     ast: `return JSON.stringify({
     		root: inspector().textContent.includes('ModuleRoot'),
@@ -592,6 +641,10 @@ const WAITS = {
     tc: `return inspector().querySelector('[data-tc=entity]') !== null`,
     mir: `return inspector().querySelector('[data-form=cfg] [data-block]') !== null`,
     ssa: `return inspector().querySelector('[data-form=ssa] [data-line=term]') !== null`,
+    branch: `return inspector().querySelectorAll('[data-form=cfg] [data-block]').length > 1`,
+    branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
+    unit: `return inspector().textContent.includes('const unit')`,
+    unitSsa: `return inspector().textContent.includes('call fun log')`,
     broken: `return diagnostics().length > 0`,
     bogus: `return inspector().textContent.includes('Bogus')`,
     long: `return inspector().textContent.includes('x79')`,
@@ -846,6 +899,34 @@ async function main() {
     await until(WAITS.ssa, "the ssa form of the buffer");
     const ssa = JSON.parse(await ask(STEPS.ssa));
 
+    // A body with a choice in it: the CFG form reads the block that branches and the blocks the
+    // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
+    // they meet in. The buffer is typed into the one that is in front.
+    await ask(STEPS.typeBranch);
+    await sleep(300);
+    const branchWords = JSON.parse(await ask(STEPS.branchWords));
+
+    await ask(STEPS.showMir);
+    await until(WAITS.branch, "the branches of the mir");
+    const branch = JSON.parse(await ask(STEPS.mir));
+
+    await ask(STEPS.showSsa);
+    await until(WAITS.branchSsa, "the branches of the ssa form");
+    const branchSsa = JSON.parse(await ask(STEPS.ssa));
+
+    // A choice that selects nothing: the block control falls into when no condition holds
+    // writes the unit the choice is, and the SSA form passes it to the join.
+    await ask(STEPS.typeUnit);
+    await sleep(300);
+
+    await ask(STEPS.showMir);
+    await until(WAITS.unit, "the unit of a choice that selects nothing");
+    const unit = JSON.parse(await ask(STEPS.mir));
+
+    await ask(STEPS.showSsa);
+    await until(WAITS.unitSsa, "the unit of the ssa form");
+    const unitSsa = JSON.parse(await ask(STEPS.ssa));
+
     await ask(STEPS.open);
     await ask(STEPS.typePath);
     await ask(STEPS.submitPath);
@@ -984,6 +1065,11 @@ async function main() {
             mir,
             mirHover,
             ssa,
+            branch,
+            branchSsa,
+            branchWords,
+            unit,
+            unitSsa,
             program,
             width,
             made,
@@ -1214,6 +1300,65 @@ function report(page, problems, warnings, asked) {
                 page.ssa.stmts.every((it) => /^v\d/.test(it)) &&
                 page.ssa.term.every((it) => it.startsWith("return v")),
         ],
+        [
+            // A choice is what makes a body more than one block: the entry evaluates the
+            // condition and branches, every arm writes the slot the expression is and goes to
+            // the block the arms meet in, and what is written after the `if` is written there.
+            // The condition holds a truth value, which is read as the constant it is.
+            "the cfg of a choice reads the blocks it branches into",
+            page.branch.form === "cfg" &&
+                page.branch.blocks.length === 4 &&
+                page.branch.branches === 1 &&
+                page.branch.stmts.some((it) => it.includes("const true")) &&
+                page.branch.stmts.some((it) => it.includes("const 1")) &&
+                page.branch.term.some((it) => it.startsWith("return l")) &&
+                page.branch.blockParams.length === 0,
+        ],
+        [
+            // The keywords of a choice are read out of names like every other keyword, and the
+            // editor paints them the same way.
+            "the editor paints the keywords of a choice as it paints fun",
+            page.branchWords.if !== "" &&
+                page.branchWords.if === page.branchWords.keyword &&
+                page.branchWords.then === page.branchWords.keyword &&
+                page.branchWords.else === page.branchWords.keyword,
+        ],
+        [
+            // A truth value is a literal like an integer: the words are keywords, and what a
+            // reader reads at them is the value.
+            "the editor paints a truth value as it paints a number",
+            page.branchWords.truth !== "" &&
+                page.branchWords.truth === page.branchWords.number,
+        ],
+        [
+            // The value the arms agree on is born at the join: the SSA form enters the block
+            // they meet in through a parameter, and every arm passes its own value to it.
+            "the ssa of a choice is entered through a parameter of the join",
+            page.branchSsa.form === "ssa" &&
+                page.branchSsa.blocks.length === page.branch.blocks.length &&
+                page.branchSsa.branches === 1 &&
+                page.branchSsa.blockParams.length === 1 &&
+                page.branchSsa.term.some((it) => it.startsWith("return v")),
+        ],
+        [
+            // A choice without an `else` selects no value: the block control falls into writes
+            // the unit the choice is, and what is written after the `if` reads one slot.
+            "the cfg of a choice without an else reads the unit it selects",
+            page.unit.form === "cfg" &&
+                page.unit.blocks.length === 4 &&
+                page.unit.branches === 1 &&
+                page.unit.stmts.some((it) => it.includes("const unit")) &&
+                page.unit.term.some((it) => it.startsWith("return l")) &&
+                page.unit.blockParams.length === 0,
+        ],
+        [
+            "the ssa of a choice without an else passes the unit to the join",
+            page.unitSsa.form === "ssa" &&
+                page.unitSsa.blocks.length === page.unit.blocks.length &&
+                page.unitSsa.branches === 1 &&
+                page.unitSsa.blockParams.length === 1 &&
+                page.unitSsa.term.some((it) => it.startsWith("return v")),
+        ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
         ["a buffer opens as a tab", page.made.open === 2],
@@ -1384,6 +1529,9 @@ function report(page, problems, warnings, asked) {
         `it paints an attribute ${page.painted.attribute}, which is the green of the theme ${page.painted.green}`,
     );
     console.log(
+        `it paints a truth value ${page.branchWords.truth || "(nothing)"}, against a number ${page.branchWords.number || "(nothing)"} and a keyword ${page.branchWords.keyword || "(nothing)"}`,
+    );
+    console.log(
         `the row that says ${page.hover.says} marks ${page.hover.marked || "nothing"} in the editor`,
     );
     console.log(
@@ -1400,6 +1548,12 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `the mir reads a ${page.mir.form} form of ${page.mir.blocks.length} block(s), which ${page.mirHover.says.trim()} marks ${JSON.stringify(page.mirHover.marked)}, and the ssa ${page.ssa.blocks.length} block(s)`,
+    );
+    console.log(
+        `a choice reads as ${page.branch.blocks.length} block(s) of a ${page.branch.form} form and ${page.branchSsa.blockParams.length} parameter(s) of the join of the ssa form`,
+    );
+    console.log(
+        `a choice without an else reads ${page.unit.stmts.filter((it) => it.includes("const unit")).length} unit(s) in its ${page.unit.blocks.length} block(s)`,
     );
     console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,

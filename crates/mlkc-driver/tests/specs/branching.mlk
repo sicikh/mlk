@@ -1,0 +1,31 @@
+// What the middle of the pipeline makes of a choice between expressions: the CFG form the
+// checked body is lowered into --- a block that branches, a block per arm, and a block the
+// arms meet in --- and the SSA form built from it, where the value the arms agree on is born
+// as a parameter of the block they meet in. The conditions are read in the order they are
+// written, and what is written after the `if` is written in the block the arms meet in.
+// An `if` without an `else` selects the unit its arms are, and the block control falls into
+// when no condition holds is the arm that writes it.
+
+//- /main.mlk
+fun pick(flag: Bool): Int =
+    if flag then 1 else 2
+
+fun ordered(low: Bool, high: Bool): Int =
+    if low then 1 elif high then 2 else 3
+
+fun where_a_value_belongs(flag: Bool): Int =
+    (if flag then 1 else 2) + 3
+
+fun through_a_let(flag: Bool): Int =
+    let carried = if flag then 1 else 2 in
+    carried + 3
+
+fun log(flag: Bool): Unit =
+    if flag then
+        log(flag)
+
+fun log_ordered(low: Bool, high: Bool): Unit =
+    if low then
+        log(low)
+    elif high then
+        log(high)

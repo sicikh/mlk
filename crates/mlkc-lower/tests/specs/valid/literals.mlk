@@ -1,11 +1,15 @@
-// The shape of a literal: an integer, a string, and a subtraction, which is an operator
-// rather than the sign of a number. What a string holds is what its escapes decode to.
+// The shape of a literal: an integer, a string, a truth value, and a subtraction, which is an
+// operator rather than the sign of a number. What a string holds is what its escapes decode
+// to.
 
 #[builtin]
 type Int
 
 #[builtin]
 type String
+
+#[builtin]
+type Bool
 
 fun positive(): Int =
     42
@@ -15,6 +19,12 @@ fun text(): String =
 
 fun escaped(): String =
     "a \"quote\", a \\ backslash, a line break \n, and a tab \t"
+
+fun truth(): Bool =
+    true
+
+fun untruth(): Bool =
+    false
 
 fun subtracted(): Int =
     1 - 2

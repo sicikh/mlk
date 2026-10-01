@@ -29,6 +29,12 @@ fun signs_chain(): Int =
 fun negated_call(): Int =
     -f(1)
 
+fun truth(): Bool =
+    true
+
+fun truth_values(): Bool =
+    true && false
+
 ```
 
 ## AST
@@ -506,18 +512,90 @@ ModuleRoot {
                 },
             },
         },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@338..344 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@344..349 "truth" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@349..350 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@350..351 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@351..353 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@353..358 "Bool" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@358..359 "=" [] [],
+                expr: BoolLiteral {
+                    value: TRUE_KW@359..368 "true" [Newline("\n"), Whitespace("    ")] [],
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@368..374 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@374..386 "truth_values" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@386..387 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@387..388 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@388..390 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@390..395 "Bool" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@395..396 "=" [] [],
+                expr: BinExpr {
+                    lhs: BoolLiteral {
+                        value: TRUE_KW@396..406 "true" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    },
+                    operator_token: AND2@406..409 "&&" [] [Whitespace(" ")],
+                    rhs: BoolLiteral {
+                        value: FALSE_KW@409..414 "false" [] [],
+                    },
+                },
+            },
+        },
     ],
-    eof_token: EOF@338..339 "" [Newline("\n")] [],
+    eof_token: EOF@414..415 "" [Newline("\n")] [],
 }
 ```
 
 ## CST
 
 ```
-0: MODULE_ROOT@0..339
+0: MODULE_ROOT@0..415
   0: (empty)
   1: (empty)
-  2: MODULE_ITEM_LIST@0..338
+  2: MODULE_ITEM_LIST@0..414
     0: FUN_DECL@0..37
       0: ATTRIBUTE_LIST@0..0
       1: (empty)
@@ -838,7 +916,57 @@ ModuleRoot {
               0: INT_LITERAL@336..337
                 0: INT_LITERAL@336..337 "1" [] []
             3: R_PAREN@337..338 ")" [] []
-  3: EOF@338..339 "" [Newline("\n")] []
+    8: FUN_DECL@338..368
+      0: ATTRIBUTE_LIST@338..338
+      1: (empty)
+      2: FUN_KW@338..344 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@344..349
+        0: IDENT@344..349 "truth" [] []
+      4: PARAMETERS@349..351
+        0: L_PAREN@349..350 "(" [] []
+        1: PARAMETER_LIST@350..350
+        2: R_PAREN@350..351 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@351..358
+        0: COLON@351..353 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@353..358
+          0: PATH@353..358
+            0: (empty)
+            1: PATH_SEGMENT@353..358
+              0: NAME@353..358
+                0: IDENT@353..358 "Bool" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@358..368
+        0: EQ@358..359 "=" [] []
+        1: BOOL_LITERAL@359..368
+          0: TRUE_KW@359..368 "true" [Newline("\n"), Whitespace("    ")] []
+    9: FUN_DECL@368..414
+      0: ATTRIBUTE_LIST@368..368
+      1: (empty)
+      2: FUN_KW@368..374 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@374..386
+        0: IDENT@374..386 "truth_values" [] []
+      4: PARAMETERS@386..388
+        0: L_PAREN@386..387 "(" [] []
+        1: PARAMETER_LIST@387..387
+        2: R_PAREN@387..388 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@388..395
+        0: COLON@388..390 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@390..395
+          0: PATH@390..395
+            0: (empty)
+            1: PATH_SEGMENT@390..395
+              0: NAME@390..395
+                0: IDENT@390..395 "Bool" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@395..414
+        0: EQ@395..396 "=" [] []
+        1: BIN_EXPR@396..414
+          0: BOOL_LITERAL@396..406
+            0: TRUE_KW@396..406 "true" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: AND2@406..409 "&&" [] [Whitespace(" ")]
+          2: BOOL_LITERAL@409..414
+            0: FALSE_KW@409..414 "false" [] []
+  3: EOF@414..415 "" [Newline("\n")] []
 
 ```
 

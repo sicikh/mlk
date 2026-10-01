@@ -1,0 +1,249 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A choice between expressions: a condition, the expression it selects, the `elif` arms
+// written after it, and the expression selected when no condition holds. Every part is an
+// expression, and what a value is chosen by is a question about types, which the HIR does
+// not answer. An `if` without an `else` selects no value, which the HIR holds as the branch
+// that is not there.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Bool
+
+#[builtin]
+type Unit
+
+fun pick(flag: Bool): Int =
+    if flag then 1 else 2
+
+fun ordered(low: Bool, high: Bool): Int =
+    if low then 1 elif high then 2 elif low && high then 3 else 4
+
+fun branch_with_a_let(flag: Bool): Int =
+    if flag then
+        let x = 1 in
+        x + 1
+    else
+        -1
+
+fun nested(flag: Bool): Int =
+    if flag then
+        if flag then 1 else 2
+    else
+        3
+
+fun log(flag: Bool): Unit =
+    if flag then
+        log(flag)
+
+fun log_ordered(low: Bool, high: Bool): Unit =
+    if low then
+        log(low)
+    elif high then
+        log(high)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::if
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  type Bool  @2.1
+    attributes: #[builtin]
+    visibility: private
+  type Unit  @2.2
+    attributes: #[builtin]
+    visibility: private
+  fun pick  @2.3
+    visibility: private
+    param: Bool -> type Bool
+    ret: Int -> type Int
+  fun ordered  @2.4
+    visibility: private
+    param: Bool -> type Bool
+    param: Bool -> type Bool
+    ret: Int -> type Int
+  fun branch_with_a_let  @2.5
+    visibility: private
+    param: Bool -> type Bool
+    ret: Int -> type Int
+  fun nested  @2.6
+    visibility: private
+    param: Bool -> type Bool
+    ret: Int -> type Int
+  fun log  @2.7
+    visibility: private
+    param: Bool -> type Bool
+    ret: Unit -> type Unit
+  fun log_ordered  @2.8
+    visibility: private
+    param: Bool -> type Bool
+    param: Bool -> type Bool
+    ret: Unit -> type Unit
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun pick in module #0
+
+root expr#3
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  literal 2
+  expr#3  if expr#0 then expr#1 else expr#2
+pats
+  pat#0  bind flag
+paths
+  path#0  flag -> binding pat#0
+```
+
+```
+BODY fun ordered in module #0
+
+root expr#9
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  path path#1
+  expr#3  literal 2
+  expr#4  path path#0
+  expr#5  path path#1
+  expr#6  binary expr#4 && expr#5
+  expr#7  literal 3
+  expr#8  literal 4
+  expr#9  if expr#0 then expr#1 elif expr#2 then expr#3 elif expr#6 then expr#7 else expr#8
+pats
+  pat#0  bind low
+  pat#1  bind high
+paths
+  path#0  low -> binding pat#0
+  path#1  high -> binding pat#1
+```
+
+```
+BODY fun branch_with_a_let in module #0
+
+root expr#8
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  path path#1
+  expr#3  literal 1
+  expr#4  binary expr#2 + expr#3
+  expr#5  let pat#1 = expr#1 in expr#4
+  expr#6  literal 1
+  expr#7  unary - expr#6
+  expr#8  if expr#0 then expr#5 else expr#7
+pats
+  pat#0  bind flag
+  pat#1  bind x
+paths
+  path#0  flag -> binding pat#0
+  path#1  x -> binding pat#1
+```
+
+```
+BODY fun nested in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#0
+  expr#2  literal 1
+  expr#3  literal 2
+  expr#4  if expr#1 then expr#2 else expr#3
+  expr#5  literal 3
+  expr#6  if expr#0 then expr#4 else expr#5
+pats
+  pat#0  bind flag
+paths
+  path#0  flag -> binding pat#0
+```
+
+```
+BODY fun log in module #0
+
+root expr#4
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#0
+  expr#3  call expr#1 (expr#2)
+  expr#4  if expr#0 then expr#3
+pats
+  pat#0  bind flag
+paths
+  path#0  flag -> binding pat#0
+  path#1  log -> fun log
+```
+
+```
+BODY fun log_ordered in module #0
+
+root expr#8
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#0
+  expr#3  call expr#1 (expr#2)
+  expr#4  path path#2
+  expr#5  path path#1
+  expr#6  path path#2
+  expr#7  call expr#5 (expr#6)
+  expr#8  if expr#0 then expr#3 elif expr#4 then expr#7
+pats
+  pat#0  bind low
+  pat#1  bind high
+paths
+  path#0  low -> binding pat#0
+  path#1  log -> fun log
+  path#2  high -> binding pat#1
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

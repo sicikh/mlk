@@ -102,6 +102,25 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.into_node(BIN_EXPR, children)
             },
+            BOOL_LITERAL => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<1usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && matches!(element.kind(), T![true] | T![false])
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        BOOL_LITERAL.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(BOOL_LITERAL, children)
+            },
             CALL_EXPR => {
                 let mut elements = (&children).into_iter();
                 let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
@@ -141,6 +160,32 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     );
                 }
                 slots.into_node(CALL_EXPR, children)
+            },
+            ELSE_BRANCH => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![else]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        ELSE_BRANCH.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(ELSE_BRANCH, children)
             },
             FIELD_EXPR => {
                 let mut elements = (&children).into_iter();
@@ -300,6 +345,94 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     );
                 }
                 slots.into_node(IDENT_PAT, children)
+            },
+            IF_ARM => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![elif]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![then]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(IF_ARM.to_bogus(), children.into_iter().map(Some));
+                }
+                slots.into_node(IF_ARM, children)
+            },
+            IF_EXPR => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<6usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![if]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![then]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && IfArmList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && ElseBranch::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(IF_EXPR.to_bogus(), children.into_iter().map(Some));
+                }
+                slots.into_node(IF_EXPR, children)
             },
             INFER_TYPE => {
                 let mut elements = (&children).into_iter();
@@ -1036,6 +1169,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 Self::make_separated_list_syntax(kind, children, Expr::can_cast, T ! [,], true)
             },
             ATTRIBUTE_LIST => Self::make_node_list_syntax(kind, children, Attribute::can_cast),
+            IF_ARM_LIST => Self::make_node_list_syntax(kind, children, IfArm::can_cast),
             MODULE_ITEM_LIST => Self::make_node_list_syntax(kind, children, ModuleItem::can_cast),
             PARAMETER_LIST => {
                 Self::make_separated_list_syntax(

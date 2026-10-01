@@ -40,7 +40,8 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         ("|>", "PIPE"),
     ],
     keywords: &[
-        "as", "fun", "in", "let", "module", "project", "pub", "type", "use",
+        "as", "elif", "else", "false", "fun", "if", "in", "let", "module", "project", "pub",
+        "then", "true", "type", "use",
     ],
     literals: &["INT_LITERAL", "STRING_LITERAL"],
     tokens: &[
@@ -79,6 +80,7 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "TYPE_ANNOTATION",
         "EXPR",
         "LITERAL",
+        "BOOL_LITERAL",
         "PATH_EXPR",
         "CALL_EXPR",
         "UFCS_CALL",
@@ -88,6 +90,10 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "BIN_EXPR",
         "PIPE_EXPR",
         "PLACEHOLDER_EXPR",
+        "IF_EXPR",
+        "ELSE_BRANCH",
+        "IF_ARM_LIST",
+        "IF_ARM",
         "LET_EXPR",
         "PAREN_EXPR",
         "TYPE",

@@ -37,14 +37,19 @@ const syntax = styleTags({
     // The keywords, which the grammar reads out of names: see `kw<...>` in the grammar.
     // The list is the one the lexer of the compiler knows the language by, and `_` with them,
     // which is what a pattern that binds nothing and a type that is inferred are written as:
-    // a word the language does not have is not painted at all.
-    "as fun in let module project pub type use _": tags.keyword,
+    // a word the language does not have is not painted at all. A truth value is a keyword of
+    // the lexer and a literal of the reader, so it is not listed here: see `tags.bool` below.
+    "as elif else fun if in let module project pub then type use _":
+        tags.keyword,
     // An attribute is painted whole, `#[extern]` and all, which the `/...` says: what the `#`
     // introduces is a word of the language rather than a name the code gives to something,
     // and the words inside a node wear its colour only when the tag reaches them.
     "Attribute/...": tags.annotation,
     Comment: tags.comment,
     IntLiteral: tags.number,
+    // A truth value is a literal like an integer, and it is painted like one: the words it is
+    // written with are keywords of the language, and what a reader reads at them is the value.
+    "false true": tags.bool,
     StringLiteral: tags.string,
     "Type/Path/PathSegment/Name": tags.typeName,
 });
@@ -63,6 +68,7 @@ const style = HighlightStyle.define([
     { tag: tags.keyword, color: "var(--accent)" },
     { tag: tags.comment, color: "var(--muted)", fontStyle: "italic" },
     { tag: tags.number, color: "var(--warning)" },
+    { tag: tags.bool, color: "var(--warning)" },
     { tag: tags.string, color: "var(--ok)" },
     { tag: tags.annotation, color: "var(--ok)" },
     { tag: tags.typeName, color: "var(--type)" },

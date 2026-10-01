@@ -29,7 +29,13 @@
 	equality @left,
 	and @left,
 	or @left,
-	pipe @left
+	pipe @left,
+
+	// The tail of an `if`: the arms and the `else` bind to the innermost `if` that can hold
+	// them, which is what the parser of the compiler reads. The marker is what says so to the
+	// generated parser: an `if` may leave its `else` unwritten, and `if a then if b then c elif …`
+	// is ambiguous without one.
+	if_tail @left
 }
 
 @skip { space | Comment }
@@ -120,7 +126,7 @@ FieldExpr { PostfixExpr !call "@" Name }
 // `-1 + 2` is `(-1) + 2`, and `-f(x)` is the negation of the call.
 UnaryExpr { !call ("-" | "+") Expr }
 
-PrimaryExpr { LetExpr | Placeholder | Literal | PathExpr | ParenExpr }
+PrimaryExpr { IfExpr | LetExpr | Placeholder | Literal | PathExpr | ParenExpr }
 
 // A place for the value a pipeline passes: `x |> f(_)`. A place is a leaf of the expression
 // grammar, and the parser of the compiler reads one only among the arguments of the call on
@@ -128,6 +134,20 @@ PrimaryExpr { LetExpr | Placeholder | Literal | PathExpr | ParenExpr }
 Placeholder { kw<"_"> }
 
 LetExpr { kw<"let"> Pat "=" Expr kw<"in"> Expr }
+
+// A choice between expressions: a condition, the expression it selects, the arms written
+// after it, and the expression selected when no condition holds. Every part is an
+// expression, and the keywords of the rule are what ends one of them. The `else` may be left
+// unwritten, and an `if` without one selects no value.
+//
+// The arms and the `else` are read by the innermost `if` they can be written after: in
+// `if a then if b then c elif d then e else f`, all the keywords after the second `then`
+// belong to the second `if`, which is what the compiler reads as well.
+IfExpr { kw<"if"> Expr kw<"then"> Expr IfArm* ElseBranch? }
+
+IfArm { !if_tail kw<"elif"> Expr kw<"then"> Expr }
+
+ElseBranch { !if_tail kw<"else"> Expr }
 
 Pat { IdentPat | WildcardPat }
 
@@ -155,11 +175,15 @@ PipeExpr { Expr !pipe "|>" Step }
 // the dot, and among whose arguments a place is written.
 Step { PathExpr ("." Path)? "(" (Expr ("," Expr)* ","?)? ")" }
 
-Literal { IntLiteral | StringLiteral }
+Literal { IntLiteral | StringLiteral | BoolLiteral }
 
 IntLiteral { int_literal }
 
 StringLiteral { string_literal }
+
+// A truth value: `true` or `false`. Both are keywords of the language, read where a value
+// belongs.
+BoolLiteral { kw<"true"> | kw<"false"> }
 
 // A path written where a value belongs: a name, or a name of the project with the names
 // inside it after it. A path is what says that a dot is never a way to name something: the

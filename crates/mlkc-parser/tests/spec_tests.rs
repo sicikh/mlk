@@ -68,6 +68,11 @@ spec_tests! {
     // step is one call.
     pipelines: "valid/pipelines.mlk",
 
+    // A choice between expressions: a condition, the expression it selects, the arms written
+    // after it, and the expression selected when no condition holds. Every part is an
+    // expression, and what follows one of them ends it.
+    if_expr: "valid/if.mlk",
+
     // A `let` without its `in`: the binding expression is parsed and the diagnostic points
     // at the place where the body was supposed to start.
     missing_in: "invalid/missing_in.mlk",
@@ -106,6 +111,11 @@ spec_tests! {
     // The keyword written where a pattern belongs: the type of the parameter and the value and
     // the `in` of the `let` are read whole around it.
     project_where_a_pattern_belongs: "invalid/project_where_a_pattern_belongs.mlk",
+
+    // An `if` with a part of it missing: the condition, the `then` of the first branch, and the
+    // condition and the expression of an `elif` are what the parser reports, and the declaration
+    // after the broken expression is read as the declaration it is.
+    if_missing_parts: "invalid/if.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

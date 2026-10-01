@@ -18,7 +18,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, ItemKind, ItemLoc,
+    BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc,
     ItemLocLike, ItemTree, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId,
     ProjectGraph, UnaryOp,
 };
@@ -211,6 +211,8 @@ enum Builtin {
     String,
     /// `Bool`: the type of a comparison and of a logical operator.
     Boolean,
+    /// `Unit`: the type of a choice that selects no value, and of a body that gives none.
+    Unit,
 }
 
 /// The check of one body.
@@ -308,6 +310,12 @@ impl Checker<'_> {
                 expr: init,
                 body,
             } => self.let_binding(pat, init, body),
+            Expr::If {
+                cond,
+                then_,
+                arms,
+                otherwise,
+            } => self.if_expr(cond, then_, &arms, otherwise),
         };
 
         self.record_expr(expr, ty.clone());
@@ -337,6 +345,57 @@ impl Checker<'_> {
             return;
         }
 
+        // An `if` propagates the expectation into every branch of it: the branches are the
+        // expressions the place expects a value from, and a mistake is reported where the
+        // branch that is one is written. An `if` without an `else` is a `Unit` whatever the
+        // place expects: what its arms are is checked against `Unit`, and the whole of it
+        // against the place.
+        if let Expr::If {
+            cond,
+            then_,
+            arms,
+            otherwise,
+        } = self.body[expr].clone()
+        {
+            let boolean = self.builtin(Builtin::Boolean);
+            self.check(cond, &boolean);
+
+            if let Some(otherwise) = otherwise {
+                self.check(then_, expected);
+
+                for arm in &arms {
+                    self.check(arm.cond, &boolean);
+                    self.check(arm.body, expected);
+                }
+
+                self.check(otherwise, expected);
+                self.record_expr(expr, expected.clone());
+            } else {
+                let unit = self.builtin(Builtin::Unit);
+                self.check(then_, &unit);
+
+                for arm in &arms {
+                    self.check(arm.cond, &boolean);
+                    self.check(arm.body, &unit);
+                }
+
+                let expected = self.engine.repr(expected);
+
+                match self.engine.unify(&expected, &unit) {
+                    Ok(()) => {
+                        let recorded = if expected.is_error() { unit } else { expected };
+                        self.record_expr(expr, recorded);
+                    },
+                    Err(error) => {
+                        self.report_unify(error, expr);
+                        self.record_expr(expr, InferTy::Error);
+                    },
+                }
+            }
+
+            return;
+        }
+
         let found = self.infer(expr);
         let expected = self.engine.repr(expected);
 
@@ -354,7 +413,8 @@ impl Checker<'_> {
         }
     }
 
-    /// The type of a literal: an integer is `Int`, and a string is `String`.
+    /// The type of a literal: an integer is `Int`, a truth value is `Bool`, and a string is
+    /// `String`.
     ///
     /// An integer literal that does not fit the 31-bit representation of `Int` is the check's to
     /// report: the representation is what the type means ([ADR-0018]).
@@ -369,6 +429,7 @@ impl Checker<'_> {
 
                 self.builtin(Builtin::Int)
             },
+            Literal::Bool(_) => self.builtin(Builtin::Boolean),
             Literal::Str(_) => self.builtin(Builtin::String),
         }
     }
@@ -619,6 +680,47 @@ impl Checker<'_> {
         }
     }
 
+    /// The type of an `if`: every condition is a `Bool`, and every branch is a value of the
+    /// type of the expression.
+    ///
+    /// Nothing fixes the type here, so the branch the first condition selects is what the arms
+    /// after it are checked against: the first branch is the one a reader reads first, and
+    /// a mistake is reported at the branch that is one. An `if` without an `else` selects no
+    /// value: its arms are `Unit`, and so it is.
+    fn if_expr(
+        &mut self,
+        cond: ExprId,
+        then_: ExprId,
+        arms: &[IfArm],
+        otherwise: Option<ExprId>,
+    ) -> InferTy {
+        let boolean = self.builtin(Builtin::Boolean);
+        self.check(cond, &boolean);
+
+        let Some(otherwise) = otherwise else {
+            let unit = self.builtin(Builtin::Unit);
+            self.check(then_, &unit);
+
+            for arm in arms {
+                self.check(arm.cond, &boolean);
+                self.check(arm.body, &unit);
+            }
+
+            return unit;
+        };
+
+        let ty = self.infer(then_);
+
+        for arm in arms {
+            self.check(arm.cond, &boolean);
+            self.check(arm.body, &ty);
+        }
+
+        self.check(otherwise, &ty);
+
+        ty
+    }
+
     /// The type of a `let`: the right side is inferred, generalized, and bound to the pattern,
     /// and the type of the expression is the type of its body.
     fn let_binding(&mut self, pat: PatId, init: ExprId, body: ExprId) -> InferTy {
@@ -650,6 +752,7 @@ impl Checker<'_> {
             Builtin::Int => self.deps.builtins().int(),
             Builtin::String => self.deps.builtins().string(),
             Builtin::Boolean => self.deps.builtins().boolean(),
+            Builtin::Unit => self.deps.builtins().unit(),
         };
 
         InferTy::Class {
@@ -900,6 +1003,185 @@ mod tests {
     }
 
     #[test]
+    fn an_if_is_a_value_of_the_type_its_branches_agree_on() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\nfun pick(low: Bool, high: Bool): Int = \
+             if low then 1 elif high then 2 else 3\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let int = Ty::class(class(&tree, "Int"));
+        let boolean = Ty::class(class(&tree, "Bool"));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(checked.expr_type(body.root()), Some(&int));
+
+        // Every condition is a `Bool`, and every branch is an `Int`: the arms after the first
+        // are checked against it, and a branch that is a `let` is as much a value as any other.
+        let Expr::If {
+            cond,
+            then_,
+            arms,
+            otherwise,
+        } = &body[body.root()]
+        else {
+            panic!("an `if` is the root of the body");
+        };
+
+        assert_eq!(checked.expr_type(*cond), Some(&boolean));
+        assert_eq!(checked.expr_type(*then_), Some(&int));
+        assert_eq!(
+            checked.expr_type(otherwise.expect("the choice to have an `else`")),
+            Some(&int),
+        );
+
+        for arm in arms {
+            assert_eq!(checked.expr_type(arm.cond), Some(&boolean));
+            assert_eq!(checked.expr_type(arm.body), Some(&int));
+        }
+    }
+
+    #[test]
+    fn a_condition_that_is_not_a_bool_is_reported() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun wrong(): Int = if 1 then 2 else 3\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(
+                diagnostics[0].error(),
+                TypeError::TypeMismatch { expected, found }
+                    if *expected == Ty::class(class(&tree, "Bool"))
+                        && *found == Ty::class(class(&tree, "Int"))
+            ),
+            "{diagnostics:?}",
+        );
+
+        // The branches agree on `Int`, and a condition that is not a `Bool` does not take the
+        // value of the expression away: what the `if` is is still known.
+        assert_eq!(
+            checked.expr_type(body.root()),
+            Some(&Ty::class(class(&tree, "Int"))),
+        );
+    }
+
+    #[test]
+    fn an_if_without_an_else_selects_the_unit_its_arms_are() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\nfun log(flag: Bool): Unit =\n    if flag then\n        log(flag)\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let boolean = Ty::class(class(&tree, "Bool"));
+        let unit = Ty::class(class(&tree, "Unit"));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        // An `if` without an `else` selects no value: its arms are `Unit`, and so it is.
+        assert_eq!(checked.expr_type(body.root()), Some(&unit));
+
+        let Expr::If {
+            cond,
+            then_,
+            otherwise,
+            ..
+        } = &body[body.root()]
+        else {
+            panic!("an `if` is the root of the body");
+        };
+
+        assert!(otherwise.is_none(), "the choice to have no `else`");
+        assert_eq!(checked.expr_type(*cond), Some(&boolean));
+        assert_eq!(checked.expr_type(*then_), Some(&unit));
+    }
+
+    #[test]
+    fn an_arm_that_is_not_a_unit_is_reported_when_there_is_no_else() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun wrong(flag: Bool): Unit = if flag then 1\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // The arm is what the choice selects when the condition holds, and a choice that
+        // selects no value selects a `Unit`.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(
+                diagnostics[0].error(),
+                TypeError::TypeMismatch { expected, found }
+                    if *expected == Ty::class(class(&tree, "Unit"))
+                        && *found == Ty::class(class(&tree, "Int"))
+            ),
+            "{diagnostics:?}",
+        );
+        assert_eq!(
+            checked.expr_type(body.root()),
+            Some(&Ty::class(class(&tree, "Unit"))),
+        );
+    }
+
+    #[test]
+    fn branches_of_different_types_are_reported() {
+        let (id, ..) = ids();
+        let source =
+            format!("{CLASSES}\nfun wrong(flag: Bool): Int = if flag then 1 else \"text\"\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // The first branch is what the arms after it are checked against: the branch that is
+        // not an `Int` is what is reported, and not the `if` around it.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(
+                diagnostics[0].error(),
+                TypeError::TypeMismatch { expected, found }
+                    if *expected == Ty::class(class(&tree, "Int"))
+                        && *found == Ty::class(class(&tree, "String"))
+            ),
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
     fn arithmetic_comparisons_and_lets_are_typed_by_the_rules_of_the_check() {
         let (id, ..) = ids();
         let source = format!(
@@ -930,6 +1212,27 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(checked.expr_type(body.root()), Some(&boolean));
+    }
+
+    #[test]
+    fn a_truth_value_is_a_bool() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun truth(): Bool = true\nfun untruth(): Bool = false\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let boolean = Ty::class(class(&tree, "Bool"));
+
+        for (owner, body) in &bodies {
+            let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+            assert_eq!(checked.expr_type(body.root()), Some(&boolean));
+        }
     }
 
     #[test]

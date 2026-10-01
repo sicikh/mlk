@@ -21,3 +21,9 @@ fun signs_chain(): Int =
 
 fun negated_call(): Int =
     -f(1)
+
+fun truth(): Bool =
+    true
+
+fun truth_values(): Bool =
+    true && false

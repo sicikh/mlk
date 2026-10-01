@@ -1,0 +1,381 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// What is wrong with an `if` as syntax: a condition that is not there, a `then` that is not
+// there, and an `elif` whose condition and expression are not there. The declaration after a
+// broken `if` is read as the declaration it is, and not as part of the expression.
+
+fun missing_condition(): Int =
+    if then 1 else 2
+
+fun missing_then(): Int =
+    if 1 == 2 3 else 4
+
+fun broken_elif(): Int =
+    if 1 == 2 then 3 elif else 7
+
+fun after_a_broken_if(): Int =
+    1
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: missing (optional),
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@0..276 "fun" [Comments("// What is wrong with ..."), Newline("\n"), Comments("// there, and an `eli ..."), Newline("\n"), Comments("// broken `if` is rea ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@276..293 "missing_condition" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@293..294 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@294..295 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@295..297 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@297..301 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@301..302 "=" [] [],
+                expr: IfExpr {
+                    if_token: IF_KW@302..310 "if" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    condition: missing (required),
+                    then_token: THEN_KW@310..315 "then" [] [Whitespace(" ")],
+                    then_branch: IntLiteral {
+                        value_token: INT_LITERAL@315..317 "1" [] [Whitespace(" ")],
+                    },
+                    arms: IfArmList [],
+                    else_branch: ElseBranch {
+                        else_token: ELSE_KW@317..322 "else" [] [Whitespace(" ")],
+                        expr: IntLiteral {
+                            value_token: INT_LITERAL@322..323 "2" [] [],
+                        },
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@323..329 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@329..341 "missing_then" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@341..342 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@342..343 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@343..345 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@345..349 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@349..350 "=" [] [],
+                expr: IfExpr {
+                    if_token: IF_KW@350..358 "if" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    condition: BinExpr {
+                        lhs: IntLiteral {
+                            value_token: INT_LITERAL@358..360 "1" [] [Whitespace(" ")],
+                        },
+                        operator_token: EQ2@360..363 "==" [] [Whitespace(" ")],
+                        rhs: IntLiteral {
+                            value_token: INT_LITERAL@363..365 "2" [] [Whitespace(" ")],
+                        },
+                    },
+                    then_token: missing (required),
+                    then_branch: IntLiteral {
+                        value_token: INT_LITERAL@365..367 "3" [] [Whitespace(" ")],
+                    },
+                    arms: IfArmList [],
+                    else_branch: ElseBranch {
+                        else_token: ELSE_KW@367..372 "else" [] [Whitespace(" ")],
+                        expr: IntLiteral {
+                            value_token: INT_LITERAL@372..373 "4" [] [],
+                        },
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@373..379 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@379..390 "broken_elif" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@390..391 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@391..392 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@392..394 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@394..398 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@398..399 "=" [] [],
+                expr: IfExpr {
+                    if_token: IF_KW@399..407 "if" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")],
+                    condition: BinExpr {
+                        lhs: IntLiteral {
+                            value_token: INT_LITERAL@407..409 "1" [] [Whitespace(" ")],
+                        },
+                        operator_token: EQ2@409..412 "==" [] [Whitespace(" ")],
+                        rhs: IntLiteral {
+                            value_token: INT_LITERAL@412..414 "2" [] [Whitespace(" ")],
+                        },
+                    },
+                    then_token: THEN_KW@414..419 "then" [] [Whitespace(" ")],
+                    then_branch: IntLiteral {
+                        value_token: INT_LITERAL@419..421 "3" [] [Whitespace(" ")],
+                    },
+                    arms: IfArmList [
+                        IfArm {
+                            elif_token: ELIF_KW@421..426 "elif" [] [Whitespace(" ")],
+                            condition: missing (required),
+                            then_token: missing (required),
+                            body: missing (required),
+                        },
+                    ],
+                    else_branch: ElseBranch {
+                        else_token: ELSE_KW@426..431 "else" [] [Whitespace(" ")],
+                        expr: IntLiteral {
+                            value_token: INT_LITERAL@431..432 "7" [] [],
+                        },
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@432..438 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@438..455 "after_a_broken_if" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@455..456 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@456..457 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@457..459 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@459..463 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@463..464 "=" [] [],
+                expr: IntLiteral {
+                    value_token: INT_LITERAL@464..470 "1" [Newline("\n"), Whitespace("    ")] [],
+                },
+            },
+        },
+    ],
+    eof_token: EOF@470..471 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..471
+  0: (empty)
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..470
+    0: FUN_DECL@0..323
+      0: ATTRIBUTE_LIST@0..0
+      1: (empty)
+      2: FUN_KW@0..276 "fun" [Comments("// What is wrong with ..."), Newline("\n"), Comments("// there, and an `eli ..."), Newline("\n"), Comments("// broken `if` is rea ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@276..293
+        0: IDENT@276..293 "missing_condition" [] []
+      4: PARAMETERS@293..295
+        0: L_PAREN@293..294 "(" [] []
+        1: PARAMETER_LIST@294..294
+        2: R_PAREN@294..295 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@295..301
+        0: COLON@295..297 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@297..301
+          0: PATH@297..301
+            0: (empty)
+            1: PATH_SEGMENT@297..301
+              0: NAME@297..301
+                0: IDENT@297..301 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@301..323
+        0: EQ@301..302 "=" [] []
+        1: IF_EXPR@302..323
+          0: IF_KW@302..310 "if" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: (empty)
+          2: THEN_KW@310..315 "then" [] [Whitespace(" ")]
+          3: INT_LITERAL@315..317
+            0: INT_LITERAL@315..317 "1" [] [Whitespace(" ")]
+          4: IF_ARM_LIST@317..317
+          5: ELSE_BRANCH@317..323
+            0: ELSE_KW@317..322 "else" [] [Whitespace(" ")]
+            1: INT_LITERAL@322..323
+              0: INT_LITERAL@322..323 "2" [] []
+    1: FUN_DECL@323..373
+      0: ATTRIBUTE_LIST@323..323
+      1: (empty)
+      2: FUN_KW@323..329 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@329..341
+        0: IDENT@329..341 "missing_then" [] []
+      4: PARAMETERS@341..343
+        0: L_PAREN@341..342 "(" [] []
+        1: PARAMETER_LIST@342..342
+        2: R_PAREN@342..343 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@343..349
+        0: COLON@343..345 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@345..349
+          0: PATH@345..349
+            0: (empty)
+            1: PATH_SEGMENT@345..349
+              0: NAME@345..349
+                0: IDENT@345..349 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@349..373
+        0: EQ@349..350 "=" [] []
+        1: IF_EXPR@350..373
+          0: IF_KW@350..358 "if" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: BIN_EXPR@358..365
+            0: INT_LITERAL@358..360
+              0: INT_LITERAL@358..360 "1" [] [Whitespace(" ")]
+            1: EQ2@360..363 "==" [] [Whitespace(" ")]
+            2: INT_LITERAL@363..365
+              0: INT_LITERAL@363..365 "2" [] [Whitespace(" ")]
+          2: (empty)
+          3: INT_LITERAL@365..367
+            0: INT_LITERAL@365..367 "3" [] [Whitespace(" ")]
+          4: IF_ARM_LIST@367..367
+          5: ELSE_BRANCH@367..373
+            0: ELSE_KW@367..372 "else" [] [Whitespace(" ")]
+            1: INT_LITERAL@372..373
+              0: INT_LITERAL@372..373 "4" [] []
+    2: FUN_DECL@373..432
+      0: ATTRIBUTE_LIST@373..373
+      1: (empty)
+      2: FUN_KW@373..379 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@379..390
+        0: IDENT@379..390 "broken_elif" [] []
+      4: PARAMETERS@390..392
+        0: L_PAREN@390..391 "(" [] []
+        1: PARAMETER_LIST@391..391
+        2: R_PAREN@391..392 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@392..398
+        0: COLON@392..394 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@394..398
+          0: PATH@394..398
+            0: (empty)
+            1: PATH_SEGMENT@394..398
+              0: NAME@394..398
+                0: IDENT@394..398 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@398..432
+        0: EQ@398..399 "=" [] []
+        1: IF_EXPR@399..432
+          0: IF_KW@399..407 "if" [Newline("\n"), Whitespace("    ")] [Whitespace(" ")]
+          1: BIN_EXPR@407..414
+            0: INT_LITERAL@407..409
+              0: INT_LITERAL@407..409 "1" [] [Whitespace(" ")]
+            1: EQ2@409..412 "==" [] [Whitespace(" ")]
+            2: INT_LITERAL@412..414
+              0: INT_LITERAL@412..414 "2" [] [Whitespace(" ")]
+          2: THEN_KW@414..419 "then" [] [Whitespace(" ")]
+          3: INT_LITERAL@419..421
+            0: INT_LITERAL@419..421 "3" [] [Whitespace(" ")]
+          4: IF_ARM_LIST@421..426
+            0: IF_ARM@421..426
+              0: ELIF_KW@421..426 "elif" [] [Whitespace(" ")]
+              1: (empty)
+              2: (empty)
+              3: (empty)
+          5: ELSE_BRANCH@426..432
+            0: ELSE_KW@426..431 "else" [] [Whitespace(" ")]
+            1: INT_LITERAL@431..432
+              0: INT_LITERAL@431..432 "7" [] []
+    3: FUN_DECL@432..470
+      0: ATTRIBUTE_LIST@432..432
+      1: (empty)
+      2: FUN_KW@432..438 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@438..455
+        0: IDENT@438..455 "after_a_broken_if" [] []
+      4: PARAMETERS@455..457
+        0: L_PAREN@455..456 "(" [] []
+        1: PARAMETER_LIST@456..456
+        2: R_PAREN@456..457 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@457..463
+        0: COLON@457..459 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@459..463
+          0: PATH@459..463
+            0: (empty)
+            1: PATH_SEGMENT@459..463
+              0: NAME@459..463
+                0: IDENT@459..463 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@463..470
+        0: EQ@463..464 "=" [] []
+        1: INT_LITERAL@464..470
+          0: INT_LITERAL@464..470 "1" [Newline("\n"), Whitespace("    ")] []
+  3: EOF@470..471 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+310..314: Expected an expression but instead found 'then'.
+    Detail Some(310..314): Expected an expression here.
+365..366: expected `then` but instead found `3`
+    Hint None: Remove 3
+426..430: Expected an expression but instead found 'else'.
+    Detail Some(426..430): Expected an expression here.

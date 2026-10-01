@@ -57,8 +57,17 @@ const MIN_PRECEDENCE: u8 = PIPE_PRECEDENCE;
 
 /// The tokens a broken expression is recovered at: whatever ends the expression and starts
 /// something else where it is written.
-const EXPR_RECOVERY_SET: TokenSet<SyntaxKind> =
-    token_set![T![,], T![')'], T![']'], T![=], T![in], T![let]];
+const EXPR_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![
+    T![,],
+    T![')'],
+    T![']'],
+    T![=],
+    T![in],
+    T![let],
+    T![then],
+    T![elif],
+    T![else]
+];
 
 /// The tokens a broken step is recovered at: what stands after a step, and what ends the
 /// expression the pipeline is written in.
@@ -422,9 +431,11 @@ fn parse_missing_arguments(p: &mut MlkParser) -> CompletedMarker {
 fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
     match p.cur() {
         INT_LITERAL | STRING_LITERAL => parse_literal(p),
+        TRUE_KW | FALSE_KW => parse_bool_literal(p),
         // A name and the project keyword are what a path expression starts with: the
         // keyword is a root, and the path rule is what reads it where it belongs.
         IDENT | PROJECT_KW => parse_path_expr(p),
+        IF_KW => parse_if_expr(p),
         LET_KW => parse_let_expr(p),
         L_PAREN => parse_paren_expr(p),
         UNDERSCORE => parse_placeholder_expr(p),
@@ -449,6 +460,29 @@ fn parse_literal(p: &mut MlkParser) -> ParsedSyntax {
     p.bump(kind);
 
     Present(m.complete(p, kind))
+}
+
+/// Parses a truth value: `true` or `false`.
+///
+/// A truth value is a literal of a node of its own rather than a token that is its kind: the
+/// two words are keywords, and one node holds whichever of them is written.
+// test mlk a_truth_value_is_a_literal
+// fun yes(): Bool =
+//     true
+//
+// test mlk a_truth_value_may_be_anything_a_value_may_be
+// fun choose(flag: Bool): Bool =
+//     flag && true
+fn parse_bool_literal(p: &mut MlkParser) -> ParsedSyntax {
+    if !(p.at(T![true]) || p.at(T![false])) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump_any();
+
+    Present(m.complete(p, BOOL_LITERAL))
 }
 
 /// Parses a `_` written where a value belongs: `x |> f(_)`.
@@ -508,6 +542,77 @@ fn parse_paren_expr(p: &mut MlkParser) -> ParsedSyntax {
     p.expect(T![')']);
 
     Present(m.complete(p, PAREN_EXPR))
+}
+
+/// Parses an `if`: a condition, the expression it selects, the `elif` arms written after it,
+/// and the expression selected when no condition holds.
+///
+/// Every part is an expression, and no keyword of the rule is an operator: a condition ends
+/// at the `then` written after it, and a branch ends at the `elif` or the `else` after it, so
+/// the rule reads the arms in the order they are written without looking past one. The `else`
+/// may be left unwritten, and an `if` without one is read with the branch that is not there.
+// test mlk an_if_selects_an_expression
+// fun pick(flag: Bool): Int =
+//     if flag then 1 else 2
+//
+// test mlk an_if_reads_its_elif_arms_in_order
+// fun pick(low: Bool, high: Bool): Int =
+//     if low then 1 elif high then 2 else 3
+//
+// test mlk an_if_may_select_nothing
+// fun log(flag: Bool): Unit =
+//     if flag then
+//         log(flag)
+//
+// test mlk a_branch_may_be_anything_an_expression_may_be
+// fun pick(flag: Bool): Int =
+//     if flag then
+//         let x = 1 in
+//         x + 1
+//     else
+//         -1
+fn parse_if_expr(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T![if]) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T![if]);
+    parse_expr(p).or_add_diagnostic(p, expected_expr);
+    p.expect(T![then]);
+    parse_expr(p).or_add_diagnostic(p, expected_expr);
+
+    // The arms are a list of their own, and the list is written even when no `elif` is: what
+    // the grammar gives the node is a slot for the arms, and a slot without a list is read as
+    // a missing one by everything that reads the tree.
+    let arms = p.start();
+
+    while p.at(T![elif]) {
+        let arm = p.start();
+
+        p.bump(T![elif]);
+        parse_expr(p).or_add_diagnostic(p, expected_expr);
+        p.expect(T![then]);
+        parse_expr(p).or_add_diagnostic(p, expected_expr);
+
+        arm.complete(p, IF_ARM);
+    }
+
+    arms.complete(p, IF_ARM_LIST);
+
+    // The `else` and the expression it selects are one node: an `if` without one selects no
+    // value, which is what a reader of the tree sees as the branch that is not there.
+    if p.at(T![else]) {
+        let otherwise = p.start();
+
+        p.bump(T![else]);
+        parse_expr(p).or_add_diagnostic(p, expected_expr);
+
+        otherwise.complete(p, ELSE_BRANCH);
+    }
+
+    Present(m.complete(p, IF_EXPR))
 }
 
 /// Parses the expression that binds a name to a value and uses it.

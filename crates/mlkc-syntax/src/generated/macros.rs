@@ -25,8 +25,16 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::BinExpr::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::BOOL_LITERAL => {
+                        let $pattern = unsafe { $crate::BoolLiteral::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::CALL_EXPR => {
                         let $pattern = unsafe { $crate::CallExpr::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::ELSE_BRANCH => {
+                        let $pattern = unsafe { $crate::ElseBranch::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::FIELD_EXPR => {
@@ -48,6 +56,14 @@ macro_rules! map_syntax_node {
                     },
                     $crate::SyntaxKind::IDENT_PAT => {
                         let $pattern = unsafe { $crate::IdentPat::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::IF_ARM => {
+                        let $pattern = unsafe { $crate::IfArm::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::IF_EXPR => {
+                        let $pattern = unsafe { $crate::IfExpr::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::INFER_TYPE => {
@@ -184,6 +200,10 @@ macro_rules! map_syntax_node {
                     },
                     $crate::SyntaxKind::ATTRIBUTE_LIST => {
                         let $pattern = unsafe { $crate::AttributeList::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::IF_ARM_LIST => {
+                        let $pattern = unsafe { $crate::IfArmList::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::MODULE_ITEM_LIST => {

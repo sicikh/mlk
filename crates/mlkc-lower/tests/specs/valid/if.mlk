@@ -1,0 +1,43 @@
+// A choice between expressions: a condition, the expression it selects, the `elif` arms
+// written after it, and the expression selected when no condition holds. Every part is an
+// expression, and what a value is chosen by is a question about types, which the HIR does
+// not answer. An `if` without an `else` selects no value, which the HIR holds as the branch
+// that is not there.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Bool
+
+#[builtin]
+type Unit
+
+fun pick(flag: Bool): Int =
+    if flag then 1 else 2
+
+fun ordered(low: Bool, high: Bool): Int =
+    if low then 1 elif high then 2 elif low && high then 3 else 4
+
+fun branch_with_a_let(flag: Bool): Int =
+    if flag then
+        let x = 1 in
+        x + 1
+    else
+        -1
+
+fun nested(flag: Bool): Int =
+    if flag then
+        if flag then 1 else 2
+    else
+        3
+
+fun log(flag: Bool): Unit =
+    if flag then
+        log(flag)
+
+fun log_ordered(low: Bool, high: Bool): Unit =
+    if low then
+        log(low)
+    elif high then
+        log(high)

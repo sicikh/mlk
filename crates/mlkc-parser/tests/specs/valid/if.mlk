@@ -1,0 +1,35 @@
+// A choice between expressions: a condition, the expression it selects, the `elif` arms
+// written after it, and the expression selected when no condition holds. Every part is an
+// expression, and what follows one of them ends it.
+
+fun pick(flag: Bool): Int =
+    if flag then 1 else 2
+
+fun ordered(low: Bool, high: Bool): Int =
+    if low then 1 elif high then 2 elif low && high then 3 else 4
+
+fun branch_with_a_let(flag: Bool): Int =
+    if flag then
+        let x = 1 in
+        x + 1
+    else
+        -1
+
+fun nested(flag: Bool): Int =
+    if flag then
+        if flag then 1 else 2
+    else
+        3
+
+fun where_a_value_belongs(flag: Bool): Int =
+    (if flag then 1 else 2) + 3
+
+fun no_else(flag: Bool): Unit =
+    if flag then
+        no_else(flag)
+
+fun no_else_with_arms(low: Bool, high: Bool): Unit =
+    if low then
+        no_else(low)
+    elif high then
+        no_else(high)

@@ -7,6 +7,13 @@
 //! remembers --- and what it reads of the resolution is a callee: the path of a call is
 //! resolved the way the check resolved it, and never by walking a module table here.
 //!
+//! A body of one block is what the walk makes of an expression with no choice in it. An `if`
+//! is lowered into blocks of its own: every condition is evaluated in a block that branches,
+//! every arm is a block that writes the slot of the expression and goes to the block the arms
+//! meet in, and what is written after the `if` is written in that block. The blocks are
+//! allocated as the walk meets them, and a block is filled when control reaches its end, so
+//! a terminator names blocks that are filled later.
+//!
 //! [adr-0019]: ../../docs/adr/0019-mir.md
 //!
 //! A body whose check reported a mistake is not lowered: a `Ty::Error` expression has no
@@ -23,8 +30,8 @@ use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, Ty};
 use mlkc_la_arena::ArenaMap;
 use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
-    Block, Body as MirBody, BodyBuilder, Callee, Const, LocalData, LocalId, Operand, Place, PrimOp,
-    Rvalue, Stmt, StmtKind, Terminator, ValueData,
+    Block, BlockId, BlockTarget, Body as MirBody, BodyBuilder, Callee, Const, LocalData, LocalId,
+    Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator, ValueData,
 };
 use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
@@ -62,6 +69,8 @@ pub fn lower_body(
 
     let module = owner.module();
     let walk = Walk::of(deps.graph(), deps.closure());
+    let mut builder = BodyBuilder::new(owner.clone());
+    let entry = open_block(&mut builder);
 
     let lowerer = Lowerer {
         module,
@@ -71,13 +80,28 @@ pub fn lower_body(
         deps,
         resolution,
         walk,
-        builder: BodyBuilder::new(owner.clone()),
+        builder,
         slots: ArenaMap::default(),
         pat_slots: ArenaMap::default(),
+        current: entry,
         stmts: Vec::new(),
     };
 
-    lowerer.run()
+    lowerer.run(entry)
+}
+
+/// Opens a block: a placeholder the lowering fills when control reaches its end.
+///
+/// A block is opened before it is filled: a terminator names the blocks control goes to, and
+/// a block that is not filled yet has no terminator to be named by.
+fn open_block(builder: &mut BodyBuilder) -> BlockId {
+    builder.block(Block {
+        params: Vec::new(),
+        stmts: Vec::new(),
+        term: Terminator::Unreachable {
+            span: Span::dummy(),
+        },
+    })
 }
 
 /// The lowering of one body.
@@ -103,27 +127,25 @@ struct Lowerer<'a> {
     slots: ArenaMap<ExprId, LocalId>,
     /// The slot of every pattern, once it is bound.
     pat_slots: ArenaMap<PatId, LocalId>,
-    /// The statements of the entry block, in the order they were lowered.
+    /// The block being built: the statements collected so far are its, and filling it gives it
+    /// the terminator control goes on with.
+    current: BlockId,
+    /// The statements of the block being built, in the order they were lowered.
     stmts: Vec<Stmt>,
 }
 
 impl Lowerer<'_> {
     /// Lowers the body and finishes it.
-    fn run(mut self) -> MirBody {
+    fn run(mut self, entry: BlockId) -> MirBody {
         for pat in self.body.params() {
             self.parameter(*pat);
         }
 
         let root = self.expr(self.body.root());
         let span = self.span_expr(self.body.root());
-        let stmts = std::mem::take(&mut self.stmts);
-        let entry = self.builder.block(Block {
-            params: Vec::new(),
-            stmts,
-            term: Terminator::Return {
-                value: Operand::Local(root),
-                span,
-            },
+        self.seal(Terminator::Return {
+            value: Operand::Local(root),
+            span,
         });
 
         self.builder.finish(entry)
@@ -139,6 +161,16 @@ impl Lowerer<'_> {
         let ty = self.checked.expr_type(expr).cloned().unwrap_or(Ty::Error);
         let slot = self.slot(span, None, ty);
         let node = self.body[expr].clone();
+
+        // An `if` writes its slot in every arm of it: the slot is the value the arms agree on,
+        // and the statements of an arm are the statements of a block of its own.
+        if let Expr::If { .. } = &node {
+            self.if_expr(slot, &node, span);
+            self.slots.insert(expr, slot);
+
+            return slot;
+        }
+
         let rvalue = self.rvalue(&node);
 
         self.assign(Place::Local(slot), rvalue, span);
@@ -170,6 +202,7 @@ impl Lowerer<'_> {
 
                 Rvalue::Const(Const::Int(*value as i32))
             },
+            Expr::Literal(Literal::Bool(value)) => Rvalue::Const(Const::Bool(*value)),
             Expr::Literal(Literal::Str(value)) => Rvalue::Const(Const::Str(value.clone())),
             Expr::Call { callee, args } => {
                 let mut lowered = Vec::with_capacity(args.len());
@@ -200,7 +233,147 @@ impl Lowerer<'_> {
 
                 Rvalue::Use(Operand::Local(value))
             },
+            // An `if` writes its slot in every arm of it, and the arms are blocks of their own:
+            // it is lowered by `Lowerer::if_expr`, which `Lowerer::expr` calls before this.
+            Expr::If { .. } => {
+                ice!("the lowering met an `if` outside the rule that reads an `if`")
+            },
         }
+    }
+
+    /// Lowers an `if` into the blocks of it, writing `slot` in every arm.
+    ///
+    /// Every condition is evaluated in the block control reaches it in and branches to the
+    /// block of the arm it selects and to the block of the next condition --- or, for the last
+    /// one, to the block of the expression selected when nothing holds. Every arm writes the
+    /// slot of the expression and goes to the block the arms meet in, and what is written after
+    /// the `if` is written there.
+    ///
+    /// An `if` without an `else` selects no value: the block control falls into writes the unit
+    /// the expression is, and the arms are `Unit` like it. The block is written like any other
+    /// arm of the choice, so what is written after the `if` reads one slot however many arms
+    /// the choice has.
+    fn if_expr(&mut self, slot: LocalId, node: &Expr, span: Span) {
+        let Expr::If {
+            cond,
+            then_,
+            arms,
+            otherwise,
+        } = node
+        else {
+            ice!("the lowering met an expression that is not an `if` in the rule of an `if`")
+        };
+
+        // The conditions and the expressions they select, in the order they are written: the
+        // first condition is the one the current block evaluates.
+        let mut branches = Vec::with_capacity(1 + arms.len());
+        branches.push((*cond, *then_));
+        branches.extend(arms.iter().map(|arm| (arm.cond, arm.body)));
+
+        // Every arm is a block, every condition after the first is a block of its own --- the
+        // condition is evaluated after the arm before it failed, and the block it is evaluated
+        // in is the one that branches --- and the expression selected when nothing holds is a
+        // block after them. The block the arms meet in is opened last.
+        let mut bodies = Vec::with_capacity(branches.len());
+        let mut conditions = Vec::with_capacity(branches.len().saturating_sub(1));
+
+        for index in 0..branches.len() {
+            bodies.push(self.open());
+
+            if index + 1 < branches.len() {
+                conditions.push(self.open());
+            }
+        }
+
+        let other = self.open();
+        let join = self.open();
+
+        // The first condition is evaluated where control already is, and what stands after it
+        // is the block of the next condition, or the last expression when there is none.
+        let value = self.expr(branches[0].0);
+        let next = conditions.first().copied().unwrap_or(other);
+
+        self.seal(Terminator::Branch {
+            cond: Operand::Local(value),
+            then_: BlockTarget {
+                block: bodies[0],
+                args: Vec::new(),
+            },
+            else_: BlockTarget {
+                block: next,
+                args: Vec::new(),
+            },
+            span: self.span_expr(branches[0].0),
+        });
+
+        // Every condition after the first is evaluated in the block the one before it failed
+        // into.
+        for (index, (condition, _)) in branches.iter().enumerate().skip(1) {
+            self.current = conditions[index - 1];
+
+            let value = self.expr(*condition);
+            let next = conditions.get(index).copied().unwrap_or(other);
+
+            self.seal(Terminator::Branch {
+                cond: Operand::Local(value),
+                then_: BlockTarget {
+                    block: bodies[index],
+                    args: Vec::new(),
+                },
+                else_: BlockTarget {
+                    block: next,
+                    args: Vec::new(),
+                },
+                span: self.span_expr(*condition),
+            });
+        }
+
+        // Every arm writes the slot of the expression and goes to the block the arms meet in.
+        for (index, (_, body)) in branches.iter().enumerate() {
+            self.current = bodies[index];
+
+            let span = self.span_expr(*body);
+            let value = self.expr(*body);
+
+            self.assign(Place::Local(slot), Rvalue::Use(Operand::Local(value)), span);
+            self.seal(Terminator::Goto {
+                target: BlockTarget {
+                    block: join,
+                    args: Vec::new(),
+                },
+                span,
+            });
+        }
+
+        // The expression selected when no condition holds: the walk of it, or --- an `if`
+        // without an `else` --- the unit the expression is.
+        self.current = other;
+
+        let end = match otherwise {
+            Some(otherwise) => {
+                let span = self.span_expr(*otherwise);
+                let value = self.expr(*otherwise);
+
+                self.assign(Place::Local(slot), Rvalue::Use(Operand::Local(value)), span);
+
+                span
+            },
+            None => {
+                self.assign(Place::Local(slot), Rvalue::Const(Const::Unit), span);
+
+                span
+            },
+        };
+
+        self.seal(Terminator::Goto {
+            target: BlockTarget {
+                block: join,
+                args: Vec::new(),
+            },
+            span: end,
+        });
+
+        self.current = join;
     }
 
     /// Binds a parameter of the body: a value, and the slot it is bound to.
@@ -461,7 +634,26 @@ impl Lowerer<'_> {
         self.builder.local(LocalData { span, name, ty })
     }
 
-    /// Writes one assignment into the entry block.
+    /// Opens a block: a placeholder the walk fills when control reaches its end.
+    fn open(&mut self) -> BlockId {
+        open_block(&mut self.builder)
+    }
+
+    /// Fills the current block, and gives it the terminator control goes on with.
+    ///
+    /// The statements collected so far are the statements of the block, and the walk goes on in
+    /// whatever block the caller makes current next.
+    fn seal(&mut self, term: Terminator) {
+        let stmts = std::mem::take(&mut self.stmts);
+
+        *self.builder.block_mut(self.current) = Block {
+            params: Vec::new(),
+            stmts,
+            term,
+        };
+    }
+
+    /// Writes one assignment into the current block.
     fn assign(&mut self, place: Place, rvalue: Rvalue, span: Span) {
         self.stmts.push(Stmt {
             kind: StmtKind::Assign { place, rvalue },
@@ -601,6 +793,161 @@ mod tests {
         let ssa = construct_ssa(&mir);
 
         (mir, ssa)
+    }
+
+    #[test]
+    fn an_if_may_be_written_in_a_condition() {
+        let source = format!(
+            "{CLASSES}fun pick(a: Bool, b: Bool, c: Bool): Int = \
+             if (if a then b else c) then 1 else 2\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+
+        // The condition is a choice of its own: the walk of the condition leaves control in the
+        // block the arms of it meet in, and the branch that reads it is written there --- the
+        // block of the outer condition is the join of the inner one.
+        assert_eq!(
+            dump_of(&mir),
+            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool, v2: Bool\n  b0:\n    l0(a) = use v0\n    l1(b) = use v1\n    l2(c) = use v2\n    l5 = use l0\n    branch l5 -> b4, b5\n  b1:\n    l8 = const 1\n    l3 = use l8\n    goto b3\n  b2:\n    l9 = const 2\n    l3 = use l9\n    goto b3\n  b3:\n    return l3\n  b4:\n    l6 = use l1\n    l4 = use l6\n    goto b6\n  b5:\n    l7 = use l2\n    l4 = use l7\n    goto b6\n  b6:\n    branch l4 -> b1, b2\n",
+        );
+
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(
+            dump_of(&ssa),
+            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool, v2: Bool\n  b0:\n    v3 = use v0\n    v4 = use v1\n    v5 = use v2\n    v6 = use v3\n    branch v6 -> b4, b5\n  b1:\n    v14 = const 1\n    v15 = use v14\n    goto b3(v15)\n  b2:\n    v12 = const 2\n    v13 = use v12\n    goto b3(v13)\n  b3(v16):\n    return v16\n  b4:\n    v9 = use v4\n    v10 = use v9\n    goto b6(v10)\n  b5:\n    v7 = use v5\n    v8 = use v7\n    goto b6(v8)\n  b6(v11):\n    branch v11 -> b1, b2\n",
+        );
+    }
+
+    #[test]
+    fn an_if_without_an_else_selects_the_unit_it_is() {
+        let source = format!("{CLASSES}fun log(flag: Bool): Unit = if flag then log(flag)\n");
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+
+        // The block control falls into when no condition holds writes the unit the expression
+        // is, so that what is written after the `if` reads one slot however many arms the
+        // choice has. The block is written like any other arm of the choice.
+        assert_eq!(
+            dump_of(&mir),
+            "fun log (entry b0)\n  params: v0: Bool\n  b0:\n    l0(flag) = use v0\n    l2 = use l0\n    branch l2 -> b1, b2\n  b1:\n    l4 = use l0\n    l3 = call fun log(l4)\n    l1 = use l3\n    goto b3\n  b2:\n    l1 = const unit\n    goto b3\n  b3:\n    return l1\n",
+        );
+
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(
+            dump_of(&ssa),
+            "fun log (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v4 = use v1\n    v5 = call fun log(v4)\n    v6 = use v5\n    goto b3(v6)\n  b2:\n    v3 = const unit\n    goto b3(v3)\n  b3(v7):\n    return v7\n",
+        );
+    }
+
+    #[test]
+    fn an_if_branches_and_writes_its_slot() {
+        let source = format!("{CLASSES}fun pick(flag: Bool): Int = if flag then 1 else 2\n");
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+
+        // The condition is evaluated in the entry block, which branches; every arm writes the
+        // slot of the `if` and goes to the block the arms meet in, and what is written after
+        // the `if` is written there.
+        assert_eq!(
+            dump_of(&mir),
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    l0(flag) = use v0\n    l2 = use l0\n    branch l2 -> b1, b2\n  b1:\n    l3 = const 1\n    l1 = use l3\n    goto b3\n  b2:\n    l4 = const 2\n    l1 = use l4\n    goto b3\n  b3:\n    return l1\n",
+        );
+
+        // The value the arms agree on is born at the join: the SSA form gives it a parameter of
+        // the block the arms meet in, and each arm passes its own value.
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(
+            dump_of(&ssa),
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v5 = const 1\n    v6 = use v5\n    goto b3(v6)\n  b2:\n    v3 = const 2\n    v4 = use v3\n    goto b3(v4)\n  b3(v7):\n    return v7\n",
+        );
+    }
+
+    #[test]
+    fn an_elif_chain_is_a_chain_of_branches_that_meet_at_one_block() {
+        let source = format!(
+            "{CLASSES}fun pick(low: Bool, high: Bool): Int = \
+             if low then 1 elif high then 2 else 3\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+
+        // The `elif` is a condition of its own: the arm before it fails into the block that
+        // evaluates it, and the block branches to the arm the condition selects and to the
+        // expression selected when nothing holds.
+        assert_eq!(
+            dump_of(&mir),
+            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool\n  b0:\n    l0(low) = use v0\n    l1(high) = use v1\n    l3 = use l0\n    branch l3 -> b1, b2\n  b1:\n    l5 = const 1\n    l2 = use l5\n    goto b5\n  b2:\n    l4 = use l1\n    branch l4 -> b3, b4\n  b3:\n    l6 = const 2\n    l2 = use l6\n    goto b5\n  b4:\n    l7 = const 3\n    l2 = use l7\n    goto b5\n  b5:\n    return l2\n",
+        );
+
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(
+            dump_of(&ssa),
+            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool\n  b0:\n    v2 = use v0\n    v3 = use v1\n    v4 = use v2\n    branch v4 -> b1, b2\n  b1:\n    v10 = const 1\n    v11 = use v10\n    goto b5(v11)\n  b2:\n    v5 = use v3\n    branch v5 -> b3, b4\n  b3:\n    v8 = const 2\n    v9 = use v8\n    goto b5(v9)\n  b4:\n    v6 = const 3\n    v7 = use v6\n    goto b5(v7)\n  b5(v12):\n    return v12\n",
+        );
+    }
+
+    #[test]
+    fn an_if_may_be_read_where_a_value_belongs() {
+        let source = format!("{CLASSES}fun pick(flag: Bool): Int = (if flag then 1 else 2) + 3\n");
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+
+        // What is written after the `if` is written in the block the arms meet in: the sum is
+        // computed there, over the slot the arms wrote.
+        assert_eq!(
+            dump_of(&mir),
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    l0(flag) = use v0\n    l3 = use l0\n    branch l3 -> b1, b2\n  b1:\n    l4 = const 1\n    l2 = use l4\n    goto b3\n  b2:\n    l5 = const 2\n    l2 = use l5\n    goto b3\n  b3:\n    l6 = const 3\n    l1 = prim int-add(l2, l6)\n    return l1\n",
+        );
+
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(
+            dump_of(&ssa),
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v5 = const 1\n    v6 = use v5\n    goto b3(v6)\n  b2:\n    v3 = const 2\n    v4 = use v3\n    goto b3(v4)\n  b3(v8):\n    v7 = const 3\n    v9 = prim int-add(v8, v7)\n    return v9\n",
+        );
+    }
+
+    #[test]
+    fn an_if_may_be_written_inside_an_arm() {
+        let source = format!(
+            "{CLASSES}fun pick(flag: Bool): Int =\n    if flag then\n        let x = 1 in\n        x\n    else\n        if flag then 2 else 3\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        // The arm holds a `let` and an `if` of its own: what the arm writes is written where
+        // the walk of the arm ended, and the join of the arm's own `if` that is.
+        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+
+        assert_eq!(
+            dump_of(&ssa),
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v10 = const 1\n    v11 = use v10\n    v12 = use v11\n    v13 = use v12\n    v14 = use v13\n    goto b3(v14)\n  b2:\n    v3 = use v1\n    branch v3 -> b4, b5\n  b3(v15):\n    return v15\n  b4:\n    v6 = const 2\n    v7 = use v6\n    goto b6(v7)\n  b5:\n    v4 = const 3\n    v5 = use v4\n    goto b6(v5)\n  b6(v8):\n    v9 = use v8\n    goto b3(v9)\n",
+        );
+    }
+
+    #[test]
+    fn a_truth_value_lowers_into_a_constant() {
+        let source = format!("{CLASSES}fun both(): Bool = true && false\n");
+        let (mir, ssa) = lower(&source);
+
+        // A truth value is a word like any other: it lowers into the constant it is, and the
+        // operator over two of them is the word-level one.
+        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(
+            dump_of(&mir),
+            "fun both (entry b0)\n  b0:\n    l1 = const true\n    l2 = const false\n    l0 = prim bool-and(l1, l2)\n    return l0\n",
+        );
+
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(
+            dump_of(&ssa),
+            "fun both (entry b0)\n  b0:\n    v0 = const true\n    v1 = const false\n    v2 = prim bool-and(v0, v1)\n    return v2\n",
+        );
     }
 
     #[test]

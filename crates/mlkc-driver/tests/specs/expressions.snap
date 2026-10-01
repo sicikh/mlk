@@ -31,10 +31,19 @@ ITEM TREE
   fun text  @2.4
     visibility: private
     ret: String -> use String
-  fun call  @2.5
+  fun truth  @2.5
+    visibility: private
+    ret: Bool -> use Bool
+  fun untruth  @2.6
+    visibility: private
+    ret: Bool -> use Bool
+  fun both  @2.7
+    visibility: private
+    ret: Bool -> use Bool
+  fun call  @2.8
     visibility: private
     ret: Unit -> use Unit
-  fun bound  @2.6
+  fun bound  @2.9
     visibility: private
     ret: Int -> use Int
   use Int  prelude
@@ -137,6 +146,38 @@ exprs
   expr#0  literal "hello"
 ```
 
+`fun truth`
+
+```
+BODY fun truth in module #2
+
+root expr#0
+exprs
+  expr#0  literal true
+```
+
+`fun untruth`
+
+```
+BODY fun untruth in module #2
+
+root expr#0
+exprs
+  expr#0  literal false
+```
+
+`fun both`
+
+```
+BODY fun both in module #2
+
+root expr#2
+exprs
+  expr#0  literal true
+  expr#1  literal false
+  expr#2  binary expr#0 && expr#1
+```
+
 `fun call`
 
 ```
@@ -189,6 +230,12 @@ SCOPE
     value: fun different in module #2 (private)
   text
     value: fun text in module #2 (private)
+  truth
+    value: fun truth in module #2 (private)
+  untruth
+    value: fun untruth in module #2 (private)
+  both
+    value: fun both in module #2 (private)
   call
     value: fun call in module #2 (private)
   bound
@@ -212,6 +259,9 @@ MODULE TYPES
   fun ordered: (Int, Int) -> Bool
   fun different: (Int, Int) -> Bool
   fun text: () -> String
+  fun truth: () -> Bool
+  fun untruth: () -> Bool
+  fun both: () -> Bool
   fun call: () -> Unit
   fun bound: () -> Int
 ```
@@ -274,6 +324,29 @@ CHECKED BODY
 ```
 CHECKED BODY
   expr #0: String
+```
+
+`fun truth`
+
+```
+CHECKED BODY
+  expr #0: Bool
+```
+
+`fun untruth`
+
+```
+CHECKED BODY
+  expr #0: Bool
+```
+
+`fun both`
+
+```
+CHECKED BODY
+  expr #0: Bool
+  expr #1: Bool
+  expr #2: Bool
 ```
 
 `fun call`
@@ -446,6 +519,70 @@ fun text (entry b0)
   b0:
     v0 = const "hello"
     return v0
+```
+
+`fun truth`
+
+CFG form:
+
+```
+fun truth (entry b0)
+  b0:
+    l0 = const true
+    return l0
+```
+
+SSA form:
+
+```
+fun truth (entry b0)
+  b0:
+    v0 = const true
+    return v0
+```
+
+`fun untruth`
+
+CFG form:
+
+```
+fun untruth (entry b0)
+  b0:
+    l0 = const false
+    return l0
+```
+
+SSA form:
+
+```
+fun untruth (entry b0)
+  b0:
+    v0 = const false
+    return v0
+```
+
+`fun both`
+
+CFG form:
+
+```
+fun both (entry b0)
+  b0:
+    l1 = const true
+    l2 = const false
+    l0 = prim bool-and(l1, l2)
+    return l0
+```
+
+SSA form:
+
+```
+fun both (entry b0)
+  b0:
+    v0 = const true
+    v1 = const false
+    v2 = prim bool-and(v0, v1)
+    return v2
 ```
 
 `fun call`

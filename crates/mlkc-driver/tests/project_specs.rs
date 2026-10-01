@@ -64,6 +64,10 @@ project_specs! {
     // What the construction of MIR reports about a body the checker accepted: an integer
     // literal outside the 31-bit range of the word.
     out_of_range: "out-of-range",
+
+    // A choice between expressions: the block that branches, the block of every arm, and the
+    // block the arms meet in, in both forms of the MIR.
+    branching: "branching",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

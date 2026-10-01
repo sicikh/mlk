@@ -124,6 +124,44 @@ pub struct BinExprFields {
     pub rhs: SyntaxResult<Expr>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct BoolLiteral {
+    pub(crate) syntax: SyntaxNode,
+}
+impl BoolLiteral {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> BoolLiteralFields {
+        BoolLiteralFields {
+            value: self.value(),
+        }
+    }
+    pub fn value(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+}
+impl Serialize for BoolLiteral {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BoolLiteral")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct BoolLiteralFields {
+    pub value: SyntaxResult<SyntaxToken>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct CallExpr {
     pub(crate) syntax: SyntaxNode,
 }
@@ -175,6 +213,49 @@ pub struct CallExprFields {
     pub l_paren_token: SyntaxResult<SyntaxToken>,
     pub arguments: ArgumentList,
     pub r_paren_token: SyntaxResult<SyntaxToken>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct ElseBranch {
+    pub(crate) syntax: SyntaxNode,
+}
+impl ElseBranch {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> ElseBranchFields {
+        ElseBranchFields {
+            else_token: self.else_token(),
+            expr: self.expr(),
+        }
+    }
+    pub fn else_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn expr(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 1usize)
+    }
+}
+impl Serialize for ElseBranch {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "ElseBranch")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct ElseBranchFields {
+    pub else_token: SyntaxResult<SyntaxToken>,
+    pub expr: SyntaxResult<Expr>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct FieldExpr {
@@ -413,6 +494,122 @@ impl Serialize for IdentPat {
 #[derive(Serialize)]
 pub struct IdentPatFields {
     pub name: SyntaxResult<Name>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct IfArm {
+    pub(crate) syntax: SyntaxNode,
+}
+impl IfArm {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> IfArmFields {
+        IfArmFields {
+            elif_token: self.elif_token(),
+            condition: self.condition(),
+            then_token: self.then_token(),
+            body: self.body(),
+        }
+    }
+    pub fn elif_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn condition(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 1usize)
+    }
+    pub fn then_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 2usize)
+    }
+    pub fn body(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 3usize)
+    }
+}
+impl Serialize for IfArm {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "IfArm")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct IfArmFields {
+    pub elif_token: SyntaxResult<SyntaxToken>,
+    pub condition: SyntaxResult<Expr>,
+    pub then_token: SyntaxResult<SyntaxToken>,
+    pub body: SyntaxResult<Expr>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct IfExpr {
+    pub(crate) syntax: SyntaxNode,
+}
+impl IfExpr {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> IfExprFields {
+        IfExprFields {
+            if_token: self.if_token(),
+            condition: self.condition(),
+            then_token: self.then_token(),
+            then_branch: self.then_branch(),
+            arms: self.arms(),
+            else_branch: self.else_branch(),
+        }
+    }
+    pub fn if_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn condition(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 1usize)
+    }
+    pub fn then_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 2usize)
+    }
+    pub fn then_branch(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 3usize)
+    }
+    pub fn arms(&self) -> IfArmList {
+        support::list(&self.syntax, 4usize)
+    }
+    pub fn else_branch(&self) -> Option<ElseBranch> {
+        support::node(&self.syntax, 5usize)
+    }
+}
+impl Serialize for IfExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "IfExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct IfExprFields {
+    pub if_token: SyntaxResult<SyntaxToken>,
+    pub condition: SyntaxResult<Expr>,
+    pub then_token: SyntaxResult<SyntaxToken>,
+    pub then_branch: SyntaxResult<Expr>,
+    pub arms: IfArmList,
+    pub else_branch: Option<ElseBranch>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct InferType {
@@ -1614,6 +1811,7 @@ pub enum Expr {
     BogusExpr(BogusExpr),
     CallExpr(CallExpr),
     FieldExpr(FieldExpr),
+    IfExpr(IfExpr),
     LetExpr(LetExpr),
     Literal(Literal),
     ParenExpr(ParenExpr),
@@ -1633,6 +1831,7 @@ impl Serialize for Expr {
             Self::BogusExpr(it) => it.serialize(serializer),
             Self::CallExpr(it) => it.serialize(serializer),
             Self::FieldExpr(it) => it.serialize(serializer),
+            Self::IfExpr(it) => it.serialize(serializer),
             Self::LetExpr(it) => it.serialize(serializer),
             Self::Literal(it) => it.serialize(serializer),
             Self::ParenExpr(it) => it.serialize(serializer),
@@ -1666,6 +1865,12 @@ impl Expr {
     pub fn as_field_expr(&self) -> Option<&FieldExpr> {
         match &self {
             Self::FieldExpr(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_if_expr(&self) -> Option<&IfExpr> {
+        match &self {
+            Self::IfExpr(item) => Some(item),
             _ => None,
         }
     }
@@ -1720,6 +1925,7 @@ impl Expr {
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
+    BoolLiteral(BoolLiteral),
     IntLiteral(IntLiteral),
     StringLiteral(StringLiteral),
 }
@@ -1729,12 +1935,19 @@ impl Serialize for Literal {
         S: Serializer,
     {
         match self {
+            Self::BoolLiteral(it) => it.serialize(serializer),
             Self::IntLiteral(it) => it.serialize(serializer),
             Self::StringLiteral(it) => it.serialize(serializer),
         }
     }
 }
 impl Literal {
+    pub fn as_bool_literal(&self) -> Option<&BoolLiteral> {
+        match &self {
+            Self::BoolLiteral(item) => Some(item),
+            _ => None,
+        }
+    }
     pub fn as_int_literal(&self) -> Option<&IntLiteral> {
         match &self {
             Self::IntLiteral(item) => Some(item),
@@ -2008,6 +2221,53 @@ impl From<BinExpr> for SyntaxElement {
         n.syntax.into()
     }
 }
+impl AstNode for BoolLiteral {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(BOOL_LITERAL as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BOOL_LITERAL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for BoolLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("BoolLiteral")
+                .field("value", &support::DebugSyntaxResult(self.value()))
+                .finish()
+        } else {
+            f.debug_struct("BoolLiteral").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<BoolLiteral> for SyntaxNode {
+    fn from(n: BoolLiteral) -> Self {
+        n.syntax
+    }
+}
+impl From<BoolLiteral> for SyntaxElement {
+    fn from(n: BoolLiteral) -> Self {
+        n.syntax.into()
+    }
+}
 impl AstNode for CallExpr {
     type Language = Language;
     const KIND_SET: SyntaxKindSet<Language> =
@@ -2061,6 +2321,54 @@ impl From<CallExpr> for SyntaxNode {
 }
 impl From<CallExpr> for SyntaxElement {
     fn from(n: CallExpr) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for ElseBranch {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(ELSE_BRANCH as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == ELSE_BRANCH
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for ElseBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("ElseBranch")
+                .field("else_token", &support::DebugSyntaxResult(self.else_token()))
+                .field("expr", &support::DebugSyntaxResult(self.expr()))
+                .finish()
+        } else {
+            f.debug_struct("ElseBranch").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<ElseBranch> for SyntaxNode {
+    fn from(n: ElseBranch) -> Self {
+        n.syntax
+    }
+}
+impl From<ElseBranch> for SyntaxElement {
+    fn from(n: ElseBranch) -> Self {
         n.syntax.into()
     }
 }
@@ -2318,6 +2626,113 @@ impl From<IdentPat> for SyntaxNode {
 }
 impl From<IdentPat> for SyntaxElement {
     fn from(n: IdentPat) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for IfArm {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> = SyntaxKindSet::from_raw(RawSyntaxKind(IF_ARM as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == IF_ARM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for IfArm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("IfArm")
+                .field("elif_token", &support::DebugSyntaxResult(self.elif_token()))
+                .field("condition", &support::DebugSyntaxResult(self.condition()))
+                .field("then_token", &support::DebugSyntaxResult(self.then_token()))
+                .field("body", &support::DebugSyntaxResult(self.body()))
+                .finish()
+        } else {
+            f.debug_struct("IfArm").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<IfArm> for SyntaxNode {
+    fn from(n: IfArm) -> Self {
+        n.syntax
+    }
+}
+impl From<IfArm> for SyntaxElement {
+    fn from(n: IfArm) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for IfExpr {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(IF_EXPR as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == IF_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for IfExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("IfExpr")
+                .field("if_token", &support::DebugSyntaxResult(self.if_token()))
+                .field("condition", &support::DebugSyntaxResult(self.condition()))
+                .field("then_token", &support::DebugSyntaxResult(self.then_token()))
+                .field(
+                    "then_branch",
+                    &support::DebugSyntaxResult(self.then_branch()),
+                )
+                .field("arms", &self.arms())
+                .field(
+                    "else_branch",
+                    &support::DebugOptionalElement(self.else_branch()),
+                )
+                .finish()
+        } else {
+            f.debug_struct("IfExpr").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<IfExpr> for SyntaxNode {
+    fn from(n: IfExpr) -> Self {
+        n.syntax
+    }
+}
+impl From<IfExpr> for SyntaxElement {
+    fn from(n: IfExpr) -> Self {
         n.syntax.into()
     }
 }
@@ -3731,6 +4146,11 @@ impl From<FieldExpr> for Expr {
         Self::FieldExpr(node)
     }
 }
+impl From<IfExpr> for Expr {
+    fn from(node: IfExpr) -> Self {
+        Self::IfExpr(node)
+    }
+}
 impl From<LetExpr> for Expr {
     fn from(node: LetExpr) -> Self {
         Self::LetExpr(node)
@@ -3772,6 +4192,7 @@ impl AstNode for Expr {
         .union(BogusExpr::KIND_SET)
         .union(CallExpr::KIND_SET)
         .union(FieldExpr::KIND_SET)
+        .union(IfExpr::KIND_SET)
         .union(LetExpr::KIND_SET)
         .union(Literal::KIND_SET)
         .union(ParenExpr::KIND_SET)
@@ -3782,8 +4203,8 @@ impl AstNode for Expr {
         .union(UnaryExpr::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
-            BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | LET_EXPR | PAREN_EXPR | PATH_EXPR
-            | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL | UNARY_EXPR => true,
+            BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | IF_EXPR | LET_EXPR | PAREN_EXPR
+            | PATH_EXPR | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL | UNARY_EXPR => true,
             k if Literal::can_cast(k) => true,
             _ => false,
         }
@@ -3794,6 +4215,7 @@ impl AstNode for Expr {
             BOGUS_EXPR => Self::BogusExpr(BogusExpr { syntax }),
             CALL_EXPR => Self::CallExpr(CallExpr { syntax }),
             FIELD_EXPR => Self::FieldExpr(FieldExpr { syntax }),
+            IF_EXPR => Self::IfExpr(IfExpr { syntax }),
             LET_EXPR => Self::LetExpr(LetExpr { syntax }),
             PAREN_EXPR => Self::ParenExpr(ParenExpr { syntax }),
             PATH_EXPR => Self::PathExpr(PathExpr { syntax }),
@@ -3816,6 +4238,7 @@ impl AstNode for Expr {
             Self::BogusExpr(it) => it.syntax(),
             Self::CallExpr(it) => it.syntax(),
             Self::FieldExpr(it) => it.syntax(),
+            Self::IfExpr(it) => it.syntax(),
             Self::LetExpr(it) => it.syntax(),
             Self::ParenExpr(it) => it.syntax(),
             Self::PathExpr(it) => it.syntax(),
@@ -3832,6 +4255,7 @@ impl AstNode for Expr {
             Self::BogusExpr(it) => it.into_syntax(),
             Self::CallExpr(it) => it.into_syntax(),
             Self::FieldExpr(it) => it.into_syntax(),
+            Self::IfExpr(it) => it.into_syntax(),
             Self::LetExpr(it) => it.into_syntax(),
             Self::ParenExpr(it) => it.into_syntax(),
             Self::PathExpr(it) => it.into_syntax(),
@@ -3850,6 +4274,7 @@ impl std::fmt::Debug for Expr {
             Self::BogusExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::CallExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::FieldExpr(it) => std::fmt::Debug::fmt(it, f),
+            Self::IfExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::LetExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::Literal(it) => std::fmt::Debug::fmt(it, f),
             Self::ParenExpr(it) => std::fmt::Debug::fmt(it, f),
@@ -3868,6 +4293,7 @@ impl From<Expr> for SyntaxNode {
             Expr::BogusExpr(it) => it.into_syntax(),
             Expr::CallExpr(it) => it.into_syntax(),
             Expr::FieldExpr(it) => it.into_syntax(),
+            Expr::IfExpr(it) => it.into_syntax(),
             Expr::LetExpr(it) => it.into_syntax(),
             Expr::Literal(it) => it.into_syntax(),
             Expr::ParenExpr(it) => it.into_syntax(),
@@ -3885,6 +4311,11 @@ impl From<Expr> for SyntaxElement {
         node.into()
     }
 }
+impl From<BoolLiteral> for Literal {
+    fn from(node: BoolLiteral) -> Self {
+        Self::BoolLiteral(node)
+    }
+}
 impl From<IntLiteral> for Literal {
     fn from(node: IntLiteral) -> Self {
         Self::IntLiteral(node)
@@ -3897,12 +4328,15 @@ impl From<StringLiteral> for Literal {
 }
 impl AstNode for Literal {
     type Language = Language;
-    const KIND_SET: SyntaxKindSet<Language> = IntLiteral::KIND_SET.union(StringLiteral::KIND_SET);
+    const KIND_SET: SyntaxKindSet<Language> = BoolLiteral::KIND_SET
+        .union(IntLiteral::KIND_SET)
+        .union(StringLiteral::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
-        matches!(kind, INT_LITERAL | STRING_LITERAL)
+        matches!(kind, BOOL_LITERAL | INT_LITERAL | STRING_LITERAL)
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         let res = match syntax.kind() {
+            BOOL_LITERAL => Self::BoolLiteral(BoolLiteral { syntax }),
             INT_LITERAL => Self::IntLiteral(IntLiteral { syntax }),
             STRING_LITERAL => Self::StringLiteral(StringLiteral { syntax }),
             _ => return None,
@@ -3911,12 +4345,14 @@ impl AstNode for Literal {
     }
     fn syntax(&self) -> &SyntaxNode {
         match self {
+            Self::BoolLiteral(it) => it.syntax(),
             Self::IntLiteral(it) => it.syntax(),
             Self::StringLiteral(it) => it.syntax(),
         }
     }
     fn into_syntax(self) -> SyntaxNode {
         match self {
+            Self::BoolLiteral(it) => it.into_syntax(),
             Self::IntLiteral(it) => it.into_syntax(),
             Self::StringLiteral(it) => it.into_syntax(),
         }
@@ -3925,6 +4361,7 @@ impl AstNode for Literal {
 impl std::fmt::Debug for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BoolLiteral(it) => std::fmt::Debug::fmt(it, f),
             Self::IntLiteral(it) => std::fmt::Debug::fmt(it, f),
             Self::StringLiteral(it) => std::fmt::Debug::fmt(it, f),
         }
@@ -3933,6 +4370,7 @@ impl std::fmt::Debug for Literal {
 impl From<Literal> for SyntaxNode {
     fn from(n: Literal) -> Self {
         match n {
+            Literal::BoolLiteral(it) => it.into_syntax(),
             Literal::IntLiteral(it) => it.into_syntax(),
             Literal::StringLiteral(it) => it.into_syntax(),
         }
@@ -4272,7 +4710,17 @@ impl std::fmt::Display for BinExpr {
         std::fmt::Display::fmt(self.syntax(), f)
     }
 }
+impl std::fmt::Display for BoolLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
 impl std::fmt::Display for CallExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for ElseBranch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }
@@ -4298,6 +4746,16 @@ impl std::fmt::Display for FunReturnTypeAnnotation {
     }
 }
 impl std::fmt::Display for IdentPat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for IfArm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for IfExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }
@@ -4992,6 +5450,87 @@ impl IntoIterator for &AttributeList {
 impl IntoIterator for AttributeList {
     type Item = Attribute;
     type IntoIter = AstNodeListIterator<Language, Attribute>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct IfArmList {
+    syntax_list: SyntaxList,
+}
+impl IfArmList {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self {
+            syntax_list: syntax.into_list(),
+        }
+    }
+}
+impl AstNode for IfArmList {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(IF_ARM_LIST as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == IF_ARM_LIST
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self {
+                syntax_list: syntax.into_list(),
+            })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        self.syntax_list.node()
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax_list.into_node()
+    }
+}
+impl Serialize for IfArmList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "IfArmList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
+    }
+}
+impl AstNodeList for IfArmList {
+    type Language = Language;
+    type Node = IfArm;
+    fn syntax_list(&self) -> &SyntaxList {
+        &self.syntax_list
+    }
+    fn into_syntax_list(self) -> SyntaxList {
+        self.syntax_list
+    }
+}
+impl Debug for IfArmList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("IfArmList ")?;
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+impl IntoIterator for &IfArmList {
+    type Item = IfArm;
+    type IntoIter = AstNodeListIterator<Language, IfArm>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+impl IntoIterator for IfArmList {
+    type Item = IfArm;
+    type IntoIter = AstNodeListIterator<Language, IfArm>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }

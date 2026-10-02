@@ -335,7 +335,7 @@ const STEPS = {
 		probe.remove();
 		return JSON.stringify({
 			keyword: colour('i32.const'),
-			type: colour('eqref'),
+			type: colour('i31'),
 			string: colour('\"std::runtime\"'),
 			accent,
 			typeColour: type,

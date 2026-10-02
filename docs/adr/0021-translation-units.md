@@ -16,7 +16,7 @@ The intended shape is known:
 
 - a module of the language becomes a module of WASM;
 - modules are linked dynamically, not statically;
-- the ABI is uniform because every value is a `Word`
+- the ABI needs no negotiation because every value is a `Word`
   ([ADR-0018][0018-values-as-words.md]);
 - the GC types of structures are declared where they are named,
   and unified by the proposal's canonicalization
@@ -37,7 +37,8 @@ and which of the several meanings of "dynamic linking" is meant?
   modules compile in parallel; only the resolution of names between them is sequential
   ([ADR-0005][0005-compiler-pipeline.md]).
 - Simplicity of the ABI:
-  a uniform word representation makes the calling convention uniform;
+  the representation of a value is a function of its type alone,
+  so the calling convention is too;
   a structure's type is re-declared where it is named
   and unified by the GC proposal's canonicalization,
   so no layout is negotiated at link time.
@@ -62,12 +63,12 @@ and which of the several meanings of "dynamic linking" is meant?
 
 Chosen option: "One WASM module per module, linked by core WASM imports and exports",
 because it is exactly the incrementality unit of [ADR-0004][0004-module-system.md],
-and because the uniform word ABI removes everything that makes
+and because the word ABI removes everything that makes
 separate compilation hard in other languages:
 no layout has to be negotiated between modules,
 no generic instantiation crosses,
 and the only signature that ever exists between modules is
-words in, a word out.
+the shape of the checked types.
 
 "Dynamic linking" here means _separate compilation with resolution at instantiation_,
 the ordinary meaning of core WASM imports;
@@ -96,19 +97,19 @@ the assembler knows them, and the linker consumes them.
 
 ### The ABI
 
-- **Every function is `(eqref, ...) -> eqref`.**
-  Parameters are words, the result is a word, and `Unit` is a word.
-  There are no multi-value results yet, and no `i32` in a signature.
+- **A signature is the shape of the checked types.**
+  A parameter or a result of an immediate type — `Int`, `Bool`, `Unit` —
+  is an `(ref i31)`,
+  and every other one is a word, an `eqref`.
+  `Unit` is an immediate, so a function that gives nothing back gives an `i31` back;
+  there are no multi-value results yet, and no `i32` in a signature.
 - **A word is the only thing that crosses.**
-  `i31ref` is a subtype of `eqref`,
-  so an immediate passes where a word is expected;
-  the converse does not hold,
-  which is why the signature is `eqref` and not `i31ref`:
-  one word type covers an immediate and a reference alike.
+  An immediate is a subtype of `eqref`,
+  so a value of an immediate type passes where a word is expected,
+  and a value that is only a word recovers its kind where a use needs one:
+  `ref.cast (ref i31)` for an immediate, `ref.cast (ref $s)` for a structure.
   A structure crosses as a word too, and its type is not in the signature:
   the reader declares the type itself (the next section).
-  A callee that needs a kind recovers it once, where the value enters:
-  `ref.cast (ref i31)` for an immediate, `ref.cast (ref $s)` for a structure.
 - **A word is not marshalled.**
   Both modules run in one engine and one store,
   so a word handed across a boundary is an ordinary reference
@@ -264,7 +265,7 @@ and not only bytes.
 - The compilation unit of the compiler is the unit of the output;
   there is no second model to keep in step.
 - The ABI is one sentence:
-  words in, a word out, no layout in a signature.
+  the shape of the checked types, no layout in a signature.
 - The host does the linking, and every host already knows how to:
   function imports and exports are the only feature used.
 - A structure's GC type is a pure function of the structure,
@@ -279,7 +280,7 @@ and not only bytes.
   inlining across modules is the Thin-LTO stage, planned for release builds,
   not part of this record.
 - Precompiled libraries must be recompiled when the ABI or the codegen changes;
-  there is no stable binary interface beyond this record's word ABI.
+  there is no stable binary interface beyond this record's ABI.
 
 ## Pros and Cons of the Options
 

@@ -4,9 +4,9 @@ expression: snapshot
 ---
 ```wat
 (module $app::main
-  (type (;0;) (func (param eqref) (result eqref)))
+  (type (;0;) (func (param (ref i31)) (result (ref i31))))
   (export "fib" (func $fib))
-  (func $fib (;0;) (type 0) (param $value eqref) (result eqref)
+  (func $fib (;0;) (type 0) (param $value (ref i31)) (result (ref i31))
     (local $"#local1 value" (@name "value") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -39,7 +39,6 @@ expression: snapshot
     ref.i31
     local.set 11
     local.get $value
-    ref.cast (ref i31)
     local.set $"#local1 value"
     block ;; label = @1
       loop ;; label = @2
@@ -90,7 +89,6 @@ expression: snapshot
           local.set 5
           local.get 5
           call $fib
-          ref.cast (ref i31)
           local.set 6
           i32.const 2
           ref.i31
@@ -104,7 +102,6 @@ expression: snapshot
           local.set 8
           local.get 8
           call $fib
-          ref.cast (ref i31)
           local.set 9
           local.get 6
           i31.get_s

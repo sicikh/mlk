@@ -24,15 +24,19 @@ use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_mir::Body as MirBody;
 use wasm_encoder::{
     CodeSection, EntityType, ExportKind, ExportSection, FunctionSection, ImportSection,
-    IndirectNameMap, NameMap, NameSection, RefType, TypeSection, ValType,
+    IndirectNameMap, NameMap, NameSection, TypeSection,
 };
 
-use crate::emit::{CodegenDiag, FuncArtifact, FunctionCtx, emit_function};
+use crate::{
+    emit::{CodegenDiag, FuncArtifact, FunctionCtx, emit_function},
+    refine::{self, AbiType},
+};
 
-/// The signature of a body: one word per parameter, and one word back.
+/// The signature of a body: one parameter per parameter of the owner, and one result.
 ///
-/// The types are the checker's, and they say what a word refines to at the boundary of the
-/// function; the WASM signature itself is all words ([ADR-0018][adr-0018]).
+/// The types are the checker's, and the WASM signature is the shape they give ([`FnShape`]):
+/// an immediate crosses as an `(ref i31)` and every other type as a word, `eqref`
+/// ([ADR-0018][adr-0018]).
 ///
 /// [adr-0018]: ../../docs/adr/0018-values-as-words.md
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +45,40 @@ pub struct FnSignature {
     pub params: Vec<Ty>,
     /// What the function gives back.
     pub ret: Ty,
+}
+
+impl FnSignature {
+    /// The shape the signature crosses the ABI as ([`FnShape`]).
+    pub fn shape(&self, builtins: &Builtins) -> FnShape {
+        FnShape {
+            params: self
+                .params
+                .iter()
+                .map(|ty| refine::of_ty(ty, builtins).abi())
+                .collect(),
+            ret: self.ret_shape(builtins),
+        }
+    }
+
+    /// What the result crosses the ABI as.
+    pub fn ret_shape(&self, builtins: &Builtins) -> AbiType {
+        refine::of_ty(&self.ret, builtins).abi()
+    }
+}
+
+/// What a signature crosses the ABI as: what every parameter and the result are ([`AbiType`]).
+///
+/// An immediate is an `(ref i31)`, which a value of an immediate type already is, and every
+/// other type is a word, an `eqref` ([ADR-0018][adr-0018]). Two signatures of one shape share
+/// a type in the type section of the module.
+///
+/// [adr-0018]: ../../docs/adr/0018-values-as-words.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FnShape {
+    /// What every parameter crosses as, in the order the function takes them.
+    pub params: Vec<AbiType>,
+    /// What the result crosses as.
+    pub ret: AbiType,
 }
 
 /// A function the module needs and does not declare.
@@ -309,45 +347,45 @@ pub fn assemble_module(
     // is written at every level.
     let _ = debug;
 
-    // Every function of the module has the same WASM signature shape: one `eqref` per
-    // parameter and one back. One type per arity is all the section needs, and the arities are
-    // sorted so that an assignment of indices follows from the module alone.
-    let mut arities: Vec<usize> = module
-        .imports
-        .iter()
-        .map(|import| import.signature.params.len())
-        .chain(
-            module
-                .functions
-                .iter()
-                .map(|function| function.signature.params.len()),
-        )
-        .collect();
+    // Every function of the module has the WASM type its signature's shape gives it: an
+    // immediate is a `(ref i31)` and every other type is a word, an `eqref`. One type per
+    // shape is all the section needs, and the shapes are interned in the order the module
+    // meets them, so an assignment of indices follows from the module alone.
+    let builtins = &module.builtins;
+    let mut shapes: Vec<FnShape> = Vec::new();
+    let mut import_types = Vec::with_capacity(module.imports.len());
 
-    arities.sort_unstable();
-    arities.dedup();
+    for import in &module.imports {
+        import_types.push(intern_shape(&mut shapes, import.signature.shape(builtins)));
+    }
 
-    let type_index = |arity: usize| -> u32 {
-        arities
-            .binary_search(&arity)
-            .expect("the arity of a function of the module to be in the table") as u32
-    };
+    let mut function_types = Vec::with_capacity(module.functions.len());
 
-    let word = ValType::Ref(RefType::EQREF);
+    for function in &module.functions {
+        function_types.push(intern_shape(
+            &mut shapes,
+            function.signature.shape(builtins),
+        ));
+    }
+
     let mut types = TypeSection::new();
 
-    for arity in &arities {
-        types.ty().function((0..*arity).map(|_| word), [word]);
+    for shape in &shapes {
+        let ret = shape.ret.val_type();
+
+        types
+            .ty()
+            .function(shape.params.iter().map(|it| it.val_type()), [ret]);
     }
 
     let mut import_section = ImportSection::new();
     let mut import_table = Vec::with_capacity(module.imports.len());
 
-    for import in &module.imports {
+    for (index, import) in module.imports.iter().enumerate() {
         import_section.import(
             &import.module,
             &import.name,
-            EntityType::Function(type_index(import.signature.params.len())),
+            EntityType::Function(import_types[index]),
         );
         import_table.push(ImportDecl {
             module: import.module.clone(),
@@ -362,8 +400,8 @@ pub fn assemble_module(
     let offset = module.imports.len() as u32;
     let mut function_section = FunctionSection::new();
 
-    for function in &module.functions {
-        function_section.function(type_index(function.signature.params.len()));
+    for type_index in &function_types {
+        function_section.function(*type_index);
     }
 
     let mut exports = ExportSection::new();
@@ -450,4 +488,19 @@ pub fn assemble_module(
         },
         Vec::new(),
     )
+}
+
+/// The index a shape has in the type section, interning it when it is not there yet.
+///
+/// The shapes are in the order the module meets them, which is a function of the module alone,
+/// so two assemblies of one module number the types the same way.
+fn intern_shape(shapes: &mut Vec<FnShape>, shape: FnShape) -> u32 {
+    match shapes.iter().position(|it| *it == shape) {
+        Some(index) => index as u32,
+        None => {
+            shapes.push(shape);
+
+            (shapes.len() - 1) as u32
+        },
+    }
 }

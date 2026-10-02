@@ -23,15 +23,17 @@ import type { Text } from "@codemirror/state";
 
 import { codeStyle } from "./highlight";
 
-/** The value types of the format: a word that names one is painted as a type. */
+/** The words a type of the format is written with: a word that names one is painted as a type. */
 const TYPES = new Set([
     "i8",
     "i16",
+    "i31",
     "i32",
     "i64",
     "f32",
     "f64",
     "v128",
+    "ref",
     "funcref",
     "externref",
     "anyref",

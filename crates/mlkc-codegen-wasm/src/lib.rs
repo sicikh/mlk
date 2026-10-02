@@ -12,19 +12,18 @@
 //! whose signature says `Int` is an immediate, and the result of `int-add` is one. What it
 //! knows is a [`Refinement`], computed by a forward dataflow over the body: a value known to be
 //! an immediate gets a `(ref i31)` local, so arithmetic needs no cast, and a value that is only
-//! a word gets an `eqref` one, so a cast is emitted where precision is needed. The uniform word
-//! ABI is therefore paid for once per value that crosses the ABI, not per access.
+//! a word gets an `eqref` one, so a cast is emitted where precision is needed.
 //!
 //! The module this crate builds uses Wasm GC: a structure is a GC struct type, and the types of
 //! a module are named, never erased. The value model of [ADR-0018][adr-0018] is visible in the
-//! module, and a value is `eqref` at rest.
+//! module, and a value is a word unless the checker makes it narrower.
 //!
 //! # The ABI
 //!
-//! Every function is exported and called as the same WASM signature: one `eqref` per parameter,
-//! and one `eqref` back. An immediate is an `i31ref` and is a subtype of `eqref`, so a value
-//! crosses the boundary as itself; what makes a non-word value precise again is one cast at the
-//! entry of the function that needs it.
+//! A function crosses the boundary as the shape of its signature ([`FnShape`]): a parameter or
+//! a result of an immediate type --- `Int`, `Bool`, `Unit` --- is an `(ref i31)`, and every
+//! other one is a word, an `eqref`. An immediate therefore needs no cast at the entry, and only
+//! a value that is known to be a word is cast where something more precise is needed.
 //!
 //! # What is not emitted yet
 //!
@@ -48,8 +47,8 @@ mod refine;
 pub use crate::{
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},
     module::{
-        DebugLevel, ExportDecl, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
+        DebugLevel, ExportDecl, FnShape, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
         ModuleLayout, ModuleMir, WasmModule, assemble_module, compile_module, layout,
     },
-    refine::Refinement,
+    refine::{AbiType, Refinement},
 };

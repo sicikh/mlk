@@ -16,10 +16,11 @@ mod harness;
 use std::{fs, path::PathBuf};
 
 use harness::RunProject;
+use mlkc_codegen_wasm::AbiType;
 use mlkc_interp::{Extern, Host, Trap, Value};
 use wasmtime::{
-    AnyRef, Caller, Config, Engine, FuncType, I31, Instance, Linker, Module, RefType, Store, Val,
-    ValType,
+    AnyRef, Caller, Config, Engine, FuncType, HeapType, I31, Instance, Linker, Module, RefType,
+    Store, Val, ValType,
 };
 
 /// The directory the runs of a project live in, as the paths the tests name them by.
@@ -196,6 +197,15 @@ struct HostData {
     printed: Vec<String>,
 }
 
+/// The WASM type a value crosses the ABI of a module as: an immediate is an `(ref i31)`, and a
+/// word is an `eqref`.
+fn abi_type(abi: AbiType) -> ValType {
+    match abi {
+        AbiType::Immediate => ValType::Ref(RefType::new(false, HeapType::I31)),
+        AbiType::Word => ValType::Ref(RefType::EQREF),
+    }
+}
+
 /// Instantiates every module of the project and runs the entry point.
 fn instantiate(project: &RunProject) -> Output {
     let mut config = Config::new();
@@ -210,12 +220,10 @@ fn instantiate(project: &RunProject) -> Output {
     // project, by the canonical name the linker uses ([ADR-0021]).
     //
     // [ADR-0021]: ../../../docs/adr/0021-translation-units.md
-    for ((module, name), arity) in &project.externs {
-        let ty = FuncType::new(
-            &engine,
-            (0..*arity).map(|_| ValType::Ref(RefType::EQREF)),
-            [ValType::Ref(RefType::EQREF)],
-        );
+    for ((module, name), shape) in &project.externs {
+        let ty = FuncType::new(&engine, shape.params.iter().copied().map(abi_type), [
+            abi_type(shape.ret),
+        ]);
         let recorded = name.clone();
 
         linker

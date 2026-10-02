@@ -21,8 +21,8 @@ use std::{
 };
 
 use mlkc_codegen_wasm::{
-    CodegenDiag, DebugLevel, FunctionCtx, ModuleMir, WasmModule, assemble_module, emit_function,
-    layout,
+    CodegenDiag, DebugLevel, FnShape, FunctionCtx, ModuleMir, WasmModule, assemble_module,
+    emit_function, layout,
 };
 use mlkc_driver::{Driver, LinkPlan};
 use mlkc_hir_def::{BodyLoc, EntityLoc, FunctionLoc, ModuleId, Name, ProjectData, ProjectId};
@@ -93,9 +93,9 @@ pub struct RunProject {
     pub cfg: Program,
     /// The bodies of the program in the SSA form, with the externs a host provides.
     pub ssa: Program,
-    /// The externs the modules import: the canonical module and name of each, and how many words
-    /// it takes. A host implements exactly these.
-    pub externs: BTreeMap<(String, String), u32>,
+    /// The externs the modules import: the canonical module and name of each, and the shape it
+    /// crosses the boundary as. A host implements exactly these.
+    pub externs: BTreeMap<(String, String), FnShape>,
 }
 
 /// Compiles the project a fixture writes, one module per mark ([`mlkc_fixture`]).
@@ -176,7 +176,7 @@ pub fn run_project(fixture: &str) -> RunProject {
             if import.external {
                 externs.insert(
                     (import.module.clone(), import.name.clone()),
-                    import.signature.params.len() as u32,
+                    import.signature.shape(&module.builtins),
                 );
             }
         }

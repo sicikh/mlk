@@ -9,8 +9,8 @@
 //!
 //! Before `localify` exists ([ADR-0020][adr-0020]), every value and every block parameter gets
 //! a local of its own, typed by its refinement: an immediate is a `(ref i31)` and everything
-//! else is an `eqref`. A parameter enters as an `eqref` --- the uniform word ABI --- and the
-//! entry block casts it to its refinement once.
+//! else is an `eqref`. A parameter enters as the shape its signature declares ([`FnShape`]),
+//! which is the type its value already has: the entry stores it and casts nothing.
 //!
 //! # Control flow
 //!
@@ -36,13 +36,11 @@ use mlkc_mir::{
     Terminator, ValueId,
 };
 use mlkc_span::Span;
-use wasm_encoder::{
-    AbstractHeapType, BlockType, Function, HeapType, Instruction, RefType, ValType,
-};
+use wasm_encoder::{AbstractHeapType, BlockType, Function, HeapType, Instruction, ValType};
 
 use crate::{
     module::{FnSignature, ModuleLayout},
-    refine::{Refinement, Refinements},
+    refine::{AbiType, Refinement, Refinements},
 };
 
 /// What codegen reads of one body besides the body itself ([ADR-0009][adr-0009]).
@@ -165,20 +163,13 @@ pub fn emit_function(mir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
     emitter.finish()
 }
 
-/// The refinement of a value's WASM local.
-fn local_type(refinement: Refinement) -> ValType {
-    if refinement.is_immediate() {
-        ValType::Ref(RefType::new_abstract(AbstractHeapType::I31, false, false))
-    } else {
-        ValType::Ref(RefType::EQREF)
-    }
-}
-
 /// The one emitter of one function.
 struct Emitter<'a> {
     mir: &'a Body,
     ctx: &'a FunctionCtx<'a>,
     refinements: Refinements,
+    /// What the result of the function crosses the ABI as.
+    ret: AbiType,
     /// The WASM local of every value, by the value's place in its arena.
     value_locals: Vec<u32>,
     /// The local the dispatch form keeps the program counter in.
@@ -195,23 +186,21 @@ struct Emitter<'a> {
 impl<'a> Emitter<'a> {
     fn new(mir: &'a Body, ctx: &'a FunctionCtx<'a>) -> Self {
         let refinements = Refinements::of(mir, ctx.layout.builtins(), ctx.layout);
+        let ret = ctx.signature.ret_shape(ctx.layout.builtins());
 
         // The first locals are the ABI parameters, which the function type declares; the
-        // values come after them, one local each, and the dispatch form keeps two more.
+        // values come after them, one local each, typed by their refinement, and the dispatch
+        // form keeps two more.
         let params = mir.params.len() as u32;
         let value_locals: Vec<u32> = (0..mir.values.len() as u32).map(|i| params + i).collect();
         let pc_local = params + mir.values.len() as u32;
         let scratch_local = pc_local + 1;
 
-        let mut locals: Vec<ValType> = value_locals
+        let mut locals: Vec<ValType> = mir
+            .values
             .iter()
-            .map(|_| ValType::Ref(RefType::EQREF))
+            .map(|(value, _)| refinements.get(value).abi().val_type())
             .collect();
-
-        for (value, data) in mir.values.iter() {
-            let _ = data;
-            locals[value.index()] = local_type(refinements.get(value));
-        }
 
         // The two dispatch locals are declared always, so that the local indices of the values
         // do not depend on the shape of the body; `localify` will drop what is unused.
@@ -222,6 +211,7 @@ impl<'a> Emitter<'a> {
             mir,
             ctx,
             refinements,
+            ret,
             value_locals,
             pc_local,
             scratch_local,
@@ -287,21 +277,17 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Casts every parameter into the local of the value it is.
+    /// Stores every parameter into the local of the value it is.
     fn prologue(&mut self) {
         let mir = self.mir;
 
         for (parameter, value) in mir.params.iter().enumerate() {
             let span = mir.values[*value].span;
 
+            // A parameter enters as the shape its signature declares, and the local of the
+            // value is the type its refinement gives it: the two are the same type, so the
+            // copy is all the entry keeps --- there is nothing to cast.
             self.insn(span, Instruction::LocalGet(parameter as u32));
-
-            // The ABI is a word per parameter; what a parameter is known to be is made
-            // precise once, here, rather than at every use.
-            if self.refinements.get(*value).is_immediate() {
-                self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
-            }
-
             self.insn(
                 span,
                 Instruction::LocalSet(self.value_locals[value.index()]),
@@ -391,7 +377,7 @@ impl<'a> Emitter<'a> {
 
         match rvalue {
             Rvalue::Use(operand) => {
-                let refinement = self.refinements.get(*place);
+                let refinement = self.refinements.get(*place).abi();
 
                 self.operand_into(operand, refinement, stmt.span);
             },
@@ -404,7 +390,7 @@ impl<'a> Emitter<'a> {
                 }
             },
             Rvalue::Call { callee, args } => {
-                if !self.call(callee, args, *place, stmt.span) {
+                if !self.call(callee, args, stmt.span) {
                     return;
                 }
             },
@@ -492,10 +478,10 @@ impl<'a> Emitter<'a> {
     }
 
     /// Emits a call, and the store of its result; `false` when it cannot be emitted.
-    fn call(&mut self, callee: &Callee, args: &'a [Operand], place: ValueId, span: Span) -> bool {
-        let index = match callee {
+    fn call(&mut self, callee: &Callee, args: &'a [Operand], span: Span) -> bool {
+        let (index, shape) = match callee {
             Callee::Entity(entity) => {
-                match self.ctx.layout.function_index(entity) {
+                let index = match self.ctx.layout.function_index(entity) {
                     Some(index) => index,
                     None => {
                         self.unsupported(
@@ -505,7 +491,14 @@ impl<'a> Emitter<'a> {
 
                         return false;
                     },
-                }
+                };
+                let signature = self
+                    .ctx
+                    .layout
+                    .signature_of(entity)
+                    .expect("a function with an index to have a signature");
+
+                (index, signature.shape(self.ctx.layout.builtins()))
             },
             Callee::Local(_) => {
                 self.unsupported("a call to a function declared inside a body", span);
@@ -519,17 +512,21 @@ impl<'a> Emitter<'a> {
             },
         };
 
-        for argument in args {
-            self.operand_word(argument, span);
+        debug_assert_eq!(
+            args.len(),
+            shape.params.len(),
+            "a call passes one argument per parameter of the callee",
+        );
+
+        // The arguments cross as the shape of the callee says: an immediate parameter is an
+        // `(ref i31)`, which only a word argument has to be cast into, and a word parameter
+        // reads an immediate as the subtype it is. The result is the shape as well, so it is
+        // stored as it comes back.
+        for (argument, refinement) in args.iter().zip(&shape.params) {
+            self.operand_into(argument, *refinement, span);
         }
 
         self.insn(span, Instruction::Call(index));
-
-        // A call gives back a word; where the result is known to be an immediate, it is made
-        // one again here, once, rather than at every use.
-        if self.refinements.get(place).is_immediate() {
-            self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
-        }
 
         true
     }
@@ -539,7 +536,7 @@ impl<'a> Emitter<'a> {
     fn terminator(&mut self, term: &'a Terminator, dispatch: Option<u32>) {
         match term {
             Terminator::Return { value, span } => {
-                self.operand_word(value, *span);
+                self.operand_into(value, self.ret, *span);
                 self.insn(*span, Instruction::Return);
             },
             Terminator::Unreachable { span } => self.insn(*span, Instruction::Unreachable),
@@ -612,10 +609,10 @@ impl<'a> Emitter<'a> {
     fn edge(&mut self, target: &'a BlockTarget, depth: u32, span: Span) {
         let mir = self.mir;
         let destination = &mir.blocks[target.block];
-        let refinements: Vec<Refinement> = destination
+        let refinements: Vec<AbiType> = destination
             .params
             .iter()
-            .map(|param| self.refinements.get(*param))
+            .map(|param| self.refinements.get(*param).abi())
             .collect();
 
         debug_assert_eq!(
@@ -658,8 +655,10 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emits an operand as an `i31ref`, casting a word where the refinement is not precise.
-    fn operand_into(&mut self, operand: &'a Operand, refinement: Refinement, span: Span) {
+    /// Emits an operand as the type a representation crosses the ABI as: an `(ref i31)` where
+    /// it is an immediate --- casting a value that is only a word --- and the word itself where
+    /// it is not.
+    fn operand_into(&mut self, operand: &'a Operand, abi: AbiType, span: Span) {
         match operand {
             Operand::Value(value) => {
                 self.insn(
@@ -667,7 +666,7 @@ impl<'a> Emitter<'a> {
                     Instruction::LocalGet(self.value_locals[value.index()]),
                 );
 
-                if refinement.is_immediate() && !self.refinements.get(*value).is_immediate() {
+                if abi == AbiType::Immediate && !self.refinements.get(*value).is_immediate() {
                     self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
                 }
             },

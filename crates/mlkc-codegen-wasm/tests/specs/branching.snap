@@ -4,15 +4,15 @@ expression: snapshot
 ---
 ```wat
 (module $app::main
-  (type (;0;) (func (param eqref) (result eqref)))
-  (type (;1;) (func (param eqref eqref) (result eqref)))
+  (type (;0;) (func (param (ref i31)) (result (ref i31))))
+  (type (;1;) (func (param (ref i31) (ref i31)) (result (ref i31))))
   (export "pick" (func $pick))
   (export "ordered" (func $ordered))
   (export "where_a_value_belongs" (func $where_a_value_belongs))
   (export "through_a_let" (func $through_a_let))
   (export "log" (func $log))
   (export "log_ordered" (func $log_ordered))
-  (func $pick (;0;) (type 0) (param $flag eqref) (result eqref)
+  (func $pick (;0;) (type 0) (param $flag (ref i31)) (result (ref i31))
     (local $"#local1 flag" (@name "flag") (ref i31)) (local (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -24,7 +24,6 @@ expression: snapshot
     ref.i31
     local.set 4
     local.get $flag
-    ref.cast (ref i31)
     local.set $"#local1 flag"
     block ;; label = @1
       loop ;; label = @2
@@ -71,7 +70,7 @@ expression: snapshot
     end
     unreachable
   )
-  (func $ordered (;1;) (type 1) (param $low eqref) (param $high eqref) (result eqref)
+  (func $ordered (;1;) (type 1) (param $low (ref i31)) (param $high (ref i31)) (result (ref i31))
     (local $"#local2 low" (@name "low") (ref i31)) (local $"#local3 high" (@name "high") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -86,10 +85,8 @@ expression: snapshot
     ref.i31
     local.set 7
     local.get $low
-    ref.cast (ref i31)
     local.set $"#local2 low"
     local.get $high
-    ref.cast (ref i31)
     local.set $"#local3 high"
     block ;; label = @1
       loop ;; label = @2
@@ -159,7 +156,7 @@ expression: snapshot
     end
     unreachable
   )
-  (func $where_a_value_belongs (;2;) (type 0) (param $flag eqref) (result eqref)
+  (func $where_a_value_belongs (;2;) (type 0) (param $flag (ref i31)) (result (ref i31))
     (local $"#local1 flag" (@name "flag") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -177,7 +174,6 @@ expression: snapshot
     ref.i31
     local.set 6
     local.get $flag
-    ref.cast (ref i31)
     local.set $"#local1 flag"
     block ;; label = @1
       loop ;; label = @2
@@ -234,7 +230,7 @@ expression: snapshot
     end
     unreachable
   )
-  (func $through_a_let (;3;) (type 0) (param $flag eqref) (result eqref)
+  (func $through_a_let (;3;) (type 0) (param $flag (ref i31)) (result (ref i31))
     (local $"#local1 flag" (@name "flag") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -252,7 +248,6 @@ expression: snapshot
     ref.i31
     local.set 6
     local.get $flag
-    ref.cast (ref i31)
     local.set $"#local1 flag"
     block ;; label = @1
       loop ;; label = @2
@@ -309,7 +304,7 @@ expression: snapshot
     end
     unreachable
   )
-  (func $log (;4;) (type 0) (param $flag eqref) (result eqref)
+  (func $log (;4;) (type 0) (param $flag (ref i31)) (result (ref i31))
     (local $"#local1 flag" (@name "flag") (ref i31)) (local (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -321,7 +316,6 @@ expression: snapshot
     ref.i31
     local.set 4
     local.get $flag
-    ref.cast (ref i31)
     local.set $"#local1 flag"
     block ;; label = @1
       loop ;; label = @2
@@ -346,7 +340,6 @@ expression: snapshot
             end
             local.get $"#local1 flag"
             call $log
-            ref.cast (ref i31)
             local.set 3
             local.get 3
             local.set 4
@@ -369,7 +362,7 @@ expression: snapshot
     end
     unreachable
   )
-  (func $log_ordered (;5;) (type 1) (param $low eqref) (param $high eqref) (result eqref)
+  (func $log_ordered (;5;) (type 1) (param $low (ref i31)) (param $high (ref i31)) (result (ref i31))
     (local $"#local2 low" (@name "low") (ref i31)) (local $"#local3 high" (@name "high") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -384,10 +377,8 @@ expression: snapshot
     ref.i31
     local.set 7
     local.get $low
-    ref.cast (ref i31)
     local.set $"#local2 low"
     local.get $high
-    ref.cast (ref i31)
     local.set $"#local3 high"
     block ;; label = @1
       loop ;; label = @2
@@ -414,7 +405,6 @@ expression: snapshot
                 end
                 local.get $"#local2 low"
                 call $log
-                ref.cast (ref i31)
                 local.set 6
                 local.get 6
                 local.set 7
@@ -436,7 +426,6 @@ expression: snapshot
             end
             local.get $"#local3 high"
             call $log
-            ref.cast (ref i31)
             local.set 5
             local.get 5
             local.set 7

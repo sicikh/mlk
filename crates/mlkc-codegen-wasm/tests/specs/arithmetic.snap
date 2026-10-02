@@ -4,9 +4,9 @@ expression: snapshot
 ---
 ```wat
 (module $app::main
-  (type (;0;) (func (result eqref)))
-  (type (;1;) (func (param eqref) (result eqref)))
-  (type (;2;) (func (param eqref eqref) (result eqref)))
+  (type (;0;) (func (param (ref i31)) (result (ref i31))))
+  (type (;1;) (func (param (ref i31) (ref i31)) (result (ref i31))))
+  (type (;2;) (func (result (ref i31))))
   (export "double" (func $double))
   (export "mixed" (func $mixed))
   (export "negated" (func $negated))
@@ -16,10 +16,9 @@ expression: snapshot
   (export "untruth" (func $untruth))
   (export "both" (func $both))
   (export "bound" (func $bound))
-  (func $double (;0;) (type 1) (param $value eqref) (result eqref)
+  (func $double (;0;) (type 0) (param $value (ref i31)) (result (ref i31))
     (local $"#local1 value" (@name "value") (ref i31)) (local (ref i31) i32 i32)
     local.get $value
-    ref.cast (ref i31)
     local.set $"#local1 value"
     local.get $"#local1 value"
     i31.get_s
@@ -31,13 +30,11 @@ expression: snapshot
     local.get 2
     return
   )
-  (func $mixed (;1;) (type 2) (param $left eqref) (param $right eqref) (result eqref)
+  (func $mixed (;1;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
     (local $"#local2 left" (@name "left") (ref i31)) (local $"#local3 right" (@name "right") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     local.get $left
-    ref.cast (ref i31)
     local.set $"#local2 left"
     local.get $right
-    ref.cast (ref i31)
     local.set $"#local3 right"
     local.get $"#local2 left"
     i31.get_s
@@ -77,10 +74,9 @@ expression: snapshot
     local.get 8
     return
   )
-  (func $negated (;2;) (type 1) (param $value eqref) (result eqref)
+  (func $negated (;2;) (type 0) (param $value (ref i31)) (result (ref i31))
     (local $"#local1 value" (@name "value") (ref i31)) (local (ref i31) i32 i32)
     local.get $value
-    ref.cast (ref i31)
     local.set $"#local1 value"
     i32.const 0
     local.get $"#local1 value"
@@ -91,13 +87,11 @@ expression: snapshot
     local.get 2
     return
   )
-  (func $ordered (;3;) (type 2) (param $left eqref) (param $right eqref) (result eqref)
+  (func $ordered (;3;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
     (local $"#local2 left" (@name "left") (ref i31)) (local $"#local3 right" (@name "right") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     local.get $left
-    ref.cast (ref i31)
     local.set $"#local2 left"
     local.get $right
-    ref.cast (ref i31)
     local.set $"#local3 right"
     local.get $"#local2 left"
     i31.get_s
@@ -151,13 +145,11 @@ expression: snapshot
     local.get 10
     return
   )
-  (func $different (;4;) (type 2) (param $left eqref) (param $right eqref) (result eqref)
+  (func $different (;4;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
     (local $"#local2 left" (@name "left") (ref i31)) (local $"#local3 right" (@name "right") (ref i31)) (local (ref i31) i32 i32)
     local.get $left
-    ref.cast (ref i31)
     local.set $"#local2 left"
     local.get $right
-    ref.cast (ref i31)
     local.set $"#local3 right"
     local.get $"#local2 left"
     i31.get_s
@@ -169,7 +161,7 @@ expression: snapshot
     local.get 4
     return
   )
-  (func $truth (;5;) (type 0) (result eqref)
+  (func $truth (;5;) (type 2) (result (ref i31))
     (local (ref i31) i32 i32)
     i32.const 1
     ref.i31
@@ -177,7 +169,7 @@ expression: snapshot
     local.get 0
     return
   )
-  (func $untruth (;6;) (type 0) (result eqref)
+  (func $untruth (;6;) (type 2) (result (ref i31))
     (local (ref i31) i32 i32)
     i32.const 0
     ref.i31
@@ -185,7 +177,7 @@ expression: snapshot
     local.get 0
     return
   )
-  (func $both (;7;) (type 0) (result eqref)
+  (func $both (;7;) (type 2) (result (ref i31))
     (local (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 1
     ref.i31
@@ -203,7 +195,7 @@ expression: snapshot
     local.get 2
     return
   )
-  (func $bound (;8;) (type 0) (result eqref)
+  (func $bound (;8;) (type 2) (result (ref i31))
     (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 2
     ref.i31

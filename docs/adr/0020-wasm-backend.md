@@ -139,12 +139,12 @@ the result of `IntAdd` is an immediate,
 the result of a `struct.new` is a specific structure,
 a parameter of a function whose signature says `Int` is an immediate.
 
-Inside a function, a kind is recovered once, at the boundary:
-a parameter enters as a word (`eqref`),
-and one `ref.cast (ref i31)` or `ref.cast (ref $s)` at entry
-makes the local precise for every use after it.
-The uniform word ABI is therefore not paid for per access,
-only once per parameter that needs more than a word.
+At the boundary of a function, a kind needs no recovery at all:
+a parameter and a result of an immediate type cross as an `(ref i31)`,
+and one of a type that is only a word crosses as an `eqref` —
+the WASM signature is the shape of the checked types,
+and a parameter enters as the type its local already has.
+A value that is only a word is cast where something more precise needs it.
 
 The emitter runs a forward dataflow over the SSA body
 and computes, per value, a refinement ordered by precision:
@@ -241,8 +241,10 @@ The assembler lays out, deterministically:
    The array type of `String` is declared the same way.
    Groups are emitted in dependency order,
    so a group references only types declared before it.
-   Function signatures come after, all words:
-   `(eqref, ...) -> eqref`.
+   Function signatures come after, shaped by the checked types:
+   an immediate parameter or result is an `(ref i31)`,
+   every other one a word, `eqref`,
+   and signatures of one shape share a type.
    Indices are assigned in the order the module declares its entities,
    so two compilations of the same module agree byte for byte.
 2. **Imports** — the functions this module calls in others,

@@ -36,8 +36,9 @@ use mlkc_vfs::{FileId, VfsPath};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, Function, FunctionSection, HeapType,
-    ImportSection, Instruction, Module as ModuleEncoding, RefType, TypeSection, ValType,
+    AbstractHeapType, CodeSection, EntityType, ExportKind, ExportSection, Function,
+    FunctionSection, ImportSection, Instruction, Module as ModuleEncoding, RefType, TypeSection,
+    ValType,
 };
 
 /// The clock of the page, which is the clock a driver in a browser is measured by.
@@ -609,21 +610,22 @@ const HOST_FUNCTIONS: &[&str] = &["print-int", "print-bool"];
 /// the boundary as the plain numbers a host outside wasm has ([ADR-0018]).
 ///
 /// A word of the language is an `i31` immediate or a reference, and a JavaScript host can make
-/// neither; what crosses this boundary is an `i32`. The module imports one function of the
-/// module `host` per extern, under the name of the extern, and exports the word signature the
-/// program imports it by: the export takes the word apart, calls the host with the number
-/// inside it, and answers the word `Unit` --- the zero immediate --- which is what a function
-/// that prints gives back.
+/// neither; what crosses this boundary is an `i32`. Every extern of the language takes and
+/// gives back an immediate, so the module imports one function of the module `host` per extern,
+/// under the name of the extern, and exports the signature the program imports it by: an
+/// `(ref i31)` in, an `(ref i31)` out. The export takes the immediate apart, calls the host
+/// with the number inside it, and answers the word `Unit` --- the zero immediate --- which is
+/// what a function that prints gives back.
 ///
 /// [adr-0018]: ../../docs/adr/0018-values-as-words.md
 fn host_module() -> Vec<u8> {
-    let word = ValType::Ref(RefType::EQREF);
+    let immediate = ValType::Ref(RefType::new_abstract(AbstractHeapType::I31, false, false));
     let mut types = TypeSection::new();
 
     // The type of a function the host implements, and the type of the export carrying it over
-    // the boundary: a number in and a number out, a word in and a word out.
+    // the boundary: a number in and a number out, an immediate in and an immediate out.
     types.ty().function([ValType::I32], [ValType::I32]);
-    types.ty().function([word], [word]);
+    types.ty().function([immediate], [immediate]);
 
     let mut imports = ImportSection::new();
 
@@ -648,7 +650,6 @@ fn host_module() -> Vec<u8> {
         let mut function = Function::new([]);
 
         function.instruction(&Instruction::LocalGet(0));
-        function.instruction(&Instruction::RefCastNonNull(HeapType::I31));
         function.instruction(&Instruction::I31GetS);
         function.instruction(&Instruction::Call(index));
         function.instruction(&Instruction::Drop);

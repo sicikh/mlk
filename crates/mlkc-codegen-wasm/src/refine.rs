@@ -25,6 +25,7 @@ use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_mir::{
     BlockTarget, Body, Callee, Const, Operand, PrimOp, Rvalue, StmtKind, Terminator, ValueId,
 };
+use wasm_encoder::{AbstractHeapType, RefType, ValType};
 
 use crate::module::ModuleLayout;
 
@@ -49,6 +50,15 @@ impl Refinement {
         matches!(self, Self::Int | Self::Bool | Self::Unit)
     }
 
+    /// The representation this refinement crosses the ABI of a module as.
+    pub fn abi(self) -> AbiType {
+        if self.is_immediate() {
+            AbiType::Immediate
+        } else {
+            AbiType::Word
+        }
+    }
+
     /// The least upper bound of two refinements: the most precise kind both are known to be.
     ///
     /// Two immediate kinds of different meaning have no kind in common but a word, because a
@@ -60,6 +70,32 @@ impl Refinement {
             (this, Self::Never) => this,
             (this, other) if this == other => this,
             _ => Self::Word,
+        }
+    }
+}
+
+/// The representation a value crosses the ABI of a module as ([ADR-0018][adr-0018]).
+///
+/// It is coarser than a [`Refinement`]: `Int`, `Bool`, and `Unit` are all immediates, and they
+/// cross as one type. Two signatures of one shape therefore share a type in the type section.
+///
+/// [adr-0018]: ../../docs/adr/0018-values-as-words.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbiType {
+    /// An immediate: an `(ref i31)`.
+    Immediate,
+    /// A word: an `eqref`.
+    Word,
+}
+
+impl AbiType {
+    /// The WASM type of the representation.
+    pub fn val_type(self) -> ValType {
+        match self {
+            Self::Immediate => {
+                ValType::Ref(RefType::new_abstract(AbstractHeapType::I31, false, false))
+            },
+            Self::Word => ValType::Ref(RefType::EQREF),
         }
     }
 }
@@ -213,8 +249,9 @@ fn rvalue_refinement(rvalue: &Rvalue, values: &[Refinement], layout: &ModuleLayo
             match callee {
                 Callee::Entity(entity) => {
                     layout.signature_of(entity).map_or(Refinement::Word, |sig| {
-                        // A call gives back an `eqref`; what it refines to is the type of the result,
-                        // which only the shape of a class can make narrower than a word.
+                        // A call gives back the shape the signature declares; what it refines
+                        // to is the type of the result, which only the shape of a class can
+                        // make narrower than a word.
                         of_ty(&sig.ret, layout.builtins())
                     })
                 },

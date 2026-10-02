@@ -12,6 +12,7 @@
     import StatsView from "$lib/components/StatsView.svelte";
     import TreeView from "$lib/components/TreeView.svelte";
     import TypeView from "$lib/components/TypeView.svelte";
+    import WatView from "$lib/components/WatView.svelte";
     import {
         loadDriver,
         type Cost,
@@ -865,12 +866,7 @@ pub fun main() : Unit =
                         to compile.
                     </p>
                 {:else}
-                    {#each reading.wat.diagnostics as it, index (index)}
-                        <p class="empty">
-                            {it.level}[{it.category}::{it.code}]: {it.message}
-                        </p>
-                    {/each}
-                    <pre class="wat" data-wat>{reading.wat.text}</pre>
+                    <WatView wat={reading.wat} />
                 {/if}
             {:else if tab === "stats"}
                 <StatsView cost={reading.cost} />
@@ -1096,16 +1092,6 @@ pub fun main() : Unit =
         margin: 0;
         padding: 0.35rem 0.25rem;
         color: var(--muted);
-    }
-
-    /* The module as text: a machine writes it, and a machine reads it back, which is what
-       the tab is for. The lines are long, so the view scrolls sideways rather than wrapping. */
-    .wat {
-        margin: 0;
-        font-family: var(--mono);
-        font-size: 12px;
-        line-height: 1.4;
-        white-space: pre;
     }
 
     /*

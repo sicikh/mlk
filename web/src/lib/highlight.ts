@@ -63,8 +63,14 @@ export const mlkLanguage = LRLanguage.define({
     },
 });
 
-/** What a painted part of the syntax looks like: the colours of the page, worn by code. */
-const style = HighlightStyle.define([
+/**
+ * What a painted part of the syntax looks like: the colours of the page, worn by code.
+ *
+ * The style is shared: the viewer of the text format ([`$lib/wat`]) wears the same one, because
+ * a module a person reads beside the buffer is read in the colours of the buffer, and a keyword
+ * is the accent wherever it is written.
+ */
+export const codeStyle = HighlightStyle.define([
     { tag: tags.keyword, color: "var(--accent)" },
     { tag: tags.comment, color: "var(--muted)", fontStyle: "italic" },
     { tag: tags.number, color: "var(--warning)" },
@@ -72,9 +78,14 @@ const style = HighlightStyle.define([
     { tag: tags.string, color: "var(--ok)" },
     { tag: tags.annotation, color: "var(--ok)" },
     { tag: tags.typeName, color: "var(--type)" },
+    // A name of the language is not painted — see the grammar above. A name of the text format
+    // the back end writes is, `$app::main` and all: what the format names is what the module
+    // calls the thing it declares, and the green says it is a name and not a word of the
+    // language.
+    { tag: tags.variableName, color: "var(--ok)" },
 ]);
 
 /** The language of the editor, ready to be handed to a view. */
 export function mlkLanguageSupport(): LanguageSupport {
-    return new LanguageSupport(mlkLanguage, [syntaxHighlighting(style)]);
+    return new LanguageSupport(mlkLanguage, [syntaxHighlighting(codeStyle)]);
 }

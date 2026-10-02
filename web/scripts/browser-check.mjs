@@ -300,14 +300,87 @@ const STEPS = {
 
     ssa: MIR,
 
-    // The WASM of the buffer: the module the link stage hands a host, printed as text.
+    // The WASM of the buffer: the module the link stage hands a host, printed as text and read
+    // in a view of its own. What is read is what the view shows: the code on the screen, what
+    // the head says the module holds, and the markers of the forms that fold.
     showWat: `show('wat'); return true`,
 
-    wat: `const module = inspector().querySelector('[data-wat]');
+    wat: `const view = inspector().querySelector('[data-wat]');
 		return JSON.stringify({
-			shown: module !== null,
-			text: text(module)
+			shown: view !== null,
+			text: text(view?.querySelector('.cm-content')),
+			lines: view?.querySelectorAll('.cm-line').length ?? 0,
+			marks: view?.querySelectorAll('.cm-foldPlaceholder').length ?? 0,
+			head: text(view?.querySelector('.lines')),
+			gutters: view?.querySelectorAll('.cm-foldGutter .cm-gutterElement').length ?? 0
 		})`,
+
+    // What the format is painted with: a word of it and a type of it against the colours of
+    // the theme, which is what says the tab is painted rather than plain text.
+    watPaint: `const view = inspector().querySelector('[data-wat]');
+		const spans = [...view.querySelectorAll('.cm-content span')];
+		const colour = (text) => {
+			const span = spans.find((it) => it.textContent === text);
+			return span ? getComputedStyle(span).color : '';
+		};
+		const probe = document.createElement('span');
+		document.body.appendChild(probe);
+		const theme = (name) => {
+			probe.style.color = 'var(' + name + ')';
+			return getComputedStyle(probe).color;
+		};
+		const accent = theme('--accent');
+		const type = theme('--type');
+		const ok = theme('--ok');
+		probe.remove();
+		return JSON.stringify({
+			keyword: colour('i32.const'),
+			type: colour('eqref'),
+			string: colour('\"std::runtime\"'),
+			accent,
+			typeColour: type,
+			ok
+		})`,
+
+    // A marker belongs to the line the form opens on: the module line and each `func` head
+    // fold, and a line of a body --- `local.get $n` above a `(ref i31)` --- opens nothing.
+    // The gutter draws an element for a marked line and none for the rest, so what says which
+    // line a marker is on is where the marker stands rather than where it is in the DOM.
+    watMarks: `const view = inspector().querySelector('[data-wat]');
+		const shown = (selector) => [...view.querySelectorAll(selector)]
+			.filter((it) => getComputedStyle(it).visibility !== 'hidden');
+		const lines = [...view.querySelectorAll('.cm-line')];
+		const marks = shown('.cm-foldGutter .cm-gutterElement');
+		const at = (mark) => lines.findIndex((line) => {
+			const box = line.getBoundingClientRect();
+			const top = mark.getBoundingClientRect().top;
+			return top >= box.top - 1 && top < box.bottom;
+		});
+		const marked = (needle) => {
+			const row = lines.findIndex((it) => text(it).includes(needle));
+			return row >= 0 && marks.some((mark) => at(mark) === row);
+		};
+		return JSON.stringify({
+			rows: lines.length,
+			marks: marks.length,
+			list: marks.map((mark) => {
+				const row = at(mark);
+				return row >= 0 ? text(lines[row]).trim().slice(0, 32) : '?';
+			}),
+			bodyMarked: marked('local.get $n'),
+			headMarked: marked('(func $fib '),
+			moduleMarked: marked('(module $app::main')
+		})`,
+
+    // A form of the module folds from the line it opens on, and unfolds again.
+    foldWat: `inspector().querySelector('[data-wat-fold-all]').click(); return true`,
+
+    unfoldWat: `inspector().querySelector('[data-wat-unfold-all]').click(); return true`,
+
+    // The name section stands at the end of the module, which a person reads by scrolling to it.
+    scrollWatEnd: `const scroller = inspector().querySelector('[data-wat] .cm-scroller');
+		scroller.scrollTop = scroller.scrollHeight;
+		return true`,
 
     // The program: every buffer is compiled and linked, the modules are instantiated, and the
     // entry point is called. `fib(5)` prints 5, which is what the program console holds.
@@ -668,7 +741,8 @@ const WAITS = {
     branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
     unit: `return inspector().textContent.includes('const unit')`,
     unitSsa: `return inspector().textContent.includes('call fun log')`,
-    wat: `return inspector().querySelector('[data-wat]') !== null`,
+    wat: `const view = inspector().querySelector('[data-wat]');
+		return view !== null && view.querySelector('.cm-content') !== null`,
     ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
 		return document.querySelector('[data-console=program].active') !== null &&
 			lines.some((it) => text(it).trim() === '5')`,
@@ -926,11 +1000,24 @@ async function main() {
     await until(WAITS.ssa, "the ssa form of the buffer");
     const ssa = JSON.parse(await ask(STEPS.ssa));
 
-    // The module the link stage hands a host: the same bytes a run instantiates, printed as the
-    // WebAssembly text format.
+    // The module the link stage hands a host: the same bytes a run instantiates, read in a view
+    // of its own, where the forms of it fold.
     await ask(STEPS.showWat);
     await until(WAITS.wat, "the wasm of the buffer");
     const wat = JSON.parse(await ask(STEPS.wat));
+    const watPaint = JSON.parse(await ask(STEPS.watPaint));
+    const watMarks = JSON.parse(await ask(STEPS.watMarks));
+
+    await ask(STEPS.foldWat);
+    const watFolded = JSON.parse(await ask(STEPS.wat));
+
+    await ask(STEPS.unfoldWat);
+    const watAgain = JSON.parse(await ask(STEPS.wat));
+
+    // The name section of the module stands at the end of it: reading it is scrolling to it.
+    await ask(STEPS.scrollWatEnd);
+    await sleep(200);
+    const watEnd = JSON.parse(await ask(STEPS.wat));
 
     // And the program itself: the modules are instantiated in the order the link stage gives
     // them, and the `#[entry]` is called. What `fib(5)` prints is what the program console holds.
@@ -1110,6 +1197,11 @@ async function main() {
             unit,
             unitSsa,
             wat,
+            watPaint,
+            watMarks,
+            watFolded,
+            watAgain,
+            watEnd,
             ran,
             program,
             width,
@@ -1428,13 +1520,53 @@ function report(page, problems, warnings, asked) {
         ],
         ["a buffer can be dropped", page.dropped.file],
         [
-            // The WASM the buffer assembles to, read as text: the module names itself, and what
-            // it imports is what it calls.
+            // The WASM the buffer assembles to, read as text in a view of its own: the module
+            // names itself, what it imports is what it calls, and the head says how much of it
+            // there is — and there is enough of it for the forms to fold.
             "the wat tab reads the module the buffer assembles to",
             page.wat.shown &&
                 page.wat.text.includes("(module") &&
-                page.wat.text.includes("app::main") &&
-                page.wat.text.includes("print-int"),
+                page.wat.text.includes("print-int") &&
+                /\d+ lines/.test(page.wat.head) &&
+                page.wat.gutters > 0,
+        ],
+        [
+            // The end of the module is read by scrolling to it, where the name section stands.
+            "the name section of the module is read at the end of it",
+            page.watEnd.text.includes("app::main"),
+        ],
+        [
+            // The format is painted: an instruction is the accent of a keyword, a value type
+            // the colour of a type, and a quoted name the green of a string.
+            "the format is painted in the colours of the theme",
+            page.watPaint.keyword !== "" &&
+                page.watPaint.keyword === page.watPaint.accent &&
+                page.watPaint.type !== "" &&
+                page.watPaint.type === page.watPaint.typeColour &&
+                page.watPaint.string !== "" &&
+                page.watPaint.string === page.watPaint.ok,
+        ],
+        [
+            // A marker belongs to the line a form opens on: the module and the head of each
+            // `func` fold, and a line of a body does not --- a marker on `local.get $n` was a
+            // bug of the scan reading a line's parenthesis from a later line.
+            "a fold marker belongs to the line a form opens on",
+            page.watMarks.marks === 3 &&
+                page.watMarks.list.every((it) => it.startsWith("(")) &&
+                page.watMarks.moduleMarked &&
+                page.watMarks.headMarked &&
+                !page.watMarks.bodyMarked,
+        ],
+        [
+            // Folding a form takes its body off the screen and leaves the placeholder where it
+            // was, inside the form: the head and the parenthesis that closes it stay, so a form
+            // reads as `(module $app::main…)` rather than as a head and a line of its own.
+            "a form of the module folds, and unfolds again",
+            page.watFolded.marks > 0 &&
+                page.watFolded.lines < page.wat.lines &&
+                page.watFolded.text.includes("…)") &&
+                page.watAgain.marks === 0 &&
+                page.watAgain.lines > page.watFolded.lines,
         ],
         [
             // The whole program: every buffer compiled and linked, the modules instantiated,
@@ -1639,8 +1771,12 @@ function report(page, problems, warnings, asked) {
         `a choice without an else reads ${page.unit.stmts.filter((it) => it.includes("const unit")).length} unit(s) in its ${page.unit.blocks.length} block(s)`,
     );
     console.log(
-        `the module assembles to ${page.wat.text.split("\n").length} line(s) of wasm text, and the program printed ${JSON.stringify(page.ran.printed)}`,
+        `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
     );
+    console.log(
+        `of ${page.watMarks.rows} line(s) on the screen, ${page.watMarks.marks} carry a fold marker: the module ${page.watMarks.moduleMarked ? "folds" : "does not fold"}, a func head ${page.watMarks.headMarked ? "folds" : "does not fold"}, and a line of a body ${page.watMarks.bodyMarked ? "FOLDS" : "does not fold"}`,
+    );
+    console.log(`the markers stand at ${JSON.stringify(page.watMarks.list)}`);
     console.log(
         `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,
     );

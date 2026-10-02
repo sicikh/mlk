@@ -326,6 +326,119 @@ export interface Mir {
 }
 
 /**
+ * One value of a body of the LIR: a parameter, a block parameter, or the value an instruction
+ * defines.
+ */
+export interface LirValue {
+    /** The label of the value, as the dump reads it: `v0`. */
+    label: string;
+
+    /** The type of the machine value: `i32`, `(ref i31)`, `eqref`. */
+    ty: string;
+
+    /** The WASM local the value lives in, or `null` where it is emitted where it is read. */
+    local: number | null;
+
+    /** Where it is written, in bytes, or nothing where it was written nowhere. */
+    range: [number, number] | null;
+}
+
+/** One line of a body of the LIR: an instruction, or the terminator of a block. */
+export interface LirLine {
+    /** What the line says: `v1 = i31.get_s v0`, `branch v1 -> b1, b2`. */
+    text: string;
+
+    /**
+     * What the line is: the name of the instruction (`i32.add`, `ref.i31`, `call`), and `goto`,
+     * `branch`, `switch`, `return`, or `unreachable` for the terminator of a block.
+     */
+    kind: string;
+
+    /** Where the line is written, in bytes, or nothing where it was written nowhere. */
+    range: [number, number] | null;
+}
+
+/** One block of a body of the LIR. */
+export interface LirBlock {
+    /** The label of the block: `b0`. */
+    label: string;
+
+    /** The block parameters: where a value coming from several predecessors is born. */
+    params: LirValue[];
+
+    /** The instructions of the block, in the order they run. */
+    insts: LirLine[];
+
+    /** The terminator the block ends in. */
+    term: LirLine;
+
+    /** The blocks that come into this one, by position. */
+    predecessors: number[];
+
+    /** The blocks this one goes to, by position, in the order the terminator lists them. */
+    successors: number[];
+}
+
+/** One local of a body of the LIR: what it holds, and what the compiler keeps in it. */
+export interface LirLocal {
+    /** The WASM local number: the parameters of the ABI are the ones before these. */
+    index: number;
+
+    /** The type of the local: `i32`, `(ref i31)`, `eqref`. */
+    ty: string;
+
+    /** What the compiler keeps there: `value`, `pc`, or `scratch`. */
+    kind: string;
+
+    /** The values that live in it, as the dump labels them: `v1`. */
+    values: string[];
+}
+
+/** One body of the LIR. */
+export interface LirBody {
+    /** The entity the body belongs to: `fun main`. */
+    owner: string;
+
+    /**
+     * Where the declaration that owns the body is written, in bytes, or nothing where it is
+     * written nowhere.
+     */
+    range: [number, number] | null;
+
+    /** The block the body is entered at, by position. */
+    entry: number;
+
+    /** What the body gives back: `(ref i31)`, `eqref`. */
+    ret: string;
+
+    /** The parameters of the body: one per parameter of the owner. */
+    params: LirValue[];
+
+    /**
+     * The locals the body declares after the parameters of the ABI, in order, with the values
+     * that live in each. Empty when every value is emitted where it is read.
+     */
+    locals: LirLocal[];
+
+    /** The blocks, in the order they are allocated. */
+    blocks: LirBlock[];
+}
+
+/**
+ * The LIR of the module in the buffer: the target's instructions in SSA form, ready to encode
+ * ([ADR-0022](../../../docs/adr/0022-wasm-lir.md)).
+ *
+ * A body is read the way a person reads a lowered body: a block with its parameters, the
+ * instructions of it, the terminator it ends in, and the table that says where every value
+ * that needs storage lives. Every line carries the range of the buffer it was read from, which
+ * is what the editor marks while a pointer is on the line.
+ */
+export interface Lir {
+    /** The bodies of the module that check clean, in the order it declares them. */
+    bodies: LirBody[];
+}
+
+/**
  * What one pass of the compiler did for one unit while a host was reading the driver.
  *
  * A counter is of consultations rather than of values: one pull that asks the driver for the
@@ -531,6 +644,12 @@ export interface Driver {
     /** The MIR of the module in the SSA form: the CFG form with block parameters. */
     mirSsa(path: string): Promise<Mir | null>;
 
+    /**
+     * The LIR of the module: the target's instructions in SSA form, ready to encode
+     * ([ADR-0022](../../../docs/adr/0022-wasm-lir.md)).
+     */
+    lir(path: string): Promise<Lir | null>;
+
     /** The WASM the module assembles to, as text, or `null` when there is nothing to compile. */
     wat(path: string): Promise<Wat | null>;
 
@@ -582,6 +701,7 @@ export type DriverRequest =
     | { kind: "types"; id: number; path: string }
     | { kind: "mir"; id: number; path: string }
     | { kind: "mirSsa"; id: number; path: string }
+    | { kind: "lir"; id: number; path: string }
     | { kind: "wat"; id: number; path: string }
     | { kind: "run"; id: number }
     | { kind: "diagnostics"; id: number; path: string }
@@ -739,6 +859,7 @@ export async function loadDriver(): Promise<Driver> {
         mir: (path) => ask<Mir | null>((id) => ({ kind: "mir", id, path })),
         mirSsa: (path) =>
             ask<Mir | null>((id) => ({ kind: "mirSsa", id, path })),
+        lir: (path) => ask<Lir | null>((id) => ({ kind: "lir", id, path })),
         wat: (path) => ask<Wat | null>((id) => ({ kind: "wat", id, path })),
         run: () => ask<Run>((id) => ({ kind: "run", id })),
         diagnostics: (path) =>

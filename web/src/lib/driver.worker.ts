@@ -111,6 +111,8 @@ function answer(
             return driver.mir(request.path);
         case "mirSsa":
             return driver.mirSsa(request.path);
+        case "lir":
+            return driver.lir(request.path);
         case "wat":
             return driver.wat(request.path);
         case "run":

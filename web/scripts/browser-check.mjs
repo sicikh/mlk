@@ -141,6 +141,28 @@ const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 		branches: [...inspector().querySelectorAll('[data-line=term][data-kind=branch]')].length
 	})`;
 
+/**
+ * What the tab of the LIR reads: the bodies of the target's instructions, what every instruction
+ * is, and where the values that need storage live.
+ *
+ * The lines are read as a person reads them: the text of every instruction and terminator, and
+ * the name of the instruction each line is, which is what says the tab shows the lowering of
+ * the MIR into the instructions of the target.
+ */
+const LIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-line=' + kind + ']')].map((it) => text(it));
+	return JSON.stringify({
+		owners: lines('owner'),
+		blocks: [...inspector().querySelectorAll('[data-block]')].map((it) => it.dataset.block),
+		entry: inspector().querySelectorAll('[data-entry=true]').length,
+		insts: lines('inst'),
+		kinds: [...inspector().querySelectorAll('[data-line=inst]')].map((it) => it.dataset.kind),
+		term: lines('term'),
+		termKinds: [...inspector().querySelectorAll('[data-line=term]')].map((it) => it.dataset.kind),
+		params: lines('params'),
+		locals: lines('locals'),
+		blockParams: [...inspector().querySelectorAll('[data-block] [data-line=value]')].map((it) => text(it))
+	})`;
+
 /** The questions themselves, each answered by one round trip. */
 const STEPS = {
     state: `return JSON.stringify({
@@ -299,6 +321,10 @@ const STEPS = {
     showSsa: `show('mir-ssa'); return true`,
 
     ssa: MIR,
+
+    showLir: `show('lir'); return true`,
+
+    lir: LIR,
 
     // The WASM of the buffer: the module the link stage hands a host, printed as text and read
     // in a view of its own. What is read is what the view shows: the code on the screen, what
@@ -737,6 +763,7 @@ const WAITS = {
     tc: `return inspector().querySelector('[data-tc=entity]') !== null`,
     mir: `return inspector().querySelector('[data-form=cfg] [data-block]') !== null`,
     ssa: `return inspector().querySelector('[data-form=ssa] [data-line=term]') !== null`,
+    lir: `return inspector().querySelector('[data-lir] [data-block]') !== null`,
     branch: `return inspector().querySelectorAll('[data-form=cfg] [data-block]').length > 1`,
     branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
     unit: `return inspector().textContent.includes('const unit')`,
@@ -1000,6 +1027,12 @@ async function main() {
     await until(WAITS.ssa, "the ssa form of the buffer");
     const ssa = JSON.parse(await ask(STEPS.ssa));
 
+    // The LIR of the buffer: what the WASM back end lowers the SSA form into, the target's own
+    // instructions, and where the values that need storage live.
+    await ask(STEPS.showLir);
+    await until(WAITS.lir, "the lir of the buffer");
+    const lir = JSON.parse(await ask(STEPS.lir));
+
     // The module the link stage hands a host: the same bytes a run instantiates, read in a view
     // of its own, where the forms of it fold.
     await ask(STEPS.showWat);
@@ -1191,6 +1224,7 @@ async function main() {
             mir,
             mirHover,
             ssa,
+            lir,
             branch,
             branchSsa,
             branchWords,
@@ -1453,6 +1487,31 @@ function report(page, problems, warnings, asked) {
                 page.ssa.term.some((it) => it.startsWith("return v")),
         ],
         [
+            // The LIR is what the back end encodes: the same bodies, one instruction of the
+            // target per line, and a local for every value that cannot be emitted where it is
+            // read. The dispatch of `fib-aux` keeps its program counter in one of them.
+            "the lir tab reads the target's instructions and where the values live",
+            page.lir.owners.some((it) => it.includes("fun fib-aux")) &&
+                page.lir.blocks.length === page.mir.blocks.length &&
+                page.lir.entry === 3 &&
+                page.lir.kinds.includes("i31.get_s") &&
+                page.lir.kinds.includes("i32.add") &&
+                page.lir.kinds.includes("i32.eq") &&
+                page.lir.kinds.includes("ref.i31") &&
+                page.lir.kinds.includes("call") &&
+                page.lir.termKinds.includes("branch") &&
+                page.lir.term.some((it) => it.startsWith("return v")) &&
+                page.lir.params.some((it) => it.includes("(ref i31)")),
+        ],
+        [
+            // A value the allocation gave a local to says which one, and a body that is
+            // dispatched declares the program counter among its locals.
+            "the lir reads the locals a value lives in",
+            page.lir.locals.some((it) => it.includes("(pc)")) &&
+                page.lir.locals.some((it) => it.includes(" = v")) &&
+                page.lir.blockParams.some((it) => it.includes("(local ")),
+        ],
+        [
             // A choice is what makes a body more than one block: the entry evaluates the
             // condition and branches, every arm writes the slot the expression is and goes to
             // the block the arms meet in, and what is written after the `if` is written there.
@@ -1635,7 +1694,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Inspect shows the inspector",
             page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 9 &&
+                page.phoneInspector.tabs === 10 &&
                 !page.phoneInspector.overflows,
         ],
         [
@@ -1763,6 +1822,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `the mir reads a ${page.mir.form} form of ${page.mir.blocks.length} block(s), which ${page.mirHover.says.trim()} marks ${JSON.stringify(page.mirHover.marked)}, and the ssa ${page.ssa.blocks.length} block(s)`,
+    );
+    console.log(
+        `the lir reads ${page.lir.blocks.length} block(s) of ${page.lir.kinds.length} instruction(s) of ${new Set(page.lir.kinds).size} kind(s), in ${page.lir.locals.length} local line(s)`,
     );
     console.log(
         `a choice reads as ${page.branch.blocks.length} block(s) of a ${page.branch.form} form and ${page.branchSsa.blockParams.length} parameter(s) of the join of the ssa form`,

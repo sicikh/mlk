@@ -121,7 +121,7 @@ pub fn project(fixture: &str) -> Compiled {
     let module = driver
         .mir_module(id)
         .expect("the module to be read by the front end");
-    let (wasm, diagnostics) = compile(&module);
+    let (wasm, diagnostics) = compile(&mut driver, &module);
 
     if let Some(report) = driver.ice() {
         panic!("the driver bugged:\n{report}");
@@ -260,19 +260,27 @@ fn setup(fixture: &str) -> (Driver, ProjectId) {
 }
 
 /// Compiles the functions of a module, and assembles the module they become.
-fn compile(module: &ModuleMir) -> (WasmModule, Vec<CodegenDiag>) {
+///
+/// Every body is lowered by the driver --- the `lir` stage of [ADR-0022] --- and encoded from
+/// what the stage handed over, which is the path the linker takes.
+///
+/// [adr-0022]: ../../../docs/adr/0022-wasm-lir.md
+fn compile(driver: &mut Driver, module: &ModuleMir) -> (WasmModule, Vec<CodegenDiag>) {
     let layout = layout(module);
     let mut artifacts = Vec::new();
     let mut diagnostics = Vec::new();
 
     for function in &module.functions {
+        let lir = driver
+            .lir(&function.owner)
+            .expect("a function of the module to be lowered");
         let ctx = FunctionCtx {
             name: &function.name,
             signature: &function.signature,
             param_names: &function.param_names,
             layout: &layout,
         };
-        let (artifact, reports) = emit_function(&function.body, &ctx);
+        let (artifact, reports) = emit_function(&lir, &ctx);
 
         artifacts.push(artifact);
         diagnostics.extend(reports);

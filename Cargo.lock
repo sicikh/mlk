@@ -1013,6 +1013,7 @@ dependencies = [
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-interp",
+ "mlkc-lir-wasm",
  "mlkc-mir",
  "mlkc-span",
  "mlkc-stdlib",
@@ -1042,6 +1043,7 @@ dependencies = [
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-line-index",
+ "mlkc-lir-wasm",
  "mlkc-lower",
  "mlkc-mir",
  "mlkc-mir-build",
@@ -1115,6 +1117,16 @@ name = "mlkc-line-index"
 version = "0.1.0"
 dependencies = [
  "mlkc-text-size",
+]
+
+[[package]]
+name = "mlkc-lir-wasm"
+version = "0.1.0"
+dependencies = [
+ "mlkc-hir-def",
+ "mlkc-intern",
+ "mlkc-la-arena",
+ "mlkc-span",
 ]
 
 [[package]]
@@ -1332,6 +1344,7 @@ dependencies = [
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-line-index",
+ "mlkc-lir-wasm",
  "mlkc-mir",
  "mlkc-span",
  "mlkc-stdlib",

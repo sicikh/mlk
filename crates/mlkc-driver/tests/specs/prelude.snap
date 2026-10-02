@@ -134,6 +134,16 @@ fun main (entry b0)
     return v0
 ```
 
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
 `fun make`
 
 CFG form:
@@ -151,6 +161,16 @@ SSA form:
 fun make (entry b0)
   b0:
     v0 = call fun make()
+    return v0
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  locals: 
+  b0:
+    v0 = call $1()
     return v0
 ```
 

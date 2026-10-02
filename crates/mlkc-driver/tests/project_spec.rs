@@ -176,6 +176,23 @@ pub(crate) fn run(fixture: &str) {
                 snapshot.push_str("SSA form:\n\n```\n");
                 snapshot.push_str(&mlkc_mir::dump::body(&ssa));
                 snapshot.push_str("```\n\n");
+
+                // The LIR is what the WASM back end lowers the SSA form into: the target's own
+                // instructions, and where every value that needs storage lives ([ADR-0022]).
+                //
+                // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+                snapshot.push_str("LIR:\n\n");
+
+                match driver.lir(body.owner()) {
+                    Some(lir) => {
+                        snapshot.push_str("```\n");
+                        snapshot.push_str(&mlkc_lir_wasm::dump::body(&lir));
+                        snapshot.push_str("```\n\n");
+                    },
+                    None => {
+                        snapshot.push_str("Not lowered: the module of the body is not whole.\n\n");
+                    },
+                }
             }
         }
 

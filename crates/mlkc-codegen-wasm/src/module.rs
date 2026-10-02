@@ -21,6 +21,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, Name};
 use mlkc_hir_ty::{Builtins, Ty};
+use mlkc_lir_wasm::Body as LirBody;
 use mlkc_mir::Body as MirBody;
 use wasm_encoder::{
     CodeSection, EntityType, ExportKind, ExportSection, FunctionSection, ImportSection,
@@ -297,19 +298,35 @@ pub struct WasmModule {
 /// This is the whole of the back end for one module: [`emit_function`] per function, in the
 /// order the module declares them, and [`assemble_module`] over the artifacts. It is what the
 /// driver's link stage and a host that shows one module both read.
-pub fn compile_module(module: &ModuleMir) -> (WasmModule, Vec<CodegenDiag>) {
+///
+/// `lirs` are the lowered bodies of the module's functions, in declaration order, as the
+/// driver pulled them ([ADR-0022][adr-0022]).
+///
+/// # Panics
+///
+/// Panics when the number of bodies is not the number of functions of the module, which is a
+/// mistake of the caller and not of the program.
+///
+/// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+pub fn compile_module(module: &ModuleMir, lirs: &[Arc<LirBody>]) -> (WasmModule, Vec<CodegenDiag>) {
+    assert_eq!(
+        lirs.len(),
+        module.functions.len(),
+        "the back end is handed one body per function of the module",
+    );
+
     let layout = layout(module);
     let mut artifacts = Vec::new();
     let mut diagnostics = Vec::new();
 
-    for function in &module.functions {
+    for (function, lir) in module.functions.iter().zip(lirs) {
         let ctx = FunctionCtx {
             name: &function.name,
             signature: &function.signature,
             param_names: &function.param_names,
             layout: &layout,
         };
-        let (artifact, reports) = emit_function(&function.body, &ctx);
+        let (artifact, reports) = emit_function(lir, &ctx);
 
         artifacts.push(artifact);
         diagnostics.extend(reports);

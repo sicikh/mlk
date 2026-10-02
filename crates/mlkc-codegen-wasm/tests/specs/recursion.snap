@@ -38,7 +38,7 @@ expression: snapshot
               end
             end
             local.get $value
-            local.set 2
+            local.set 1
             i32.const 3
             local.set 3
             br 2 (;@2;)
@@ -49,8 +49,8 @@ expression: snapshot
           i32.sub
           ref.i31
           call $fib
-          local.set 1
-          local.get 1
+          local.set 2
+          local.get 2
           i31.get_s
           local.get $value
           i31.get_s
@@ -61,12 +61,12 @@ expression: snapshot
           i31.get_s
           i32.add
           ref.i31
-          local.set 2
+          local.set 1
           i32.const 3
           local.set 3
           br 1 (;@2;)
         end
-        local.get 2
+        local.get 1
         return
       end
     end

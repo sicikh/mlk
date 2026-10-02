@@ -7,6 +7,7 @@
     import Editor from "$lib/components/Editor.svelte";
     import FileList from "$lib/components/FileList.svelte";
     import HirView from "$lib/components/HirView.svelte";
+    import LirView from "$lib/components/LirView.svelte";
     import MirView from "$lib/components/MirView.svelte";
     import Splitter from "$lib/components/Splitter.svelte";
     import StatsView from "$lib/components/StatsView.svelte";
@@ -19,6 +20,7 @@
         type Diagnostic,
         type Driver,
         type Hir,
+        type Lir,
         type Mir,
         type StatsRow,
         type StdFile,
@@ -62,6 +64,9 @@
         /** The MIR in the SSA form, read when its tab is in front. */
         mirSsa?: Mir | null;
 
+        /** The LIR, read when its tab is in front. */
+        lir?: Lir | null;
+
         /** The WASM of the module, read when the tab of the WAT is in front. */
         wat?: Wat | null;
     }
@@ -102,6 +107,7 @@ pub fun main() : Unit =
         | "hir"
         | "mir"
         | "mir-ssa"
+        | "lir"
         | "wat"
         | "tc"
         | "stats";
@@ -351,7 +357,7 @@ pub fun main() : Unit =
 
         try {
             const started = performance.now();
-            const [diagnostics, types, cst, ast, hir, mir, mirSsa, wat] =
+            const [diagnostics, types, cst, ast, hir, mir, mirSsa, lir, wat] =
                 await Promise.all([
                     driver.diagnostics(path),
                     driver.types(path),
@@ -360,6 +366,7 @@ pub fun main() : Unit =
                     tab === "hir" ? driver.hir(path) : undefined,
                     tab === "mir" ? driver.mir(path) : undefined,
                     tab === "mir-ssa" ? driver.mirSsa(path) : undefined,
+                    tab === "lir" ? driver.lir(path) : undefined,
                     tab === "wat" ? driver.wat(path) : undefined,
                 ]);
 
@@ -382,6 +389,7 @@ pub fun main() : Unit =
                 hir,
                 mir,
                 mirSsa,
+                lir,
                 wat,
                 cost: { rows: stats.rows, took },
             };
@@ -776,6 +784,11 @@ pub fun main() : Unit =
                 onclick={() => show("mir-ssa")}>MIR/SSA</button
             >
             <button
+                data-tab="lir"
+                class:active={tab === "lir"}
+                onclick={() => show("lir")}>LIR</button
+            >
+            <button
                 data-tab="wat"
                 class:active={tab === "wat"}
                 onclick={() => show("wat")}>WAT</button
@@ -853,6 +866,24 @@ pub fun main() : Unit =
                 {:else}
                     <MirView
                         mir={reading.mirSsa}
+                        onHover={pointed}
+                        onPick={picked}
+                    />
+                {/if}
+            {:else if tab === "lir"}
+                {#if reading.lir === undefined}
+                    <p class="empty">Lowering the body.</p>
+                {:else if reading.lir === null}
+                    <p class="empty">
+                        No body of the module checks clean, so none has a LIR.
+                    </p>
+                {:else if reading.lir.bodies.length === 0}
+                    <p class="empty">
+                        No body of the module checks clean, so none has a LIR.
+                    </p>
+                {:else}
+                    <LirView
+                        lir={reading.lir}
                         onHover={pointed}
                         onPick={picked}
                     />

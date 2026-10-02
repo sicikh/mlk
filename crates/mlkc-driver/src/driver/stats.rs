@@ -56,8 +56,8 @@ pub fn system_clock() -> Clock {
 ///
 /// Every pass owns one slot per unit it is a value of: a file owns its parse and its line
 /// index, a module owns its HIR, its interface, its resolution and its rendered diagnostics,
-/// a project owns its index and its def map, and a body owns its check, its MIR and its SSA
-/// form. What a host reads of the counters is which of those had to be read again.
+/// a project owns its index and its def map, and a body owns its check, its MIR, its SSA form,
+/// and its LIR. What a host reads of the counters is which of those had to be read again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Pass {
     /// The parse of a file: the tree, and what the parser reported.
@@ -92,13 +92,17 @@ pub enum Pass {
     ///
     /// [adr-0021]: ../../docs/adr/0021-translation-units.md
     MirModule,
+    /// The LIR of one body: the target's instructions in SSA form ([ADR-0022]).
+    ///
+    /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+    Lir,
     /// The compiled modules of one project, ordered for a host to link.
     Link,
 }
 
 impl Pass {
     /// Every pass, in the order a module is read in.
-    pub const ALL: [Pass; 16] = [
+    pub const ALL: [Pass; 17] = [
         Pass::Parse,
         Pass::Lower,
         Pass::LineIndex,
@@ -114,6 +118,7 @@ impl Pass {
         Pass::Mir,
         Pass::Ssa,
         Pass::MirModule,
+        Pass::Lir,
         Pass::Link,
     ];
 
@@ -135,6 +140,7 @@ impl Pass {
             Pass::Mir => "mir",
             Pass::Ssa => "ssa",
             Pass::MirModule => "mir_module",
+            Pass::Lir => "lir",
             Pass::Link => "link",
         }
     }
@@ -150,8 +156,8 @@ impl fmt::Display for Pass {
 ///
 /// A file owns its parse, its HIR, its line index and the rendered diagnostics of its parse; a
 /// module owns its interface, its resolution, its type surface and the diagnostics of them; a
-/// project owns its module index and its def map; a body owns its check, its MIR and its SSA
-/// form. What a host reads of the counters is which of those had to be read again.
+/// project owns its module index and its def map; a body owns its check, its MIR, its SSA form
+/// and its LIR. What a host reads of the counters is which of those had to be read again.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unit {
     /// A file of the host's, by the id it was pushed under.
@@ -360,11 +366,12 @@ mod tests {
                 | Pass::Mir
                 | Pass::Ssa
                 | Pass::MirModule
+                | Pass::Lir
                 | Pass::Link => (),
             }
         }
 
-        assert_eq!(Pass::ALL.len(), 16);
+        assert_eq!(Pass::ALL.len(), 17);
     }
 
     /// A name is what a table and a log read a pass by, and two passes share none.

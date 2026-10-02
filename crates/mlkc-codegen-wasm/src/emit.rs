@@ -1,51 +1,35 @@
-//! Emitting one function: a MIR body to a WASM function body.
+//! Emitting one function: the LIR of a body to a WASM function body ([ADR-0022][adr-0022]).
 //!
-//! The emitter is handed an SSA body and a [`FunctionCtx`], and owns its output: the encoded
-//! body, where its instructions came from, and what every value refined to. It borrows nothing
-//! from its inputs ([ADR-0009][adr-0009]), so the driver stores an artifact and drops the MIR
-//! it came from.
+//! The emitter is handed a body whose allocation pass has run ([`crate::allocate`]) and a
+//! [`FunctionCtx`], and owns its output: the encoded body, where its instructions came from,
+//! and what every value is. It borrows nothing from its inputs ([ADR-0009][adr-0009]), so the
+//! driver stores an artifact and drops the LIR it came from.
 //!
-//! # Locals
+//! It makes no decisions. What an instruction is, is what the LIR says; a value that lives in a
+//! local is a `local.get`, and a value the allocation pass left out is the instruction that
+//! defines it, written where the value is read. What is left is the shape of the module: the
+//! dispatch table, the initialization a dispatched body needs, and the spans of the
+//! instructions.
 //!
-//! Before `localify` exists ([ADR-0020][adr-0020]), every value gets a local of its own, typed
-//! by its refinement: an immediate is a `(ref i31)` and everything else is an `eqref`. A value
-//! that is a parameter is the local the ABI already declares for it --- the emitter reads it
-//! where the caller left it --- and a value read once, in the block that defines it, is emitted
-//! where it is used and given no local at all ([`Inlining`](crate::inlining::Inlining)). What
-//! reads it is what it is emitted as: a word where the use wants a word, and the `i32` inside
-//! it where the use takes it apart --- so a constant or an operator is never boxed only to be
-//! unboxed at once.
-//!
-//! # Control flow
-//!
-//! A body of one block that returns is emitted directly, as the straight line it is. Every
-//! other body is emitted as a dispatch loop: a `pc` local, one `block` per MIR block, and a
-//! `br_table` over the block ids. The dispatch loop is always correct for a well-formed body,
-//! and it is what the emitter falls back to until reducible bodies are structured into
-//! `if`/`loop` regions; the body that the current language lowers to --- a single block ---
-//! pays nothing for it.
-//!
-//! An edge into a block passes one word per parameter. The emitter evaluates every argument
-//! before storing any of them and stores them into the parameter locals in reverse, so that an
-//! edge which permutes the parameters of its target copies all of them.
+//! Writing the stack out of a tree of values is what Waffle's `stackify` does
+//! (<https://github.com/bytecodealliance/waffle>, Apache-2.0 WITH LLVM-exception, which the
+//! Apache-2.0 half of this crate's licence is compatible with); no code is taken from it.
 //!
 //! [adr-0009]: ../../docs/adr/0009-pass-contract.md
-//! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+//! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 
 use std::fmt;
 
 use mlkc_hir_def::Name;
-use mlkc_mir::{
-    BlockId, BlockTarget, Body, Callee, Const, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind,
-    Terminator, ValueId,
-};
+use mlkc_lir_wasm::{BlockId, Body, Op, RefTy, Terminator, Ty, ValueId};
 use mlkc_span::Span;
-use wasm_encoder::{AbstractHeapType, BlockType, Function, HeapType, Instruction, ValType};
+use wasm_encoder::{
+    AbstractHeapType, BlockType, Function, HeapType, Instruction, RefType, ValType,
+};
 
 use crate::{
-    inlining::Inlining,
     module::{FnSignature, ModuleLayout},
-    refine::{AbiType, Refinement, Refinements},
+    select,
 };
 
 /// What codegen reads of one body besides the body itself ([ADR-0009][adr-0009]).
@@ -70,8 +54,8 @@ pub struct FuncArtifact {
     pub body: Vec<u8>,
     /// Source positions of instructions inside `body`, by byte offset.
     pub origins: Vec<Origin>,
-    /// The refinement of every value that lives in a local, for the debugger and for the
-    /// assembler; a value the emitter inlines lives in no local.
+    /// Every value that lives in a local, for the debugger and for the assembler; a value the
+    /// allocation pass emits where it is read lives in no local.
     pub debug: Vec<ValueDebug>,
 }
 
@@ -84,13 +68,13 @@ pub struct Origin {
     pub span: Span,
 }
 
-/// What a MIR value refined to, and where it lives.
+/// What a value is, and where it lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValueDebug {
-    /// The MIR value.
+    /// The value of the LIR.
     pub value: ValueId,
-    /// The refinement the emitter gave it.
-    pub refinement: Refinement,
+    /// The type of the machine value.
+    pub ty: Ty,
     /// The WASM local the value lives in.
     pub local: u32,
     /// The name the value was bound under in the source, if it has one.
@@ -99,12 +83,12 @@ pub struct ValueDebug {
 
 /// What codegen reports about a body it cannot emit.
 ///
-/// A backend does not reject a well-formed SSA body for its shape ([ADR-0020][adr-0020]); what
-/// it reports is a construct it does not lower *yet*, and the driver drops the artifact with
-/// it. A `Unexpected` variant is a compiler bug: the body violates the contract the stages
-/// before codegen promise.
+/// A backend does not reject a well-formed body for its shape ([ADR-0022][adr-0022]); what it
+/// reports is a construct it does not lower *yet*, and the driver drops the artifact with it.
+/// Such a construct is selected only for a feature the language has and the backend does not:
+/// a string constant, a call to a function declared inside a body, and an indirect call.
 ///
-/// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+/// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CodegenDiag {
     /// The emitter met a construct it does not lower yet.
@@ -114,7 +98,7 @@ pub enum CodegenDiag {
         /// Where it is written.
         span: Span,
     },
-    /// The emitter met a body that breaks the invariant of the SSA form.
+    /// The emitter met a body that breaks an invariant of the LIR.
     Unexpected {
         /// What is wrong.
         what: String,
@@ -143,26 +127,42 @@ impl fmt::Display for CodegenDiag {
     }
 }
 
-/// Emits the WASM function body of one SSA body.
+/// Emits the WASM function body of one body of the LIR.
 ///
 /// # Panics
 ///
-/// Panics when `mir` is not a well-formed SSA body, which is the contract every stage before
-/// codegen promises ([ADR-0019][adr-0019]): a body that breaks it is a compiler bug.
+/// Panics when `lir` is not a well-formed body, or when its allocation pass has not run, which
+/// is the contract the stage before codegen promises ([ADR-0022][adr-0022]): a body that breaks
+/// it is a compiler bug.
 ///
-/// [adr-0019]: ../../docs/adr/0019-mir.md
-pub fn emit_function(mir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<CodegenDiag>) {
-    if let Err(invalid) = mir.validate_ssa() {
-        panic!("the input of the WASM back end is an SSA body, and this one is not: {invalid}");
+/// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+pub fn emit_function(lir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<CodegenDiag>) {
+    if let Err(invalid) = lir.validate() {
+        panic!(
+            "the input of the WASM back end is a well-formed body, and this one is not: {invalid}"
+        );
+    }
+
+    if let Err(invalid) = lir.validate_locals() {
+        panic!("the WASM back end encodes a body whose allocation has run: {invalid}");
     }
 
     assert_eq!(
-        mir.params.len(),
-        ctx.signature.params.len(),
-        "a body has as many parameters as its signature says",
+        lir.params
+            .iter()
+            .map(|value| lir.values[*value].ty)
+            .collect::<Vec<_>>(),
+        ctx.signature
+            .shape(ctx.layout.builtins())
+            .params
+            .iter()
+            .copied()
+            .map(select::ty_of)
+            .collect::<Vec<_>>(),
+        "a body to have the parameters its signature declares",
     );
 
-    let mut emitter = Emitter::new(mir, ctx);
+    let mut emitter = Emitter::new(lir, ctx);
 
     emitter.run();
 
@@ -170,7 +170,11 @@ pub fn emit_function(mir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
 }
 
 /// Whether a body is emitted as the straight line it is, rather than as a dispatch loop.
-fn is_direct(body: &Body) -> bool {
+///
+/// A body of one block that returns or is not meant to be reached is the straight line it is;
+/// every other body is emitted as a dispatch loop, which is always correct and is what the
+/// backend falls back to until control flow is structured.
+pub(crate) fn is_direct(body: &Body) -> bool {
     body.blocks.len() == 1
         && matches!(
             &body.blocks[body.entry].term,
@@ -178,22 +182,25 @@ fn is_direct(body: &Body) -> bool {
         )
 }
 
+/// The WASM type of a type of the LIR.
+fn val_type(ty: Ty) -> ValType {
+    match ty {
+        Ty::I32 => ValType::I32,
+        Ty::Ref(RefTy::I31) => {
+            ValType::Ref(RefType::new_abstract(AbstractHeapType::I31, false, false))
+        },
+        Ty::Ref(RefTy::Eq) => ValType::Ref(RefType::EQREF),
+    }
+}
+
 /// The one emitter of one function.
 struct Emitter<'a> {
-    mir: &'a Body,
+    lir: &'a Body,
     ctx: &'a FunctionCtx<'a>,
-    refinements: Refinements,
-    /// Which values are emitted where they are used rather than kept in a local.
-    inlining: Inlining<'a>,
-    /// What the result of the function crosses the ABI as.
-    ret: AbiType,
-    /// The WASM local of every value that lives in one, by the value's place in its arena; a
-    /// value the emitter inlines has none.
-    value_locals: Vec<Option<u32>>,
-    /// The local the dispatch form keeps the program counter in.
-    pc_local: u32,
-    /// The local the dispatch form compares a `switch` scrutinee in.
-    scratch_local: u32,
+    /// The instruction that defines every value, by the value's place in its arena.
+    definitions: Vec<Option<(BlockId, usize)>>,
+    /// The block being emitted.
+    current: BlockId,
     function: Function,
     origins: Vec<Origin>,
     diags: Vec<CodegenDiag>,
@@ -202,73 +209,15 @@ struct Emitter<'a> {
 }
 
 impl<'a> Emitter<'a> {
-    fn new(mir: &'a Body, ctx: &'a FunctionCtx<'a>) -> Self {
-        let refinements = Refinements::of(mir, ctx.layout.builtins(), ctx.layout);
-        let inlining = Inlining::of(mir);
-        let ret = ctx.signature.ret_shape(ctx.layout.builtins());
-
-        // A parameter is the local the ABI already declares for it, so the type the emitter
-        // reads it as and the type its signature declares it as have to be the same one: a
-        // disagreement is a gap of the check, and not something codegen repairs with a cast.
-        debug_assert_eq!(
-            mir.params
-                .iter()
-                .map(|value| refinements.get(*value).abi())
-                .collect::<Vec<_>>(),
-            ctx.signature.shape(ctx.layout.builtins()).params,
-            "every parameter to be the shape its signature declares",
-        );
-
-        // The first locals are the ABI parameters, which the function type declares; a value
-        // that is a parameter is the local of that parameter, and every other value that is
-        // not inlined gets a local of its own after them, typed by its refinement.
-        let params = mir.params.len() as u32;
-        let mut value_locals: Vec<Option<u32>> = vec![None; mir.values.len()];
-        let mut locals: Vec<ValType> = Vec::new();
-
-        for (position, value) in mir.params.iter().enumerate() {
-            value_locals[value.index()] = Some(position as u32);
-        }
-
-        for (value, _) in mir.values.iter() {
-            if mir.params.contains(&value) || inlining.is_inlined(value) {
-                continue;
-            }
-
-            value_locals[value.index()] = Some(params + locals.len() as u32);
-            locals.push(refinements.get(value).abi().val_type());
-        }
-
-        // The dispatch form keeps a program counter after every value, and a `switch` compares
-        // its scrutinee in a scratch local of its own; a body that is emitted directly needs
-        // neither, and neither is declared for a body that does not use it.
-        let dispatch = !is_direct(mir);
-        let switching = mir
-            .blocks
-            .iter()
-            .any(|(_, block)| matches!(block.term, Terminator::Switch { .. }));
-        let pc_local = params + locals.len() as u32;
-        let scratch_local = pc_local + 1;
-
-        if dispatch {
-            locals.push(ValType::I32);
-        }
-
-        if switching {
-            debug_assert!(dispatch, "a switch is emitted by the dispatch form");
-
-            locals.push(ValType::I32);
-        }
+    fn new(lir: &'a Body, ctx: &'a FunctionCtx<'a>) -> Self {
+        let locals = lir.locals.locals.iter().map(|ty| val_type(*ty));
+        let definitions = lir.definitions();
 
         Self {
-            mir,
+            lir,
             ctx,
-            refinements,
-            inlining,
-            ret,
-            value_locals,
-            pc_local,
-            scratch_local,
+            definitions,
+            current: lir.entry,
             function: Function::new_with_locals_types(locals),
             origins: Vec::new(),
             diags: Vec::new(),
@@ -279,83 +228,74 @@ impl<'a> Emitter<'a> {
     /// Emits the whole body: the blocks, and a dispatch loop around them where there is more
     /// than one.
     fn run(&mut self) {
-        let direct = is_direct(self.mir);
-
-        // A dispatch form is entered through the table, and the validator does not know which
-        // `pc` reached it: every value local is initialized, or a read in a case the path did
-        // not reach is rejected. What the initialization writes is never read: SSA defines
-        // every value before its use, and the parameters are written by the caller.
-        if !direct {
-            self.initialize_values();
-        }
-
-        if direct {
-            self.direct(self.mir.entry);
+        if is_direct(self.lir) {
+            self.direct(self.lir.entry);
         } else {
+            self.initialize();
             self.dispatch();
         }
     }
 
-    /// Initializes every value local, so that a dispatch form validates under Wasm GC.
+    /// Emits what a dispatched body needs before its first case runs.
     ///
-    /// An immediate is a `(ref i31)`, which has no default value: a `local.get` of one the
-    /// validator cannot prove to be written is an error. The parameters are left out: they are
-    /// the locals of the ABI, and the caller wrote them.
-    fn initialize_values(&mut self) {
-        for (value, _) in self.mir.values.iter() {
-            if self.mir.params.contains(&value) {
+    /// An `(ref i31)` local has no default value, and the dispatch table lets the validator
+    /// prove nothing about which case wrote one: every such local is initialized, or a read in
+    /// a case some path did not reach is rejected. What the initialization writes is never
+    /// read: SSA defines every value before its use, and the parameters are written by the
+    /// caller. A `pc` of a body that is entered at a block that is not the first case is
+    /// initialized as well, because the default of the local is case zero.
+    fn initialize(&mut self) {
+        if self.lir.entry.index() != 0 {
+            self.insn(
+                Span::dummy(),
+                Instruction::I32Const(self.lir.entry.index() as i32),
+            );
+            self.insn(Span::dummy(), Instruction::LocalSet(self.pc()));
+        }
+
+        let parameters = self.lir.params.len() as u32;
+
+        for (index, ty) in self.lir.locals.locals.iter().enumerate() {
+            if *ty != Ty::I31 {
                 continue;
             }
 
-            // A value the plan inlines is computed where it is used, and has no local to
-            // initialize.
-            let Some(local) = self.value_locals[value.index()] else {
-                continue;
-            };
+            let local = parameters + index as u32;
 
-            if self.refinements.get(value).is_immediate() {
-                self.insn(Span::dummy(), Instruction::I32Const(0));
-                self.insn(Span::dummy(), Instruction::RefI31);
-            } else {
-                self.insn(
-                    Span::dummy(),
-                    Instruction::RefNull(HeapType::Abstract {
-                        shared: false,
-                        ty: AbstractHeapType::Eq,
-                    }),
-                );
-            }
-
+            self.insn(Span::dummy(), Instruction::I32Const(0));
+            self.insn(Span::dummy(), Instruction::RefI31);
             self.insn(Span::dummy(), Instruction::LocalSet(local));
         }
     }
 
     /// Emits a body of one block as the straight line it is.
     fn direct(&mut self, id: BlockId) {
-        let mir = self.mir;
-        let block = &mir.blocks[id];
+        let lir = self.lir;
+        let block = &lir.blocks[id];
 
-        self.stmts(&block.stmts);
+        self.current = id;
+        self.insts(&block.insts);
         self.terminator(&block.term, None);
     }
 
     /// Emits every block of the body as a case of a dispatch loop.
     fn dispatch(&mut self) {
-        let mir = self.mir;
-        let count = mir.blocks.len() as u32;
+        let lir = self.lir;
+        let count = lir.blocks.len() as u32;
+        let pc = self.pc();
 
         // `done` wraps the loop so that an out-of-range `pc` has somewhere to go; every
         // terminator branches to the loop or returns, so the fall-through is unreachable.
         self.insn(Span::dummy(), Instruction::Block(BlockType::Empty));
         self.insn(Span::dummy(), Instruction::Loop(BlockType::Empty));
 
-        // One case block per MIR block, innermost first; branching to the `i`th label lands
+        // One case block per LIR block, innermost first; branching to the `i`th label lands
         // right after the `i`th `end`, which is where the code of the block is emitted.
         for _ in 0..count {
             self.insn(Span::dummy(), Instruction::Block(BlockType::Empty));
         }
 
-        self.insn(Span::dummy(), Instruction::LocalGet(self.pc_local));
+        self.insn(Span::dummy(), Instruction::LocalGet(pc));
         self.insn(
             Span::dummy(),
             Instruction::BrTable((0..count).collect::<Vec<_>>().into(), count + 1),
@@ -364,16 +304,17 @@ impl<'a> Emitter<'a> {
         // The first `end` closes the innermost case; after it comes the code of block zero.
         self.insn(Span::dummy(), Instruction::End);
 
-        let ids: Vec<BlockId> = mir.blocks.iter().map(|(id, _)| id).collect();
+        let ids: Vec<BlockId> = lir.blocks.iter().map(|(id, _)| id).collect();
 
         for (index, id) in ids.iter().enumerate() {
             let index = index as u32;
-            let block = &mir.blocks[*id];
+            let block = &lir.blocks[*id];
 
             // The loop is as many labels above this point as there are case blocks left.
             let dispatch_depth = count - 1 - index;
 
-            self.stmts(&block.stmts);
+            self.current = *id;
+            self.insts(&block.insts);
             self.terminator(&block.term, Some(dispatch_depth));
 
             if index + 1 < count {
@@ -389,196 +330,86 @@ impl<'a> Emitter<'a> {
         self.insn(Span::dummy(), Instruction::Unreachable);
     }
 
-    /// Emits the statements of a block.
-    fn stmts(&mut self, stmts: &'a [Stmt]) {
-        for stmt in stmts {
+    /// Emits the instructions of a block that live in locals.
+    ///
+    /// An instruction whose value the allocation pass left out is emitted where the value is
+    /// read, which is [`Emitter::inlined`].
+    fn insts(&mut self, insts: &'a [mlkc_lir_wasm::Inst]) {
+        for inst in insts {
             if self.failed {
                 return;
             }
 
-            self.stmt(stmt);
+            let Some(local) = self.lir.locals.values[inst.value.index()] else {
+                continue;
+            };
+
+            self.emit_inst(inst);
+            self.insn(inst.span, Instruction::LocalSet(local));
         }
     }
 
-    /// Emits one statement.
-    fn stmt(&mut self, stmt: &'a Stmt) {
-        let StmtKind::Assign { place, rvalue } = &stmt.kind;
+    /// Emits one instruction, leaving its value on the stack.
+    fn emit_inst(&mut self, inst: &'a mlkc_lir_wasm::Inst) {
+        let span = inst.span;
 
-        let Place::Value(place) = place else {
-            self.unsupported("an assignment to a slot", stmt.span);
-
-            return;
-        };
-
-        // A value the plan inlines is emitted where it is used; there is nothing to emit and
-        // nothing to keep here.
-        if self.inlining.is_inlined(*place) {
-            return;
-        }
-
-        if !self.rvalue(rvalue, *place, stmt.span) {
-            return;
-        }
-
-        let local = self.value_locals[place.index()].expect("a value with a local");
-
-        self.insn(stmt.span, Instruction::LocalSet(local));
-    }
-
-    /// Emits the expression of a right-hand side, leaving its value on the stack; `false` when
-    /// it cannot be emitted.
-    fn rvalue(&mut self, rvalue: &'a Rvalue, place: ValueId, span: Span) -> bool {
-        match rvalue {
-            Rvalue::Use(operand) => {
-                let refinement = self.refinements.get(place).abi();
-
-                self.operand_into(operand, refinement, span);
-
-                true
+        match &inst.op {
+            Op::I32Const(value) => self.insn(span, Instruction::I32Const(*value)),
+            Op::I32Eqz(operand) => {
+                self.value(*operand, span);
+                self.insn(span, Instruction::I32Eqz);
             },
-            Rvalue::Const(constant) => self.constant(constant, span),
-            Rvalue::Prim { op, args } => self.prim(*op, args, span),
-            Rvalue::Call { callee, args } => self.call(callee, args, span),
-        }
-    }
-
-    /// Emits a primitive, boxed into the word it computes; `false` when it cannot be emitted.
-    fn prim(&mut self, op: PrimOp, args: &'a [Operand], span: Span) -> bool {
-        if !self.prim_i32(op, args, span) {
-            return false;
-        }
-
-        self.insn(span, Instruction::RefI31);
-
-        true
-    }
-
-    /// Emits a primitive unboxed: what it leaves on the stack is the `i32` its result is.
-    ///
-    /// A value read by something that takes the number inside it --- an operator, the condition
-    /// of a branch --- is emitted this way, so that a constant or an operator is never boxed
-    /// only to be taken apart again by the instruction that reads it.
-    fn prim_i32(&mut self, op: PrimOp, args: &'a [Operand], span: Span) -> bool {
-        use PrimOp::*;
-
-        match op {
-            IntAdd | IntSub | IntMul | IntDiv | IntEq | IntNe | IntLt | IntLe | IntGt | IntGe
-            | BoolAnd | BoolOr | BoolEq | BoolNe => {
-                let [lhs, rhs] = args else {
-                    self.unexpected("a binary primitive with not two operands", span);
-
-                    return false;
-                };
-
-                self.operand_i32(lhs, span);
-                self.operand_i32(rhs, span);
-
-                self.insn(span, match op {
-                    IntAdd => Instruction::I32Add,
-                    IntSub => Instruction::I32Sub,
-                    IntMul => Instruction::I32Mul,
-                    IntDiv => Instruction::I32DivS,
-                    IntEq | BoolEq => Instruction::I32Eq,
-                    IntNe | BoolNe => Instruction::I32Ne,
-                    IntLt => Instruction::I32LtS,
-                    IntLe => Instruction::I32LeS,
-                    IntGt => Instruction::I32GtS,
-                    IntGe => Instruction::I32GeS,
-                    BoolAnd => Instruction::I32And,
-                    BoolOr => Instruction::I32Or,
-                    _ => unreachable!("the arm above fixes the operator"),
-                });
+            Op::I32Eq(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32Eq),
+            Op::I32Ne(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32Ne),
+            Op::I32LtS(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32LtS),
+            Op::I32LeS(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32LeS),
+            Op::I32GtS(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32GtS),
+            Op::I32GeS(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32GeS),
+            Op::I32Add(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32Add),
+            Op::I32Sub(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32Sub),
+            Op::I32Mul(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32Mul),
+            Op::I32DivS(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32DivS),
+            Op::I32And(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32And),
+            Op::I32Or(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::I32Or),
+            Op::RefI31(operand) => {
+                self.value(*operand, span);
+                self.insn(span, Instruction::RefI31);
             },
-            IntNeg | BoolNot => {
-                let [operand] = args else {
-                    self.unexpected("a unary primitive with not one operand", span);
-
-                    return false;
-                };
-
-                if op == IntNeg {
-                    self.insn(span, Instruction::I32Const(0));
+            Op::I31GetS(operand) => {
+                self.value(*operand, span);
+                self.insn(span, Instruction::I31GetS);
+            },
+            Op::RefCast(ty, operand) => {
+                self.value(*operand, span);
+                self.insn(span, Instruction::RefCastNonNull(heap_type(*ty)));
+            },
+            Op::RefEq(lhs, rhs) => self.binary(*lhs, *rhs, span, Instruction::RefEq),
+            Op::Call { function, args } => {
+                for argument in args {
+                    self.value(*argument, span);
                 }
 
-                self.operand_i32(operand, span);
-
-                self.insn(
-                    span,
-                    if op == IntNeg {
-                        Instruction::I32Sub
-                    } else {
-                        Instruction::I32Eqz
-                    },
-                );
+                self.insn(span, Instruction::Call(*function));
             },
-            RefEq => {
-                let [lhs, rhs] = args else {
-                    self.unexpected("a binary primitive with not two operands", span);
-
-                    return false;
-                };
-
-                self.operand_word(lhs, span);
-                self.operand_word(rhs, span);
-                self.insn(span, Instruction::RefEq);
+            Op::CallLocal { .. } => {
+                self.unsupported("a call to a function declared inside a body", span);
             },
+            Op::CallIndirect { .. } => self.unsupported("an indirect call", span),
+            Op::String(_) => self.unsupported("a string constant", span),
         }
-
-        true
     }
 
-    /// Emits a call, and the store of its result; `false` when it cannot be emitted.
-    fn call(&mut self, callee: &Callee, args: &'a [Operand], span: Span) -> bool {
-        let (index, shape) = match callee {
-            Callee::Entity(entity) => {
-                let index = match self.ctx.layout.function_index(entity) {
-                    Some(index) => index,
-                    None => {
-                        self.unsupported(
-                            "a call to a function the module neither declares nor imports",
-                            span,
-                        );
-
-                        return false;
-                    },
-                };
-                let signature = self
-                    .ctx
-                    .layout
-                    .signature_of(entity)
-                    .expect("a function with an index to have a signature");
-
-                (index, signature.shape(self.ctx.layout.builtins()))
-            },
-            Callee::Local(_) => {
-                self.unsupported("a call to a function declared inside a body", span);
-
-                return false;
-            },
-            Callee::Indirect(_) => {
-                self.unsupported("an indirect call", span);
-
-                return false;
-            },
-        };
-
-        debug_assert_eq!(
-            args.len(),
-            shape.params.len(),
-            "a call passes one argument per parameter of the callee",
-        );
-
-        // The arguments cross as the shape of the callee says: an immediate parameter is an
-        // `(ref i31)`, which only a word argument has to be cast into, and a word parameter
-        // reads an immediate as the subtype it is. The result is the shape as well, so it is
-        // stored as it comes back.
-        for (argument, refinement) in args.iter().zip(&shape.params) {
-            self.operand_into(argument, *refinement, span);
-        }
-
-        self.insn(span, Instruction::Call(index));
-
-        true
+    /// Emits a binary instruction over two values.
+    fn binary(
+        &mut self,
+        lhs: ValueId,
+        rhs: ValueId,
+        span: Span,
+        instruction: Instruction<'static>,
+    ) {
+        self.value(lhs, span);
+        self.value(rhs, span);
+        self.insn(span, instruction);
     }
 
     /// Emits a terminator. `dispatch` is the depth of the dispatch loop where it is written,
@@ -586,16 +417,12 @@ impl<'a> Emitter<'a> {
     fn terminator(&mut self, term: &'a Terminator, dispatch: Option<u32>) {
         match term {
             Terminator::Return { value, span } => {
-                self.operand_into(value, self.ret, *span);
+                self.value(*value, *span);
                 self.insn(*span, Instruction::Return);
             },
             Terminator::Unreachable { span } => self.insn(*span, Instruction::Unreachable),
             Terminator::Goto { target, span } => {
-                let Some(depth) = dispatch else {
-                    self.unexpected("a body of one block that goes to a block", *span);
-
-                    return;
-                };
+                let depth = dispatch.expect("a body that goes to a block to be dispatched");
 
                 self.edge(target, depth, *span);
             },
@@ -605,13 +432,9 @@ impl<'a> Emitter<'a> {
                 else_,
                 span,
             } => {
-                let Some(depth) = dispatch else {
-                    self.unexpected("a body of one block that branches", *span);
+                let depth = dispatch.expect("a body that branches to be dispatched");
 
-                    return;
-                };
-
-                self.operand_i32(cond, *span);
+                self.value(*cond, *span);
                 self.insn(*span, Instruction::If(BlockType::Empty));
 
                 self.edge(then_, depth + 1, *span);
@@ -626,22 +449,19 @@ impl<'a> Emitter<'a> {
                 otherwise,
                 span,
             } => {
-                let Some(depth) = dispatch else {
-                    self.unexpected("a body of one block that switches", *span);
+                let depth = dispatch.expect("a body that switches to be dispatched");
+                let scratch = self
+                    .lir
+                    .locals
+                    .scratch
+                    .expect("a body that switches to have a scratch local");
 
-                    return;
-                };
+                self.value(*scrutinee, *span);
+                self.insn(*span, Instruction::LocalSet(scratch));
 
-                self.operand_i32(scrutinee, *span);
-                self.insn(*span, Instruction::LocalSet(self.scratch_local));
-
-                for (constant, target) in arms {
-                    self.insn(*span, Instruction::LocalGet(self.scratch_local));
-
-                    if !self.constant_i32(constant, *span) {
-                        return;
-                    }
-
+                for (value, target) in arms {
+                    self.insn(*span, Instruction::LocalGet(scratch));
+                    self.insn(*span, Instruction::I32Const(*value));
                     self.insn(*span, Instruction::I32Eq);
                     self.insn(*span, Instruction::If(BlockType::Empty));
 
@@ -656,130 +476,36 @@ impl<'a> Emitter<'a> {
     }
 
     /// Emits an edge: every argument, then the parameter locals in reverse, then the branch.
-    fn edge(&mut self, target: &'a BlockTarget, depth: u32, span: Span) {
-        let mir = self.mir;
-        let destination = &mir.blocks[target.block];
-        let refinements: Vec<AbiType> = destination
-            .params
-            .iter()
-            .map(|param| self.refinements.get(*param).abi())
-            .collect();
+    fn edge(&mut self, target: &'a mlkc_lir_wasm::BlockTarget, depth: u32, span: Span) {
+        let destination = &self.lir.blocks[target.block];
+        let mut locals = Vec::with_capacity(destination.params.len());
 
-        debug_assert_eq!(
-            destination.params.len(),
-            target.args.len(),
-            "an edge passes one argument per parameter of its target",
-        );
+        for param in &destination.params {
+            locals.push(
+                self.lir.locals.values[param.index()]
+                    .expect("a parameter of a block to live in a local"),
+            );
+        }
 
-        for (argument, refinement) in target.args.iter().zip(&refinements) {
-            self.operand_into(argument, *refinement, span);
+        for argument in &target.args {
+            self.value(*argument, span);
         }
 
         // The stores are in reverse, so that an edge which permutes the parameters of its
         // target reads every argument before it writes any of them.
-        for param in destination.params.iter().rev() {
-            let local =
-                self.value_locals[param.index()].expect("a block parameter to live in a local");
-
-            self.insn(span, Instruction::LocalSet(local));
+        for local in locals.iter().rev() {
+            self.insn(span, Instruction::LocalSet(*local));
         }
 
         self.insn(span, Instruction::I32Const(target.block.index() as i32));
-        self.insn(span, Instruction::LocalSet(self.pc_local));
+        self.insn(span, Instruction::LocalSet(self.pc()));
         self.insn(span, Instruction::Br(depth));
     }
 
-    /// Emits an operand as the word it is, boxed where it is an immediate constant.
-    fn operand_word(&mut self, operand: &'a Operand, span: Span) {
-        match operand {
-            Operand::Value(value) => self.value(*value, span),
-            Operand::Const(constant) => {
-                self.constant(constant, span);
-            },
-            Operand::Local(_) => self.unsupported("a read of a slot", span),
-        }
-    }
-
-    /// Emits an operand as the type a representation crosses the ABI as: an `(ref i31)` where
-    /// it is an immediate --- casting a value that is only a word --- and the word itself where
-    /// it is not.
-    fn operand_into(&mut self, operand: &'a Operand, abi: AbiType, span: Span) {
-        match operand {
-            Operand::Value(value) => {
-                self.value(*value, span);
-
-                if abi == AbiType::Immediate && !self.refinements.get(*value).is_immediate() {
-                    self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
-                }
-            },
-            Operand::Const(constant) => {
-                self.constant(constant, span);
-            },
-            Operand::Local(_) => self.unsupported("a read of a slot", span),
-        }
-    }
-
-    /// Emits an operand as the unboxed `i32` an arithmetic instruction reads.
-    fn operand_i32(&mut self, operand: &'a Operand, span: Span) {
-        match operand {
-            Operand::Value(value) => {
-                // A value the plan inlines is computed here; when what computes it is already
-                // a number --- a constant or an operator --- it is emitted unboxed, and the
-                // `ref.i31` and `i31.get_s` around it are not emitted at all.
-                if self.inlining.is_inlined(*value) && self.unboxed(*value) {
-                    return;
-                }
-
-                self.value(*value, span);
-
-                if !self.refinements.get(*value).is_immediate() {
-                    self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
-                }
-
-                self.insn(span, Instruction::I31GetS);
-            },
-            Operand::Const(constant) => {
-                self.constant_i32(constant, span);
-            },
-            Operand::Local(_) => self.unsupported("a read of a slot", span),
-        }
-    }
-
-    /// Emits the definition of an inlined value as the number inside it, when it can be;
-    /// `false` when the value has to be boxed --- a call comes back boxed, and a string
-    /// constant is not a number at all.
-    fn unboxed(&mut self, value: ValueId) -> bool {
-        let definition = self
-            .inlining
-            .definition(value)
-            .expect("an inlined value to have a definition");
-        let StmtKind::Assign { rvalue, .. } = &definition.kind;
-
-        match rvalue {
-            Rvalue::Const(constant) => {
-                match constant {
-                    Const::Int(_) | Const::Bool(_) | Const::Unit => {
-                        self.constant_i32(constant, definition.span)
-                    },
-                    // A string constant has no number to read, and is reported where it is
-                    // emitted as the word it is.
-                    Const::Str(_) => false,
-                }
-            },
-            Rvalue::Prim { op, args } => self.prim_i32(*op, args, definition.span),
-            Rvalue::Use(operand) => {
-                self.operand_i32(operand, definition.span);
-
-                true
-            },
-            Rvalue::Call { .. } => false,
-        }
-    }
-
-    /// Puts a value on the stack: from the local it lives in, or by emitting the expression of
-    /// it where it is used, when the plan inlined it.
+    /// Puts a value on the stack: from the local it lives in, or by emitting the instruction
+    /// that defines it, where the allocation pass left it out.
     fn value(&mut self, value: ValueId, span: Span) {
-        let Some(local) = self.value_locals[value.index()] else {
+        let Some(local) = self.lir.locals.values[value.index()] else {
             self.inlined(value);
 
             return;
@@ -788,56 +514,30 @@ impl<'a> Emitter<'a> {
         self.insn(span, Instruction::LocalGet(local));
     }
 
-    /// Emits the expression of a value the plan inlines.
+    /// Emits the instruction that defines a value the allocation pass left out.
+    ///
+    /// The pass only leaves a value out when it is read once, in the block that defines it, so
+    /// the definition is in the block being emitted.
     fn inlined(&mut self, value: ValueId) {
-        let definition = self
-            .inlining
-            .definition(value)
-            .expect("an inlined value to have a definition");
-        let StmtKind::Assign { rvalue, .. } = &definition.kind;
+        let (block, at) = self.definitions[value.index()]
+            .expect("a value to be defined by an instruction or live in a local");
 
-        self.rvalue(rvalue, value, definition.span);
+        debug_assert_eq!(
+            block, self.current,
+            "a value the allocation left out to be defined in the block it is read in",
+        );
+
+        let inst = &self.lir.blocks[block].insts[at];
+
+        self.emit_inst(inst);
     }
 
-    /// Emits a constant as the word it is.
-    fn constant(&mut self, constant: &'a Const, span: Span) -> bool {
-        match constant {
-            Const::Int(value) => {
-                self.insn(span, Instruction::I32Const(*value));
-                self.insn(span, Instruction::RefI31);
-            },
-            Const::Bool(value) => {
-                self.insn(span, Instruction::I32Const(i32::from(*value)));
-                self.insn(span, Instruction::RefI31);
-            },
-            Const::Unit => {
-                self.insn(span, Instruction::I32Const(0));
-                self.insn(span, Instruction::RefI31);
-            },
-            Const::Str(_) => {
-                self.unsupported("a string constant", span);
-
-                return false;
-            },
-        }
-
-        true
-    }
-
-    /// Emits a constant as the unboxed `i32` a comparison reads.
-    fn constant_i32(&mut self, constant: &'a Const, span: Span) -> bool {
-        match constant {
-            Const::Int(value) => self.insn(span, Instruction::I32Const(*value)),
-            Const::Bool(value) => self.insn(span, Instruction::I32Const(i32::from(*value))),
-            Const::Unit => self.insn(span, Instruction::I32Const(0)),
-            Const::Str(_) => {
-                self.unsupported("a string constant", span);
-
-                return false;
-            },
-        }
-
-        true
+    /// The local the dispatch form keeps its program counter in.
+    fn pc(&self) -> u32 {
+        self.lir
+            .locals
+            .pc
+            .expect("a dispatched body to have a program counter local")
     }
 
     /// Records an instruction and where it came from.
@@ -858,15 +558,6 @@ impl<'a> Emitter<'a> {
         self.failed = true;
     }
 
-    /// Reports a body that breaks the invariant of the SSA form, and stops emitting it.
-    fn unexpected(&mut self, what: &str, span: Span) {
-        self.diags.push(CodegenDiag::Unexpected {
-            what: what.to_owned(),
-            span,
-        });
-        self.failed = true;
-    }
-
     /// Finishes the artifact and the reports of what could not be emitted.
     fn finish(mut self) -> (FuncArtifact, Vec<CodegenDiag>) {
         // A function body is a sequence of instructions closed by `end`, which is the frame of
@@ -884,25 +575,35 @@ impl<'a> Emitter<'a> {
         (artifact, self.diags)
     }
 
-    /// What every value that lives in a local refined to, and where it lives.
+    /// What every value that lives in a local is, and where it lives.
     fn debug(&self) -> Vec<ValueDebug> {
-        let mir = self.mir;
-        let mut names: Vec<Option<Name>> = vec![None; mir.values.len()];
+        let lir = self.lir;
+        let mut names: Vec<Option<Name>> = vec![None; lir.values.len()];
 
-        for (index, value) in mir.params.iter().enumerate() {
+        for (index, value) in lir.params.iter().enumerate() {
             names[value.index()] = self.ctx.param_names.get(index).cloned().unwrap_or_default();
         }
 
-        mir.values
+        lir.values
             .iter()
-            .filter_map(|(value, _)| {
+            .filter_map(|(value, data)| {
                 Some(ValueDebug {
                     value,
-                    refinement: self.refinements.get(value),
-                    local: self.value_locals[value.index()]?,
+                    ty: data.ty,
+                    local: lir.locals.values[value.index()]?,
                     name: names[value.index()].clone(),
                 })
             })
             .collect()
+    }
+}
+
+/// The heap type of a reference type of the LIR.
+fn heap_type(ty: RefTy) -> HeapType {
+    match ty {
+        RefTy::I31 => HeapType::I31,
+        // A cast to a nullable reference is not a value of the LIR: the verifier rejects it,
+        // and this is the encoder not being asked to write one.
+        RefTy::Eq => unreachable!("a cast to a nullable reference"),
     }
 }

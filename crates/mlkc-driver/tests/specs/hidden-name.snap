@@ -107,6 +107,17 @@ fun hidden (entry b0)
     return v0
 ```
 
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  locals: 
+  b0:
+    v0 = i32.const 1
+    v1 = ref.i31 v0
+    return v1
+```
+
 ### Diagnostics
 
 No diagnostics.

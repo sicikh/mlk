@@ -257,6 +257,16 @@ fun get (entry b0)
     return v0
 ```
 
+LIR:
+
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
 ### Diagnostics
 
 No diagnostics.

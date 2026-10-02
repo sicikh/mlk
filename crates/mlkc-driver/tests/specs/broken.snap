@@ -249,6 +249,16 @@ fun get (entry b0)
     return v0
 ```
 
+LIR:
+
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
 `fun size`
 
 CFG form:
@@ -267,6 +277,16 @@ SSA form:
 ```
 fun size (entry b0)
   params: v0: Int
+  b0:
+    return v0
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
   b0:
     return v0
 ```
@@ -291,6 +311,18 @@ fun wrong (entry b0)
     v0 = const 1
     v1 = call fun size(v0)
     return v1
+```
+
+LIR:
+
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = i32.const 1
+    v1 = ref.i31 v0
+    v2 = call $1(v1)
+    return v2
 ```
 
 ### Diagnostics

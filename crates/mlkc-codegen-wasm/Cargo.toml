@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 mlkc-hir-def.workspace = true
 mlkc-hir-ty.workspace = true
+mlkc-lir-wasm.workspace = true
 mlkc-mir.workspace = true
 mlkc-span.workspace = true
 wasm-encoder.workspace = true

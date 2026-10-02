@@ -5,6 +5,7 @@ mod check;
 mod diagnostics;
 mod host;
 mod link;
+mod lir;
 mod lower;
 mod mir;
 mod mir_module;
@@ -30,6 +31,7 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
+use mlkc_lir_wasm::Body as LirBody;
 use mlkc_mir::Body as MirBody;
 use mlkc_resolve::{Closure, Resolution};
 use mlkc_rowan::NodeCache;
@@ -76,6 +78,8 @@ pub struct Driver {
     mirs: FxHashMap<BodyEntityLoc, MirSlot>,
     /// The SSA form of every body whose MIR has been asked for in it.
     ssas: FxHashMap<BodyEntityLoc, SsaSlot>,
+    /// The LIR of every body whose lowering into the target's instructions was asked for.
+    lirs: FxHashMap<BodyEntityLoc, LirSlot>,
     /// The module of every module that has been asked for one.
     mir_modules: FxHashMap<ModuleId, ModuleMirSlot>,
     /// The plan of every project that has been asked to link.
@@ -326,6 +330,23 @@ struct SsaSlot {
     cfg: Arc<MirBody>,
     /// The value, retained so that the driver can hand it out and compare it later.
     value: Arc<MirBody>,
+}
+
+/// The LIR of one body, and what the lowering read ([ADR-0022]).
+///
+/// The key of the slot is what the pass read: the SSA form of the body, and the module it
+/// belongs to, which says what its calls call and how the functions of the module are numbered.
+/// The layout the pass is written against is a pure function of the module, so it is not part
+/// of the key.
+///
+/// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+struct LirSlot {
+    /// The SSA form the pass read.
+    ssa: Arc<MirBody>,
+    /// The module the pass read.
+    module: Arc<ModuleMir>,
+    /// The value, retained so that the driver can hand it out and compare it later.
+    value: Arc<LirBody>,
 }
 
 /// The module of one module, and what building it read ([ADR-0021]).
@@ -643,8 +664,8 @@ impl Driver {
     }
 
     /// Drops the values derived from one module: its HIR, its interface, its resolution, its
-    /// type surface, the checks and the MIR of its bodies, and the diagnostics that were rendered
-    /// from them.
+    /// type surface, the checks, the MIR, and the LIR of its bodies, and the diagnostics that
+    /// were rendered from them.
     ///
     /// A module that changed project or text is read again; what reads this module is not
     /// dropped with it, and sees the new value when it is read again. A value of a body goes by
@@ -716,6 +737,17 @@ impl Driver {
         for owner in bodies {
             self.ssas.remove(&owner);
             self.stats.dropped(Pass::Ssa, &Unit::Body(owner), 1);
+        }
+
+        let bodies: Vec<BodyEntityLoc> = self
+            .lirs
+            .keys()
+            .filter(|owner| owner.module() == module)
+            .cloned()
+            .collect();
+        for owner in bodies {
+            self.lirs.remove(&owner);
+            self.stats.dropped(Pass::Lir, &Unit::Body(owner), 1);
         }
 
         self.stats.dropped(

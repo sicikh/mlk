@@ -5,12 +5,13 @@
 //! file system --- in a browser there is none, and the driver never wanted one.
 //!
 //! The boundary is the driver's own: one method per value a host may ask for --- the concrete
-//! tree, the typed view, the HIR, the types of a module, the MIR in both of its forms, the WASM
-//! a module assembles to, the manifest of a run, and the diagnostics --- and a pull computes
-//! what it answers and nothing else. A host that shows the trees only when a person opens them
-//! asks for them only then, and the pipeline under the boundary recomputes nothing it already
-//! holds. No method bundles the others: what a host does not ask for is not built, and a host
-//! that speaks another protocol --- an editor, over LSP --- asks for the same pulls.
+//! tree, the typed view, the HIR, the types of a module, the MIR in both of its forms, the LIR
+//! the backend lowers it into, the WASM a module assembles to, the manifest of a run, and the
+//! diagnostics --- and a pull computes what it answers and nothing else. A host that shows the
+//! trees only when a person opens them asks for them only then, and the pipeline under the
+//! boundary recomputes nothing it already holds. No method bundles the others: what a host does
+//! not ask for is not built, and a host that speaks another protocol --- an editor, over LSP ---
+//! asks for the same pulls.
 //!
 //! The standard library is the one thing a host does not push: it is part of the compiler, and
 //! a browser has nowhere to read it from, so a host asks the driver for it
@@ -228,6 +229,17 @@ impl WasmDriver {
         to_js(&self.mir_of(path, Form::Ssa)?)
     }
 
+    /// The LIR of the module in the buffer: the target's instructions in SSA form, ready to
+    /// encode ([ADR-0022](../../docs/adr/0022-wasm-lir.md)).
+    ///
+    /// The bodies are read the way a person reads them --- a block with its parameters, the
+    /// instructions of it, and the terminator it ends in --- and every line says where it was
+    /// read from, which is what an editor marks the buffer by. The table of a body says where
+    /// every value that needs storage lives, and which values are emitted where they are read.
+    pub fn lir(&mut self, path: &str) -> Result<JsValue, JsValue> {
+        to_js(&self.lir_of(path)?)
+    }
+
     /// The WASM the module in the buffer assembles to, as text ([ADR-0020]).
     ///
     /// The same bytes the link stage hands a host, printed as the WebAssembly text format:
@@ -339,6 +351,19 @@ impl WasmDriver {
         Ok(Some(Mir::of(&mut self.driver, &lowered, form)))
     }
 
+    /// The LIR of every body of the module in the buffer.
+    fn lir_of(&mut self, path: &str) -> Result<Option<Lir>, JsValue> {
+        let file = self.file(path)?;
+
+        // A file the driver does not lower has nothing to lower into the LIR, and a body whose
+        // module is not whole is left out ([ADR-0022](../../docs/adr/0022-wasm-lir.md)).
+        let Some(lowered) = self.driver.lower(file) else {
+            return Ok(None);
+        };
+
+        Ok(Some(Lir::of(&mut self.driver, &lowered)))
+    }
+
     /// The WASM of the module in the buffer, as text.
     fn wat_of(&mut self, path: &str) -> Result<Option<Wat>, JsValue> {
         let file = self.file(path)?;
@@ -350,8 +375,21 @@ impl WasmDriver {
         let Some(module) = self.driver.mir_module(ModuleId(file)) else {
             return Ok(None);
         };
+        let mut lirs = Vec::with_capacity(module.functions.len());
 
-        let (wasm, reports) = compile_module(&module);
+        // A body the driver did not lower has no LIR, and a module that is not whole has
+        // nothing to compile ([ADR-0022]).
+        //
+        // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+        for function in &module.functions {
+            let Some(lir) = self.driver.lir(&function.owner) else {
+                return Ok(None);
+            };
+
+            lirs.push(lir);
+        }
+
+        let (wasm, reports) = compile_module(&module, &lirs);
         let text = wasmprinter::print_bytes(&wasm.bytes)
             .map_err(|error| failure(&format!("the module of {path} did not print: {error}")))?;
         let index = self
@@ -1313,6 +1351,279 @@ fn terminator_kind(term: &Terminator) -> &'static str {
     }
 }
 
+/// The LIR of the bodies of one module, as a host reads it.
+///
+/// A body is read the way a person reads it: the blocks in the order they are allocated, the
+/// instructions of a block in the order they run, the terminator the block ends in, and the
+/// table that says where every value that needs storage lives. Every line and every value
+/// carries the range of the buffer it was read from, which is what an editor marks while a
+/// pointer is on it.
+#[derive(Serialize)]
+struct Lir {
+    /// The bodies of the module that check clean, in the order it declares them.
+    bodies: Vec<LirBody>,
+}
+
+impl Lir {
+    /// Reads the LIR of every body of a lowered module.
+    ///
+    /// A body the driver did not lower has no LIR ([ADR-0022](../../docs/adr/0022-wasm-lir.md))
+    /// and is not among the bodies: the diagnostics of the buffer say why, and the reading of
+    /// the LIR is what there is to read.
+    fn of(driver: &mut Driver, lowered: &Lowered) -> Self {
+        let mut bodies = Vec::new();
+
+        for body in lowered.bodies() {
+            let owner = body.owner().clone();
+            let Some(lir) = driver.lir(&owner) else {
+                continue;
+            };
+            let place = ItemLoc::from(owner.item.clone());
+
+            bodies.push(LirBody::of(
+                &lir,
+                entity_name(&place),
+                lowered.item_range(&place).map(covered),
+                owner.module().0,
+            ));
+        }
+
+        Self { bodies }
+    }
+}
+
+/// One body of the LIR, as a host reads it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirBody {
+    /// The entity the body belongs to: `fun main`.
+    owner: String,
+
+    /// Where the declaration that owns the body is written, in bytes, or nothing where it is
+    /// written nowhere.
+    range: Option<[u32; 2]>,
+
+    /// The block the body is entered at, by position.
+    entry: u32,
+
+    /// What the body gives back: `(ref i31)`, `eqref`.
+    ret: String,
+
+    /// The parameters of the body: one per parameter of the owner.
+    params: Vec<LirValue>,
+
+    /// The locals the body declares after the parameters of the ABI, in order, with the values
+    /// that live in each.
+    locals: Vec<LirLocal>,
+
+    /// The blocks, in the order they are allocated.
+    blocks: Vec<LirBlock>,
+}
+
+impl LirBody {
+    /// Reads one body of the LIR the way a host reads it.
+    fn of(
+        body: &mlkc_lir_wasm::Body,
+        owner: String,
+        range: Option<[u32; 2]>,
+        file: FileId,
+    ) -> Self {
+        let graph = mlkc_lir_wasm::cfg::Cfg::of(body);
+        let parameters = body.params.len() as u32;
+        let mut blocks = Vec::with_capacity(body.blocks.len());
+
+        for (id, block) in body.blocks.iter() {
+            let at = id.index();
+            let params = block
+                .params
+                .iter()
+                .map(|value| lir_value_of(body, *value, file))
+                .collect();
+            let insts = block
+                .insts
+                .iter()
+                .map(|inst| {
+                    LirLine {
+                        text: mlkc_lir_wasm::dump::inst_text(body, inst),
+                        kind: inst.op.as_str(),
+                        range: span_range(inst.span, file),
+                    }
+                })
+                .collect();
+            let (text, kind, span) = lir_terminator(&block.term);
+
+            blocks.push(LirBlock {
+                label: mlkc_lir_wasm::dump::block_label(id),
+                params,
+                insts,
+                term: LirLine {
+                    text,
+                    kind,
+                    range: span_range(span, file),
+                },
+                predecessors: graph.predecessors(at).iter().map(|it| *it as u32).collect(),
+                successors: graph.successors(at).iter().map(|it| *it as u32).collect(),
+            });
+        }
+
+        let locals = body
+            .locals
+            .locals
+            .iter()
+            .enumerate()
+            .map(|(at, ty)| {
+                let index = parameters + at as u32;
+                let kind = if body.locals.pc == Some(index) {
+                    "pc"
+                } else if body.locals.scratch == Some(index) {
+                    "scratch"
+                } else {
+                    "value"
+                };
+                let values = body
+                    .values
+                    .iter()
+                    .filter(|(value, _)| {
+                        body.locals.values.get(value.index()).copied().flatten() == Some(index)
+                    })
+                    .map(|(value, _)| mlkc_lir_wasm::dump::value_label(value))
+                    .collect();
+
+                LirLocal {
+                    index,
+                    ty: ty.to_string(),
+                    kind,
+                    values,
+                }
+            })
+            .collect();
+
+        Self {
+            owner,
+            range,
+            entry: body.entry.index() as u32,
+            ret: body.ret.to_string(),
+            params: body
+                .params
+                .iter()
+                .map(|value| lir_value_of(body, *value, file))
+                .collect(),
+            locals,
+            blocks,
+        }
+    }
+}
+
+/// One block of a body of the LIR, as a host reads it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirBlock {
+    /// The label of the block: `b0`.
+    label: String,
+
+    /// The block parameters: where a value coming from several predecessors is born.
+    params: Vec<LirValue>,
+
+    /// The instructions of the block, in the order they run.
+    insts: Vec<LirLine>,
+
+    /// The terminator the block ends in.
+    term: LirLine,
+
+    /// The blocks that come into this one, by position.
+    predecessors: Vec<u32>,
+
+    /// The blocks this one goes to, by position, in the order the terminator lists them.
+    successors: Vec<u32>,
+}
+
+/// One line of a body of the LIR: an instruction, or the terminator of a block.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirLine {
+    /// What the line says: `v1 = i31.get_s v0`, `branch v1 -> b1, b2`.
+    text: String,
+
+    /// What the line is: the name of the instruction, or the name of the terminator.
+    kind: &'static str,
+
+    /// Where the line is written, in bytes, or nothing where it was written nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// One value of a body of the LIR.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirValue {
+    /// The label of the value, as the dump reads it: `v0`.
+    label: String,
+
+    /// The type of the machine value: `i32`, `(ref i31)`, `eqref`.
+    ty: String,
+
+    /// The WASM local the value lives in, or nothing where it is emitted where it is read.
+    local: Option<u32>,
+
+    /// Where it is written, in bytes, or nothing where it was written nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// One local of a body of the LIR: what it holds, and what the compiler keeps in it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirLocal {
+    /// The WASM local number: the parameters of the ABI are the ones before these.
+    index: u32,
+
+    /// The type of the local: `i32`, `(ref i31)`, `eqref`.
+    ty: String,
+
+    /// What the compiler keeps there: `value`, `pc`, or `scratch`.
+    kind: &'static str,
+
+    /// The values that live in it, as the dump labels them: `v1`.
+    values: Vec<String>,
+}
+
+/// Reads one value of a body of the LIR the way a host reads it.
+fn lir_value_of(
+    body: &mlkc_lir_wasm::Body,
+    value: mlkc_lir_wasm::ValueId,
+    file: FileId,
+) -> LirValue {
+    let data = &body.values[value];
+
+    LirValue {
+        label: mlkc_lir_wasm::dump::value_label(value),
+        ty: data.ty.to_string(),
+        local: body.locals.values.get(value.index()).copied().flatten(),
+        range: span_range(data.span, file),
+    }
+}
+
+/// What a terminator of the LIR is, as a host reads it: the text, the kind, and where it is
+/// written.
+fn lir_terminator(term: &mlkc_lir_wasm::Terminator) -> (String, &'static str, Span) {
+    use mlkc_lir_wasm::Terminator as Lir;
+
+    let span = match term {
+        Lir::Goto { span, .. }
+        | Lir::Branch { span, .. }
+        | Lir::Switch { span, .. }
+        | Lir::Return { span, .. }
+        | Lir::Unreachable { span } => *span,
+    };
+    let kind = match term {
+        Lir::Goto { .. } => "goto",
+        Lir::Branch { .. } => "branch",
+        Lir::Switch { .. } => "switch",
+        Lir::Return { .. } => "return",
+        Lir::Unreachable { .. } => "unreachable",
+    };
+
+    (mlkc_lir_wasm::dump::terminator_text(term), kind, span)
+}
+
 /// The name of an entity of the surface of a module, as a host reads it: `fun main`.
 ///
 /// The name is the one the entity was declared under, and the kind is what the language
@@ -2170,6 +2481,75 @@ mod tests {
 
         assert_eq!(texts, ["v0 = const 1"]);
         assert_eq!(json["bodies"][0]["blocks"][0]["term"]["text"], "return v0");
+    }
+
+    #[test]
+    fn the_lir_of_a_buffer_crosses_the_boundary_as_instructions_and_locals() {
+        const SOURCE: &str = "fun add(a: Int, b: Int): Int = a + b\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+
+        let lir = driver
+            .lir_of("/main.mlk")
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&lir).expect("the LIR to serialize");
+        let body = &json["bodies"][0];
+
+        // A body of the LIR is what the back end encodes: the instructions of the target, the
+        // value every one of them defines, and where the values that need storage live
+        // ([ADR-0022](../../docs/adr/0022-wasm-lir.md)).
+        assert_eq!(body["owner"], "fun add");
+        assert_eq!(body["ret"], "(ref i31)");
+        assert_eq!(body["entry"], 0);
+
+        // A parameter is the local the ABI declared for it: the first two locals.
+        let params = body["params"].as_array().expect("the parameters");
+
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0]["ty"], "(ref i31)");
+        assert_eq!(params[0]["local"], 0);
+        assert_eq!(params[1]["local"], 1);
+
+        // Every value of this body is read once, in the block that defines it, so none of them
+        // is given a local of its own: the instructions are emitted where they are read.
+        assert!(
+            body["locals"].as_array().is_some_and(Vec::is_empty),
+            "a value read once to live nowhere: {}",
+            body["locals"],
+        );
+
+        let block = &body["blocks"][0];
+        let lines: Vec<(&str, &str)> = block["insts"]
+            .as_array()
+            .expect("the instructions of the block")
+            .iter()
+            .map(|it| {
+                (
+                    it["kind"].as_str().expect("a kind"),
+                    it["text"].as_str().expect("a line"),
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            lines,
+            [
+                ("i31.get_s", "v2 = i31.get_s v0"),
+                ("i31.get_s", "v3 = i31.get_s v1"),
+                ("i32.add", "v4 = i32.add v2, v3"),
+                ("ref.i31", "v5 = ref.i31 v4"),
+            ],
+            "the operator as the unboxed instruction and the box of its result",
+        );
+
+        let (from, to) = range(&block["term"]);
+
+        assert_eq!(block["term"]["kind"], "return");
+        assert_eq!(block["term"]["text"], "return v5");
+        assert_eq!(&SOURCE[from..to], "a + b");
     }
 
     #[test]

@@ -1,7 +1,7 @@
-//! What a word refines to: the kind the emitter knows a value has, when it knows one.
+//! What a word refines to: the kind the backend knows a value has, when it knows one.
 //!
 //! A word is one uniform value ([ADR-0018][adr-0018]), and a MIR body says what an expression
-//! *means* and not what it is. The emitter recovers a kind by a forward dataflow over the SSA
+//! *means* and not what it is. Selection recovers a kind by a forward dataflow over the SSA
 //! body: a parameter whose signature says `Int` is an immediate, the result of `int-add` is an
 //! immediate, the result of a call is what the callee gives back, and where two paths meet the
 //! refinement is the least upper bound of theirs.
@@ -29,7 +29,7 @@ use wasm_encoder::{AbstractHeapType, RefType, ValType};
 
 use crate::module::ModuleLayout;
 
-/// What the emitter knows a word to be.
+/// What the backend knows a word to be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refinement {
     /// No definition reaches the value, or its block is not reachable; nothing is known.

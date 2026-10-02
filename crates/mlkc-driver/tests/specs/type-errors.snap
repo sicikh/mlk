@@ -437,6 +437,10 @@ fun takes (entry b0)
     return v0
 ```
 
+LIR:
+
+Not lowered: the module of the body is not whole.
+
 `fun wrong-argument`
 
 Not lowered: the front end reported a mistake.
@@ -474,6 +478,10 @@ fun applied (entry b0)
   b0:
     return v0
 ```
+
+LIR:
+
+Not lowered: the module of the body is not whole.
 
 `fun no-equality`
 

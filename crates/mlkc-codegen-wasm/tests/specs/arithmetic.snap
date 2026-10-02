@@ -26,16 +26,14 @@ expression: snapshot
     return
   )
   (func $mixed (;1;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
-    (local (ref i31))
+    (local i32)
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.mul
-    ref.i31
     local.set 2
     local.get 2
-    i31.get_s
     local.get $left
     i31.get_s
     local.get $right

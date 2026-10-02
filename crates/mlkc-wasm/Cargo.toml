@@ -17,6 +17,7 @@ mlkc-driver.workspace = true
 mlkc-hir-def.workspace = true
 mlkc-hir-ty.workspace = true
 mlkc-line-index.workspace = true
+mlkc-lir-wasm.workspace = true
 mlkc-mir.workspace = true
 mlkc-span.workspace = true
 mlkc-stdlib.workspace = true

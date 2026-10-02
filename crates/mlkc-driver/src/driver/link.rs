@@ -22,6 +22,7 @@ use mlkc_hir_def::{
     BodyLoc, EntityData, EntityLoc, FunctionLoc, ItemLoc, ModuleId, ProjectGraph, ProjectId,
 };
 use mlkc_hir_ty::{Builtins, Ty};
+use mlkc_lir_wasm::Body as LirBody;
 use mlkc_span::Span;
 
 use super::{Driver, LinkSlot, Pass, Unit, entries_are_the_same};
@@ -130,6 +131,11 @@ impl DiagKind for LinkError {
 struct LinkInputs {
     /// The module of every module of the program, by module.
     modules: BTreeMap<ModuleId, Arc<ModuleMir>>,
+    /// The lowered bodies of every module, by module, in the order the module declares its
+    /// functions ([ADR-0022]).
+    ///
+    /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+    lirs: BTreeMap<ModuleId, Vec<Arc<LirBody>>>,
     /// The functions of the root project declared `#[entry]`, in the order of their modules.
     entries: Vec<EntryCandidate>,
     /// The classes of the language, which say what the unit is.
@@ -165,12 +171,21 @@ impl Driver {
         // [ADR-0021]: ../../docs/adr/0021-translation-units.md
         let projects = self.project_closure(project);
         let mut modules: BTreeMap<ModuleId, Arc<ModuleMir>> = BTreeMap::new();
+        let mut lirs: BTreeMap<ModuleId, Vec<Arc<LirBody>>> = BTreeMap::new();
 
         for it in &projects {
             let index = self.module_index(it)?;
 
             for (_, module) in index.iter() {
-                modules.insert(module, self.mir_module(module)?);
+                let mir = self.mir_module(module)?;
+                let mut bodies = Vec::with_capacity(mir.functions.len());
+
+                for function in &mir.functions {
+                    bodies.push(self.lir(&function.owner)?);
+                }
+
+                modules.insert(module, mir);
+                lirs.insert(module, bodies);
             }
         }
 
@@ -244,6 +259,7 @@ impl Driver {
         let started = self.ticking();
         let inputs = LinkInputs {
             modules,
+            lirs,
             entries,
             builtins,
         };
@@ -319,7 +335,14 @@ fn link_plan(inputs: &LinkInputs) -> LinkPlan {
     let mut modules = BTreeMap::new();
 
     for (id, mir) in &inputs.modules {
-        let (wasm, reports) = compile_module(mir);
+        // Every module of the program was lowered before the plan was built: a body that has no
+        // LIR is a body that has no SSA form, and a module that holds one is not a module of
+        // the program.
+        let lirs = inputs
+            .lirs
+            .get(id)
+            .expect("every module of the program to have its bodies lowered");
+        let (wasm, reports) = compile_module(mir, lirs);
 
         diagnostics.extend(reports.iter().map(codegen_diagnostic));
         modules.insert(*id, Arc::new(wasm));

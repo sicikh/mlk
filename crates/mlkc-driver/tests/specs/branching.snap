@@ -365,6 +365,27 @@ fun pick (entry b0)
     return v3
 ```
 
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31), 2: i32 (pc)
+  b0:
+    v2 = i31.get_s v0
+    branch v2 -> b1, b2
+  b1:
+    v5 = i32.const 1
+    v6 = ref.i31 v5
+    goto b3(v6)
+  b2:
+    v3 = i32.const 2
+    v4 = ref.i31 v3
+    goto b3(v4)
+  b3(v1(local 1): (ref i31)):
+    return v1
+```
+
 `fun ordered`
 
 CFG form:
@@ -418,6 +439,34 @@ fun ordered (entry b0)
     return v5
 ```
 
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31), v1: (ref i31)
+  locals: 2: (ref i31), 3: i32 (pc)
+  b0:
+    v3 = i31.get_s v0
+    branch v3 -> b1, b2
+  b1:
+    v9 = i32.const 1
+    v10 = ref.i31 v9
+    goto b5(v10)
+  b2:
+    v4 = i31.get_s v1
+    branch v4 -> b3, b4
+  b3:
+    v7 = i32.const 2
+    v8 = ref.i31 v7
+    goto b5(v8)
+  b4:
+    v5 = i32.const 3
+    v6 = ref.i31 v5
+    goto b5(v6)
+  b5(v2(local 2): (ref i31)):
+    return v2
+```
+
 `fun where_a_value_belongs`
 
 CFG form:
@@ -460,6 +509,31 @@ fun where_a_value_belongs (entry b0)
     v3 = const 3
     v5 = prim int-add(v4, v3)
     return v5
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31), 2: i32 (pc)
+  b0:
+    v2 = i31.get_s v0
+    branch v2 -> b1, b2
+  b1:
+    v5 = i32.const 1
+    v6 = ref.i31 v5
+    goto b3(v6)
+  b2:
+    v3 = i32.const 2
+    v4 = ref.i31 v3
+    goto b3(v4)
+  b3(v1(local 1): (ref i31)):
+    v7 = i32.const 3
+    v8 = i31.get_s v1
+    v9 = i32.add v8, v7
+    v10 = ref.i31 v9
+    return v10
 ```
 
 `fun through_a_let`
@@ -509,6 +583,31 @@ fun through_a_let (entry b0)
     return v5
 ```
 
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31), 2: i32 (pc)
+  b0:
+    v2 = i31.get_s v0
+    branch v2 -> b1, b2
+  b1:
+    v5 = i32.const 1
+    v6 = ref.i31 v5
+    goto b3(v6)
+  b2:
+    v3 = i32.const 2
+    v4 = ref.i31 v3
+    goto b3(v4)
+  b3(v1(local 1): (ref i31)):
+    v7 = i32.const 3
+    v8 = i31.get_s v1
+    v9 = i32.add v8, v7
+    v10 = ref.i31 v9
+    return v10
+```
+
 `fun log`
 
 CFG form:
@@ -547,6 +646,26 @@ fun log (entry b0)
     goto b3(v1)
   b3(v3):
     return v3
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31), 2: i32 (pc)
+  b0:
+    v2 = i31.get_s v0
+    branch v2 -> b1, b2
+  b1:
+    v5 = call $4(v0)
+    goto b3(v5)
+  b2:
+    v3 = i32.const 0
+    v4 = ref.i31 v3
+    goto b3(v4)
+  b3(v1(local 1): (ref i31)):
+    return v1
 ```
 
 `fun log_ordered`
@@ -601,6 +720,32 @@ fun log_ordered (entry b0)
     goto b5(v2)
   b5(v5):
     return v5
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31), v1: (ref i31)
+  locals: 2: (ref i31), 3: i32 (pc)
+  b0:
+    v3 = i31.get_s v0
+    branch v3 -> b1, b2
+  b1:
+    v8 = call $4(v0)
+    goto b5(v8)
+  b2:
+    v4 = i31.get_s v1
+    branch v4 -> b3, b4
+  b3:
+    v7 = call $4(v1)
+    goto b5(v7)
+  b4:
+    v5 = i32.const 0
+    v6 = ref.i31 v5
+    goto b5(v6)
+  b5(v2(local 2): (ref i31)):
+    return v2
 ```
 
 ### Diagnostics

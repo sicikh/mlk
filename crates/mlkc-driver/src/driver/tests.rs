@@ -1623,6 +1623,74 @@ fn the_ssa_form_of_a_body_is_reached_by_a_pass() {
 }
 
 #[test]
+fn the_lir_of_a_body_is_reached_by_a_pass() {
+    let (mut driver, file) =
+        driver_with_std("main.mlk", "fun double(value: Int): Int = value + 1\n");
+    let owner = body_of(&mut driver, file, "double");
+
+    let ssa = driver
+        .mir_ssa(&owner)
+        .expect("the body to have an SSA form");
+    let lir = driver.lir(&owner).expect("the body to have a LIR");
+    let again = driver.lir(&owner).expect("the body to have a LIR");
+
+    // The LIR is a pass of its own, memoized per body: a second pull is the value the first
+    // one returned, and the SSA form it was lowered from is a value of another type
+    // ([ADR-0022]).
+    //
+    // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+    assert!(Arc::ptr_eq(&lir, &again), "the slot was built twice");
+    assert_eq!(lir.validate(), Ok(()));
+    assert_eq!(lir.validate_locals(), Ok(()));
+    assert_eq!(lir.params.len(), ssa.params.len());
+    assert!(driver.ice().is_none(), "the driver bugged while lowering");
+}
+
+#[test]
+fn a_body_that_does_not_check_clean_has_no_lir() {
+    let (mut driver, file) = driver_with_std("main.mlk", "fun main(): Unit = 1\n");
+    let owner = body_of(&mut driver, file, "main");
+
+    assert!(
+        driver.lir(&owner).is_none(),
+        "a body with a mistake to be lowered into the LIR",
+    );
+}
+
+#[test]
+fn a_body_edit_leaves_the_lir_of_the_bodies_that_did_not_change_where_it_was() {
+    const SOURCE: &str = "\
+//- /main.mlk
+fun first(): Int = 1
+
+fun second(): Int = 2
+";
+
+    let mut driver = std_project_of(SOURCE);
+    let main = file(&driver, "main.mlk");
+
+    let owner = body_of(&mut driver, main, "second");
+    let before = driver.lir(&owner).expect("the body to have a LIR");
+
+    driver.set_file_text(
+        path("main.mlk"),
+        Some("fun first(): Int = 3\n\nfun second(): Int = 2\n".to_owned()),
+    );
+
+    let owner = body_of(&mut driver, main, "second");
+    let after = driver.lir(&owner).expect("the body to have a LIR");
+
+    // A body edit that does not move a body cannot change its LIR: the lowering of a body
+    // that ends up equal to the one the driver held is the one it held ([ADR-0022]).
+    //
+    // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+    assert!(
+        Arc::ptr_eq(&before, &after),
+        "a body edit re-lowered the LIR of a body that did not move",
+    );
+}
+
+#[test]
 fn a_body_edit_leaves_the_mir_of_the_bodies_that_did_not_change_where_they_were() {
     const SOURCE: &str = "\
 //- /main.mlk

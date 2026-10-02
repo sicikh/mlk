@@ -283,7 +283,9 @@ Binaryen, or the `portal-pc-waffle` fork rejected in [ADR-0020][0020-wasm-backen
 - Pass contract: [0009-pass-contract.md]
 - Snapshot testing: [0006-snapshot-testing.md]
 - Pipeline and stages: [0005-compiler-pipeline.md]
-- Waffle, whose IR is a WASM-level SSA: <https://github.com/bytecodealliance/waffle>
+- Waffle, whose IR is a WASM-level SSA and whose passes our own follow
+  (`reducify`, `localify`, `stackify`; Apache-2.0 WITH LLVM-exception):
+  <https://github.com/bytecodealliance/waffle>
 - Cranelift, the low-level IR of the native backend:
   <https://github.com/bytecodealliance/wasmtime/tree/main/cranelift>
 

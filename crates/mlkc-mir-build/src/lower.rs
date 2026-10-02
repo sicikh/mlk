@@ -816,7 +816,7 @@ mod tests {
         assert_eq!(ssa.validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
-            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool, v2: Bool\n  b0:\n    v3 = use v0\n    v4 = use v1\n    v5 = use v2\n    v6 = use v3\n    branch v6 -> b4, b5\n  b1:\n    v14 = const 1\n    v15 = use v14\n    goto b3(v15)\n  b2:\n    v12 = const 2\n    v13 = use v12\n    goto b3(v13)\n  b3(v16):\n    return v16\n  b4:\n    v9 = use v4\n    v10 = use v9\n    goto b6(v10)\n  b5:\n    v7 = use v5\n    v8 = use v7\n    goto b6(v8)\n  b6(v11):\n    branch v11 -> b1, b2\n",
+            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool, v2: Bool\n  b0:\n    branch v0 -> b4, b5\n  b1:\n    v5 = const 1\n    goto b3(v5)\n  b2:\n    v4 = const 2\n    goto b3(v4)\n  b3(v6):\n    return v6\n  b4:\n    goto b6(v1)\n  b5:\n    goto b6(v2)\n  b6(v3):\n    branch v3 -> b1, b2\n",
         );
     }
 
@@ -838,7 +838,7 @@ mod tests {
         assert_eq!(ssa.validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
-            "fun log (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v4 = use v1\n    v5 = call fun log(v4)\n    v6 = use v5\n    goto b3(v6)\n  b2:\n    v3 = const unit\n    goto b3(v3)\n  b3(v7):\n    return v7\n",
+            "fun log (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v2 = call fun log(v0)\n    goto b3(v2)\n  b2:\n    v1 = const unit\n    goto b3(v1)\n  b3(v3):\n    return v3\n",
         );
     }
 
@@ -862,7 +862,7 @@ mod tests {
         assert_eq!(ssa.validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
-            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v5 = const 1\n    v6 = use v5\n    goto b3(v6)\n  b2:\n    v3 = const 2\n    v4 = use v3\n    goto b3(v4)\n  b3(v7):\n    return v7\n",
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v2 = const 1\n    goto b3(v2)\n  b2:\n    v1 = const 2\n    goto b3(v1)\n  b3(v3):\n    return v3\n",
         );
     }
 
@@ -887,7 +887,7 @@ mod tests {
         assert_eq!(ssa.validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
-            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool\n  b0:\n    v2 = use v0\n    v3 = use v1\n    v4 = use v2\n    branch v4 -> b1, b2\n  b1:\n    v10 = const 1\n    v11 = use v10\n    goto b5(v11)\n  b2:\n    v5 = use v3\n    branch v5 -> b3, b4\n  b3:\n    v8 = const 2\n    v9 = use v8\n    goto b5(v9)\n  b4:\n    v6 = const 3\n    v7 = use v6\n    goto b5(v7)\n  b5(v12):\n    return v12\n",
+            "fun pick (entry b0)\n  params: v0: Bool, v1: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v4 = const 1\n    goto b5(v4)\n  b2:\n    branch v1 -> b3, b4\n  b3:\n    v3 = const 2\n    goto b5(v3)\n  b4:\n    v2 = const 3\n    goto b5(v2)\n  b5(v5):\n    return v5\n",
         );
     }
 
@@ -908,7 +908,7 @@ mod tests {
         assert_eq!(ssa.validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
-            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v5 = const 1\n    v6 = use v5\n    goto b3(v6)\n  b2:\n    v3 = const 2\n    v4 = use v3\n    goto b3(v4)\n  b3(v8):\n    v7 = const 3\n    v9 = prim int-add(v8, v7)\n    return v9\n",
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v2 = const 1\n    goto b3(v2)\n  b2:\n    v1 = const 2\n    goto b3(v1)\n  b3(v4):\n    v3 = const 3\n    v5 = prim int-add(v4, v3)\n    return v5\n",
         );
     }
 
@@ -926,7 +926,7 @@ mod tests {
 
         assert_eq!(
             dump_of(&ssa),
-            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    v1 = use v0\n    v2 = use v1\n    branch v2 -> b1, b2\n  b1:\n    v10 = const 1\n    v11 = use v10\n    v12 = use v11\n    v13 = use v12\n    v14 = use v13\n    goto b3(v14)\n  b2:\n    v3 = use v1\n    branch v3 -> b4, b5\n  b3(v15):\n    return v15\n  b4:\n    v6 = const 2\n    v7 = use v6\n    goto b6(v7)\n  b5:\n    v4 = const 3\n    v5 = use v4\n    goto b6(v5)\n  b6(v8):\n    v9 = use v8\n    goto b3(v9)\n",
+            "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v4 = const 1\n    goto b3(v4)\n  b2:\n    branch v0 -> b4, b5\n  b3(v5):\n    return v5\n  b4:\n    v2 = const 2\n    goto b6(v2)\n  b5:\n    v1 = const 3\n    goto b6(v1)\n  b6(v3):\n    goto b3(v3)\n",
         );
     }
 
@@ -964,7 +964,7 @@ mod tests {
         assert_eq!(ssa.validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
-            "fun double (entry b0)\n  params: v0: Int\n  b0:\n    v1 = use v0\n    v2 = use v1\n    v3 = use v1\n    v4 = prim int-add(v2, v3)\n    return v4\n",
+            "fun double (entry b0)\n  params: v0: Int\n  b0:\n    v1 = prim int-add(v0, v0)\n    return v1\n",
         );
     }
 

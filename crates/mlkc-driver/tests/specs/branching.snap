@@ -354,19 +354,15 @@ SSA form:
 fun pick (entry b0)
   params: v0: Bool
   b0:
-    v1 = use v0
-    v2 = use v1
-    branch v2 -> b1, b2
+    branch v0 -> b1, b2
   b1:
-    v5 = const 1
-    v6 = use v5
-    goto b3(v6)
+    v2 = const 1
+    goto b3(v2)
   b2:
-    v3 = const 2
-    v4 = use v3
-    goto b3(v4)
-  b3(v7):
-    return v7
+    v1 = const 2
+    goto b3(v1)
+  b3(v3):
+    return v3
 ```
 
 `fun ordered`
@@ -406,27 +402,20 @@ SSA form:
 fun ordered (entry b0)
   params: v0: Bool, v1: Bool
   b0:
-    v2 = use v0
-    v3 = use v1
-    v4 = use v2
-    branch v4 -> b1, b2
+    branch v0 -> b1, b2
   b1:
-    v10 = const 1
-    v11 = use v10
-    goto b5(v11)
+    v4 = const 1
+    goto b5(v4)
   b2:
-    v5 = use v3
-    branch v5 -> b3, b4
+    branch v1 -> b3, b4
   b3:
-    v8 = const 2
-    v9 = use v8
-    goto b5(v9)
+    v3 = const 2
+    goto b5(v3)
   b4:
-    v6 = const 3
-    v7 = use v6
-    goto b5(v7)
-  b5(v12):
-    return v12
+    v2 = const 3
+    goto b5(v2)
+  b5(v5):
+    return v5
 ```
 
 `fun where_a_value_belongs`
@@ -460,21 +449,17 @@ SSA form:
 fun where_a_value_belongs (entry b0)
   params: v0: Bool
   b0:
-    v1 = use v0
-    v2 = use v1
-    branch v2 -> b1, b2
+    branch v0 -> b1, b2
   b1:
-    v5 = const 1
-    v6 = use v5
-    goto b3(v6)
+    v2 = const 1
+    goto b3(v2)
   b2:
-    v3 = const 2
-    v4 = use v3
-    goto b3(v4)
-  b3(v8):
-    v7 = const 3
-    v9 = prim int-add(v8, v7)
-    return v9
+    v1 = const 2
+    goto b3(v1)
+  b3(v4):
+    v3 = const 3
+    v5 = prim int-add(v4, v3)
+    return v5
 ```
 
 `fun through_a_let`
@@ -511,24 +496,17 @@ SSA form:
 fun through_a_let (entry b0)
   params: v0: Bool
   b0:
-    v1 = use v0
-    v2 = use v1
-    branch v2 -> b1, b2
+    branch v0 -> b1, b2
   b1:
-    v5 = const 1
-    v6 = use v5
-    goto b3(v6)
+    v2 = const 1
+    goto b3(v2)
   b2:
-    v3 = const 2
-    v4 = use v3
-    goto b3(v4)
-  b3(v7):
-    v8 = use v7
-    v9 = use v8
-    v10 = const 3
-    v11 = prim int-add(v9, v10)
-    v12 = use v11
-    return v12
+    v1 = const 2
+    goto b3(v1)
+  b3(v3):
+    v4 = const 3
+    v5 = prim int-add(v3, v4)
+    return v5
 ```
 
 `fun log`
@@ -560,19 +538,15 @@ SSA form:
 fun log (entry b0)
   params: v0: Bool
   b0:
-    v1 = use v0
-    v2 = use v1
-    branch v2 -> b1, b2
+    branch v0 -> b1, b2
   b1:
-    v4 = use v1
-    v5 = call fun log(v4)
-    v6 = use v5
-    goto b3(v6)
+    v2 = call fun log(v0)
+    goto b3(v2)
   b2:
-    v3 = const unit
-    goto b3(v3)
-  b3(v7):
-    return v7
+    v1 = const unit
+    goto b3(v1)
+  b3(v3):
+    return v3
 ```
 
 `fun log_ordered`
@@ -613,28 +587,20 @@ SSA form:
 fun log_ordered (entry b0)
   params: v0: Bool, v1: Bool
   b0:
-    v2 = use v0
-    v3 = use v1
-    v4 = use v2
-    branch v4 -> b1, b2
+    branch v0 -> b1, b2
   b1:
-    v10 = use v2
-    v11 = call fun log(v10)
-    v12 = use v11
-    goto b5(v12)
+    v4 = call fun log(v0)
+    goto b5(v4)
   b2:
-    v5 = use v3
-    branch v5 -> b3, b4
+    branch v1 -> b3, b4
   b3:
-    v7 = use v3
-    v8 = call fun log(v7)
-    v9 = use v8
-    goto b5(v9)
+    v3 = call fun log(v1)
+    goto b5(v3)
   b4:
-    v6 = const unit
-    goto b5(v6)
-  b5(v13):
-    return v13
+    v2 = const unit
+    goto b5(v2)
+  b5(v5):
+    return v5
 ```
 
 ### Diagnostics

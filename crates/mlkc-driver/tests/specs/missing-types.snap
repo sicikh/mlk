@@ -213,9 +213,7 @@ SSA form:
 fun parameter (entry b0)
   params: v0: {error}
   b0:
-    v1 = use v0
-    v2 = use v1
-    return v2
+    return v0
 ```
 
 `fun inferred`
@@ -237,9 +235,7 @@ SSA form:
 fun inferred (entry b0)
   params: v0: {error}
   b0:
-    v1 = use v0
-    v2 = use v1
-    return v2
+    return v0
 ```
 
 `fun shown`
@@ -261,9 +257,7 @@ SSA form:
 fun shown (entry b0)
   params: v0: Int
   b0:
-    v1 = use v0
-    v2 = use v1
-    return v2
+    return v0
 ```
 
 ### Diagnostics

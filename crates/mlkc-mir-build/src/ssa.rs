@@ -67,8 +67,9 @@ struct Ssa<'a> {
     /// The arguments of every parameter, one per predecessor, in the order of the
     /// predecessors.
     phi_args: FxHashMap<ValueId, Vec<ValueId>>,
-    /// The parameters that carried one value: they are not definitions, and every use of one
-    /// reads the value it carried.
+    /// The values that carried one value, by the value they carry: a parameter whose arguments
+    /// all turned out to be one value, and a statement that only copies one. They are not
+    /// definitions, and every use of one reads the value it carried.
     trivial: FxHashMap<ValueId, ValueId>,
     /// The values: the ones of the source, and the definition of every statement.
     values: Arena<ValueData>,
@@ -147,6 +148,24 @@ impl<'a> Ssa<'a> {
         for stmt in &source.stmts {
             let StmtKind::Assign { place, rvalue } = &stmt.kind;
             let rvalue = self.rvalue(rvalue, at);
+
+            // A copy of a value defines nothing of its own: a slot reads the value it copied,
+            // and a definition of the CFG form that copies one is dropped like a parameter
+            // that carries one value. Constants, calls, and primitives stay definitions.
+            if let Rvalue::Use(Operand::Value(value)) = &rvalue {
+                let value = resolve(&self.trivial, *value);
+
+                match place {
+                    Place::Local(local) => {
+                        self.current[at].insert(*local, value);
+                    },
+                    Place::Value(copied) => {
+                        self.trivial.insert(*copied, value);
+                    },
+                }
+
+                continue;
+            }
 
             let place = match place {
                 // A slot is written: the statement is the definition of a value of its own,
@@ -495,8 +514,8 @@ impl<'a> Ssa<'a> {
 
     /// Builds the body: the parameters of every block, the compacted values, and no slots.
     fn finish(mut self) -> Body {
-        // A parameter that carried one value is not a definition of anything: the arena is
-        // rebuilt without it, so that every value of the SSA form has a definition.
+        // A value that carried one value is not a definition of anything: the arena is rebuilt
+        // without it, so that every value of the SSA form has a definition.
         let mut remap: Vec<Option<ValueId>> = vec![None; self.values.len()];
         let mut values = Arena::default();
 
@@ -552,11 +571,11 @@ impl<'a> Ssa<'a> {
     }
 }
 
-/// The value a use of a dropped parameter reads.
+/// The value a use of a dropped value reads.
 fn resolve(trivial: &FxHashMap<ValueId, ValueId>, value: ValueId) -> ValueId {
     let mut value = value;
 
-    // A parameter that carried one value is a chain; the chain ends at a value that was not
+    // A value that carried one value is a chain; the chain ends at a value that was not
     // dropped. A cycle would be a graph no program has, and the bound is what keeps a
     // malformed one from hanging the construction.
     for _ in 0..=trivial.len() {
@@ -767,7 +786,7 @@ mod tests {
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
             dump::body(&body),
-            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = use v0\n    v2 = prim int-neg(v1)\n    return v2\n",
+            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = prim int-neg(v0)\n    return v1\n",
         );
     }
 
@@ -819,7 +838,7 @@ mod tests {
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
             dump::body(&body),
-            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = const 1\n    branch v0 -> b1, b2\n  b1:\n    v2 = const 2\n    goto b3(v2)\n  b2:\n    goto b3(v1)\n  b3(v3):\n    v4 = use v3\n    return v4\n",
+            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = const 1\n    branch v0 -> b1, b2\n  b1:\n    v2 = const 2\n    goto b3(v2)\n  b2:\n    goto b3(v1)\n  b3(v3):\n    return v3\n",
         );
     }
 
@@ -871,7 +890,7 @@ mod tests {
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
             dump::body(&body),
-            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = const 1\n    branch v0 -> b1, b2\n  b1:\n    goto b3\n  b2:\n    goto b3\n  b3:\n    v2 = use v1\n    return v2\n",
+            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = const 1\n    branch v0 -> b1, b2\n  b1:\n    goto b3\n  b2:\n    goto b3\n  b3:\n    return v1\n",
         );
     }
 
@@ -927,7 +946,7 @@ mod tests {
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
             dump::body(&body),
-            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = const 0\n    goto b1(v1)\n  b1(v2):\n    v3 = use v2\n    branch v0 -> b2, b3\n  b2:\n    v5 = prim int-neg(v3)\n    goto b1(v5)\n  b3:\n    v4 = use v2\n    return v4\n",
+            "fun main (entry b0)\n  params: v0: {error}\n  b0:\n    v1 = const 0\n    goto b1(v1)\n  b1(v2):\n    branch v0 -> b2, b3\n  b2:\n    v3 = prim int-neg(v2)\n    goto b1(v3)\n  b3:\n    return v2\n",
         );
     }
 }

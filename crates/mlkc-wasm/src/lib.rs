@@ -2167,13 +2167,8 @@ mod tests {
             .map(|it| it["text"].as_str().expect("a line"))
             .collect();
 
-        assert_eq!(texts, [
-            "v0 = const 1",
-            "v1 = use v0",
-            "v2 = use v1",
-            "v3 = use v2",
-        ]);
-        assert_eq!(json["bodies"][0]["blocks"][0]["term"]["text"], "return v3");
+        assert_eq!(texts, ["v0 = const 1"]);
+        assert_eq!(json["bodies"][0]["blocks"][0]["term"]["text"], "return v0");
     }
 
     #[test]

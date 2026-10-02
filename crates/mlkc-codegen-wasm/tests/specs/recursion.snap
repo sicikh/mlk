@@ -7,7 +7,7 @@ expression: snapshot
   (type (;0;) (func (param eqref) (result eqref)))
   (export "fib" (func $fib))
   (func $fib (;0;) (type 0) (param $value eqref) (result eqref)
-    (local $"#local1 value" (@name "value") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
+    (local $"#local1 value" (@name "value") (ref i31)) (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
     i32.const 0
     ref.i31
     local.set 2
@@ -38,27 +38,6 @@ expression: snapshot
     i32.const 0
     ref.i31
     local.set 11
-    i32.const 0
-    ref.i31
-    local.set 12
-    i32.const 0
-    ref.i31
-    local.set 13
-    i32.const 0
-    ref.i31
-    local.set 14
-    i32.const 0
-    ref.i31
-    local.set 15
-    i32.const 0
-    ref.i31
-    local.set 16
-    i32.const 0
-    ref.i31
-    local.set 17
-    i32.const 0
-    ref.i31
-    local.set 18
     local.get $value
     ref.cast (ref i31)
     local.set $"#local1 value"
@@ -68,51 +47,55 @@ expression: snapshot
           block ;; label = @4
             block ;; label = @5
               block ;; label = @6
-                local.get 19
+                local.get 12
                 br_table 0 (;@6;) 1 (;@5;) 2 (;@4;) 3 (;@3;) 5 (;@1;)
               end
-              local.get $"#local1 value"
-              local.set 2
-              local.get 2
-              local.set 3
               i32.const 2
               ref.i31
-              local.set 4
-              local.get 3
+              local.set 2
+              local.get $"#local1 value"
               i31.get_s
-              local.get 4
+              local.get 2
               i31.get_s
               i32.lt_s
               ref.i31
-              local.set 5
-              local.get 5
+              local.set 3
+              local.get 3
               i31.get_s
               if ;; label = @6
                 i32.const 1
-                local.set 19
+                local.set 12
                 br 4 (;@2;)
               else
                 i32.const 2
-                local.set 19
+                local.set 12
                 br 4 (;@2;)
               end
             end
-            local.get 2
-            local.set 16
-            local.get 16
-            local.set 17
-            local.get 17
-            local.set 18
+            local.get $"#local1 value"
+            local.set 11
             i32.const 3
-            local.set 19
+            local.set 12
             br 2 (;@2;)
           end
-          local.get 2
-          local.set 6
           i32.const 1
           ref.i31
+          local.set 4
+          local.get $"#local1 value"
+          i31.get_s
+          local.get 4
+          i31.get_s
+          i32.sub
+          ref.i31
+          local.set 5
+          local.get 5
+          call $fib
+          ref.cast (ref i31)
+          local.set 6
+          i32.const 2
+          ref.i31
           local.set 7
-          local.get 6
+          local.get $"#local1 value"
           i31.get_s
           local.get 7
           i31.get_s
@@ -123,38 +106,20 @@ expression: snapshot
           call $fib
           ref.cast (ref i31)
           local.set 9
-          local.get 2
-          local.set 10
-          i32.const 2
-          ref.i31
-          local.set 11
-          local.get 10
+          local.get 6
           i31.get_s
-          local.get 11
-          i31.get_s
-          i32.sub
-          ref.i31
-          local.set 12
-          local.get 12
-          call $fib
-          ref.cast (ref i31)
-          local.set 13
           local.get 9
-          i31.get_s
-          local.get 13
           i31.get_s
           i32.add
           ref.i31
-          local.set 14
-          local.get 14
-          local.set 15
-          local.get 15
-          local.set 18
+          local.set 10
+          local.get 10
+          local.set 11
           i32.const 3
-          local.set 19
+          local.set 12
           br 1 (;@2;)
         end
-        local.get 18
+        local.get 11
         return
       end
     end

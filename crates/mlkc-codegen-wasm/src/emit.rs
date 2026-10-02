@@ -7,10 +7,10 @@
 //!
 //! # Locals
 //!
-//! Before `localify` exists ([ADR-0020][adr-0020]), every value and every block parameter gets
-//! a local of its own, typed by its refinement: an immediate is a `(ref i31)` and everything
-//! else is an `eqref`. A parameter enters as the shape its signature declares ([`FnShape`]),
-//! which is the type its value already has: the entry stores it and casts nothing.
+//! Before `localify` exists ([ADR-0020][adr-0020]), every value gets a local of its own, typed
+//! by its refinement: an immediate is a `(ref i31)` and everything else is an `eqref`. A value
+//! that is a parameter is the local the ABI already declares for it --- the emitter reads it
+//! where the caller left it --- and no other value is copied at the entry either.
 //!
 //! # Control flow
 //!
@@ -188,19 +188,41 @@ impl<'a> Emitter<'a> {
         let refinements = Refinements::of(mir, ctx.layout.builtins(), ctx.layout);
         let ret = ctx.signature.ret_shape(ctx.layout.builtins());
 
-        // The first locals are the ABI parameters, which the function type declares; the
-        // values come after them, one local each, typed by their refinement, and the dispatch
-        // form keeps two more.
-        let params = mir.params.len() as u32;
-        let value_locals: Vec<u32> = (0..mir.values.len() as u32).map(|i| params + i).collect();
-        let pc_local = params + mir.values.len() as u32;
-        let scratch_local = pc_local + 1;
+        // A parameter is the local the ABI already declares for it, so the type the emitter
+        // reads it as and the type its signature declares it as have to be the same one: a
+        // disagreement is a gap of the check, and not something codegen repairs with a cast.
+        debug_assert_eq!(
+            mir.params
+                .iter()
+                .map(|value| refinements.get(*value).abi())
+                .collect::<Vec<_>>(),
+            ctx.signature.shape(ctx.layout.builtins()).params,
+            "every parameter to be the shape its signature declares",
+        );
 
-        let mut locals: Vec<ValType> = mir
-            .values
-            .iter()
-            .map(|(value, _)| refinements.get(value).abi().val_type())
-            .collect();
+        // The first locals are the ABI parameters, which the function type declares; a value
+        // that is a parameter is the local of that parameter, and every other value gets a
+        // local of its own after them, typed by its refinement. The dispatch form keeps two
+        // locals more after every value.
+        let params = mir.params.len() as u32;
+        let mut value_locals: Vec<u32> = vec![0; mir.values.len()];
+        let mut locals: Vec<ValType> = Vec::new();
+
+        for (position, value) in mir.params.iter().enumerate() {
+            value_locals[value.index()] = position as u32;
+        }
+
+        for (value, _) in mir.values.iter() {
+            if mir.params.contains(&value) {
+                continue;
+            }
+
+            value_locals[value.index()] = params + locals.len() as u32;
+            locals.push(refinements.get(value).abi().val_type());
+        }
+
+        let pc_local = params + locals.len() as u32;
+        let scratch_local = pc_local + 1;
 
         // The two dispatch locals are declared always, so that the local indices of the values
         // do not depend on the shape of the body; `localify` will drop what is unused.
@@ -222,7 +244,8 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emits the whole body: the entry casts, then the blocks.
+    /// Emits the whole body: the blocks, and a dispatch loop around them where there is more
+    /// than one.
     fn run(&mut self) {
         let single = self.mir.blocks.len() == 1
             && matches!(
@@ -231,14 +254,12 @@ impl<'a> Emitter<'a> {
             );
 
         // A dispatch form is entered through the table, and the validator does not know which
-        // `pc` reached it: every value local is initialized before the prologue writes the
-        // parameters over theirs, or a read in a case the path did not reach is rejected. What
-        // the initialization writes is never read: SSA defines every value before its use.
+        // `pc` reached it: every value local is initialized, or a read in a case the path did
+        // not reach is rejected. What the initialization writes is never read: SSA defines
+        // every value before its use, and the parameters are written by the caller.
         if !single {
             self.initialize_values();
         }
-
-        self.prologue();
 
         if single {
             self.direct(self.mir.entry);
@@ -250,8 +271,8 @@ impl<'a> Emitter<'a> {
     /// Initializes every value local, so that a dispatch form validates under Wasm GC.
     ///
     /// An immediate is a `(ref i31)`, which has no default value: a `local.get` of one the
-    /// validator cannot prove to be written is an error. The parameters of the entry block are
-    /// left out: the prologue writes them.
+    /// validator cannot prove to be written is an error. The parameters are left out: they are
+    /// the locals of the ABI, and the caller wrote them.
     fn initialize_values(&mut self) {
         for (value, _) in self.mir.values.iter() {
             if self.mir.params.contains(&value) {
@@ -274,24 +295,6 @@ impl<'a> Emitter<'a> {
             }
 
             self.insn(Span::dummy(), Instruction::LocalSet(local));
-        }
-    }
-
-    /// Stores every parameter into the local of the value it is.
-    fn prologue(&mut self) {
-        let mir = self.mir;
-
-        for (parameter, value) in mir.params.iter().enumerate() {
-            let span = mir.values[*value].span;
-
-            // A parameter enters as the shape its signature declares, and the local of the
-            // value is the type its refinement gives it: the two are the same type, so the
-            // copy is all the entry keeps --- there is nothing to cast.
-            self.insn(span, Instruction::LocalGet(parameter as u32));
-            self.insn(
-                span,
-                Instruction::LocalSet(self.value_locals[value.index()]),
-            );
         }
     }
 

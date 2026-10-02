@@ -467,9 +467,18 @@ pub fn assemble_module(
 
         if let Some(artifact) = functions.get(index) {
             for value in &artifact.debug {
-                if let Some(name) = &value.name {
-                    names.append(value.local, name.as_str());
+                let Some(name) = &value.name else {
+                    continue;
+                };
+
+                // A value that is a parameter lives in the local of that parameter, and the
+                // loop above named it from the function; the artifact's name for it is the
+                // same one.
+                if value.local < function.param_names.len() as u32 {
+                    continue;
                 }
+
+                names.append(value.local, name.as_str());
             }
         }
 

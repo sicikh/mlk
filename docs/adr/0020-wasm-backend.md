@@ -143,7 +143,8 @@ At the boundary of a function, a kind needs no recovery at all:
 a parameter and a result of an immediate type cross as an `(ref i31)`,
 and one of a type that is only a word crosses as an `eqref` —
 the WASM signature is the shape of the checked types,
-and a parameter enters as the type its local already has.
+a parameter is the local the signature declares,
+so nothing is copied at the entry either.
 A value that is only a word is cast where something more precise needs it.
 
 The emitter runs a forward dataflow over the SSA body

@@ -267,6 +267,13 @@ lir (entry b0) ret eqref
     return v0
 ```
 
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
 ### Diagnostics
 
 No diagnostics.

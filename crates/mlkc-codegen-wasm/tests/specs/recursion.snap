@@ -7,70 +7,44 @@ expression: snapshot
   (type (;0;) (func (param (ref i31)) (result (ref i31))))
   (export "fib" (func $fib))
   (func $fib (;0;) (type 0) (param $value (ref i31)) (result (ref i31))
-    (local (ref i31) (ref i31) i32)
+    (local (ref i31) (ref i31))
     i32.const 0
     ref.i31
     local.set 1
-    i32.const 0
-    ref.i31
-    local.set 2
     block ;; label = @1
-      loop ;; label = @2
-        block ;; label = @3
-          block ;; label = @4
-            block ;; label = @5
-              block ;; label = @6
-                local.get 3
-                br_table 0 (;@6;) 1 (;@5;) 2 (;@4;) 3 (;@3;) 5 (;@1;)
-              end
-              local.get $value
-              i31.get_s
-              i32.const 2
-              i32.lt_s
-              if ;; label = @6
-                i32.const 1
-                local.set 3
-                br 4 (;@2;)
-              else
-                i32.const 2
-                local.set 3
-                br 4 (;@2;)
-              end
-            end
-            local.get $value
-            local.set 1
-            i32.const 3
-            local.set 3
-            br 2 (;@2;)
-          end
-          local.get $value
-          i31.get_s
-          i32.const 1
-          i32.sub
-          ref.i31
-          call $fib
-          local.set 2
-          local.get 2
-          i31.get_s
-          local.get $value
-          i31.get_s
-          i32.const 2
-          i32.sub
-          ref.i31
-          call $fib
-          i31.get_s
-          i32.add
-          ref.i31
-          local.set 1
-          i32.const 3
-          local.set 3
-          br 1 (;@2;)
-        end
-        local.get 1
-        return
+      local.get $value
+      i31.get_s
+      i32.const 2
+      i32.lt_s
+      if ;; label = @2
+        local.get $value
+        local.set 1
+        br 1 (;@1;)
+      else
+        local.get $value
+        i31.get_s
+        i32.const 1
+        i32.sub
+        ref.i31
+        call $fib
+        local.set 2
+        local.get 2
+        i31.get_s
+        local.get $value
+        i31.get_s
+        i32.const 2
+        i32.sub
+        ref.i31
+        call $fib
+        i31.get_s
+        i32.add
+        ref.i31
+        local.set 1
+        br 1 (;@1;)
       end
     end
-    unreachable
+    local.get 1
+    return
   )
 )
 ```

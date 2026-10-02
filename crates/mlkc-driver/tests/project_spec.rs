@@ -11,7 +11,8 @@
 //!
 //! The snapshot holds, for every module of the project, the surface it was lowered to, the scope
 //! it resolved to, the types its signatures and bodies were checked to, the MIR of every body
-//! the front end read clean, in both of its forms, and what the stages reported. A snapshot is
+//! the front end read clean, in both of its forms, the LIR it is lowered to and the structure of
+//! its control flow, and what the stages reported. A snapshot is
 //! part of changing how a project is read:
 //! `INSTA_UPDATE=always cargo test -p mlkc-driver` rewrites them, and the diff of the snapshots
 //! is what a review reads ([ADR-0006], [ADR-0016], [ADR-0017], [ADR-0019]).
@@ -188,6 +189,23 @@ pub(crate) fn run(fixture: &str) {
                         snapshot.push_str("```\n");
                         snapshot.push_str(&mlkc_lir_wasm::dump::body(&lir));
                         snapshot.push_str("```\n\n");
+
+                        // The structure is what the structuring pass makes of the control
+                        // flow: the frames of the target around the blocks, or the dispatch
+                        // form where the body has none.
+                        snapshot.push_str("Structure:\n\n");
+
+                        match &lir.structure {
+                            Some(structure) => {
+                                snapshot.push_str("```\n");
+                                snapshot.push_str(&mlkc_lir_wasm::dump::structure(structure));
+                                snapshot.push_str("```\n\n");
+                            },
+                            None => {
+                                snapshot
+                                    .push_str("Dispatched: the control flow is not structured.\n\n")
+                            },
+                        }
                     },
                     None => {
                         snapshot.push_str("Not lowered: the module of the body is not whole.\n\n");

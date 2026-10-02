@@ -9,9 +9,13 @@
 //! such a statement would be observable.
 //!
 //! Everything else keeps a local. A value read twice or more has to live somewhere; a value
-//! read outside the block that defines it cannot be computed where it is read, because the
-//! dispatch form has no fall-through between blocks; and a parameter of the body or of a block
-//! is defined by the ABI or by an edge rather than by an instruction.
+//! read outside the block that defines it cannot be computed where it is read, because a
+//! branch has no fall-through into it; and a parameter of the body or of a block is defined by
+//! the ABI or by an edge rather than by an instruction.
+//!
+//! A constant is the exception to the rule: it has no operands and no effects, so it is written
+//! again wherever it is read, however many reads there are. That is what Waffle's treeification
+//! does with its constants, and a local would cost more than the instruction it saves.
 //!
 //! The pass also decides the locals no value lives in: the program counter of a body that is
 //! dispatched, and the scratch local a `switch` compares its scrutinee in.
@@ -23,9 +27,9 @@
 //!
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 
-use mlkc_lir_wasm::{BlockId, Body, Locals, Terminator, Ty, ValueId};
+use mlkc_lir_wasm::{BlockId, Body, Locals, Op, Terminator, Ty, ValueId};
 
-use crate::{collapse::is_observed, emit::is_direct};
+use crate::collapse::is_observed;
 
 /// One read of a value: the block it is in, and where in the block it stands.
 ///
@@ -41,7 +45,7 @@ struct Use {
 pub(crate) fn run(body: &mut Body) {
     let uses = uses(body);
     let definitions = body.definitions();
-    let direct = is_direct(body);
+    let dispatched = body.structure.is_none();
     let parameters = body.params.len() as u32;
     let mut locals: Vec<Ty> = Vec::new();
     let mut allocation: Vec<Option<u32>> = vec![None; body.values.len()];
@@ -52,7 +56,9 @@ pub(crate) fn run(body: &mut Body) {
             Some(position as u32)
         } else if is_block_param(body, value) {
             Some(fresh(&mut locals, data.ty, parameters))
-        } else if inlines(body, &definitions, &uses, value) {
+        } else if rematerializes(body, &definitions, value)
+            || inlines(body, &definitions, &uses, value)
+        {
             None
         } else {
             Some(fresh(&mut locals, data.ty, parameters))
@@ -61,12 +67,15 @@ pub(crate) fn run(body: &mut Body) {
         allocation[value.index()] = local;
     }
 
-    let pc = (!direct).then(|| fresh(&mut locals, Ty::I32, parameters));
-    let scratch = body
+    // A body without a structure is emitted as a dispatch loop, which keeps a program counter,
+    // and a `switch` compares its scrutinee in a local of its own; a structured body needs
+    // neither.
+    let pc = dispatched.then(|| fresh(&mut locals, Ty::I32, parameters));
+    let switching = body
         .blocks
         .iter()
-        .any(|(_, block)| matches!(block.term, Terminator::Switch { .. }))
-        .then(|| fresh(&mut locals, Ty::I32, parameters));
+        .any(|(_, block)| matches!(block.term, Terminator::Switch { .. }));
+    let scratch = (dispatched && switching).then(|| fresh(&mut locals, Ty::I32, parameters));
 
     body.locals = Locals {
         locals,
@@ -74,6 +83,18 @@ pub(crate) fn run(body: &mut Body) {
         pc,
         scratch,
     };
+}
+
+/// Whether a value is written again wherever it is read, rather than kept in a local.
+///
+/// A constant has no operands and cannot be observed, so writing it twice costs one instruction
+/// and saves a local and the two instructions that read and write it.
+fn rematerializes(body: &Body, definitions: &[Option<(BlockId, usize)>], value: ValueId) -> bool {
+    let Some((block, at)) = definitions[value.index()] else {
+        return false;
+    };
+
+    matches!(body.blocks[block].insts[at].op, Op::I32Const(_))
 }
 
 /// Whether a value is a parameter of a block.
@@ -157,6 +178,9 @@ mod tests {
     }
 
     /// A body of one block: `insts`, and a return of `ret`.
+    ///
+    /// The body is structured, as a body the pipeline hands to the pass is: allocation reads the
+    /// structure to tell the dispatch form from the structured one.
     fn straight(mut builder: BodyBuilder, ret: ValueId, insts: Vec<Inst>) -> Body {
         let entry = builder.block(Block {
             params: Vec::new(),
@@ -167,7 +191,10 @@ mod tests {
             },
         });
 
-        builder.finish(entry)
+        let mut body = builder.finish(entry);
+        body.structure = crate::structure::run(&body);
+
+        body
     }
 
     #[test]
@@ -181,7 +208,7 @@ mod tests {
         let one = value(&mut builder, Ty::I32);
         let sum = value(&mut builder, Ty::I32);
         let result = value(&mut builder, Ty::I31);
-        let body = straight(builder, result, vec![
+        let mut body = straight(builder, result, vec![
             Inst {
                 value: number,
                 op: Op::I31GetS(param),
@@ -203,7 +230,6 @@ mod tests {
                 span: Span::dummy(),
             },
         ]);
-        let mut body = body;
 
         run(&mut body);
 
@@ -220,6 +246,47 @@ mod tests {
 
     #[test]
     fn a_value_read_twice_lives_in_a_local() {
+        let mut builder = BodyBuilder::new(Ty::I31);
+        let param = builder.param(ValueData {
+            span: Span::dummy(),
+            ty: Ty::I31,
+        });
+        let number = value(&mut builder, Ty::I32);
+        let sum = value(&mut builder, Ty::I32);
+        let result = value(&mut builder, Ty::I31);
+        let mut body = straight(builder, result, vec![
+            Inst {
+                value: number,
+                op: Op::I31GetS(param),
+                span: Span::dummy(),
+            },
+            Inst {
+                value: sum,
+                op: Op::I32Add(number, number),
+                span: Span::dummy(),
+            },
+            Inst {
+                value: result,
+                op: Op::RefI31(sum),
+                span: Span::dummy(),
+            },
+        ]);
+
+        run(&mut body);
+
+        // A value read twice has to live somewhere, and an `i32` lives in an `i32` local. The
+        // body takes one parameter, whose local the ABI declares, so the pass declares the next
+        // local after it.
+        assert_eq!(body.locals.values[number.index()], Some(1));
+        assert_eq!(body.locals.locals, [Ty::I32]);
+        assert_eq!(body.locals.values[sum.index()], None);
+        assert_eq!(body.locals.values[result.index()], None);
+        assert_eq!(body.locals.pc, None);
+        assert_eq!(body.locals.scratch, None);
+    }
+
+    #[test]
+    fn a_constant_read_twice_is_written_where_it_is_read() {
         let mut builder = BodyBuilder::new(Ty::I31);
         let number = value(&mut builder, Ty::I32);
         let sum = value(&mut builder, Ty::I32);
@@ -244,23 +311,30 @@ mod tests {
 
         run(&mut body);
 
-        // A value read twice has to live somewhere, and an `i32` lives in an `i32` local.
-        assert_eq!(body.locals.values[number.index()], Some(0));
-        assert_eq!(body.locals.locals, [Ty::I32]);
+        // A constant has no operands and cannot be observed, so it is written again at every
+        // read and needs no local at all.
+        assert_eq!(body.locals.values[number.index()], None);
         assert_eq!(body.locals.values[sum.index()], None);
         assert_eq!(body.locals.values[result.index()], None);
+        assert!(body.locals.locals.is_empty());
+        assert_eq!(body.locals.pc, None);
+        assert_eq!(body.locals.scratch, None);
     }
 
     #[test]
     fn a_value_read_in_another_block_lives_in_a_local() {
         let mut builder = BodyBuilder::new(Ty::I32);
+        let param = builder.param(ValueData {
+            span: Span::dummy(),
+            ty: Ty::I31,
+        });
         let number = value(&mut builder, Ty::I32);
         let tested = value(&mut builder, Ty::I32);
         let entry = builder.block(Block {
             params: Vec::new(),
             insts: vec![Inst {
                 value: number,
-                op: Op::I32Const(7),
+                op: Op::I31GetS(param),
                 span: Span::dummy(),
             }],
             term: Terminator::Unreachable {
@@ -289,16 +363,18 @@ mod tests {
         };
 
         let mut body = builder.finish(entry);
+        body.structure = crate::structure::run(&body);
 
         run(&mut body);
 
-        // A value read in a block that is not the one that defines it cannot be computed where
-        // it is read: the dispatch form has no fall-through between blocks. The body is
-        // dispatched, so it keeps a program counter as well.
-        assert_eq!(body.locals.values[number.index()], Some(0));
+        // A value read in a block that is not the one that defines it lives in a local: the pass
+        // does not count on the two blocks being written one after the other. `tested` is read
+        // once, in the block that defines it, and lives nowhere. The body is structured, so it
+        // needs no program counter.
+        assert_eq!(body.locals.values[number.index()], Some(1));
         assert_eq!(body.locals.values[tested.index()], None);
-        assert_eq!(body.locals.locals, [Ty::I32, Ty::I32]);
-        assert_eq!(body.locals.pc, Some(1));
+        assert_eq!(body.locals.locals, [Ty::I32]);
+        assert_eq!(body.locals.pc, None);
         assert_eq!(body.locals.scratch, None);
     }
 

@@ -394,6 +394,36 @@ export interface LirLocal {
     values: string[];
 }
 
+/**
+ * One node of the structured control flow of a body of the LIR: a frame, an arm, a leaf, or
+ * where control goes.
+ */
+export interface LirStructureLine {
+    /** The number of frames the node stands in, which is what a person reads as indentation. */
+    depth: number;
+
+    /**
+     * What the node is: `block`, `loop`, `if`, `else`, `leaf`, `params`, `br`, `return`, or
+     * `unreachable`.
+     */
+    kind: string;
+
+    /** What the node says: `block b3`, `leaf b0`, `br 1 -> b3`. */
+    text: string;
+
+    /** Where the node is written, in bytes, or nothing where it was written nowhere. */
+    range: [number, number] | null;
+}
+
+/**
+ * The structured control flow of a body of the LIR: the frames the encoder writes around the
+ * instructions of its blocks, in the order they are written.
+ */
+export interface LirStructure {
+    /** The nodes of the structure, in the order encoding writes them. */
+    lines: LirStructureLine[];
+}
+
 /** One body of the LIR. */
 export interface LirBody {
     /** The entity the body belongs to: `fun main`. */
@@ -420,6 +450,12 @@ export interface LirBody {
      */
     locals: LirLocal[];
 
+    /**
+     * The structured control flow the body is encoded as, or `null` where the body is
+     * dispatched because its control flow is not one of the frames.
+     */
+    structure: LirStructure | null;
+
     /** The blocks, in the order they are allocated. */
     blocks: LirBlock[];
 }
@@ -429,9 +465,10 @@ export interface LirBody {
  * ([ADR-0022](../../../docs/adr/0022-wasm-lir.md)).
  *
  * A body is read the way a person reads a lowered body: a block with its parameters, the
- * instructions of it, the terminator it ends in, and the table that says where every value
- * that needs storage lives. Every line carries the range of the buffer it was read from, which
- * is what the editor marks while a pointer is on the line.
+ * instructions of it, the terminator it ends in, the table that says where every value that
+ * needs storage lives, and the tree of frames the encoder writes it as. Every line carries the
+ * range of the buffer it was read from, which is what the editor marks while a pointer is on
+ * the line.
  */
 export interface Lir {
     /** The bodies of the module that check clean, in the order it declares them. */

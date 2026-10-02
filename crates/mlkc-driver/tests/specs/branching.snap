@@ -370,7 +370,7 @@ LIR:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
-  locals: 1: (ref i31), 2: i32 (pc)
+  locals: 1: (ref i31)
   b0:
     v2 = i31.get_s v0
     branch v2 -> b1, b2
@@ -384,6 +384,23 @@ lir (entry b0) ret (ref i31)
     goto b3(v4)
   b3(v1(local 1): (ref i31)):
     return v1
+```
+
+Structure:
+
+```
+  block b3:
+    leaf b0
+    if v2:
+      leaf b1
+      params b3(v6)
+      br 1 -> b3
+    else:
+      leaf b2
+      params b3(v4)
+      br 1 -> b3
+  leaf b3
+  return v1
 ```
 
 `fun ordered`
@@ -444,7 +461,7 @@ LIR:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31), v1: (ref i31)
-  locals: 2: (ref i31), 3: i32 (pc)
+  locals: 2: (ref i31)
   b0:
     v3 = i31.get_s v0
     branch v3 -> b1, b2
@@ -465,6 +482,29 @@ lir (entry b0) ret (ref i31)
     goto b5(v6)
   b5(v2(local 2): (ref i31)):
     return v2
+```
+
+Structure:
+
+```
+  block b5:
+    leaf b0
+    if v3:
+      leaf b1
+      params b5(v10)
+      br 1 -> b5
+    else:
+      leaf b2
+      if v4:
+        leaf b3
+        params b5(v8)
+        br 2 -> b5
+      else:
+        leaf b4
+        params b5(v6)
+        br 2 -> b5
+  leaf b5
+  return v2
 ```
 
 `fun where_a_value_belongs`
@@ -516,7 +556,7 @@ LIR:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
-  locals: 1: (ref i31), 2: i32 (pc)
+  locals: 1: (ref i31)
   b0:
     v2 = i31.get_s v0
     branch v2 -> b1, b2
@@ -534,6 +574,23 @@ lir (entry b0) ret (ref i31)
     v9 = i32.add v8, v7
     v10 = ref.i31 v9
     return v10
+```
+
+Structure:
+
+```
+  block b3:
+    leaf b0
+    if v2:
+      leaf b1
+      params b3(v6)
+      br 1 -> b3
+    else:
+      leaf b2
+      params b3(v4)
+      br 1 -> b3
+  leaf b3
+  return v10
 ```
 
 `fun through_a_let`
@@ -588,7 +645,7 @@ LIR:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
-  locals: 1: (ref i31), 2: i32 (pc)
+  locals: 1: (ref i31)
   b0:
     v2 = i31.get_s v0
     branch v2 -> b1, b2
@@ -606,6 +663,23 @@ lir (entry b0) ret (ref i31)
     v9 = i32.add v8, v7
     v10 = ref.i31 v9
     return v10
+```
+
+Structure:
+
+```
+  block b3:
+    leaf b0
+    if v2:
+      leaf b1
+      params b3(v6)
+      br 1 -> b3
+    else:
+      leaf b2
+      params b3(v4)
+      br 1 -> b3
+  leaf b3
+  return v10
 ```
 
 `fun log`
@@ -653,7 +727,7 @@ LIR:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
-  locals: 1: (ref i31), 2: i32 (pc)
+  locals: 1: (ref i31)
   b0:
     v2 = i31.get_s v0
     branch v2 -> b1, b2
@@ -666,6 +740,23 @@ lir (entry b0) ret (ref i31)
     goto b3(v4)
   b3(v1(local 1): (ref i31)):
     return v1
+```
+
+Structure:
+
+```
+  block b3:
+    leaf b0
+    if v2:
+      leaf b1
+      params b3(v5)
+      br 1 -> b3
+    else:
+      leaf b2
+      params b3(v4)
+      br 1 -> b3
+  leaf b3
+  return v1
 ```
 
 `fun log_ordered`
@@ -727,7 +818,7 @@ LIR:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31), v1: (ref i31)
-  locals: 2: (ref i31), 3: i32 (pc)
+  locals: 2: (ref i31)
   b0:
     v3 = i31.get_s v0
     branch v3 -> b1, b2
@@ -746,6 +837,29 @@ lir (entry b0) ret (ref i31)
     goto b5(v6)
   b5(v2(local 2): (ref i31)):
     return v2
+```
+
+Structure:
+
+```
+  block b5:
+    leaf b0
+    if v3:
+      leaf b1
+      params b5(v8)
+      br 1 -> b5
+    else:
+      leaf b2
+      if v4:
+        leaf b3
+        params b5(v7)
+        br 2 -> b5
+      else:
+        leaf b4
+        params b5(v6)
+        br 2 -> b5
+  leaf b5
+  return v2
 ```
 
 ### Diagnostics

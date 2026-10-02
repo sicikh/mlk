@@ -52,6 +52,7 @@ mod lower;
 mod module;
 mod refine;
 mod select;
+mod structure;
 
 pub use crate::{
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},

@@ -26,7 +26,8 @@
 //!
 //! - [`body`] --- the data of one body, and the builder a stage builds with.
 //! - [`ty`] --- the types of the target a value has.
-//! - [`cfg`] --- the edges of a body and an order to walk them in.
+//! - [`cfg`] --- the edges of a body, an order to walk them in, and the dominator tree.
+//! - [`structure`] --- the structured control flow the structuring pass builds.
 //! - [`verify`] --- the verifier: what tells a well-formed body from one that is not.
 //! - [`dump`] --- a reading of a body, for a person and for a diff.
 //!
@@ -40,6 +41,7 @@
 pub mod body;
 pub mod cfg;
 pub mod dump;
+pub mod structure;
 pub mod ty;
 pub mod verify;
 
@@ -48,6 +50,8 @@ pub use crate::{
         Block, BlockId, BlockTarget, Body, BodyBuilder, FuncIndex, Inst, Locals, Op, Terminator,
         ValueData, ValueId,
     },
+    cfg::Cfg,
+    structure::{Node, Structure},
     ty::{RefTy, Ty},
     verify::Invalid,
 };

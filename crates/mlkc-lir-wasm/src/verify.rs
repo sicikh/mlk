@@ -138,6 +138,39 @@ pub enum Invalid {
         /// The local the pass named.
         scratch: u32,
     },
+    /// A body with no structure is asked about its structure.
+    NotStructured,
+    /// A block a path from the entry reaches is emitted by no leaf.
+    StructureMissing {
+        /// The block.
+        block: BlockId,
+    },
+    /// A block is emitted by more than one leaf.
+    StructureTwice {
+        /// The block.
+        block: BlockId,
+    },
+    /// An edge passes a number of arguments the block it goes to does not take.
+    StructureParams {
+        /// The block the edge goes to.
+        target: BlockId,
+        /// How many arguments the target takes.
+        expected: usize,
+        /// How many the edge passes.
+        found: usize,
+    },
+    /// A branch names a frame that is not around it.
+    StructureBranch {
+        /// How many frames out the branch goes.
+        depth: u32,
+    },
+    /// A branch names a frame that belongs to another block.
+    StructureTarget {
+        /// How many frames out the branch goes.
+        depth: u32,
+        /// The block the branch says the label belongs to.
+        target: BlockId,
+    },
 }
 
 impl fmt::Display for Invalid {
@@ -279,6 +312,45 @@ impl fmt::Display for Invalid {
                 write!(
                     f,
                     "the scratch local is local {scratch}, which the body has not",
+                )
+            },
+            Self::NotStructured => f.write_str("the body has no structure to read"),
+            Self::StructureMissing { block } => {
+                write!(
+                    f,
+                    "{} is reached by a path, and no leaf of the structure emits it",
+                    block_text(*block),
+                )
+            },
+            Self::StructureTwice { block } => {
+                write!(
+                    f,
+                    "{} is emitted by more than one leaf of the structure",
+                    block_text(*block),
+                )
+            },
+            Self::StructureParams {
+                target,
+                expected,
+                found,
+            } => {
+                write!(
+                    f,
+                    "an edge to {} passes {found} arguments, and the block takes {expected}",
+                    block_text(*target),
+                )
+            },
+            Self::StructureBranch { depth } => {
+                write!(
+                    f,
+                    "a branch goes {depth} frames out, and there are not that many",
+                )
+            },
+            Self::StructureTarget { depth, target } => {
+                write!(
+                    f,
+                    "a branch to {} goes {depth} frames out, and that frame is another block",
+                    block_text(*target),
                 )
             },
         }
@@ -567,7 +639,6 @@ impl Body {
     /// Checks the invariant of the SSA form: every value is defined once, and every use is
     /// dominated by its definition.
     fn check_ssa(&self) -> Result<(), Invalid> {
-        let entry = self.entry.index();
         let mut defs: Vec<Option<Def>> = vec![None; self.values.len()];
 
         for value in &self.params {
@@ -577,12 +648,10 @@ impl Body {
                 return Err(Invalid::ValueDefinedTwice { value: *value });
             }
 
-            defs[at] = Some(Def::Block(entry));
+            defs[at] = Some(Def::Block(self.entry));
         }
 
         for (id, block) in self.blocks.iter() {
-            let at = id.index();
-
             for param in &block.params {
                 let value = param.index();
 
@@ -590,7 +659,7 @@ impl Body {
                     return Err(Invalid::ValueDefinedTwice { value: *param });
                 }
 
-                defs[value] = Some(Def::Block(at));
+                defs[value] = Some(Def::Block(id));
             }
 
             for (index, inst) in block.insts.iter().enumerate() {
@@ -600,7 +669,7 @@ impl Body {
                     return Err(Invalid::ValueDefinedTwice { value: inst.value });
                 }
 
-                defs[defined] = Some(Def::Stmt(at, index));
+                defs[defined] = Some(Def::Stmt(id, index));
             }
         }
 
@@ -613,32 +682,22 @@ impl Body {
         // Every use is dominated by its definition. A use in a block no path from the entry
         // reaches is not checked: there is no path to it for the promise to be about.
         let cfg = Cfg::of(self);
-        let rpo = cfg.reverse_postorder();
-        let mut number = vec![usize::MAX; self.blocks.len()];
-
-        for (index, block) in rpo.iter().enumerate() {
-            number[*block] = index;
-        }
-
-        let idom = dominators(entry, rpo, &cfg, &number);
 
         for (id, block) in self.blocks.iter() {
-            let at = id.index();
-
-            if number[at] == usize::MAX {
+            if cfg.position_of(id).is_none() {
                 continue;
             }
 
             for (index, inst) in block.insts.iter().enumerate() {
                 for operand in inst.op.operands() {
-                    self.check_definition(operand, id, index, &defs, &idom)?;
+                    self.check_definition(operand, id, index, &defs, &cfg)?;
                 }
             }
 
             let term = block.insts.len();
 
             for operand in block.term.operands() {
-                self.check_definition(operand, id, term, &defs, &idom)?;
+                self.check_definition(operand, id, term, &defs, &cfg)?;
             }
         }
 
@@ -652,20 +711,20 @@ impl Body {
         block: BlockId,
         at: usize,
         defs: &[Option<Def>],
-        idom: &[Option<usize>],
+        cfg: &Cfg,
     ) -> Result<(), Invalid> {
         match defs[value.index()].expect("every value is defined") {
             Def::Block(defined) => {
-                if !dominates(defined, block.index(), idom) {
+                if !cfg.dominates(defined, block) {
                     return Err(Invalid::NotDominated { value, block });
                 }
             },
             Def::Stmt(defined, index) => {
-                if defined == block.index() {
+                if defined == block {
                     if index >= at {
                         return Err(Invalid::DefinedAfterUse { value, block });
                     }
-                } else if !dominates(defined, block.index(), idom) {
+                } else if !cfg.dominates(defined, block) {
                     return Err(Invalid::NotDominated { value, block });
                 }
             },
@@ -675,7 +734,7 @@ impl Body {
     }
 
     /// Checks that the type of a value is the one an instruction takes.
-    fn expect(&self, value: ValueId, expected: Ty) -> Result<(), Invalid> {
+    pub(crate) fn expect(&self, value: ValueId, expected: Ty) -> Result<(), Invalid> {
         let found = self.values[value].ty;
 
         if found != expected {
@@ -718,84 +777,9 @@ impl Body {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Def {
     /// A parameter of a body or of a block, defined where the block is entered.
-    Block(usize),
+    Block(BlockId),
     /// An instruction, defined where it runs.
-    Stmt(usize, usize),
-}
-
-/// The immediate dominator of every reachable block, in the style of Cooper, Harvey, and
-/// Kennedy: iterate the reverse postorder until nothing changes.
-fn dominators(entry: usize, rpo: &[usize], cfg: &Cfg, number: &[usize]) -> Vec<Option<usize>> {
-    let mut idom = vec![None; number.len()];
-    idom[entry] = Some(entry);
-
-    loop {
-        let mut changed = false;
-
-        for &block in rpo {
-            if block == entry {
-                continue;
-            }
-
-            let mut new = None;
-
-            for &pred in cfg.predecessors(block) {
-                if idom[pred].is_none() {
-                    continue;
-                }
-
-                new = Some(match new {
-                    None => pred,
-                    Some(current) => intersect(current, pred, &idom, number),
-                });
-            }
-
-            if new != idom[block] {
-                idom[block] = new;
-                changed = true;
-            }
-        }
-
-        if !changed {
-            break;
-        }
-    }
-
-    idom
-}
-
-/// The common dominator of two blocks, in the style of Cooper, Harvey, and Kennedy.
-fn intersect(a: usize, b: usize, idom: &[Option<usize>], number: &[usize]) -> usize {
-    let mut a = a;
-    let mut b = b;
-
-    while a != b {
-        while number[a] > number[b] {
-            a = idom[a].expect("a reachable block has a dominator");
-        }
-
-        while number[b] > number[a] {
-            b = idom[b].expect("a reachable block has a dominator");
-        }
-    }
-
-    a
-}
-
-/// Whether the block `defined` dominates the block `used`.
-fn dominates(defined: usize, used: usize, idom: &[Option<usize>]) -> bool {
-    let mut block = used;
-
-    loop {
-        if block == defined {
-            return true;
-        }
-
-        match idom[block] {
-            Some(next) if next != block => block = next,
-            _ => return false,
-        }
-    }
+    Stmt(BlockId, usize),
 }
 
 /// The label of a block, for a message.

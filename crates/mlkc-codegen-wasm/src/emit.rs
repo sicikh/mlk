@@ -21,7 +21,7 @@
 use std::fmt;
 
 use mlkc_hir_def::Name;
-use mlkc_lir_wasm::{BlockId, Body, Op, RefTy, Terminator, Ty, ValueId};
+use mlkc_lir_wasm::{BlockId, Body, Node, Op, RefTy, Terminator, Ty, ValueId};
 use mlkc_span::Span;
 use wasm_encoder::{
     AbstractHeapType, BlockType, Function, HeapType, Instruction, RefType, ValType,
@@ -144,7 +144,13 @@ pub fn emit_function(lir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
     }
 
     if let Err(invalid) = lir.validate_locals() {
-        panic!("the WASM back end encodes a body whose allocation has run: {invalid}");
+        panic!("the WASM back end encodes a body whose allocation has not run: {invalid}");
+    }
+
+    if lir.structure.is_some()
+        && let Err(invalid) = lir.validate_structure()
+    {
+        panic!("the WASM back end encodes a body whose structure is not well-formed: {invalid}");
     }
 
     assert_eq!(
@@ -169,19 +175,6 @@ pub fn emit_function(lir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
     emitter.finish()
 }
 
-/// Whether a body is emitted as the straight line it is, rather than as a dispatch loop.
-///
-/// A body of one block that returns or is not meant to be reached is the straight line it is;
-/// every other body is emitted as a dispatch loop, which is always correct and is what the
-/// backend falls back to until control flow is structured.
-pub(crate) fn is_direct(body: &Body) -> bool {
-    body.blocks.len() == 1
-        && matches!(
-            &body.blocks[body.entry].term,
-            Terminator::Return { .. } | Terminator::Unreachable { .. }
-        )
-}
-
 /// The WASM type of a type of the LIR.
 fn val_type(ty: Ty) -> ValType {
     match ty {
@@ -190,6 +183,28 @@ fn val_type(ty: Ty) -> ValType {
             ValType::Ref(RefType::new_abstract(AbstractHeapType::I31, false, false))
         },
         Ty::Ref(RefTy::Eq) => ValType::Ref(RefType::EQREF),
+    }
+}
+
+/// Collects the blocks a structure closes a `block` around: the joins of the body.
+fn collect_joins(nodes: &[Node], joins: &mut Vec<BlockId>) {
+    for node in nodes {
+        match node {
+            Node::Block { out, body } => {
+                joins.push(*out);
+                collect_joins(body, joins);
+            },
+            Node::Loop { body, .. } => collect_joins(body, joins),
+            Node::If { then_, else_, .. } => {
+                collect_joins(then_, joins);
+                collect_joins(else_, joins);
+            },
+            Node::Leaf { .. }
+            | Node::Params { .. }
+            | Node::Br { .. }
+            | Node::Return { .. }
+            | Node::Unreachable { .. } => {},
+        }
     }
 }
 
@@ -225,26 +240,124 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emits the whole body: the blocks, and a dispatch loop around them where there is more
-    /// than one.
+    /// Emits the whole body: the structure the structuring pass built, or the dispatch loop
+    /// where the body has none.
     fn run(&mut self) {
-        if is_direct(self.lir) {
-            self.direct(self.lir.entry);
-        } else {
-            self.initialize();
-            self.dispatch();
+        let lir = self.lir;
+
+        self.initialize();
+
+        match &lir.structure {
+            Some(structure) => self.structured(&structure.nodes),
+            None => self.dispatch(),
         }
     }
 
-    /// Emits what a dispatched body needs before its first case runs.
+    /// Emits the structured control flow of a body.
     ///
-    /// An `(ref i31)` local has no default value, and the dispatch table lets the validator
-    /// prove nothing about which case wrote one: every such local is initialized, or a read in
-    /// a case some path did not reach is rejected. What the initialization writes is never
-    /// read: SSA defines every value before its use, and the parameters are written by the
-    /// caller. A `pc` of a body that is entered at a block that is not the first case is
-    /// initialized as well, because the default of the local is case zero.
+    /// The nodes are the frames of the target in the order they stand, and a leaf is where the
+    /// instructions of one block are written: what the terminator of a block becomes is the
+    /// nodes around its leaf, so encoding makes no decision here.
+    fn structured(&mut self, nodes: &'a [Node]) {
+        for node in nodes {
+            if self.failed {
+                return;
+            }
+
+            match node {
+                Node::Block { body, .. } => {
+                    self.insn(Span::dummy(), Instruction::Block(BlockType::Empty));
+                    self.structured(body);
+                    self.insn(Span::dummy(), Instruction::End);
+                },
+                Node::Loop { body, .. } => {
+                    self.insn(Span::dummy(), Instruction::Loop(BlockType::Empty));
+                    self.structured(body);
+                    self.insn(Span::dummy(), Instruction::End);
+                },
+                Node::If {
+                    cond,
+                    then_,
+                    else_,
+                    span,
+                } => {
+                    self.value(*cond, *span);
+                    self.insn(*span, Instruction::If(BlockType::Empty));
+                    self.structured(then_);
+                    self.insn(*span, Instruction::Else);
+                    self.structured(else_);
+                    self.insn(*span, Instruction::End);
+                },
+                Node::Leaf { block } => self.leaf(*block),
+                Node::Params { target, args, span } => self.params(*target, args, *span),
+                Node::Br { depth, span, .. } => self.insn(*span, Instruction::Br(*depth)),
+                Node::Return { value, span } => {
+                    self.value(*value, *span);
+                    self.insn(*span, Instruction::Return);
+                },
+                Node::Unreachable { span } => self.insn(*span, Instruction::Unreachable),
+            }
+        }
+    }
+
+    /// Emits the instructions of a block, where the structure puts it.
+    fn leaf(&mut self, block: BlockId) {
+        let lir = self.lir;
+
+        self.current = block;
+        self.insts(&lir.blocks[block].insts);
+    }
+
+    /// Emits the values an edge passes, and the stores of the parameters they are for.
+    fn params(&mut self, target: BlockId, args: &'a [ValueId], span: Span) {
+        let lir = self.lir;
+        let params = &lir.blocks[target].params;
+
+        for arg in args {
+            self.value(*arg, span);
+        }
+
+        // The stores are in reverse, so that an edge which permutes the parameters of its
+        // target reads every argument before it writes any of them.
+        for param in params.iter().rev() {
+            let local = lir.locals.values[param.index()]
+                .expect("a parameter of a block to live in a local");
+
+            self.insn(span, Instruction::LocalSet(local));
+        }
+    }
+
+    /// Emits what a body needs before its code runs.
+    ///
+    /// A local of a reference type that is not nullable --- an `(ref i31)` --- has no default
+    /// value, and WASM's validator tracks whether one is initialized frame by frame: a store
+    /// made inside a frame is forgotten where the frame ends. A dispatched body may read any
+    /// local in any case, so every such local is initialized here. A structured body needs the
+    /// same for the parameters of its joins: the branches that leave the arms of an `if` store
+    /// them, and the reads stand after the frame the arms are in.
+    ///
+    /// What the initialization writes is never read in either form: SSA defines every value
+    /// before its use, every edge stores what its target reads, and a parameter of the function
+    /// is written by the caller. A `pc` of a body that is entered at a block that is not the
+    /// first case is initialized as well, because the default of the local is case zero.
     fn initialize(&mut self) {
+        if let Some(structure) = &self.lir.structure {
+            let mut joins = Vec::new();
+
+            collect_joins(&structure.nodes, &mut joins);
+
+            for join in joins {
+                for param in &self.lir.blocks[join].params {
+                    let local = self.lir.locals.values[param.index()]
+                        .expect("a parameter of a block to live in a local");
+
+                    self.default_of(local, self.lir.values[*param].ty);
+                }
+            }
+
+            return;
+        }
+
         if self.lir.entry.index() != 0 {
             self.insn(
                 Span::dummy(),
@@ -256,26 +369,21 @@ impl<'a> Emitter<'a> {
         let parameters = self.lir.params.len() as u32;
 
         for (index, ty) in self.lir.locals.locals.iter().enumerate() {
-            if *ty != Ty::I31 {
-                continue;
-            }
-
             let local = parameters + index as u32;
 
-            self.insn(Span::dummy(), Instruction::I32Const(0));
-            self.insn(Span::dummy(), Instruction::RefI31);
-            self.insn(Span::dummy(), Instruction::LocalSet(local));
+            self.default_of(local, *ty);
         }
     }
 
-    /// Emits a body of one block as the straight line it is.
-    fn direct(&mut self, id: BlockId) {
-        let lir = self.lir;
-        let block = &lir.blocks[id];
+    /// Emits a default for a local whose type has none, and nothing for every other local.
+    fn default_of(&mut self, local: u32, ty: Ty) {
+        if ty != Ty::I31 {
+            return;
+        }
 
-        self.current = id;
-        self.insts(&block.insts);
-        self.terminator(&block.term, None);
+        self.insn(Span::dummy(), Instruction::I32Const(0));
+        self.insn(Span::dummy(), Instruction::RefI31);
+        self.insn(Span::dummy(), Instruction::LocalSet(local));
     }
 
     /// Emits every block of the body as a case of a dispatch loop.
@@ -516,18 +624,17 @@ impl<'a> Emitter<'a> {
 
     /// Emits the instruction that defines a value the allocation pass left out.
     ///
-    /// The pass only leaves a value out when it is read once, in the block that defines it, so
-    /// the definition is in the block being emitted.
+    /// The pass leaves a value out when it is read once, in the block that defines it, or when
+    /// it is a constant, which is written again wherever it is read.
     fn inlined(&mut self, value: ValueId) {
         let (block, at) = self.definitions[value.index()]
-            .expect("a value to be defined by an instruction or live in a local");
-
-        debug_assert_eq!(
-            block, self.current,
-            "a value the allocation left out to be defined in the block it is read in",
-        );
-
+            .expect("a value emitted where it is read to be defined by an instruction");
         let inst = &self.lir.blocks[block].insts[at];
+
+        debug_assert!(
+            block == self.current || matches!(inst.op, Op::I32Const(_)),
+            "a value emitted in another block to be a constant",
+        );
 
         self.emit_inst(inst);
     }

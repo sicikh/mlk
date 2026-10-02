@@ -205,6 +205,13 @@ lir (entry b0) ret eqref
     return v1
 ```
 
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
 `fun parameter`
 
 CFG form:
@@ -236,6 +243,13 @@ lir (entry b0) ret (ref i31)
   b0:
     v1 = ref.cast (ref i31) v0
     return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
 ```
 
 `fun inferred`
@@ -271,6 +285,13 @@ lir (entry b0) ret (ref i31)
     return v1
 ```
 
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
 `fun shown`
 
 CFG form:
@@ -301,6 +322,13 @@ lir (entry b0) ret eqref
   locals: 
   b0:
     return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
 ```
 
 ### Diagnostics

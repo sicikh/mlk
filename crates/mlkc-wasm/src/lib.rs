@@ -1416,6 +1416,9 @@ struct LirBody {
     /// that live in each.
     locals: Vec<LirLocal>,
 
+    /// The structured control flow the body is encoded as, or nothing where it is dispatched.
+    structure: Option<LirStructure>,
+
     /// The blocks, in the order they are allocated.
     blocks: Vec<LirBlock>,
 }
@@ -1509,8 +1512,159 @@ impl LirBody {
                 .map(|value| lir_value_of(body, *value, file))
                 .collect(),
             locals,
+            structure: body.structure.as_ref().map(|structure| {
+                let mut lines = Vec::new();
+
+                structure_lines(&structure.nodes, 0, file, &mut lines);
+
+                LirStructure { lines }
+            }),
             blocks,
         }
+    }
+}
+
+/// The structured control flow of a body of the LIR, as a host reads it.
+///
+/// A body the structuring pass structured is encoded as a tree of `block`, `loop`, and `if`
+/// frames around the instructions of its blocks; a body it could not structure is dispatched,
+/// and the reading is nothing ([ADR-0022](../../docs/adr/0022-wasm-lir.md)).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirStructure {
+    /// The nodes, in the order encoding writes them.
+    lines: Vec<LirStructureLine>,
+}
+
+/// One node of the structured control flow: a frame, an arm, a leaf, or where control goes.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LirStructureLine {
+    /// The number of frames the node stands in, which is what a person reads as indentation.
+    depth: u32,
+
+    /// What the node is: `block`, `loop`, `if`, `else`, `leaf`, `params`, `br`, `return`, or
+    /// `unreachable`.
+    kind: &'static str,
+
+    /// What the node says: `block b3`, `leaf b0`, `br 1 -> b3`.
+    text: String,
+
+    /// Where the node is written, in bytes, or nothing where it was written nowhere.
+    range: Option<[u32; 2]>,
+}
+
+/// Writes the nodes of a structure, each at the depth of the frames around it.
+fn structure_lines(
+    nodes: &[mlkc_lir_wasm::Node],
+    depth: u32,
+    file: FileId,
+    lines: &mut Vec<LirStructureLine>,
+) {
+    use mlkc_lir_wasm::{Node, dump};
+
+    for node in nodes {
+        match node {
+            Node::Block { out, body } => {
+                lines.push(structure_line(
+                    depth,
+                    "block",
+                    format!("block {}", dump::block_label(*out)),
+                    None,
+                ));
+                structure_lines(body, depth + 1, file, lines);
+            },
+            Node::Loop { header, body } => {
+                lines.push(structure_line(
+                    depth,
+                    "loop",
+                    format!("loop {}", dump::block_label(*header)),
+                    None,
+                ));
+                structure_lines(body, depth + 1, file, lines);
+            },
+            Node::If {
+                cond,
+                then_,
+                else_,
+                span,
+            } => {
+                lines.push(structure_line(
+                    depth,
+                    "if",
+                    format!("if {}", dump::value_label(*cond)),
+                    span_range(*span, file),
+                ));
+                structure_lines(then_, depth + 1, file, lines);
+                lines.push(structure_line(depth, "else", "else".to_owned(), None));
+                structure_lines(else_, depth + 1, file, lines);
+            },
+            Node::Leaf { block } => {
+                lines.push(structure_line(
+                    depth,
+                    "leaf",
+                    format!("leaf {}", dump::block_label(*block)),
+                    None,
+                ));
+            },
+            Node::Params { target, args, span } => {
+                let args = args
+                    .iter()
+                    .map(|arg| dump::value_label(*arg))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                lines.push(structure_line(
+                    depth,
+                    "params",
+                    format!("params {}({args})", dump::block_label(*target)),
+                    span_range(*span, file),
+                ));
+            },
+            Node::Br {
+                depth: relative,
+                target,
+                span,
+            } => {
+                lines.push(structure_line(
+                    depth,
+                    "br",
+                    format!("br {relative} -> {}", dump::block_label(*target)),
+                    span_range(*span, file),
+                ));
+            },
+            Node::Return { value, span } => {
+                lines.push(structure_line(
+                    depth,
+                    "return",
+                    format!("return {}", dump::value_label(*value)),
+                    span_range(*span, file),
+                ));
+            },
+            Node::Unreachable { span } => {
+                lines.push(structure_line(
+                    depth,
+                    "unreachable",
+                    "unreachable".to_owned(),
+                    span_range(*span, file),
+                ));
+            },
+        }
+    }
+}
+
+/// One line of a structured body, as a host reads it.
+fn structure_line(
+    depth: u32,
+    kind: &'static str,
+    text: String,
+    range: Option<[u32; 2]>,
+) -> LirStructureLine {
+    LirStructureLine {
+        depth,
+        kind,
+        text,
+        range,
     }
 }
 

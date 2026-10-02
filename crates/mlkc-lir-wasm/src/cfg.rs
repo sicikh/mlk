@@ -20,6 +20,10 @@ pub struct Cfg {
     preds: Vec<Vec<usize>>,
     /// The blocks reached from the entry, in reverse postorder, by position.
     rpo: Vec<usize>,
+    /// The immediate dominator of every reachable block, by position.
+    idom: Vec<Option<usize>>,
+    /// The children of every block in the dominator tree, by position, in reverse postorder.
+    children: Vec<Vec<usize>>,
 }
 
 impl Cfg {
@@ -42,8 +46,34 @@ impl Cfg {
         }
 
         let rpo = reverse_postorder(body.entry.index(), &succs);
+        let mut number = vec![usize::MAX; body.blocks.len()];
 
-        Self { succs, preds, rpo }
+        for (position, block) in rpo.iter().enumerate() {
+            number[*block] = position;
+        }
+
+        let idom = dominators(body.entry.index(), &rpo, &preds, &number);
+        let mut children = vec![Vec::new(); body.blocks.len()];
+
+        for (block, parent) in idom.iter().enumerate() {
+            if let Some(parent) = parent
+                && *parent != block
+            {
+                children[*parent].push(block);
+            }
+        }
+
+        for siblings in &mut children {
+            siblings.sort_unstable_by_key(|block| number[*block]);
+        }
+
+        Self {
+            succs,
+            preds,
+            rpo,
+            idom,
+            children,
+        }
     }
 
     /// The successors of a block, by position.
@@ -64,6 +94,30 @@ impl Cfg {
     /// The position of a block in the reverse postorder, or `None` where no path reaches it.
     pub fn position_of(&self, block: BlockId) -> Option<usize> {
         self.rpo.iter().position(|it| *it == block.index())
+    }
+
+    /// Whether `dominator` dominates `dominated`.
+    ///
+    /// A block dominates itself, and a block no path from the entry reaches is dominated by
+    /// itself alone: there is no path to it for the promise to be about.
+    pub fn dominates(&self, dominator: BlockId, dominated: BlockId) -> bool {
+        let mut block = dominated.index();
+
+        loop {
+            if block == dominator.index() {
+                return true;
+            }
+
+            match self.idom[block] {
+                Some(next) if next != block => block = next,
+                _ => return false,
+            }
+        }
+    }
+
+    /// The children of a block in the dominator tree, by position, in reverse postorder.
+    pub fn dominator_children(&self, position: usize) -> &[usize] {
+        &self.children[position]
     }
 }
 
@@ -100,6 +154,72 @@ fn reverse_postorder(entry: usize, succs: &[Vec<usize>]) -> Vec<usize> {
 
     postorder.reverse();
     postorder
+}
+
+/// The immediate dominator of every reachable block, in the style of Cooper, Harvey, and
+/// Kennedy: iterate the reverse postorder until nothing changes.
+///
+/// The entry dominates itself, and a block no path reaches has none.
+fn dominators(
+    entry: usize,
+    rpo: &[usize],
+    preds: &[Vec<usize>],
+    number: &[usize],
+) -> Vec<Option<usize>> {
+    let mut idom = vec![None; number.len()];
+    idom[entry] = Some(entry);
+
+    loop {
+        let mut changed = false;
+
+        for &block in rpo {
+            if block == entry {
+                continue;
+            }
+
+            let mut new = None;
+
+            for &pred in &preds[block] {
+                if idom[pred].is_none() {
+                    continue;
+                }
+
+                new = Some(match new {
+                    None => pred,
+                    Some(current) => intersect(current, pred, &idom, number),
+                });
+            }
+
+            if new != idom[block] {
+                idom[block] = new;
+                changed = true;
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    idom
+}
+
+/// The common dominator of two blocks, in the style of Cooper, Harvey, and Kennedy.
+fn intersect(a: usize, b: usize, idom: &[Option<usize>], number: &[usize]) -> usize {
+    let mut a = a;
+    let mut b = b;
+
+    while a != b {
+        while number[a] > number[b] {
+            a = idom[a].expect("a reachable block has a dominator");
+        }
+
+        while number[b] > number[a] {
+            b = idom[b].expect("a reachable block has a dominator");
+        }
+    }
+
+    a
 }
 
 #[cfg(test)]
@@ -171,5 +291,88 @@ mod tests {
         assert!(!cfg.reverse_postorder().contains(&unreachable.index()));
         assert_eq!(cfg.position_of(third), Some(1));
         assert_eq!(cfg.position_of(unreachable), None);
+    }
+
+    /// A body of a diamond: the entry branches to two arms, and the arms meet in a fourth
+    /// block nothing else enters.
+    #[test]
+    fn the_dominators_of_a_body_are_read_off_the_graph() {
+        let mut builder = BodyBuilder::new(Ty::I32);
+        let cond = builder.param(ValueData {
+            span: Span::dummy(),
+            ty: Ty::I32,
+        });
+        let entry = builder.block(Block {
+            params: Vec::new(),
+            insts: Vec::new(),
+            term: Terminator::Unreachable {
+                span: Span::dummy(),
+            },
+        });
+        let then_ = builder.block(Block {
+            params: Vec::new(),
+            insts: Vec::new(),
+            term: Terminator::Unreachable {
+                span: Span::dummy(),
+            },
+        });
+        let else_ = builder.block(Block {
+            params: Vec::new(),
+            insts: Vec::new(),
+            term: Terminator::Unreachable {
+                span: Span::dummy(),
+            },
+        });
+        let join = builder.block(Block {
+            params: Vec::new(),
+            insts: Vec::new(),
+            term: Terminator::Return {
+                value: cond,
+                span: Span::dummy(),
+            },
+        });
+
+        builder.block_mut(entry).term = Terminator::Branch {
+            cond,
+            then_: BlockTarget {
+                block: then_,
+                args: Vec::new(),
+            },
+            else_: BlockTarget {
+                block: else_,
+                args: Vec::new(),
+            },
+            span: Span::dummy(),
+        };
+        builder.block_mut(then_).term = Terminator::Goto {
+            target: BlockTarget {
+                block: join,
+                args: Vec::new(),
+            },
+            span: Span::dummy(),
+        };
+        builder.block_mut(else_).term = Terminator::Goto {
+            target: BlockTarget {
+                block: join,
+                args: Vec::new(),
+            },
+            span: Span::dummy(),
+        };
+
+        let body = builder.finish(entry);
+        let cfg = Cfg::of(&body);
+
+        // The entry dominates everything, an arm dominates nothing but itself, and the join is
+        // a child of the entry in the dominator tree.
+        assert!(cfg.dominates(entry, join));
+        assert!(cfg.dominates(then_, then_));
+        assert!(!cfg.dominates(then_, join));
+        assert!(!cfg.dominates(else_, then_));
+        assert_eq!(cfg.dominator_children(entry.index()).len(), 3);
+        assert!(
+            cfg.dominator_children(entry.index())
+                .contains(&join.index())
+        );
+        assert!(cfg.dominator_children(then_.index()).is_empty());
     }
 }

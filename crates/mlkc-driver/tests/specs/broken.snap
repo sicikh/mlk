@@ -259,6 +259,13 @@ lir (entry b0) ret eqref
     return v0
 ```
 
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
 `fun size`
 
 CFG form:
@@ -289,6 +296,13 @@ lir (entry b0) ret (ref i31)
   locals: 
   b0:
     return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
 ```
 
 `fun wrong`
@@ -323,6 +337,13 @@ lir (entry b0) ret eqref
     v1 = ref.i31 v0
     v2 = call $1(v1)
     return v2
+```
+
+Structure:
+
+```
+  leaf b0
+  return v2
 ```
 
 ### Diagnostics

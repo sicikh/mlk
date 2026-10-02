@@ -106,6 +106,12 @@ The WASM LIR is a _low-level IR_: the target's own instructions in SSA form, whi
 - **Blocks with parameters**, as in MIR ([ADR-0019][0019-mir.md]):
   a join takes a parameter,
   so there are no phi nodes and no second construction algorithm.
+- **A structure of the control flow the encoder writes**:
+  the tree of `block`, `loop`, and `if` frames around the instructions of the blocks,
+  built by a structuring pass from the graph of the body.
+  A body whose graph is not one of those frames —
+  a body that switches, or one whose backward branches are irreducible —
+  has no structure and is encoded as a dispatch loop.
 - **The target's instructions**:
   `i32.add`, `ref.i31`, `i31.get_s`, `ref.cast`, `ref.eq`, `struct.get $s`,
   calls by index, constants, and the terminators.
@@ -163,13 +169,19 @@ What it emits is what the types say, and the passes make it small.
    The rule the emitter keeps today — one read, in the defining block,
    with no effect in between ([ADR-0020][0020-wasm-backend.md]) — becomes one pass here,
    and the invariants that rule protects become the pass's own;
-4. later, on the same foundation:
-   structuring the dispatch loop into `if`/`loop` regions
-   ([ADR-0020][0020-wasm-backend.md]),
+4. structuring the control flow of a body:
+   the frames the encoder writes around the blocks,
+   built from the dominator tree of the graph after Ramsey's _Beyond Relooper_ (ICFP 2022),
+   as Waffle's `stackify` implements it.
+   A body that switches, or one whose graph is not reducible,
+   has no structure and is left to the dispatch form of the encoder;
+5. later, on the same foundation:
    coalescing locals by live range, and folding constants in LIR instructions.
 
-**Encoding** walks the blocks and writes `wasm-encoder` calls:
-no decisions, and the `Origin`s of the artifact are the spans the passes did not drop.
+**Encoding** walks the structure of the body and writes `wasm-encoder` calls:
+where the body has a structure, it opens its frames and closes them at its ends,
+and where it has none, it walks the blocks as a dispatch loop.
+No decisions, and the `Origin`s of the artifact are the spans the passes did not drop.
 It produces the same `FuncArtifact` [ADR-0020][0020-wasm-backend.md] describes,
 so `assemble_module` does not change;
 `emit_function` is handed the LIR of a body instead of its MIR body.
@@ -286,6 +298,8 @@ Binaryen, or the `portal-pc-waffle` fork rejected in [ADR-0020][0020-wasm-backen
 - Waffle, whose IR is a WASM-level SSA and whose passes our own follow
   (`reducify`, `localify`, `stackify`; Apache-2.0 WITH LLVM-exception):
   <https://github.com/bytecodealliance/waffle>
+- Ramsey, _Beyond Relooper: recursive translation of unstructured control flow to structured
+  control flow_ (ICFP 2022), the algorithm of the structuring pass.
 - Cranelift, the low-level IR of the native backend:
   <https://github.com/bytecodealliance/wasmtime/tree/main/cranelift>
 

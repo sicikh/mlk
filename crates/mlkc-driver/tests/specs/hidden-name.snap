@@ -118,6 +118,13 @@ lir (entry b0) ret (ref i31)
     return v1
 ```
 
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
 ### Diagnostics
 
 No diagnostics.

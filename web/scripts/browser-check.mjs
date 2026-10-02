@@ -160,7 +160,10 @@ const LIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 		termKinds: [...inspector().querySelectorAll('[data-line=term]')].map((it) => it.dataset.kind),
 		params: lines('params'),
 		locals: lines('locals'),
-		blockParams: [...inspector().querySelectorAll('[data-block] [data-line=value]')].map((it) => text(it))
+		blockParams: [...inspector().querySelectorAll('[data-block] [data-line=value]')].map((it) => text(it)),
+		structure: lines('structure'),
+		structureKinds: [...inspector().querySelectorAll('[data-line=structure]')].map((it) => it.dataset.kind),
+		structureDepths: [...inspector().querySelectorAll('[data-line=structure]')].map((it) => Number(it.dataset.depth))
 	})`;
 
 /** The questions themselves, each answered by one round trip. */
@@ -402,6 +405,12 @@ const STEPS = {
     foldWat: `inspector().querySelector('[data-wat-fold-all]').click(); return true`,
 
     unfoldWat: `inspector().querySelector('[data-wat-unfold-all]').click(); return true`,
+
+    // A frame of the structure folds what it holds away, and unfolding brings it back. The
+    // frame taken is the first one, and it stays on the screen while folded.
+    foldLir: `inspector().querySelector('[data-lir] [data-fold]').click(); return true`,
+
+    unfoldLir: `inspector().querySelector('[data-lir] [data-fold]').click(); return true`,
 
     // The name section stands at the end of the module, which a person reads by scrolling to it.
     scrollWatEnd: `const scroller = inspector().querySelector('[data-wat] .cm-scroller');
@@ -763,7 +772,7 @@ const WAITS = {
     tc: `return inspector().querySelector('[data-tc=entity]') !== null`,
     mir: `return inspector().querySelector('[data-form=cfg] [data-block]') !== null`,
     ssa: `return inspector().querySelector('[data-form=ssa] [data-line=term]') !== null`,
-    lir: `return inspector().querySelector('[data-lir] [data-block]') !== null`,
+    lir: `return inspector().querySelector('[data-lir] [data-block]') !== null && inspector().querySelector('[data-lir] [data-structure] [data-line=structure]') !== null`,
     branch: `return inspector().querySelectorAll('[data-form=cfg] [data-block]').length > 1`,
     branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
     unit: `return inspector().textContent.includes('const unit')`,
@@ -1028,10 +1037,18 @@ async function main() {
     const ssa = JSON.parse(await ask(STEPS.ssa));
 
     // The LIR of the buffer: what the WASM back end lowers the SSA form into, the target's own
-    // instructions, and where the values that need storage live.
+    // instructions, where the values that need storage live, and the frames the encoder writes
+    // them as.
     await ask(STEPS.showLir);
     await until(WAITS.lir, "the lir of the buffer");
     const lir = JSON.parse(await ask(STEPS.lir));
+
+    // A frame of the structure folds what it holds away, and unfolding brings the lines back.
+    await ask(STEPS.foldLir);
+    const lirFolded = JSON.parse(await ask(STEPS.lir));
+
+    await ask(STEPS.unfoldLir);
+    const lirAgain = JSON.parse(await ask(STEPS.lir));
 
     // The module the link stage hands a host: the same bytes a run instantiates, read in a view
     // of its own, where the forms of it fold.
@@ -1225,6 +1242,8 @@ async function main() {
             mirHover,
             ssa,
             lir,
+            lirFolded,
+            lirAgain,
             branch,
             branchSsa,
             branchWords,
@@ -1504,12 +1523,33 @@ function report(page, problems, warnings, asked) {
                 page.lir.params.some((it) => it.includes("(ref i31)")),
         ],
         [
-            // A value the allocation gave a local to says which one, and a body that is
-            // dispatched declares the program counter among its locals.
+            // A value the allocation gave a local to says which one; the dispatch form would
+            // keep a program counter in one of them, and every body of the buffer is structured.
             "the lir reads the locals a value lives in",
-            page.lir.locals.some((it) => it.includes("(pc)")) &&
-                page.lir.locals.some((it) => it.includes(" = v")) &&
-                page.lir.blockParams.some((it) => it.includes("(local ")),
+            page.lir.locals.some((it) => it.includes(" = v")) &&
+                page.lir.blockParams.some((it) => it.includes("(local ")) &&
+                !page.lir.locals.some((it) => it.includes("(pc)")),
+        ],
+        [
+            // The structure is the tree of frames the encoder writes around the instructions:
+            // a join is a `block` a branch leaves, an `if` is a choice, a `leaf` is where a
+            // block is written, and what a person folds is a frame and what it holds.
+            "the lir tab reads the structure the encoder writes",
+            page.lir.structureKinds.includes("block") &&
+                page.lir.structureKinds.includes("if") &&
+                page.lir.structureKinds.includes("br") &&
+                page.lir.structureKinds.includes("leaf") &&
+                page.lir.structureKinds.includes("return") &&
+                page.lir.structure.some((it) => it.startsWith("block b")) &&
+                page.lir.structure.some((it) => it.startsWith("leaf b")) &&
+                Math.max(...page.lir.structureDepths) > 0,
+        ],
+        [
+            // The structure is a view rather than a note: a frame folds the lines it holds
+            // away, and unfolding it brings them back.
+            "the lir folds and unfolds a frame of the structure",
+            page.lirFolded.structure.length < page.lir.structure.length &&
+                page.lirAgain.structure.length === page.lir.structure.length,
         ],
         [
             // A choice is what makes a body more than one block: the entry evaluates the
@@ -1824,7 +1864,7 @@ function report(page, problems, warnings, asked) {
         `the mir reads a ${page.mir.form} form of ${page.mir.blocks.length} block(s), which ${page.mirHover.says.trim()} marks ${JSON.stringify(page.mirHover.marked)}, and the ssa ${page.ssa.blocks.length} block(s)`,
     );
     console.log(
-        `the lir reads ${page.lir.blocks.length} block(s) of ${page.lir.kinds.length} instruction(s) of ${new Set(page.lir.kinds).size} kind(s), in ${page.lir.locals.length} local line(s)`,
+        `the lir reads ${page.lir.blocks.length} block(s) of ${page.lir.kinds.length} instruction(s) of ${new Set(page.lir.kinds).size} kind(s), in ${page.lir.locals.length} local line(s), and the structure is ${page.lir.structure.length} line(s) folded to ${page.lirFolded.structure.length}`,
     );
     console.log(
         `a choice reads as ${page.branch.blocks.length} block(s) of a ${page.branch.form} form and ${page.branchSsa.blockParams.length} parameter(s) of the join of the ssa form`,

@@ -1,5 +1,11 @@
 <script lang="ts">
-    import type { Lir, LirBlock, LirLocal, LirValue } from "$lib/driver";
+    import type {
+        Lir,
+        LirBlock,
+        LirLocal,
+        LirStructureLine,
+        LirValue,
+    } from "$lib/driver";
 
     interface Props {
         /** The LIR of the buffer: the target's instructions in SSA form. */
@@ -16,6 +22,12 @@
     }
 
     let { lir, onHover, onPick }: Props = $props();
+
+    /**
+     * The frames a person folded, by the body and the line they stand at: a reading of a deep
+     * structure is a person's choice, and the choice outlives a buffer read again.
+     */
+    let folded = $state<string[]>([]);
 
     /**
      * What a line tells the page about the pointer: the part of the source it stands for.
@@ -47,7 +59,8 @@
 
     /** What one local holds: `1: (ref i31) = v1`, `3: i32 (pc)`. */
     function local(local: LirLocal): string {
-        const values = local.values.length > 0 ? ` = ${local.values.join(", ")}` : "";
+        const values =
+            local.values.length > 0 ? ` = ${local.values.join(", ")}` : "";
         const kind = local.kind === "value" ? "" : ` (${local.kind})`;
 
         return `${local.index}: ${local.ty}${kind}${values}`;
@@ -66,6 +79,65 @@
         ]
             .filter((it) => it !== "")
             .join("  ");
+    }
+
+    /** Whether a node of the structure holds other nodes and can be folded. */
+    function holds(kind: string): boolean {
+        return (
+            kind === "block" ||
+            kind === "loop" ||
+            kind === "if" ||
+            kind === "else"
+        );
+    }
+
+    /** When a frame of the structure was folded: the body and the line it stands at. */
+    function key(body: number, at: number): string {
+        return `${body}:${at}`;
+    }
+
+    /** Folds a frame, or unfolds one a person opened again. */
+    function toggle(body: number, at: number) {
+        const id = key(body, at);
+
+        folded = folded.includes(id)
+            ? folded.filter((it) => it !== id)
+            : [...folded, id];
+    }
+
+    /**
+     * Which lines of a structure a person folded away, by the line they stand at.
+     *
+     * A frame holds every line deeper than it, up to the next line at its own depth; an `if`
+     * holds its else arm as well, because the arm stands at the depth of the `if` itself.
+     */
+    function hidden_lines(lines: LirStructureLine[], body: number): boolean[] {
+        const hidden = lines.map(() => false);
+
+        for (const id of folded) {
+            if (!id.startsWith(`${body}:`)) continue;
+
+            const at = Number(id.slice(id.indexOf(":") + 1));
+            if (at >= lines.length) continue;
+
+            const depth = lines[at].depth;
+            let end = at + 1;
+
+            while (end < lines.length && lines[end].depth > depth) end++;
+
+            if (
+                lines[at].kind === "if" &&
+                end < lines.length &&
+                lines[end].kind === "else"
+            ) {
+                end++;
+                while (end < lines.length && lines[end].depth > depth) end++;
+            }
+
+            for (let line = at + 1; line < end; line++) hidden[line] = true;
+        }
+
+        return hidden;
     }
 </script>
 
@@ -105,11 +177,59 @@
                 <p class="params" data-line="locals">
                     <span class="tag">locals</span>
                     {#each body.locals as held, at (at)}
-                        <span class="value local" data-line="local" title={local(held)}
-                            >{local(held)}</span
+                        <span
+                            class="value local"
+                            data-line="local"
+                            title={local(held)}>{local(held)}</span
                         >
                     {/each}
                 </p>
+            {/if}
+
+            {#if body.structure !== null}
+                {@const hidden = hidden_lines(body.structure.lines, index)}
+                <div class="structure" data-structure>
+                    <p class="params">
+                        <span class="tag">structure</span>
+                    </p>
+
+                    {#each body.structure.lines as node, at (at)}
+                        {#if !hidden[at]}
+                            <div
+                                class="frame"
+                                style="padding-left: {node.depth * 0.75}rem"
+                            >
+                                {#if holds(node.kind)}
+                                    <button
+                                        class="fold"
+                                        data-fold={node.kind}
+                                        title={folded.includes(key(index, at))
+                                            ? "Unfold"
+                                            : "Fold"}
+                                        onclick={() => toggle(index, at)}
+                                        >{folded.includes(key(index, at))
+                                            ? "▸"
+                                            : "▾"}</button
+                                    >
+                                {:else}
+                                    <span class="fold"></span>
+                                {/if}
+
+                                <button
+                                    class="line"
+                                    data-line="structure"
+                                    data-kind={node.kind}
+                                    data-depth={node.depth}
+                                    title={node.text}
+                                    {...pointing(node.range)}
+                                    onclick={() => onPick(node.range)}
+                                >
+                                    <span class="saying">{node.text}</span>
+                                </button>
+                            </div>
+                        {/if}
+                    {/each}
+                </div>
             {/if}
 
             {#each body.blocks as block, at (at)}
@@ -233,6 +353,48 @@
         margin: 0;
         padding: 0.2rem 0 0.1rem;
         white-space: nowrap;
+    }
+
+    /* The structure is the tree of frames encoding writes: a leaf, and the frames around it.
+       Its lines are indented by depth, and a frame folds what it holds. */
+    .structure {
+        padding: 0.1rem 0 0.25rem;
+    }
+
+    .frame {
+        display: flex;
+        align-items: baseline;
+        min-height: 1.1rem;
+    }
+
+    .fold {
+        flex: none;
+        width: 1rem;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 10px;
+        text-align: left;
+    }
+
+    .fold:hover {
+        color: var(--text);
+    }
+
+    .structure .line {
+        padding-left: 0;
+    }
+
+    .structure .saying {
+        color: var(--muted);
+    }
+
+    .line[data-kind="if"] .saying,
+    .line[data-kind="br"] .saying {
+        color: var(--type);
+    }
+
+    .line[data-kind="leaf"] .saying {
+        color: var(--accent);
     }
 
     .label {

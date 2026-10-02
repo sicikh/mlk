@@ -18,7 +18,10 @@ use mlkc_intern::Interned;
 use mlkc_la_arena::{Arena, Idx};
 use mlkc_span::Span;
 
-use crate::ty::{RefTy, Ty};
+use crate::{
+    structure::Structure,
+    ty::{RefTy, Ty},
+};
 
 /// The id of a block inside one body.
 pub type BlockId = Idx<Block>;
@@ -51,6 +54,9 @@ pub struct Body {
     pub values: Arena<ValueData>,
     /// Where the values live, once the allocation pass has decided.
     pub locals: Locals,
+    /// How the control flow becomes the frames of the target, once the structuring pass has
+    /// run: what encoding writes as `block`, `loop`, and `if`.
+    pub structure: Option<Structure>,
 }
 
 /// One block: its parameters, its instructions, and the terminator it ends in.
@@ -492,6 +498,7 @@ impl BodyBuilder {
             blocks: self.blocks,
             values: self.values,
             locals: Locals::default(),
+            structure: None,
         }
     }
 }

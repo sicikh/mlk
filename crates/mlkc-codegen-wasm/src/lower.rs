@@ -1,16 +1,17 @@
 //! Lowering one SSA body into the LIR of the back end ([ADR-0022][adr-0022]).
 //!
 //! This is the stage the driver calls `lir`: selection, which writes what the types say, and
-//! the passes that make it small --- collapsing what the target has nothing to do, and deciding
-//! where the values that are left live. What comes back is a value of the compiler, keyed and
-//! memoized per body by the driver, and handed to encoding as it stands.
+//! the passes that make it small --- collapsing what the target has nothing to do, structuring
+//! the control flow into the frames of the target, and deciding where the values that are left
+//! live. What comes back is a value of the compiler, keyed and memoized per body by the driver,
+//! and handed to encoding as it stands.
 //!
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 
 use mlkc_lir_wasm::Body;
 use mlkc_mir::Body as MirBody;
 
-use crate::{allocate, collapse, emit::FunctionCtx, select};
+use crate::{allocate, collapse, emit::FunctionCtx, select, structure};
 
 /// Lowers one SSA body into the LIR of the back end, ready to encode.
 ///
@@ -24,6 +25,8 @@ pub fn lower_function(mir: &MirBody, ctx: &FunctionCtx<'_>) -> Body {
     let selected = select::run(mir, ctx);
     let mut body = collapse::run(&selected);
 
+    body.structure = structure::run(&body);
+
     allocate::run(&mut body);
 
     if let Err(invalid) = body.validate() {
@@ -32,6 +35,12 @@ pub fn lower_function(mir: &MirBody, ctx: &FunctionCtx<'_>) -> Body {
 
     if let Err(invalid) = body.validate_locals() {
         panic!("the allocation of a body is not well-formed: {invalid}");
+    }
+
+    if body.structure.is_some()
+        && let Err(invalid) = body.validate_structure()
+    {
+        panic!("the structure of a body is not well-formed: {invalid}");
     }
 
     body

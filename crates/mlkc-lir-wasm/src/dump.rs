@@ -13,7 +13,7 @@
 use std::fmt::Write as _;
 
 use crate::{
-    BlockId, BlockTarget, Body, Inst, Op, Terminator, ValueId,
+    BlockId, BlockTarget, Body, Inst, Node, Op, Structure, Terminator, ValueId,
     ty::{RefTy, Ty},
 };
 
@@ -82,6 +82,65 @@ fn value_text(body: &Body, value: ValueId) -> String {
     match body.locals.values.get(value.index()).copied().flatten() {
         Some(local) if local as usize >= body.params.len() => format!("{label}(local {local})"),
         _ => label,
+    }
+}
+
+/// Reads the structured control flow of a body as a person reads it.
+///
+/// The dump is a nested list of frames, one per line, in the order encoding writes them: a
+/// `block` or a `loop` holds what stands between it and its `end`, an `if` holds both arms, and
+/// a `leaf` is where the instructions of one block are emitted.
+pub fn structure(structure: &Structure) -> String {
+    let mut out = String::new();
+
+    nodes_text(&structure.nodes, 0, &mut out);
+
+    out
+}
+
+/// Writes one list of nodes, indented by the frames around them.
+fn nodes_text(nodes: &[Node], depth: usize, out: &mut String) {
+    let indent = "  ".repeat(depth + 1);
+
+    for node in nodes {
+        match node {
+            Node::Block { out: block, body } => {
+                let _ = writeln!(out, "{indent}block {}:", block_label(*block));
+                nodes_text(body, depth + 1, out);
+            },
+            Node::Loop { header, body } => {
+                let _ = writeln!(out, "{indent}loop {}:", block_label(*header));
+                nodes_text(body, depth + 1, out);
+            },
+            Node::If {
+                cond, then_, else_, ..
+            } => {
+                let _ = writeln!(out, "{indent}if {}:", value_label(*cond));
+                nodes_text(then_, depth + 1, out);
+                let _ = writeln!(out, "{indent}else:");
+                nodes_text(else_, depth + 1, out);
+            },
+            Node::Leaf { block } => {
+                let _ = writeln!(out, "{indent}leaf {}", block_label(*block));
+            },
+            Node::Params { target, args, .. } => {
+                let _ = writeln!(
+                    out,
+                    "{indent}params {}({})",
+                    block_label(*target),
+                    labels(args.iter().copied().map(value_label)),
+                );
+            },
+            Node::Br { depth, target, .. } => {
+                let _ = writeln!(out, "{indent}br {depth} -> {}", block_label(*target),);
+            },
+            Node::Return { value, .. } => {
+                let _ = writeln!(out, "{indent}return {}", value_label(*value));
+            },
+            Node::Unreachable { .. } => {
+                let _ = writeln!(out, "{indent}unreachable");
+            },
+        }
     }
 }
 

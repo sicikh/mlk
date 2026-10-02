@@ -91,8 +91,10 @@ behind the same backend seam.
 
 ### The stages
 
-Codegen is two stages, because a WASM module is assembled after its functions exist,
-and because DWARF needs addresses that are only known after the layout:
+Codegen assembles a module in two stages, because a WASM module is assembled after its
+functions exist, and because DWARF needs addresses that are only known after the layout.
+Before them, each body is lowered from MIR into the backend's LIR
+([ADR-0022][0022-wasm-lir.md]):
 
 ```rust
 // mlkc-codegen-wasm
@@ -106,7 +108,7 @@ pub struct FuncArtifact {
     pub debug: Vec<ValueDebug>,
 }
 
-pub fn emit_function(mir: &Body, ctx: &FunctionCtx) -> (FuncArtifact, Vec<CodegenDiag>);
+pub fn emit_function(lir: &mlkc_lir_wasm::Body, ctx: &FunctionCtx) -> (FuncArtifact, Vec<CodegenDiag>);
 
 /// One module's checked bodies, their MIR, the structures the module declares,
 /// and the signatures its entities have ([ADR-0017][0017-resolved-types.md]).
@@ -119,7 +121,8 @@ pub fn assemble_module(
 
 - `emit_function` runs per body, in parallel, like every other pass
   ([ADR-0005][0005-compiler-pipeline.md]).
-  Its input is the SSA body, the signature of its owner, the layouts of the structures
+  Its input is the LIR of the body ([ADR-0022][0022-wasm-lir.md]),
+  the signature of its owner, the layouts of the structures
   the body names, and, for the debug tables, the checked types of the body's nodes;
   its output does not borrow from any of them,
   so the driver stores it ([ADR-0009][0009-pass-contract.md]).
@@ -150,9 +153,12 @@ A value read once, in the block that defines it, is not given a local at all:
 its expression is emitted where it is read,
 unless a call or a trapping division stands between the two,
 which would make computing it later observable.
-A use that takes the number inside the value --- an operator, a condition ---
+A use that takes the number inside the value — an operator, a condition —
 reads it unboxed,
 so nothing is boxed only to be taken apart at once.
+Those representation-level decisions — what a value is, where it is opened,
+and whether it lives in a local — are passes over the backend's own IR
+([ADR-0022][0022-wasm-lir.md]); this record fixes what the emitted module must look like.
 
 The emitter runs a forward dataflow over the SSA body
 and computes, per value, a refinement ordered by precision:
@@ -406,6 +412,7 @@ A Waffle with GC types and a real backend, published as `portal-pc-waffle*`.
 
 - Values as words: [0018-values-as-words.md]
 - MIR: [0019-mir.md]
+- The backend's own IR, where representation decisions are passes: [0022-wasm-lir.md]
 - Translation units and linking: [0021-translation-units.md]
 - Pipeline and stages: [0005-compiler-pipeline.md]
 - Resolved types: [0017-resolved-types.md]
@@ -433,4 +440,5 @@ A Waffle with GC types and a real backend, published as `portal-pc-waffle*`.
 [0018-values-as-words.md]: 0018-values-as-words.md
 [0019-mir.md]: 0019-mir.md
 [0021-translation-units.md]: 0021-translation-units.md
+[0022-wasm-lir.md]: 0022-wasm-lir.md
 [mlkc-line-index]: ../../crates/mlkc-line-index

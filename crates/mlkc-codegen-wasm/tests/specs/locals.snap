@@ -1,0 +1,54 @@
+---
+source: crates/mlkc-codegen-wasm/tests/wasm_specs.rs
+expression: snapshot
+---
+```wat
+(module $app::main
+  (type (;0;) (func (param (ref i31)) (result (ref i31))))
+  (type (;1;) (func (param (ref i31) (ref i31)) (result (ref i31))))
+  (export "twice" (func $twice))
+  (export "from_a_call" (func $from_a_call))
+  (export "after_a_call" (func $after_a_call))
+  (func $twice (;0;) (type 0) (param $value (ref i31)) (result (ref i31))
+    (local (ref i31) i32 i32)
+    local.get $value
+    i31.get_s
+    local.get $value
+    i31.get_s
+    i32.mul
+    ref.i31
+    local.set 1
+    local.get 1
+    i31.get_s
+    local.get 1
+    i31.get_s
+    i32.add
+    ref.i31
+    return
+  )
+  (func $from_a_call (;1;) (type 0) (param $value (ref i31)) (result (ref i31))
+    (local i32 i32)
+    local.get $value
+    call $twice
+    return
+  )
+  (func $after_a_call (;2;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
+    (local (ref i31) i32 i32)
+    local.get $left
+    i31.get_s
+    local.get $right
+    i31.get_s
+    i32.mul
+    ref.i31
+    local.set 2
+    local.get 2
+    i31.get_s
+    local.get $left
+    call $twice
+    i31.get_s
+    i32.add
+    ref.i31
+    return
+  )
+)
+```

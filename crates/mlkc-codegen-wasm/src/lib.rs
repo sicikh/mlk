@@ -41,6 +41,7 @@
 //! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
 
 mod emit;
+mod inlining;
 mod module;
 mod refine;
 

@@ -10,7 +10,8 @@
 //! Before `localify` exists ([ADR-0020][adr-0020]), every value gets a local of its own, typed
 //! by its refinement: an immediate is a `(ref i31)` and everything else is an `eqref`. A value
 //! that is a parameter is the local the ABI already declares for it --- the emitter reads it
-//! where the caller left it --- and no other value is copied at the entry either.
+//! where the caller left it --- and a value read once, in the block that defines it, is emitted
+//! where it is used and given no local at all ([`Inlining`](crate::inlining::Inlining)).
 //!
 //! # Control flow
 //!
@@ -39,6 +40,7 @@ use mlkc_span::Span;
 use wasm_encoder::{AbstractHeapType, BlockType, Function, HeapType, Instruction, ValType};
 
 use crate::{
+    inlining::Inlining,
     module::{FnSignature, ModuleLayout},
     refine::{AbiType, Refinement, Refinements},
 };
@@ -65,7 +67,8 @@ pub struct FuncArtifact {
     pub body: Vec<u8>,
     /// Source positions of instructions inside `body`, by byte offset.
     pub origins: Vec<Origin>,
-    /// The refinement of every value, for the debugger and for the assembler.
+    /// The refinement of every value that lives in a local, for the debugger and for the
+    /// assembler; a value the emitter inlines lives in no local.
     pub debug: Vec<ValueDebug>,
 }
 
@@ -168,10 +171,13 @@ struct Emitter<'a> {
     mir: &'a Body,
     ctx: &'a FunctionCtx<'a>,
     refinements: Refinements,
+    /// Which values are emitted where they are used rather than kept in a local.
+    inlining: Inlining<'a>,
     /// What the result of the function crosses the ABI as.
     ret: AbiType,
-    /// The WASM local of every value, by the value's place in its arena.
-    value_locals: Vec<u32>,
+    /// The WASM local of every value that lives in one, by the value's place in its arena; a
+    /// value the emitter inlines has none.
+    value_locals: Vec<Option<u32>>,
     /// The local the dispatch form keeps the program counter in.
     pc_local: u32,
     /// The local the dispatch form compares a `switch` scrutinee in.
@@ -186,6 +192,7 @@ struct Emitter<'a> {
 impl<'a> Emitter<'a> {
     fn new(mir: &'a Body, ctx: &'a FunctionCtx<'a>) -> Self {
         let refinements = Refinements::of(mir, ctx.layout.builtins(), ctx.layout);
+        let inlining = Inlining::of(mir);
         let ret = ctx.signature.ret_shape(ctx.layout.builtins());
 
         // A parameter is the local the ABI already declares for it, so the type the emitter
@@ -201,23 +208,23 @@ impl<'a> Emitter<'a> {
         );
 
         // The first locals are the ABI parameters, which the function type declares; a value
-        // that is a parameter is the local of that parameter, and every other value gets a
-        // local of its own after them, typed by its refinement. The dispatch form keeps two
-        // locals more after every value.
+        // that is a parameter is the local of that parameter, and every other value that is
+        // not inlined gets a local of its own after them, typed by its refinement. The
+        // dispatch form keeps two locals more after every value.
         let params = mir.params.len() as u32;
-        let mut value_locals: Vec<u32> = vec![0; mir.values.len()];
+        let mut value_locals: Vec<Option<u32>> = vec![None; mir.values.len()];
         let mut locals: Vec<ValType> = Vec::new();
 
         for (position, value) in mir.params.iter().enumerate() {
-            value_locals[value.index()] = position as u32;
+            value_locals[value.index()] = Some(position as u32);
         }
 
         for (value, _) in mir.values.iter() {
-            if mir.params.contains(&value) {
+            if mir.params.contains(&value) || inlining.is_inlined(value) {
                 continue;
             }
 
-            value_locals[value.index()] = params + locals.len() as u32;
+            value_locals[value.index()] = Some(params + locals.len() as u32);
             locals.push(refinements.get(value).abi().val_type());
         }
 
@@ -233,6 +240,7 @@ impl<'a> Emitter<'a> {
             mir,
             ctx,
             refinements,
+            inlining,
             ret,
             value_locals,
             pc_local,
@@ -279,7 +287,11 @@ impl<'a> Emitter<'a> {
                 continue;
             }
 
-            let local = self.value_locals[value.index()];
+            // A value the plan inlines is computed where it is used, and has no local to
+            // initialize.
+            let Some(local) = self.value_locals[value.index()] else {
+                continue;
+            };
 
             if self.refinements.get(value).is_immediate() {
                 self.insn(Span::dummy(), Instruction::I32Const(0));
@@ -378,31 +390,36 @@ impl<'a> Emitter<'a> {
             return;
         };
 
-        match rvalue {
-            Rvalue::Use(operand) => {
-                let refinement = self.refinements.get(*place).abi();
-
-                self.operand_into(operand, refinement, stmt.span);
-            },
-            Rvalue::Const(constant) => {
-                self.constant(constant, stmt.span);
-            },
-            Rvalue::Prim { op, args } => {
-                if !self.prim(*op, args, stmt.span) {
-                    return;
-                }
-            },
-            Rvalue::Call { callee, args } => {
-                if !self.call(callee, args, stmt.span) {
-                    return;
-                }
-            },
+        // A value the plan inlines is emitted where it is used; there is nothing to emit and
+        // nothing to keep here.
+        if self.inlining.is_inlined(*place) {
+            return;
         }
 
-        self.insn(
-            stmt.span,
-            Instruction::LocalSet(self.value_locals[place.index()]),
-        );
+        if !self.rvalue(rvalue, *place, stmt.span) {
+            return;
+        }
+
+        let local = self.value_locals[place.index()].expect("a value with a local");
+
+        self.insn(stmt.span, Instruction::LocalSet(local));
+    }
+
+    /// Emits the expression of a right-hand side, leaving its value on the stack; `false` when
+    /// it cannot be emitted.
+    fn rvalue(&mut self, rvalue: &'a Rvalue, place: ValueId, span: Span) -> bool {
+        match rvalue {
+            Rvalue::Use(operand) => {
+                let refinement = self.refinements.get(place).abi();
+
+                self.operand_into(operand, refinement, span);
+
+                true
+            },
+            Rvalue::Const(constant) => self.constant(constant, span),
+            Rvalue::Prim { op, args } => self.prim(*op, args, span),
+            Rvalue::Call { callee, args } => self.call(callee, args, span),
+        }
     }
 
     /// Emits a primitive, and the store of its result; `false` when it cannot be emitted.
@@ -631,10 +648,10 @@ impl<'a> Emitter<'a> {
         // The stores are in reverse, so that an edge which permutes the parameters of its
         // target reads every argument before it writes any of them.
         for param in destination.params.iter().rev() {
-            self.insn(
-                span,
-                Instruction::LocalSet(self.value_locals[param.index()]),
-            );
+            let local =
+                self.value_locals[param.index()].expect("a block parameter to live in a local");
+
+            self.insn(span, Instruction::LocalSet(local));
         }
 
         self.insn(span, Instruction::I32Const(target.block.index() as i32));
@@ -645,12 +662,7 @@ impl<'a> Emitter<'a> {
     /// Emits an operand as the word it is, boxed where it is an immediate constant.
     fn operand_word(&mut self, operand: &'a Operand, span: Span) {
         match operand {
-            Operand::Value(value) => {
-                self.insn(
-                    span,
-                    Instruction::LocalGet(self.value_locals[value.index()]),
-                );
-            },
+            Operand::Value(value) => self.value(*value, span),
             Operand::Const(constant) => {
                 self.constant(constant, span);
             },
@@ -664,10 +676,7 @@ impl<'a> Emitter<'a> {
     fn operand_into(&mut self, operand: &'a Operand, abi: AbiType, span: Span) {
         match operand {
             Operand::Value(value) => {
-                self.insn(
-                    span,
-                    Instruction::LocalGet(self.value_locals[value.index()]),
-                );
+                self.value(*value, span);
 
                 if abi == AbiType::Immediate && !self.refinements.get(*value).is_immediate() {
                     self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
@@ -684,10 +693,7 @@ impl<'a> Emitter<'a> {
     fn operand_i32(&mut self, operand: &'a Operand, span: Span) {
         match operand {
             Operand::Value(value) => {
-                self.insn(
-                    span,
-                    Instruction::LocalGet(self.value_locals[value.index()]),
-                );
+                self.value(*value, span);
 
                 if !self.refinements.get(*value).is_immediate() {
                     self.insn(span, Instruction::RefCastNonNull(HeapType::I31));
@@ -700,6 +706,29 @@ impl<'a> Emitter<'a> {
             },
             Operand::Local(_) => self.unsupported("a read of a slot", span),
         }
+    }
+
+    /// Puts a value on the stack: from the local it lives in, or by emitting the expression of
+    /// it where it is used, when the plan inlined it.
+    fn value(&mut self, value: ValueId, span: Span) {
+        let Some(local) = self.value_locals[value.index()] else {
+            self.inlined(value);
+
+            return;
+        };
+
+        self.insn(span, Instruction::LocalGet(local));
+    }
+
+    /// Emits the expression of a value the plan inlines.
+    fn inlined(&mut self, value: ValueId) {
+        let definition = self
+            .inlining
+            .definition(value)
+            .expect("an inlined value to have a definition");
+        let StmtKind::Assign { rvalue, .. } = &definition.kind;
+
+        self.rvalue(rvalue, value, definition.span);
     }
 
     /// Emits a constant as the word it is.
@@ -787,7 +816,7 @@ impl<'a> Emitter<'a> {
         (artifact, self.diags)
     }
 
-    /// What every value refined to, and where it lives.
+    /// What every value that lives in a local refined to, and where it lives.
     fn debug(&self) -> Vec<ValueDebug> {
         let mir = self.mir;
         let mut names: Vec<Option<Name>> = vec![None; mir.values.len()];
@@ -798,13 +827,13 @@ impl<'a> Emitter<'a> {
 
         mir.values
             .iter()
-            .map(|(value, _)| {
-                ValueDebug {
+            .filter_map(|(value, _)| {
+                Some(ValueDebug {
                     value,
                     refinement: self.refinements.get(value),
-                    local: self.value_locals[value.index()],
+                    local: self.value_locals[value.index()]?,
                     name: names[value.index()].clone(),
-                }
+                })
             })
             .collect()
     }

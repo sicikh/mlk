@@ -1,7 +1,7 @@
 // What the back end makes of arithmetic over immediates: every operator is the instruction of
 // the unboxed `i32`, and its result is boxed back into the word. Every body here is one block,
-// so it is emitted as the straight line it is: the snapshot shows the prologue that refines
-// each parameter once, the instructions an operator becomes, and the return of the word.
+// so it is emitted as the straight line it is: the snapshot shows the instructions an operator
+// becomes, chained where a value is read once, and the return of the word.
 
 //- /main.mlk
 pub fun double(value: Int): Int =

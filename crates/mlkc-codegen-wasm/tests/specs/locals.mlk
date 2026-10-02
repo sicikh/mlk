@@ -1,0 +1,15 @@
+// What the emitter keeps in a local and what it emits where a value is read: a value read more
+// than once keeps a local, and a value read once is computed where it is read --- unless a call
+// stands between the definition and the read, which pins it to a local, because computing it
+// after the call would be observable.
+
+//- /main.mlk
+pub fun twice(value: Int): Int =
+    let product = value * value in
+    product + product
+
+pub fun from_a_call(value: Int): Int =
+    twice(value)
+
+pub fun after_a_call(left: Int, right: Int): Int =
+    (left * right) + twice(left)

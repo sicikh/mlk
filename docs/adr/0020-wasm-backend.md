@@ -146,6 +146,10 @@ the WASM signature is the shape of the checked types,
 a parameter is the local the signature declares,
 so nothing is copied at the entry either.
 A value that is only a word is cast where something more precise needs it.
+A value read once, in the block that defines it, is not given a local at all:
+its expression is emitted where it is read,
+unless a call or a trapping division stands between the two,
+which would make computing it later observable.
 
 The emitter runs a forward dataflow over the SSA body
 and computes, per value, a refinement ordered by precision:

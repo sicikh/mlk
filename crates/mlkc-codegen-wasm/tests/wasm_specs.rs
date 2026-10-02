@@ -42,6 +42,10 @@ wasm_specs! {
     // passes to its target, and a call to a function of the same module.
     branching: "branching",
 
+    // What the emitter keeps in a local: a value read more than once, and a value a call stands
+    // between; everything else is computed where it is read.
+    locals: "locals",
+
     // What a recursive function compiles to: the call whose index the layout assigned, and the
     // dispatch loop that runs again with the arguments the edge passed.
     recursion: "recursion",

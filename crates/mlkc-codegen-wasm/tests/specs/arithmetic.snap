@@ -17,19 +17,17 @@ expression: snapshot
   (export "both" (func $both))
   (export "bound" (func $bound))
   (func $double (;0;) (type 0) (param $value (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local i32 i32)
     local.get $value
     i31.get_s
     local.get $value
     i31.get_s
     i32.add
     ref.i31
-    local.set 1
-    local.get 1
     return
   )
   (func $mixed (;1;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
-    (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
+    (local (ref i31) i32 i32)
     local.get $left
     i31.get_s
     local.get $right
@@ -37,174 +35,128 @@ expression: snapshot
     i32.mul
     ref.i31
     local.set 2
+    local.get 2
+    i31.get_s
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.div_s
     ref.i31
-    local.set 3
-    local.get 2
-    i31.get_s
-    local.get 3
     i31.get_s
     i32.sub
     ref.i31
-    local.set 4
+    i31.get_s
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.sub
     ref.i31
-    local.set 5
-    local.get 4
-    i31.get_s
-    local.get 5
     i31.get_s
     i32.add
     ref.i31
-    local.set 6
-    local.get 6
     return
   )
   (func $negated (;2;) (type 0) (param $value (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local i32 i32)
     i32.const 0
     local.get $value
     i31.get_s
     i32.sub
     ref.i31
-    local.set 1
-    local.get 1
     return
   )
   (func $ordered (;3;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
-    (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
+    (local i32 i32)
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.lt_s
     ref.i31
-    local.set 2
+    i31.get_s
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.le_s
     ref.i31
-    local.set 3
-    local.get 2
-    i31.get_s
-    local.get 3
     i31.get_s
     i32.and
     ref.i31
-    local.set 4
+    i31.get_s
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.gt_s
     ref.i31
-    local.set 5
-    local.get 4
-    i31.get_s
-    local.get 5
     i31.get_s
     i32.or
     ref.i31
-    local.set 6
+    i31.get_s
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.ge_s
     ref.i31
-    local.set 7
-    local.get 6
-    i31.get_s
-    local.get 7
     i31.get_s
     i32.or
     ref.i31
-    local.set 8
-    local.get 8
     return
   )
   (func $different (;4;) (type 1) (param $left (ref i31)) (param $right (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local i32 i32)
     local.get $left
     i31.get_s
     local.get $right
     i31.get_s
     i32.ne
     ref.i31
-    local.set 2
-    local.get 2
     return
   )
   (func $truth (;5;) (type 2) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local i32 i32)
     i32.const 1
     ref.i31
-    local.set 0
-    local.get 0
     return
   )
   (func $untruth (;6;) (type 2) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local i32 i32)
     i32.const 0
     ref.i31
-    local.set 0
-    local.get 0
     return
   )
   (func $both (;7;) (type 2) (result (ref i31))
-    (local (ref i31) (ref i31) (ref i31) i32 i32)
+    (local i32 i32)
     i32.const 1
     ref.i31
-    local.set 0
+    i31.get_s
     i32.const 0
     ref.i31
-    local.set 1
-    local.get 0
-    i31.get_s
-    local.get 1
     i31.get_s
     i32.and
     ref.i31
-    local.set 2
-    local.get 2
     return
   )
   (func $bound (;8;) (type 2) (result (ref i31))
-    (local (ref i31) (ref i31) (ref i31) (ref i31) (ref i31) i32 i32)
+    (local i32 i32)
     i32.const 2
     ref.i31
-    local.set 0
-    i32.const 2
-    ref.i31
-    local.set 1
-    local.get 0
     i31.get_s
-    local.get 1
+    i32.const 2
+    ref.i31
     i31.get_s
     i32.mul
     ref.i31
-    local.set 2
+    i31.get_s
     i32.const 1
     ref.i31
-    local.set 3
-    local.get 2
-    i31.get_s
-    local.get 3
     i31.get_s
     i32.add
     ref.i31
-    local.set 4
-    local.get 4
     return
   )
 )

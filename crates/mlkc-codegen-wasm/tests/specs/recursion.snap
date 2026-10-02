@@ -7,7 +7,7 @@ expression: snapshot
   (type (;0;) (func (param (ref i31)) (result (ref i31))))
   (export "fib" (func $fib))
   (func $fib (;0;) (type 0) (param $value (ref i31)) (result (ref i31))
-    (local (ref i31) (ref i31) i32 i32)
+    (local (ref i31) (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 1
@@ -26,11 +26,7 @@ expression: snapshot
               local.get $value
               i31.get_s
               i32.const 2
-              ref.i31
-              i31.get_s
               i32.lt_s
-              ref.i31
-              i31.get_s
               if ;; label = @6
                 i32.const 1
                 local.set 3
@@ -50,8 +46,6 @@ expression: snapshot
           local.get $value
           i31.get_s
           i32.const 1
-          ref.i31
-          i31.get_s
           i32.sub
           ref.i31
           call $fib
@@ -61,8 +55,6 @@ expression: snapshot
           local.get $value
           i31.get_s
           i32.const 2
-          ref.i31
-          i31.get_s
           i32.sub
           ref.i31
           call $fib

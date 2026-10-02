@@ -150,6 +150,9 @@ A value read once, in the block that defines it, is not given a local at all:
 its expression is emitted where it is read,
 unless a call or a trapping division stands between the two,
 which would make computing it later observable.
+A use that takes the number inside the value --- an operator, a condition ---
+reads it unboxed,
+so nothing is boxed only to be taken apart at once.
 
 The emitter runs a forward dataflow over the SSA body
 and computes, per value, a refinement ordered by precision:

@@ -13,7 +13,7 @@ expression: snapshot
   (export "log" (func $log))
   (export "log_ordered" (func $log_ordered))
   (func $pick (;0;) (type 0) (param $flag (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 1
@@ -59,7 +59,7 @@ expression: snapshot
     unreachable
   )
   (func $ordered (;1;) (type 1) (param $low (ref i31)) (param $high (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 2
@@ -126,7 +126,7 @@ expression: snapshot
     unreachable
   )
   (func $where_a_value_belongs (;2;) (type 0) (param $flag (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 1
@@ -168,8 +168,6 @@ expression: snapshot
         local.get 1
         i31.get_s
         i32.const 3
-        ref.i31
-        i31.get_s
         i32.add
         ref.i31
         return
@@ -178,7 +176,7 @@ expression: snapshot
     unreachable
   )
   (func $through_a_let (;3;) (type 0) (param $flag (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 1
@@ -220,8 +218,6 @@ expression: snapshot
         local.get 1
         i31.get_s
         i32.const 3
-        ref.i31
-        i31.get_s
         i32.add
         ref.i31
         return
@@ -230,7 +226,7 @@ expression: snapshot
     unreachable
   )
   (func $log (;4;) (type 0) (param $flag (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 1
@@ -276,7 +272,7 @@ expression: snapshot
     unreachable
   )
   (func $log_ordered (;5;) (type 1) (param $low (ref i31)) (param $high (ref i31)) (result (ref i31))
-    (local (ref i31) i32 i32)
+    (local (ref i31) i32)
     i32.const 0
     ref.i31
     local.set 2

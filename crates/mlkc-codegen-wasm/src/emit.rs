@@ -11,7 +11,10 @@
 //! by its refinement: an immediate is a `(ref i31)` and everything else is an `eqref`. A value
 //! that is a parameter is the local the ABI already declares for it --- the emitter reads it
 //! where the caller left it --- and a value read once, in the block that defines it, is emitted
-//! where it is used and given no local at all ([`Inlining`](crate::inlining::Inlining)).
+//! where it is used and given no local at all ([`Inlining`](crate::inlining::Inlining)). What
+//! reads it is what it is emitted as: a word where the use wants a word, and the `i32` inside
+//! it where the use takes it apart --- so a constant or an operator is never boxed only to be
+//! unboxed at once.
 //!
 //! # Control flow
 //!
@@ -166,6 +169,15 @@ pub fn emit_function(mir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
     emitter.finish()
 }
 
+/// Whether a body is emitted as the straight line it is, rather than as a dispatch loop.
+fn is_direct(body: &Body) -> bool {
+    body.blocks.len() == 1
+        && matches!(
+            &body.blocks[body.entry].term,
+            Terminator::Return { .. } | Terminator::Unreachable { .. }
+        )
+}
+
 /// The one emitter of one function.
 struct Emitter<'a> {
     mir: &'a Body,
@@ -209,8 +221,7 @@ impl<'a> Emitter<'a> {
 
         // The first locals are the ABI parameters, which the function type declares; a value
         // that is a parameter is the local of that parameter, and every other value that is
-        // not inlined gets a local of its own after them, typed by its refinement. The
-        // dispatch form keeps two locals more after every value.
+        // not inlined gets a local of its own after them, typed by its refinement.
         let params = mir.params.len() as u32;
         let mut value_locals: Vec<Option<u32>> = vec![None; mir.values.len()];
         let mut locals: Vec<ValType> = Vec::new();
@@ -228,13 +239,26 @@ impl<'a> Emitter<'a> {
             locals.push(refinements.get(value).abi().val_type());
         }
 
+        // The dispatch form keeps a program counter after every value, and a `switch` compares
+        // its scrutinee in a scratch local of its own; a body that is emitted directly needs
+        // neither, and neither is declared for a body that does not use it.
+        let dispatch = !is_direct(mir);
+        let switching = mir
+            .blocks
+            .iter()
+            .any(|(_, block)| matches!(block.term, Terminator::Switch { .. }));
         let pc_local = params + locals.len() as u32;
         let scratch_local = pc_local + 1;
 
-        // The two dispatch locals are declared always, so that the local indices of the values
-        // do not depend on the shape of the body; `localify` will drop what is unused.
-        locals.push(ValType::I32);
-        locals.push(ValType::I32);
+        if dispatch {
+            locals.push(ValType::I32);
+        }
+
+        if switching {
+            debug_assert!(dispatch, "a switch is emitted by the dispatch form");
+
+            locals.push(ValType::I32);
+        }
 
         Self {
             mir,
@@ -255,21 +279,17 @@ impl<'a> Emitter<'a> {
     /// Emits the whole body: the blocks, and a dispatch loop around them where there is more
     /// than one.
     fn run(&mut self) {
-        let single = self.mir.blocks.len() == 1
-            && matches!(
-                &self.mir.blocks[self.mir.entry].term,
-                Terminator::Return { .. } | Terminator::Unreachable { .. }
-            );
+        let direct = is_direct(self.mir);
 
         // A dispatch form is entered through the table, and the validator does not know which
         // `pc` reached it: every value local is initialized, or a read in a case the path did
         // not reach is rejected. What the initialization writes is never read: SSA defines
         // every value before its use, and the parameters are written by the caller.
-        if !single {
+        if !direct {
             self.initialize_values();
         }
 
-        if single {
+        if direct {
             self.direct(self.mir.entry);
         } else {
             self.dispatch();
@@ -422,8 +442,23 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emits a primitive, and the store of its result; `false` when it cannot be emitted.
+    /// Emits a primitive, boxed into the word it computes; `false` when it cannot be emitted.
     fn prim(&mut self, op: PrimOp, args: &'a [Operand], span: Span) -> bool {
+        if !self.prim_i32(op, args, span) {
+            return false;
+        }
+
+        self.insn(span, Instruction::RefI31);
+
+        true
+    }
+
+    /// Emits a primitive unboxed: what it leaves on the stack is the `i32` its result is.
+    ///
+    /// A value read by something that takes the number inside it --- an operator, the condition
+    /// of a branch --- is emitted this way, so that a constant or an operator is never boxed
+    /// only to be taken apart again by the instruction that reads it.
+    fn prim_i32(&mut self, op: PrimOp, args: &'a [Operand], span: Span) -> bool {
         use PrimOp::*;
 
         match op {
@@ -453,8 +488,6 @@ impl<'a> Emitter<'a> {
                     BoolOr => Instruction::I32Or,
                     _ => unreachable!("the arm above fixes the operator"),
                 });
-
-                self.insn(span, Instruction::RefI31);
             },
             IntNeg | BoolNot => {
                 let [operand] = args else {
@@ -477,8 +510,6 @@ impl<'a> Emitter<'a> {
                         Instruction::I32Eqz
                     },
                 );
-
-                self.insn(span, Instruction::RefI31);
             },
             RefEq => {
                 let [lhs, rhs] = args else {
@@ -490,7 +521,6 @@ impl<'a> Emitter<'a> {
                 self.operand_word(lhs, span);
                 self.operand_word(rhs, span);
                 self.insn(span, Instruction::RefEq);
-                self.insn(span, Instruction::RefI31);
             },
         }
 
@@ -693,6 +723,13 @@ impl<'a> Emitter<'a> {
     fn operand_i32(&mut self, operand: &'a Operand, span: Span) {
         match operand {
             Operand::Value(value) => {
+                // A value the plan inlines is computed here; when what computes it is already
+                // a number --- a constant or an operator --- it is emitted unboxed, and the
+                // `ref.i31` and `i31.get_s` around it are not emitted at all.
+                if self.inlining.is_inlined(*value) && self.unboxed(*value) {
+                    return;
+                }
+
                 self.value(*value, span);
 
                 if !self.refinements.get(*value).is_immediate() {
@@ -705,6 +742,37 @@ impl<'a> Emitter<'a> {
                 self.constant_i32(constant, span);
             },
             Operand::Local(_) => self.unsupported("a read of a slot", span),
+        }
+    }
+
+    /// Emits the definition of an inlined value as the number inside it, when it can be;
+    /// `false` when the value has to be boxed --- a call comes back boxed, and a string
+    /// constant is not a number at all.
+    fn unboxed(&mut self, value: ValueId) -> bool {
+        let definition = self
+            .inlining
+            .definition(value)
+            .expect("an inlined value to have a definition");
+        let StmtKind::Assign { rvalue, .. } = &definition.kind;
+
+        match rvalue {
+            Rvalue::Const(constant) => {
+                match constant {
+                    Const::Int(_) | Const::Bool(_) | Const::Unit => {
+                        self.constant_i32(constant, definition.span)
+                    },
+                    // A string constant has no number to read, and is reported where it is
+                    // emitted as the word it is.
+                    Const::Str(_) => false,
+                }
+            },
+            Rvalue::Prim { op, args } => self.prim_i32(*op, args, definition.span),
+            Rvalue::Use(operand) => {
+                self.operand_i32(operand, definition.span);
+
+                true
+            },
+            Rvalue::Call { .. } => false,
         }
     }
 

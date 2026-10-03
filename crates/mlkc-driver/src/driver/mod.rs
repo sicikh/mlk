@@ -9,6 +9,7 @@ mod lir;
 mod lower;
 mod mir;
 mod mir_module;
+mod options;
 mod parse;
 mod resolve;
 mod stats;
@@ -44,6 +45,7 @@ pub use self::{
     host::StdFile,
     link::{LinkError, LinkPlan, codegen_diagnostic},
     lower::{Lowered, ModuleBody},
+    options::{DebugLevel, OptLevel, Options},
     parse::Parse,
     stats::{Clock, Pass, Stats, Tally, Unit, system_clock},
 };
@@ -60,6 +62,12 @@ pub struct Driver {
     /// rather than owned so that a resolution can be handed the graph it was resolved against
     /// without copying it.
     projects: Arc<ProjectGraph>,
+    /// What the host asked the pipeline for ([ADR-0023][adr-0023]).
+    ///
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    options: Options,
+    /// How many changes the options went through; a value built under them keeps the number.
+    options_version: u32,
     /// The parse of every file that has been parsed, with the green nodes it was built through.
     parses: FxHashMap<FileId, ParseSlot>,
     /// The HIR of every file that has been lowered.
@@ -374,11 +382,15 @@ struct ModuleMirSlot {
 
 /// The plan of one project, and the modules it was built from ([ADR-0021]).
 ///
-/// A plan is a function of the modules of the program and of nothing else: every import a
-/// compiled module carries is a name the module of the plan already has.
+/// A plan is a function of the modules of the program, of the options it was assembled under,
+/// and of nothing else: every import a compiled module carries is a name the module of the plan
+/// already has ([ADR-0023]).
 ///
 /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+/// [adr-0023]: ../../docs/adr/0023-debug-information.md
 struct LinkSlot {
+    /// The version of the options the plan was assembled under.
+    options: u32,
     /// The module of every module of the program, by module, as the plan was built.
     modules: BTreeMap<ModuleId, Arc<ModuleMir>>,
     /// The value, retained so that the driver can hand it out and compare it later.

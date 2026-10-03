@@ -144,6 +144,6 @@
 mod driver;
 
 pub use crate::driver::{
-    Clock, Diagnostics, Driver, IceReport, LinkError, LinkPlan, Lowered, ModuleBody, Parse, Pass,
-    Stats, StdFile, Tally, Unit, codegen_diagnostic, system_clock,
+    Clock, DebugLevel, Diagnostics, Driver, IceReport, LinkError, LinkPlan, Lowered, ModuleBody,
+    OptLevel, Options, Parse, Pass, Stats, StdFile, Tally, Unit, codegen_diagnostic, system_clock,
 };

@@ -28,15 +28,22 @@
 //! other one is a word, an `eqref`. An immediate therefore needs no cast at the entry, and only
 //! a value that is known to be a word is cast where something more precise is needed.
 //!
+//! # Debug information
+//!
+//! The debug level of a module ([`DebugLevel`]) says how much DWARF it carries
+//! ([ADR-0023][adr-0023]): the name section at every level, line tables and a subprogram per
+//! function at [`DebugLevel::Lines`], and the DIEs of variables at [`DebugLevel::Full`]. The
+//! lines are read from the [`Origin`]s of the bodies and from the [`Sources`] the host hands to
+//! the assembler, and the addresses are the code-section offsets of the WASM DWARF convention.
+//!
 //! # What is not emitted yet
 //!
 //! The emitter reports [`CodegenDiag::Unsupported`] for the constructs it does not lower yet
 //! rather than emitting something wrong: string constants, calls to functions declared inside a
 //! body, indirect calls, and field access. A call to a function of another module, and a call to
 //! one declared `#[extern]`, is an import ([`ModuleImport`]), and the linker resolves it
-//! ([ADR-0021][adr-0021]). Control flow of a body with more than one block is emitted as a
-//! dispatch loop; structuring it into `if`/`loop` regions, allocating locals by live range, and
-//! the DWARF custom sections are the next milestones of [ADR-0020][adr-0020].
+//! ([ADR-0021][adr-0021]). The DIEs of variables, locals allocated by live range, and folding
+//! constants in the LIR are the next milestones of [ADR-0020][adr-0020] and [ADR-0023][adr-0023].
 //!
 //! [adr-0005]: ../../docs/adr/0005-compiler-pipeline.md
 //! [adr-0009]: ../../docs/adr/0009-pass-contract.md
@@ -44,9 +51,11 @@
 //! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
 //! [adr-0021]: ../../docs/adr/0021-translation-units.md
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+//! [adr-0023]: ../../docs/adr/0023-debug-information.md
 
 mod allocate;
 mod collapse;
+mod dwarf;
 mod emit;
 mod lower;
 mod module;
@@ -55,6 +64,7 @@ mod select;
 mod structure;
 
 pub use crate::{
+    dwarf::{SourceFile, Sources},
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},
     lower::lower_function,
     module::{

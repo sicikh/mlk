@@ -144,6 +144,25 @@
         >
     </div>
 
+    <!--
+        The custom sections are not in the text: they are binary tables, and what a person reads
+        of them is their names and sizes. The debug tables are what the debug level decides, so
+        they are marked apart from the name section, which every module carries.
+    -->
+    {#if wat.sections.length > 0}
+        <div class="sections" data-wat-sections>
+            {#each wat.sections as section (section.name)}
+                <span
+                    class="section"
+                    class:debug={section.name.startsWith(".debug")}
+                    data-section={section.name}
+                >
+                    {section.name} <span class="size">{section.size} B</span>
+                </span>
+            {/each}
+        </div>
+    {/if}
+
     {#each wat.diagnostics as it, index (index)}
         <p class="empty">
             {it.level}[{it.category}::{it.code}]: {it.message}
@@ -192,6 +211,31 @@
     .head button:hover {
         border-color: var(--accent);
         color: var(--text);
+    }
+
+    .sections {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        padding: 0 0.25rem;
+    }
+
+    .section {
+        padding: 0.05rem 0.35rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 10px;
+    }
+
+    .section.debug {
+        border-color: var(--accent);
+        color: var(--text);
+    }
+
+    .section .size {
+        opacity: 0.7;
     }
 
     .empty {

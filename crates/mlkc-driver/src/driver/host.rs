@@ -6,7 +6,7 @@ use mlkc_hir_def::{ModuleId, ProjectData, ProjectGraph, ProjectId};
 use mlkc_line_index::LineIndex;
 use mlkc_vfs::{ChangedFile, FileId, FileState, FileVersion, RelPathBuf, VfsPath};
 
-use super::{Driver, Pass};
+use super::{Driver, Pass, options::Options};
 
 /// One file of the standard library: the path a driver keeps a module under, and its source.
 ///
@@ -67,6 +67,31 @@ impl Driver {
     /// an editor, a WASM shim, a test.
     pub fn set_file_text(&mut self, path: VfsPath, text: Option<String>) -> bool {
         self.vfs.set_file_text(path, text)
+    }
+
+    /// Configures the pipeline: how much debug information a module carries, and how hard the
+    /// passes optimize ([ADR-0023][adr-0023]).
+    ///
+    /// Returns whether the options changed; pushing them again changes nothing, and a value
+    /// built under them stays where it was
+    /// ([ADR-0008][adr-0008]).
+    ///
+    /// [adr-0008]: ../../docs/adr/0008-compiler-driver.md
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    pub fn set_options(&mut self, options: Options) -> bool {
+        if options == self.options {
+            return false;
+        }
+
+        self.options = options;
+        self.options_version += 1;
+
+        true
+    }
+
+    /// What the host last configured.
+    pub fn options(&self) -> Options {
+        self.options
     }
 
     /// Records a project: what it depends on, and the prelude its modules are given without

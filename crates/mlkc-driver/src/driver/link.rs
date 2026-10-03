@@ -16,14 +16,18 @@ use std::{
     sync::Arc,
 };
 
-use mlkc_codegen_wasm::{CodegenDiag, FnSignature, ModuleMir, WasmModule, compile_module};
+use mlkc_codegen_wasm::{
+    CodegenDiag, DebugLevel, FnSignature, ModuleMir, Sources, WasmModule, compile_module,
+};
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Label, Level};
 use mlkc_hir_def::{
     BodyLoc, EntityData, EntityLoc, FunctionLoc, ItemLoc, ModuleId, ProjectGraph, ProjectId,
 };
 use mlkc_hir_ty::{Builtins, Ty};
+use mlkc_line_index::LineIndex;
 use mlkc_lir_wasm::Body as LirBody;
 use mlkc_span::Span;
+use mlkc_vfs::FileId;
 
 use super::{Driver, LinkSlot, Pass, Unit, entries_are_the_same};
 
@@ -140,6 +144,15 @@ struct LinkInputs {
     entries: Vec<EntryCandidate>,
     /// The classes of the language, which say what the unit is.
     builtins: Builtins,
+    /// How much debug information the assembled modules carry ([ADR-0023][adr-0023]).
+    ///
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    debug: DebugLevel,
+    /// What the debug tables read of the files the bodies were read from, by module
+    /// ([ADR-0023][adr-0023]).
+    ///
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    sources: BTreeMap<ModuleId, Sources>,
 }
 
 /// One function declared `#[entry]`, and what the link stage reads of it.
@@ -243,7 +256,10 @@ impl Driver {
         let held = self
             .links
             .get(project)
-            .filter(|slot| entries_are_the_same(&slot.modules, &modules))
+            .filter(|slot| {
+                slot.options == self.options_version
+                    && entries_are_the_same(&slot.modules, &modules)
+            })
             .map(|slot| Arc::clone(&slot.value));
         let unit = Unit::Project(project.clone());
 
@@ -257,11 +273,14 @@ impl Driver {
             .consulted(Pass::Link, &unit, self.links.contains_key(project), false);
 
         let started = self.ticking();
+        let sources = self.sources_of(&modules);
         let inputs = LinkInputs {
             modules,
             lirs,
             entries,
             builtins,
+            debug: self.options.debug,
+            sources,
         };
         let value = self.guarded(
             |driver| {
@@ -290,11 +309,63 @@ impl Driver {
         };
 
         self.links.insert(project.clone(), LinkSlot {
+            options: self.options_version,
             modules: inputs.modules,
             value: Arc::clone(&value),
         });
 
         Some(value)
+    }
+
+    /// What the debug tables of every module read: the path and the lines of every file of the
+    /// program ([ADR-0023][adr-0023]).
+    ///
+    /// Every module is handed every file, because a body may name a file of another module:
+    /// inlining moves code across them ([ADR-0022][adr-0022]), and a line of the table points
+    /// at where the code came from.
+    ///
+    /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    fn sources_of(
+        &mut self,
+        modules: &BTreeMap<ModuleId, Arc<ModuleMir>>,
+    ) -> BTreeMap<ModuleId, Sources> {
+        let mut sources = BTreeMap::new();
+
+        // A program assembled without debug information names no file, and the lines of one are
+        // never read: taking them anyway would time a pass nothing asked for.
+        if self.options.debug == DebugLevel::None {
+            for module in modules.keys() {
+                let primary = self.file_path(module.0).to_string();
+
+                sources.insert(*module, Sources::new(primary));
+            }
+
+            return sources;
+        }
+
+        let mut files: Vec<(FileId, String, Arc<LineIndex>)> = Vec::new();
+
+        for module in modules.keys() {
+            let file = module.0;
+            let Some(lines) = self.line_index(file) else {
+                continue;
+            };
+
+            files.push((file, self.file_path(file).to_string(), lines));
+        }
+
+        for module in modules.keys() {
+            let mut of = Sources::new(self.file_path(module.0).to_string());
+
+            for (file, path, lines) in &files {
+                of.insert(*file, path.clone(), Arc::clone(lines));
+            }
+
+            sources.insert(*module, of);
+        }
+
+        sources
     }
 
     /// The projects a project is built from: its dependencies, each before it, and itself last.
@@ -342,7 +413,11 @@ fn link_plan(inputs: &LinkInputs) -> LinkPlan {
             .lirs
             .get(id)
             .expect("every module of the program to have its bodies lowered");
-        let (wasm, reports) = compile_module(mir, lirs);
+        let sources = inputs
+            .sources
+            .get(id)
+            .expect("every module of the program to have its sources");
+        let (wasm, reports) = compile_module(mir, lirs, inputs.debug, sources);
 
         diagnostics.extend(reports.iter().map(codegen_diagnostic));
         modules.insert(*id, Arc::new(wasm));

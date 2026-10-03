@@ -8,7 +8,7 @@ version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59317f77929f0e679d39364702289274de2f0f0b22cbf50b2b8cff2169a0b27a"
 dependencies = [
- "gimli",
+ "gimli 0.33.0",
 ]
 
 [[package]]
@@ -379,7 +379,7 @@ dependencies = [
  "cranelift-control",
  "cranelift-entity",
  "cranelift-isle",
- "gimli",
+ "gimli 0.33.0",
  "hashbrown 0.17.1",
  "libm",
  "log",
@@ -627,6 +627,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -762,6 +768,17 @@ dependencies = [
  "libc",
  "r-efi",
  "rand_core",
+]
+
+[[package]]
+name = "gimli"
+version = "0.32.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
+dependencies = [
+ "fallible-iterator",
+ "indexmap",
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -1007,12 +1024,14 @@ dependencies = [
 name = "mlkc-codegen-wasm"
 version = "0.1.0"
 dependencies = [
+ "gimli 0.32.3",
  "insta",
  "mlkc-driver",
  "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-interp",
+ "mlkc-line-index",
  "mlkc-lir-wasm",
  "mlkc-mir",
  "mlkc-span",
@@ -1058,6 +1077,7 @@ dependencies = [
  "mlkc-typeck",
  "mlkc-vfs",
  "rustc-hash",
+ "wasmparser 0.245.1",
 ]
 
 [[package]]
@@ -1355,6 +1375,7 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "wasm-encoder 0.245.1",
+ "wasmparser 0.245.1",
  "wasmprinter 0.245.1",
  "wasmtime",
 ]
@@ -2244,7 +2265,7 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-bitset",
  "cranelift-entity",
- "gimli",
+ "gimli 0.33.0",
  "hashbrown 0.17.1",
  "indexmap",
  "log",
@@ -2292,7 +2313,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-native",
- "gimli",
+ "gimli 0.33.0",
  "itertools",
  "log",
  "object",

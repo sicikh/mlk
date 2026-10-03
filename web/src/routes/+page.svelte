@@ -17,11 +17,13 @@
     import {
         loadDriver,
         type Cost,
+        type DebugLevel,
         type Diagnostic,
         type Driver,
         type Hir,
         type Lir,
         type Mir,
+        type OptLevel,
         type StatsRow,
         type StdFile,
         type SyntaxNode,
@@ -144,6 +146,17 @@ pub fun main() : Unit =
      */
     let reading = $state.raw<Reading | null>(null);
     let tab = $state<Tab>("diagnostics");
+
+    /**
+     * How the pipeline is configured: how much debug information the modules carry, and how
+     * hard the passes optimize ([ADR-0023](../../../docs/adr/0023-debug-information.md)).
+     *
+     * The options belong to the driver rather than to a buffer, and every value read after
+     * they are pushed is built under them: the WAT shows the custom sections they add, and a
+     * program run under them is the program they describe.
+     */
+    let debug = $state<DebugLevel>("none");
+    let opt = $state<OptLevel>("none");
 
     /**
      * The panel a narrow screen has in front, which is the editor until asked otherwise.
@@ -574,6 +587,35 @@ pub fun main() : Unit =
     }
 
     /**
+     * Configures the pipeline for every read that follows ([ADR-0023](../../../docs/adr/0023-debug-information.md)).
+     *
+     * The options are pushed to the driver, which is what makes a module carry the debug tables
+     * the level asks for; what the tabs hold was built under the options before it, so the
+     * values on the screen are read again. A push that changes nothing builds nothing: the
+     * driver hands back whether the options moved.
+     */
+    async function configure(nextDebug: DebugLevel, nextOpt: OptLevel) {
+        if (!driver) return;
+
+        debug = nextDebug;
+        opt = nextOpt;
+
+        try {
+            const changed = await driver.setOptions(debug, opt);
+
+            if (changed)
+                say(
+                    "info",
+                    `the options are ${debug} debug information and ${opt} optimization`,
+                );
+
+            check();
+        } catch (error) {
+            say("error", `the driver refused the options: ${String(error)}`);
+        }
+    }
+
+    /**
      * Runs the program every buffer makes, and shows what it printed.
      *
      * A run is of the whole project: the driver compiles every module, links them into the
@@ -635,6 +677,32 @@ pub fun main() : Unit =
     <header class="top">
         <span class="brand">MLK</span>
         <span class="grow"></span>
+        <label
+            class="tool field"
+            title="How much debug information a module carries"
+        >
+            <select
+                data-debug
+                value={debug}
+                onchange={(it) =>
+                    configure(it.currentTarget.value as DebugLevel, opt)}
+            >
+                <option value="none">Debug: none</option>
+                <option value="lines">Debug: lines</option>
+                <option value="full">Debug: full</option>
+            </select>
+        </label>
+        <label class="tool field" title="How hard the passes optimize">
+            <select
+                data-opt
+                value={opt}
+                onchange={(it) =>
+                    configure(debug, it.currentTarget.value as OptLevel)}
+            >
+                <option value="none">Opt: none</option>
+                <option value="full">Opt: full</option>
+            </select>
+        </label>
         <span class="tool-name">{name(active)}</span>
         <button class="tool" data-run onclick={run}>Run</button>
         <button class="tool primary" onclick={compile}>Compile</button>
@@ -984,6 +1052,7 @@ pub fun main() : Unit =
 
     .top {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.75rem;
         align-items: center;
         grid-column: 1 / -1;
@@ -1037,6 +1106,31 @@ pub fun main() : Unit =
 
     .tool.primary:hover {
         background: #33507f;
+    }
+
+    .field {
+        display: flex;
+        align-items: center;
+        padding: 0;
+    }
+
+    .field select {
+        padding: 0.2rem 0.5rem;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .field select:hover {
+        color: var(--text);
+    }
+
+    .field select:focus {
+        outline: none;
+        color: var(--text);
     }
 
     /*

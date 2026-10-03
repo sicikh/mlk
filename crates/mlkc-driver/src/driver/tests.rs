@@ -10,6 +10,7 @@ use mlkc_rowan::{AstNodeList, Direction};
 use mlkc_syntax::{FUN_KW, SyntaxKind, SyntaxToken, TextRange};
 use mlkc_text_size::TextLen;
 use mlkc_vfs::{Change, FileId, FileState, VfsPath};
+use wasmparser::{Parser, Payload};
 
 use super::*;
 
@@ -2160,6 +2161,77 @@ fn an_edit_of_a_body_links_the_program_again() {
     let after = driver.link(&project()).expect("the project to link");
 
     assert!(!Arc::ptr_eq(&before, &after), "the plan was not read again");
+}
+
+/// The options the modules are assembled under are an input of the plan: pushing others builds
+/// it again, and pushing the same ones leaves it where it was ([ADR-0008], [ADR-0023]).
+///
+/// [adr-0008]: ../../docs/adr/0008-compiler-driver.md
+/// [adr-0023]: ../../docs/adr/0023-debug-information.md
+#[test]
+fn the_options_decide_what_the_plan_is_assembled_under() {
+    let mut driver = std_project_of(LINKED);
+    let quiet = driver.link(&project()).expect("the project to link");
+
+    assert!(
+        !custom_sections(&quiet)
+            .iter()
+            .any(|name| name.starts_with(".debug")),
+        "a plan assembled without debug information to carry no debug tables: {:?}",
+        custom_sections(&quiet),
+    );
+
+    assert!(
+        driver.set_options(Options {
+            debug: DebugLevel::Full,
+            opt: OptLevel::None,
+        }),
+        "the options to change",
+    );
+
+    let loud = driver.link(&project()).expect("the project to link");
+
+    assert!(
+        !Arc::ptr_eq(&quiet, &loud),
+        "the plan was not assembled again",
+    );
+    assert!(
+        custom_sections(&loud)
+            .iter()
+            .any(|name| name == ".debug_line"),
+        "a plan assembled with debug information to carry line tables: {:?}",
+        custom_sections(&loud),
+    );
+
+    assert!(
+        !driver.set_options(Options {
+            debug: DebugLevel::Full,
+            opt: OptLevel::None,
+        }),
+        "pushing the same options to change nothing",
+    );
+    assert!(
+        Arc::ptr_eq(
+            &loud,
+            &driver.link(&project()).expect("the project to link")
+        ),
+        "the plan was assembled again under the same options",
+    );
+}
+
+/// The names of the custom sections of every module of a plan.
+fn custom_sections(plan: &LinkPlan) -> Vec<String> {
+    let mut names = Vec::new();
+
+    for module in &plan.order {
+        for payload in Parser::new(0).parse_all(&plan.modules[module].bytes) {
+            if let Payload::CustomSection(section) = payload.expect("a module of a plan to parse") {
+                names.push(section.name().to_owned());
+            }
+        }
+    }
+
+    names
 }
 
 #[test]

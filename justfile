@@ -17,6 +17,8 @@ install-tools:
     command -v cargo-binstall >/dev/null || cargo install cargo-binstall
     cargo binstall cargo-insta
     cargo binstall wasm-bindgen-cli --version "={{ wasm_bindgen }}"
+    cargo binstall wasm-tools
+    cargo binstall wasmtime-cli
     rustup target add wasm32-unknown-unknown
     pnpm install
 
@@ -24,6 +26,9 @@ install-tools:
 upgrade-tools:
     cargo install cargo-binstall --force
     cargo binstall cargo-insta --force
+    cargo binstall wasm-bindgen-cli --force
+    cargo binstall wasm-tools --force
+    cargo binstall wasmtime-cli --force
 
 # Format Rust and TOML files
 format:

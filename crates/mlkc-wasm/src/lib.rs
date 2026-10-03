@@ -25,8 +25,10 @@
 
 use std::sync::Arc;
 
-use mlkc_codegen_wasm::compile_module;
-use mlkc_driver::{Driver, LinkPlan, Lowered, Parse, codegen_diagnostic};
+use mlkc_codegen_wasm::{Sources, compile_module};
+use mlkc_driver::{
+    DebugLevel, Driver, LinkPlan, Lowered, OptLevel, Options, Parse, codegen_diagnostic,
+};
 use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, Name, ProjectData, ProjectId, dump};
 use mlkc_hir_ty::Ty;
 use mlkc_line_index::LineIndex;
@@ -123,6 +125,35 @@ impl WasmDriver {
     #[wasm_bindgen(js_name = useStd)]
     pub fn use_std(&mut self) -> Result<JsValue, JsValue> {
         to_js(&self.register_library())
+    }
+
+    /// Configures the pipeline: how much debug information a module carries, and how hard the
+    /// passes optimize ([ADR-0023]).
+    ///
+    /// The levels cross the boundary as the words a host writes: `none`, `lines`, and `full`
+    /// for the debug information; `none` and `full` for the optimization. Returns whether the
+    /// options changed, which is what tells a host to read what depends on them again.
+    ///
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    #[wasm_bindgen(js_name = setOptions)]
+    pub fn set_options(&mut self, debug: &str, opt: &str) -> Result<bool, JsValue> {
+        let debug = match debug {
+            "none" => DebugLevel::None,
+            "lines" => DebugLevel::Lines,
+            "full" => DebugLevel::Full,
+            other => return Err(failure(&format!("no debug level is called `{other}`"))),
+        };
+        let opt = match opt {
+            "none" => OptLevel::None,
+            "full" => OptLevel::Full,
+            other => {
+                return Err(failure(&format!(
+                    "no optimization level is called `{other}`"
+                )));
+            },
+        };
+
+        Ok(self.driver.set_options(Options { debug, opt }))
     }
 
     /// Feeds the text of a file into the driver; `null` or `undefined` means the file is gone.
@@ -389,19 +420,66 @@ impl WasmDriver {
             lirs.push(lir);
         }
 
-        let (wasm, reports) = compile_module(&module, &lirs);
-        let text = wasmprinter::print_bytes(&wasm.bytes)
-            .map_err(|error| failure(&format!("the module of {path} did not print: {error}")))?;
+        let options = self.driver.options();
+        let sources = self.sources_of(&module);
+        let (wasm, reports) = compile_module(&module, &lirs, options.debug, &sources);
         let index = self
             .driver
             .line_index(file)
             .ok_or_else(|| failure(&format!("{path} has no lines to read")))?;
+        let text = wat_text(&wasm.bytes)
+            .map_err(|error| failure(&format!("the module of {path} did not print: {error}")))?;
+        let sections = custom_sections(&wasm.bytes);
         let diagnostics = reports
             .iter()
             .map(|report| Diagnostic::of(&codegen_diagnostic(report), &index))
             .collect();
 
-        Ok(Some(Wat { text, diagnostics }))
+        Ok(Some(Wat {
+            text,
+            sections,
+            diagnostics,
+        }))
+    }
+
+    /// What the debug tables of a module read: the path and the lines of the file it was read
+    /// from ([ADR-0023][adr-0023]).
+    ///
+    /// Every function of the module names the same file today, and a body may name another
+    /// one once inlining moves code across modules ([ADR-0022][adr-0022]); the page hands the
+    /// driver the text of every buffer, so the lines of any of them are a pull away.
+    ///
+    /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    fn sources_of(&mut self, module: &mlkc_codegen_wasm::ModuleMir) -> Sources {
+        if self.driver.options().debug == DebugLevel::None {
+            return Sources::default();
+        }
+
+        let Some(first) = module.functions.first() else {
+            return Sources::default();
+        };
+        let file = first.owner.module.0;
+        let path = self.driver.file_path(file).to_string();
+        let mut sources = Sources::new(path.clone());
+
+        let mut seen = std::collections::BTreeSet::new();
+
+        for function in &module.functions {
+            let file = function.owner.module.0;
+
+            if !seen.insert(file) {
+                continue;
+            }
+
+            let Some(lines) = self.driver.line_index(file) else {
+                continue;
+            };
+
+            sources.insert(file, self.driver.file_path(file).to_string(), lines);
+        }
+
+        sources
     }
 
     /// The manifest of a run of the project of the page.
@@ -472,10 +550,72 @@ impl Default for WasmDriver {
 #[serde(rename_all = "camelCase")]
 struct Wat {
     /// The module in the WebAssembly text format.
+    ///
+    /// The `(@custom ...)` groups of the debug sections are left out: they are binary tables
+    /// with nothing a person reads, and [`Wat::sections`] says what they are and how large.
     text: String,
+
+    /// The custom sections of the module, in the order it carries them.
+    sections: Vec<WatSection>,
 
     /// What the back end reported about the bodies of the module.
     diagnostics: Vec<Diagnostic>,
+}
+
+/// One custom section of a module: its name and its size in bytes.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WatSection {
+    /// The name of the section: `name`, `.debug_info`, ...
+    name: String,
+
+    /// How many bytes of the module the section is.
+    size: u32,
+}
+
+/// The module in the WebAssembly text format, without the binary custom sections.
+fn wat_text(bytes: &[u8]) -> Result<String, String> {
+    let text = wasmprinter::print_bytes(bytes).map_err(|error| error.to_string())?;
+    let mut kept = String::with_capacity(text.len());
+
+    for line in text.lines() {
+        if is_debug_custom(line) {
+            continue;
+        }
+
+        kept.push_str(line);
+        kept.push('\n');
+    }
+
+    Ok(kept)
+}
+
+/// Whether a line of WAT is a debug custom section with its binary contents.
+fn is_debug_custom(line: &str) -> bool {
+    let Some(rest) = line.trim_start().strip_prefix("(@custom \"") else {
+        return false;
+    };
+    let name = rest.split('"').next().unwrap_or("");
+
+    name.starts_with(".debug_") || name == "external_debug_info"
+}
+
+/// The custom sections of a module, read off its bytes.
+fn custom_sections(bytes: &[u8]) -> Vec<WatSection> {
+    let mut sections = Vec::new();
+
+    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+        let Ok(wasmparser::Payload::CustomSection(reader)) = payload else {
+            continue;
+        };
+
+        sections.push(WatSection {
+            name: reader.name().to_owned(),
+            size: reader.data().len() as u32,
+        });
+    }
+
+    sections
 }
 
 /// The manifest of a run: what a host instantiates, and where the program begins ([ADR-0021]).

@@ -97,6 +97,8 @@ function answer(
     request: Exclude<DriverRequest, { kind: "setText" }>,
 ): unknown {
     switch (request.kind) {
+        case "setOptions":
+            return driver.setOptions(request.debug, request.opt);
         case "useStd":
             return driver.useStd();
         case "cst":

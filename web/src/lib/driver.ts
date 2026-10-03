@@ -542,14 +542,37 @@ export interface Cost {
     took: number;
 }
 
+/** One custom section a module carries: the debug tables and the names, with their sizes. */
+export interface WatSection {
+    /** The name of the section: `name`, `.debug_info`, ... */
+    name: string;
+
+    /** How many bytes of the module the section is. */
+    size: number;
+}
+
 /** The WASM of one module, as the driver hands it over. */
 export interface Wat {
     /** The module in the WebAssembly text format. */
     text: string;
 
+    /**
+     * The custom sections of the module, in the order it carries them.
+     *
+     * The binary tables --- the debug sections --- are not in the text: they are blobs in a
+     * text file, and the sizes here are what an editor shows of them.
+     */
+    sections: WatSection[];
+
     /** What the back end reported about the bodies of the module. */
     diagnostics: Diagnostic[];
 }
+
+/** How much debug information a module carries ([ADR-0023](../../../docs/adr/0023-debug-information.md)). */
+export type DebugLevel = "none" | "lines" | "full";
+
+/** How hard the pipeline optimizes a program ([ADR-0023](../../../docs/adr/0023-debug-information.md)). */
+export type OptLevel = "none" | "full";
 
 /** One function a module of a program imports. */
 export interface RunImport {
@@ -691,6 +714,19 @@ export interface Driver {
     wat(path: string): Promise<Wat | null>;
 
     /**
+     * Configures the pipeline for every pull that follows: how much debug information the
+     * modules carry, and how hard the passes optimize ([ADR-0023]).
+     *
+     * Returns whether the options changed: pushing the same ones changes nothing, and only a
+     * change makes the driver build the modules again. The options are a property of the
+     * driver rather than of one buffer: a host sets them once, and the WAT and the program
+     * that follow read what they say.
+     *
+     * [adr-0023]: ../../../docs/adr/0023-debug-information.md
+     */
+    setOptions(debug: DebugLevel, opt: OptLevel): Promise<boolean>;
+
+    /**
      * Runs the program the buffers make, and hands back what it printed.
      *
      * The program is of the whole project rather than of one buffer: every module of it is
@@ -731,6 +767,7 @@ export interface StdFile {
  */
 export type DriverRequest =
     | { kind: "setText"; path: string; text: string | null }
+    | { kind: "setOptions"; id: number; debug: DebugLevel; opt: OptLevel }
     | { kind: "useStd"; id: number }
     | { kind: "cst"; id: number; path: string }
     | { kind: "ast"; id: number; path: string }
@@ -898,6 +935,8 @@ export async function loadDriver(): Promise<Driver> {
             ask<Mir | null>((id) => ({ kind: "mirSsa", id, path })),
         lir: (path) => ask<Lir | null>((id) => ({ kind: "lir", id, path })),
         wat: (path) => ask<Wat | null>((id) => ({ kind: "wat", id, path })),
+        setOptions: (debug, opt) =>
+            ask<boolean>((id) => ({ kind: "setOptions", id, debug, opt })),
         run: () => ask<Run>((id) => ({ kind: "run", id })),
         diagnostics: (path) =>
             ask<Diagnostic[]>((id) => ({ kind: "diagnostics", id, path })),

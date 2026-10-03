@@ -29,6 +29,7 @@ use wasm_encoder::{
 };
 
 use crate::{
+    dwarf::{self, Sources},
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, emit_function},
     refine::{self, AbiType},
 };
@@ -227,23 +228,27 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
     }
 }
 
-/// How much debug information `assemble_module` is asked for ([ADR-0020][adr-0020]).
+/// How much debug information `assemble_module` is asked for ([ADR-0023][adr-0023]).
 ///
 /// The level is configuration, which is an input, so the debug tables of a module are
-/// absent-or-equal for equal input ([ADR-0008][adr-0008]). The DWARF custom sections are the
-/// next milestone; what every level emits for now is the `name` section, which is what makes a
-/// stack trace readable without DWARF.
+/// absent-or-equal for equal input ([ADR-0008][adr-0008]). A module carries the `name` section
+/// at every level; the DWARF custom sections are written by [`crate::dwarf`].
 ///
 /// [adr-0008]: ../../docs/adr/0008-compiler-driver.md
-/// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+/// [adr-0023]: ../../docs/adr/0023-debug-information.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DebugLevel {
-    /// No debug information.
+    /// No debug information. The `name` section is still written.
     #[default]
     None,
-    /// Line tables only.
+    /// Line tables, a compile unit, and a subprogram per function.
     Lines,
     /// Line tables, functions, parameters, and locals.
+    ///
+    /// The DIEs of parameters and locals are a later milestone ([ADR-0023][adr-0023]); until
+    /// they are emitted, this level carries what [`DebugLevel::Lines`] carries.
+    ///
+    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
     Full,
 }
 
@@ -300,7 +305,8 @@ pub struct WasmModule {
 /// driver's link stage and a host that shows one module both read.
 ///
 /// `lirs` are the lowered bodies of the module's functions, in declaration order, as the
-/// driver pulled them ([ADR-0022][adr-0022]).
+/// driver pulled them ([ADR-0022][adr-0022]); `sources` are the files the bodies were read
+/// from, which the debug tables point at ([ADR-0023][adr-0023]).
 ///
 /// # Panics
 ///
@@ -308,7 +314,13 @@ pub struct WasmModule {
 /// mistake of the caller and not of the program.
 ///
 /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-pub fn compile_module(module: &ModuleMir, lirs: &[Arc<LirBody>]) -> (WasmModule, Vec<CodegenDiag>) {
+/// [adr-0023]: ../../docs/adr/0023-debug-information.md
+pub fn compile_module(
+    module: &ModuleMir,
+    lirs: &[Arc<LirBody>],
+    debug: DebugLevel,
+    sources: &Sources,
+) -> (WasmModule, Vec<CodegenDiag>) {
     assert_eq!(
         lirs.len(),
         module.functions.len(),
@@ -332,7 +344,7 @@ pub fn compile_module(module: &ModuleMir, lirs: &[Arc<LirBody>]) -> (WasmModule,
         diagnostics.extend(reports);
     }
 
-    let (wasm, reports) = assemble_module(module, &artifacts, DebugLevel::Full);
+    let (wasm, reports) = assemble_module(module, &artifacts, debug, sources);
 
     diagnostics.extend(reports);
 
@@ -353,6 +365,7 @@ pub fn assemble_module(
     module: &ModuleMir,
     functions: &[FuncArtifact],
     debug: DebugLevel,
+    sources: &Sources,
 ) -> (WasmModule, Vec<CodegenDiag>) {
     assert_eq!(
         functions.len(),
@@ -360,9 +373,11 @@ pub fn assemble_module(
         "the assembler is handed one artifact per function of the module",
     );
 
-    // The DWARF custom sections read the level; the `name` section is a part of the module and
-    // is written at every level.
-    let _ = debug;
+    // The `name` section is a part of the module and is written at every level; the DWARF
+    // custom sections are written where the level asks for them, after the code section is
+    // laid out, because their addresses are offsets inside it ([ADR-0023]).
+    //
+    // [adr-0023]: ../../docs/adr/0023-debug-information.md
 
     // Every function of the module has the WASM type its signature's shape gives it: an
     // immediate is a `(ref i31)` and every other type is a word, an `eqref`. One type per
@@ -505,6 +520,15 @@ pub fn assemble_module(
     names.locals(&local_names);
 
     wasm.section(&names);
+
+    if debug != DebugLevel::None {
+        for (name, data) in dwarf::sections(module, functions, sources) {
+            wasm.section(&wasm_encoder::CustomSection {
+                name: name.into(),
+                data: data.into(),
+            });
+        }
+    }
 
     (
         WasmModule {

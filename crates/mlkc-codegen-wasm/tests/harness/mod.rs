@@ -21,7 +21,7 @@ use std::{
 };
 
 use mlkc_codegen_wasm::{
-    CodegenDiag, DebugLevel, FnShape, FunctionCtx, ModuleMir, WasmModule, assemble_module,
+    CodegenDiag, DebugLevel, FnShape, FunctionCtx, ModuleMir, Sources, WasmModule, assemble_module,
     emit_function, layout,
 };
 use mlkc_driver::{Driver, LinkPlan};
@@ -53,8 +53,24 @@ pub struct Compiled {
 
 impl Compiled {
     /// The module as text, for a person to read and for a snapshot.
+    ///
+    /// The binary custom sections --- the debug tables --- are left out: they are a blob in a
+    /// text file, and what the code reads is what a person reads here.
     pub fn wat(&self) -> String {
-        wasmprinter::print_bytes(&self.wasm.bytes).expect("the emitted module to be printable")
+        let text =
+            wasmprinter::print_bytes(&self.wasm.bytes).expect("the emitted module to be printable");
+        let mut kept = String::with_capacity(text.len());
+
+        for line in text.lines() {
+            if line.trim_start().starts_with("(@custom \"") {
+                continue;
+            }
+
+            kept.push_str(line);
+            kept.push('\n');
+        }
+
+        kept
     }
 
     /// Checks the module against the WebAssembly specification, with the proposals it uses.
@@ -106,6 +122,16 @@ pub struct RunProject {
 /// one module, and when a pass of the driver bugged: a test writes programs the compiler is
 /// expected to compile, and anything else is the test's mistake or the compiler's bug.
 pub fn project(fixture: &str) -> Compiled {
+    project_with(fixture, DebugLevel::Full)
+}
+
+/// Compiles the project a fixture writes at the debug level `debug`.
+///
+/// The level is what the driver would ask for under its options ([ADR-0023]); the tests of the
+/// debug tables read what each level carries.
+///
+/// [adr-0023]: ../../../docs/adr/0023-debug-information.md
+pub fn project_with(fixture: &str, debug: DebugLevel) -> Compiled {
     let (mut driver, project) = setup(fixture);
     let index = driver
         .module_index(&project)
@@ -121,7 +147,7 @@ pub fn project(fixture: &str) -> Compiled {
     let module = driver
         .mir_module(id)
         .expect("the module to be read by the front end");
-    let (wasm, diagnostics) = compile(&mut driver, &module);
+    let (wasm, diagnostics) = compile(&mut driver, &module, debug);
 
     if let Some(report) = driver.ice() {
         panic!("the driver bugged:\n{report}");
@@ -265,7 +291,11 @@ fn setup(fixture: &str) -> (Driver, ProjectId) {
 /// what the stage handed over, which is the path the linker takes.
 ///
 /// [adr-0022]: ../../../docs/adr/0022-wasm-lir.md
-fn compile(driver: &mut Driver, module: &ModuleMir) -> (WasmModule, Vec<CodegenDiag>) {
+fn compile(
+    driver: &mut Driver,
+    module: &ModuleMir,
+    debug: DebugLevel,
+) -> (WasmModule, Vec<CodegenDiag>) {
     let layout = layout(module);
     let mut artifacts = Vec::new();
     let mut diagnostics = Vec::new();
@@ -286,16 +316,43 @@ fn compile(driver: &mut Driver, module: &ModuleMir) -> (WasmModule, Vec<CodegenD
         diagnostics.extend(reports);
     }
 
-    let (wasm, reports) = assemble_module(module, &artifacts, DebugLevel::Full);
+    let (wasm, reports) = assemble_module(module, &artifacts, debug, &sources(driver, module));
 
     diagnostics.extend(reports);
 
     (wasm, diagnostics)
 }
 
+/// What the debug tables of a module read: the path and the lines of every file its bodies were
+/// read from.
+fn sources(driver: &mut Driver, module: &ModuleMir) -> Sources {
+    let primary = module.functions.first().map_or_else(
+        || module.name.clone(),
+        |function| driver.file_path(function.owner.module.0).to_string(),
+    );
+    let mut sources = Sources::new(primary);
+
+    for function in &module.functions {
+        let file = function.owner.module.0;
+
+        let Some(lines) = driver.line_index(file) else {
+            continue;
+        };
+
+        sources.insert(file, driver.file_path(file).to_string(), lines);
+    }
+
+    sources
+}
+
 /// Compiles one module, written as its source.
 pub fn module(source: &str) -> Compiled {
-    project(&format!("//- /main.mlk\n{source}"))
+    module_with(source, DebugLevel::Full)
+}
+
+/// Compiles one module, written as its source, at the debug level `debug`.
+pub fn module_with(source: &str, debug: DebugLevel) -> Compiled {
+    project_with(&format!("//- /main.mlk\n{source}"), debug)
 }
 
 /// Compiles the fixture under [`SPECS_DIR`], named by `name`.

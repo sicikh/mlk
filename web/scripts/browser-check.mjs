@@ -374,17 +374,23 @@ const STEPS = {
     // A marker belongs to the line the form opens on: the module line and each `func` head
     // fold, and a line of a body --- `local.get $n` above a `(ref i31)` --- opens nothing.
     // The gutter draws an element for a marked line and none for the rest, so what says which
-    // line a marker is on is where the marker stands rather than where it is in the DOM.
+    // line a marker is on is where the marker stands rather than where it is in the DOM. The
+    // marker is as tall as a line and stands a hair above it, so what says which line it is on
+    // is the middle of it: the boxes of two lines share an edge, and the top of a marker is on
+    // the edge of the line above it as often as it is on its own.
     watMarks: `const view = inspector().querySelector('[data-wat]');
 		const shown = (selector) => [...view.querySelectorAll(selector)]
 			.filter((it) => getComputedStyle(it).visibility !== 'hidden');
 		const lines = [...view.querySelectorAll('.cm-line')];
 		const marks = shown('.cm-foldGutter .cm-gutterElement');
-		const at = (mark) => lines.findIndex((line) => {
-			const box = line.getBoundingClientRect();
-			const top = mark.getBoundingClientRect().top;
-			return top >= box.top - 1 && top < box.bottom;
-		});
+		const at = (mark) => {
+			const box = mark.getBoundingClientRect();
+			const middle = box.top + box.height / 2;
+			return lines.findIndex((line) => {
+				const it = line.getBoundingClientRect();
+				return middle >= it.top && middle < it.bottom;
+			});
+		};
 		const marked = (needle) => {
 			const row = lines.findIndex((it) => text(it).includes(needle));
 			return row >= 0 && marks.some((mark) => at(mark) === row);
@@ -416,6 +422,27 @@ const STEPS = {
     scrollWatEnd: `const scroller = inspector().querySelector('[data-wat] .cm-scroller');
 		scroller.scrollTop = scroller.scrollHeight;
 		return true`,
+
+    // The debug level decides what tables a module carries: at `lines` the debug custom
+    // sections are written beside the name section, and at `none` they are not. The tables are
+    // not in the text of the module --- they are binary --- so what the editor shows of them is
+    // the list the head of the tab reads.
+    debugLines: `const select = document.querySelector('[data-debug]');
+		select.value = 'lines';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		return true`,
+
+    debugNone: `const select = document.querySelector('[data-debug]');
+		select.value = 'none';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		return true`,
+
+    watSections: `const head = inspector().querySelector('[data-wat-sections]');
+		return JSON.stringify({
+			sections: head ? [...head.querySelectorAll('[data-section]')]
+				.map((it) => it.dataset.section) : [],
+			head: text(head)
+		})`,
 
     // The program: every buffer is compiled and linked, the modules are instantiated, and the
     // entry point is called. `fib(5)` prints 5, which is what the program console holds.
@@ -779,6 +806,10 @@ const WAITS = {
     unitSsa: `return inspector().textContent.includes('call fun log')`,
     wat: `const view = inspector().querySelector('[data-wat]');
 		return view !== null && view.querySelector('.cm-content') !== null`,
+    debugTables: `const head = inspector().querySelector('[data-wat-sections]');
+		return head !== null && head.textContent.includes('.debug_line')`,
+    debugNone: `const head = inspector().querySelector('[data-wat-sections]');
+		return head !== null && !head.textContent.includes('.debug')`,
     ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
 		return document.querySelector('[data-console=program].active') !== null &&
 			lines.some((it) => text(it).trim() === '5')`,
@@ -1069,6 +1100,17 @@ async function main() {
     await sleep(200);
     const watEnd = JSON.parse(await ask(STEPS.wat));
 
+    // The debug level is an option of the driver: at `lines` the module carries the debug
+    // tables, and at `none` it carries the name section alone. The tables are read off the head
+    // of the tab, which is where a person reads them.
+    await ask(STEPS.debugLines);
+    await until(WAITS.debugTables, "the debug tables of the module");
+    const debugWat = JSON.parse(await ask(STEPS.watSections));
+
+    await ask(STEPS.debugNone);
+    await until(WAITS.debugNone, "the module without debug tables");
+    const plainWat = JSON.parse(await ask(STEPS.watSections));
+
     // And the program itself: the modules are instantiated in the order the link stage gives
     // them, and the `#[entry]` is called. What `fib(5)` prints is what the program console holds.
     await ask(STEPS.run);
@@ -1255,6 +1297,8 @@ async function main() {
             watFolded,
             watAgain,
             watEnd,
+            debugWat,
+            plainWat,
             ran,
             program,
             width,
@@ -1633,6 +1677,16 @@ function report(page, problems, warnings, asked) {
             // The end of the module is read by scrolling to it, where the name section stands.
             "the name section of the module is read at the end of it",
             page.watEnd.text.includes("app::main"),
+        ],
+        [
+            // The debug level is an option of the driver: at `lines` the module carries the
+            // debug tables, and at `none` it carries the name section alone.
+            "the debug level decides what tables a module carries",
+            page.debugWat.sections.includes("name") &&
+                page.debugWat.sections.includes(".debug_line") &&
+                page.debugWat.sections.includes(".debug_info") &&
+                page.debugWat.sections.includes(".debug_abbrev") &&
+                !page.plainWat.sections.some((it) => it.startsWith(".debug")),
         ],
         [
             // The format is painted: an instruction is the accent of a keyword, a value type

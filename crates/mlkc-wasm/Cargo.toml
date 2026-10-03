@@ -27,6 +27,7 @@ serde = { workspace = true, features = ["derive"] }
 serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
 wasm-encoder.workspace = true
+wasmparser.workspace = true
 wasmprinter.workspace = true
 
 [dev-dependencies]

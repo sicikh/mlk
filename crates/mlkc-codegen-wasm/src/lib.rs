@@ -30,11 +30,14 @@
 //!
 //! # Debug information
 //!
-//! The debug level of a module ([`DebugLevel`]) says how much DWARF it carries
+//! The debug level of a module ([`DebugLevel`]) says how much debug information it carries
 //! ([ADR-0023][adr-0023]): the name section at every level, line tables and a subprogram per
 //! function at [`DebugLevel::Lines`], and the DIEs of variables at [`DebugLevel::Full`]. The
 //! lines are read from the [`Origin`]s of the bodies and from the [`Sources`] the host hands to
 //! the assembler, and the addresses are the code-section offsets of the WASM DWARF convention.
+//! At [`DebugLevel::Lines`] and above the module also carries a source map
+//! ([ADR-0024][adr-0024]), the format a browser reads without an extension, with the text of
+//! every file its bodies were read from embedded in the module.
 //!
 //! # What is not emitted yet
 //!
@@ -52,6 +55,7 @@
 //! [adr-0021]: ../../docs/adr/0021-translation-units.md
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 //! [adr-0023]: ../../docs/adr/0023-debug-information.md
+//! [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
 
 mod allocate;
 mod collapse;
@@ -61,6 +65,7 @@ mod lower;
 mod module;
 mod refine;
 mod select;
+mod sourcemap;
 mod structure;
 
 pub use crate::{

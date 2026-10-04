@@ -24,6 +24,7 @@ mlkc-fixture.workspace = true
 mlkc-interp.workspace = true
 mlkc-stdlib.workspace = true
 mlkc-vfs.workspace = true
+serde_json.workspace = true
 wasmparser.workspace = true
 wasmprinter.workspace = true
 wasmtime.workspace = true

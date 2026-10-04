@@ -32,6 +32,7 @@ use crate::{
     dwarf::{self, Sources},
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, emit_function},
     refine::{self, AbiType},
+    sourcemap,
 };
 
 /// The signature of a body: one parameter per parameter of the owner, and one result.
@@ -460,12 +461,23 @@ pub fn assemble_module(
         code.raw(&artifact.body);
     }
 
+    let layout = dwarf::Layout::of(functions);
     let mut wasm = wasm_encoder::Module::new();
 
     wasm.section(&types);
     wasm.section(&import_section);
     wasm.section(&function_section);
     wasm.section(&exports);
+
+    // A column of the source map is a byte offset in the module ([ADR-0024][adr-0024]), so the
+    // offset of the contents of the code section --- after the `id` of the section and its
+    // size --- is measured where the module stands when the code section is written. The layout
+    // says how long the contents are, and the size is the length of them as an unsigned LEB128.
+    //
+    // [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+    let code_payload =
+        (wasm.as_slice().len() + 1 + dwarf::leb_len(layout.payload()) as usize) as u32;
+
     wasm.section(&code);
 
     let mut names = NameSection::new();
@@ -522,7 +534,15 @@ pub fn assemble_module(
     wasm.section(&names);
 
     if debug != DebugLevel::None {
-        for (name, data) in dwarf::sections(module, functions, sources) {
+        let mut tables = dwarf::sections(module, functions, sources, &layout);
+
+        // The map a browser reads without an extension: it points at the same lines the DWARF
+        // line program does, and carries the text of the files itself ([ADR-0024]).
+        if let Some(map) = sourcemap::section(functions, sources, &layout, code_payload) {
+            tables.push(map);
+        }
+
+        for (name, data) in tables {
             wasm.section(&wasm_encoder::CustomSection {
                 name: name.into(),
                 data: data.into(),

@@ -323,8 +323,8 @@ fn compile(
     (wasm, diagnostics)
 }
 
-/// What the debug tables of a module read: the path and the lines of every file its bodies were
-/// read from.
+/// What the debug tables of a module read: the path, the text, and the lines of every file its
+/// bodies were read from.
 fn sources(driver: &mut Driver, module: &ModuleMir) -> Sources {
     let primary = module.functions.first().map_or_else(
         || module.name.clone(),
@@ -338,8 +338,11 @@ fn sources(driver: &mut Driver, module: &ModuleMir) -> Sources {
         let Some(lines) = driver.line_index(file) else {
             continue;
         };
+        let Some(text) = driver.file_text(file) else {
+            continue;
+        };
 
-        sources.insert(file, driver.file_path(file).to_string(), lines);
+        sources.insert(file, driver.file_path(file).to_string(), text, lines);
     }
 
     sources

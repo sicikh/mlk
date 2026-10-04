@@ -42,7 +42,7 @@ use crate::{emit::FuncArtifact, module::ModuleMir};
 pub struct Sources {
     /// The path of the file the module is a source of: the primary source of the line program.
     primary: String,
-    /// The path and the lines of every file a body may name.
+    /// The path, the text, and the lines of every file a body may name.
     files: BTreeMap<FileId, SourceFile>,
 }
 
@@ -51,6 +51,10 @@ pub struct Sources {
 pub struct SourceFile {
     /// The path of the file, as a reader of the debugger sees it.
     pub path: String,
+    /// The text of the file, which the source map carries to a browser ([ADR-0024][adr-0024]).
+    ///
+    /// [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+    pub text: Arc<str>,
     /// The line and the column of every offset of the file.
     pub lines: Arc<LineIndex>,
 }
@@ -64,21 +68,28 @@ impl Sources {
         }
     }
 
-    /// Records the path and the lines of one file.
+    /// Records the path, the text, and the lines of one file.
     ///
     /// A file that is recorded twice is the same file: the driver holds one text per file, and
     /// a body that names it twice names it once ([ADR-0007][adr-0007]).
     ///
     /// [adr-0007]: ../../docs/adr/0007-vfs-file-state.md
-    pub fn insert(&mut self, file: FileId, path: impl Into<String>, lines: Arc<LineIndex>) {
+    pub fn insert(
+        &mut self,
+        file: FileId,
+        path: impl Into<String>,
+        text: Arc<str>,
+        lines: Arc<LineIndex>,
+    ) {
         self.files.insert(file, SourceFile {
             path: path.into(),
+            text,
             lines,
         });
     }
 
     /// What is known of one file, if it is known at all.
-    fn get(&self, file: FileId) -> Option<&SourceFile> {
+    pub(crate) fn get(&self, file: FileId) -> Option<&SourceFile> {
         self.files.get(&file)
     }
 }
@@ -91,6 +102,7 @@ pub(crate) fn sections(
     module: &ModuleMir,
     functions: &[FuncArtifact],
     sources: &Sources,
+    layout: &Layout,
 ) -> Vec<(&'static str, Vec<u8>)> {
     if functions.is_empty()
         || !functions
@@ -100,10 +112,9 @@ pub(crate) fn sections(
         return Vec::new();
     }
 
-    let layout = Layout::of(functions);
     let mut unit = DwarfUnit::new(encoding());
 
-    unit.unit.line_program = line_program(functions, sources, &layout);
+    unit.unit.line_program = line_program(functions, sources, layout);
 
     let root = unit.unit.root();
 
@@ -157,18 +168,18 @@ pub(crate) fn sections(
 
 /// Where every function stands in the code section, in the offsets DWARF counts from: the
 /// contents of the section, which begin at the count of the bodies.
-struct Layout {
+pub(crate) struct Layout {
     /// One entry per function, in the order the assembler writes them.
-    functions: Vec<At>,
+    pub(crate) functions: Vec<At>,
 }
 
 /// One function in the code section.
 #[derive(Debug, Clone, Copy)]
-struct At {
+pub(crate) struct At {
     /// The offset of the body content: where the function begins.
-    content: u32,
+    pub(crate) content: u32,
     /// The length of the body, without its prefix: how far the function reaches.
-    body: u32,
+    pub(crate) body: u32,
 }
 
 impl Layout {
@@ -176,7 +187,7 @@ impl Layout {
     ///
     /// The offsets are from the first byte of the contents of the code section, the count of the
     /// bodies; each function begins at its own body content, after its length prefix.
-    fn of(functions: &[FuncArtifact]) -> Self {
+    pub(crate) fn of(functions: &[FuncArtifact]) -> Self {
         let count = functions.len() as u32;
         let mut at = leb_len(count);
         let mut functions_at = Vec::with_capacity(functions.len());
@@ -196,6 +207,16 @@ impl Layout {
         Self {
             functions: functions_at,
         }
+    }
+
+    /// The length of the contents of the code section: the count and the bodies.
+    pub(crate) fn payload(&self) -> u32 {
+        leb_len(self.functions.len() as u32)
+            + self
+                .functions
+                .iter()
+                .map(|at| leb_len(at.body) + at.body)
+                .sum::<u32>()
     }
 }
 
@@ -280,7 +301,7 @@ fn string(name: &str) -> AttributeValue {
 }
 
 /// The number of bytes a `u32` takes as an unsigned LEB128, which is how WASM writes lengths.
-fn leb_len(mut value: u32) -> u32 {
+pub(crate) fn leb_len(mut value: u32) -> u32 {
     let mut len = 1;
 
     while value >= 0x80 {

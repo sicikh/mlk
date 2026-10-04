@@ -442,15 +442,17 @@ impl WasmDriver {
         }))
     }
 
-    /// What the debug tables of a module read: the path and the lines of the file it was read
-    /// from ([ADR-0023][adr-0023]).
+    /// What the debug tables of a module read: the path, the text, and the lines of the file it
+    /// was read from ([ADR-0023][adr-0023], [ADR-0024][adr-0024]).
     ///
     /// Every function of the module names the same file today, and a body may name another
     /// one once inlining moves code across modules ([ADR-0022][adr-0022]); the page hands the
-    /// driver the text of every buffer, so the lines of any of them are a pull away.
+    /// driver the text of every buffer, so the lines of any of them are a pull away, and so is
+    /// the text a source map carries.
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
     /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    /// [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
     fn sources_of(&mut self, module: &mlkc_codegen_wasm::ModuleMir) -> Sources {
         if self.driver.options().debug == DebugLevel::None {
             return Sources::default();
@@ -475,8 +477,11 @@ impl WasmDriver {
             let Some(lines) = self.driver.line_index(file) else {
                 continue;
             };
+            let Some(text) = self.driver.file_text(file) else {
+                continue;
+            };
 
-            sources.insert(file, self.driver.file_path(file).to_string(), lines);
+            sources.insert(file, self.driver.file_path(file).to_string(), text, lines);
         }
 
         sources

@@ -1037,6 +1037,7 @@ dependencies = [
  "mlkc-span",
  "mlkc-stdlib",
  "mlkc-vfs",
+ "serde_json",
  "wasm-encoder 0.245.1",
  "wasmparser 0.245.1",
  "wasmprinter 0.245.1",

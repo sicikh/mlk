@@ -1680,13 +1680,22 @@ function report(page, problems, warnings, asked) {
         ],
         [
             // The debug level is an option of the driver: at `lines` the module carries the
-            // debug tables, and at `none` it carries the name section alone.
+            // debug tables and the source map, and at `none` the name section alone.
             "the debug level decides what tables a module carries",
             page.debugWat.sections.includes("name") &&
                 page.debugWat.sections.includes(".debug_line") &&
                 page.debugWat.sections.includes(".debug_info") &&
                 page.debugWat.sections.includes(".debug_abbrev") &&
                 !page.plainWat.sections.some((it) => it.startsWith(".debug")),
+        ],
+        [
+            // A browser reads a source map rather than DWARF, and the map follows the level as
+            // the tables do: it is a custom section of the module, which the head of the tab
+            // reads like any other. What the browser makes of it is the engine's part of the
+            // contract, checked where the engine is (ADR-0024).
+            "the module carries the source map where the level asks for it",
+            page.debugWat.sections.includes("sourceMappingURL") &&
+                !page.plainWat.sections.includes("sourceMappingURL"),
         ],
         [
             // The format is painted: an instruction is the accent of a keyword, a value type
@@ -1928,6 +1937,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
+    );
+    console.log(
+        `the module carries ${page.debugWat.sections.length} custom section(s) at \`lines\`, the source map among them, and ${page.plainWat.sections.length} at \`none\` without it`,
     );
     console.log(
         `of ${page.watMarks.rows} line(s) on the screen, ${page.watMarks.marks} carry a fold marker: the module ${page.watMarks.moduleMarked ? "folds" : "does not fold"}, a func head ${page.watMarks.headMarked ? "folds" : "does not fold"}, and a line of a body ${page.watMarks.bodyMarked ? "FOLDS" : "does not fold"}`,

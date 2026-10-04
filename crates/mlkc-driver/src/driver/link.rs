@@ -317,15 +317,16 @@ impl Driver {
         Some(value)
     }
 
-    /// What the debug tables of every module read: the path and the lines of every file of the
-    /// program ([ADR-0023][adr-0023]).
+    /// What the debug tables of every module read: the path, the text, and the lines of every
+    /// file of the program ([ADR-0023][adr-0023], [ADR-0024][adr-0024]).
     ///
     /// Every module is handed every file, because a body may name a file of another module:
     /// inlining moves code across them ([ADR-0022][adr-0022]), and a line of the table points
-    /// at where the code came from.
+    /// at where the code came from. The text is what the source map carries to a browser.
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
     /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    /// [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
     fn sources_of(
         &mut self,
         modules: &BTreeMap<ModuleId, Arc<ModuleMir>>,
@@ -344,22 +345,25 @@ impl Driver {
             return sources;
         }
 
-        let mut files: Vec<(FileId, String, Arc<LineIndex>)> = Vec::new();
+        let mut files: Vec<(FileId, String, Arc<str>, Arc<LineIndex>)> = Vec::new();
 
         for module in modules.keys() {
             let file = module.0;
             let Some(lines) = self.line_index(file) else {
                 continue;
             };
+            let Some(text) = self.file_text(file) else {
+                continue;
+            };
 
-            files.push((file, self.file_path(file).to_string(), lines));
+            files.push((file, self.file_path(file).to_string(), text, lines));
         }
 
         for module in modules.keys() {
             let mut of = Sources::new(self.file_path(module.0).to_string());
 
-            for (file, path, lines) in &files {
-                of.insert(*file, path.clone(), Arc::clone(lines));
+            for (file, path, text, lines) in &files {
+                of.insert(*file, path.clone(), Arc::clone(text), Arc::clone(lines));
             }
 
             sources.insert(*module, of);

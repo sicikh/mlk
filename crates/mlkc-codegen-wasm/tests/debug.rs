@@ -1,4 +1,4 @@
-//! The debug tables of a compiled module ([ADR-0023][adr-0023]).
+//! The debug information of a compiled module ([ADR-0023][adr-0023], [ADR-0024][adr-0024]).
 //!
 //! A module assembled at the `Lines` level or above carries DWARF custom sections, and this is
 //! what reads them back: the line program points at the file and the line a body was read from,
@@ -8,7 +8,12 @@
 //! a code address is an offset from the contents of the code section, and a function begins at
 //! its body content, after the length prefix.
 //!
+//! The same module carries a source map, the format a browser reads without an extension
+//! ([ADR-0024][adr-0024]): it points at the same lines the line program does, counted in module
+//! bytes rather than code-section offsets, and it carries the text of the file itself.
+//!
 //! [adr-0023]: ../../../docs/adr/0023-debug-information.md
+//! [adr-0024]: ../../../docs/adr/0024-browser-debug-information.md
 
 mod harness;
 
@@ -19,6 +24,7 @@ use gimli::{
     constants::{DW_AT_high_pc, DW_AT_low_pc, DW_AT_name, DW_TAG_subprogram},
 };
 use mlkc_codegen_wasm::DebugLevel;
+use serde_json::Value;
 use wasmparser::{Parser, Payload};
 
 /// What the tables are read with: the bytes of the module, little endian as WASM writes them.
@@ -27,6 +33,9 @@ type Slice<'a> = EndianSlice<'a, LittleEndian>;
 /// A program whose bodies stand on known lines: each function's literal is on a line of its own.
 const SOURCE: &str =
     "//- /main.mlk\npub fun first(): Int =\n    1\n\npub fun second(): Int =\n    2\n";
+
+/// The text of the file of the fixture: what a map of the module must carry.
+const FILE: &str = "pub fun first(): Int =\n    1\n\npub fun second(): Int =\n    2\n";
 
 /// The debug tables of a module follow the level it is assembled at.
 #[test]
@@ -154,6 +163,73 @@ fn the_line_program_names_the_source_of_a_body() {
                 .filter(|row| row.address >= subprogram.low_pc)
                 .collect::<Vec<_>>(),
         );
+    }
+}
+
+/// The map is carried where the tables are, and it carries the source itself.
+#[test]
+fn the_source_map_follows_the_debug_level() {
+    let none = harness::project_with(SOURCE, DebugLevel::None);
+
+    assert!(
+        map_url(&none.wasm.bytes).is_none(),
+        "a module without debug information to carry no source map",
+    );
+
+    for debug in [DebugLevel::Lines, DebugLevel::Full] {
+        let map = map(&harness::project_with(SOURCE, debug).wasm.bytes);
+
+        assert_eq!(map["version"].as_u64(), Some(3));
+        assert_eq!(strings(&map["sources"]), ["/main.mlk"]);
+        assert_eq!(strings(&map["sourcesContent"]), [FILE]);
+    }
+}
+
+/// Every segment of the map is a row of the line program, in module bytes and from zero.
+#[test]
+fn the_segments_of_the_map_are_the_rows_of_the_line_program() {
+    let compiled = harness::project_with(SOURCE, DebugLevel::Lines);
+    let (contents, _) = bodies(&compiled.wasm.bytes);
+    let rows = rows(&compiled.wasm.bytes);
+    let map = map(&compiled.wasm.bytes);
+    let sources = strings(&map["sources"]);
+    let mappings = map["mappings"].as_str().expect("the mappings of a map");
+    let segments = segments(mappings);
+
+    assert_eq!(segments.len(), rows.len(), "one segment per row");
+
+    for (segment, row) in segments.iter().zip(&rows) {
+        assert_eq!(
+            segment.address,
+            (contents + row.address as usize) as i64,
+            "a segment to stand where its row does, counted in module bytes",
+        );
+        assert_eq!(sources[segment.file as usize], row.file);
+        // A map counts lines and columns from zero, and a line program from one.
+        assert_eq!(segment.line + 1, i64::from(row.line));
+        assert_eq!(segment.column + 1, i64::from(row.column));
+    }
+}
+
+/// The segments of the map are sorted by the byte they stand at, which a reader assumes.
+#[test]
+fn the_segments_of_the_map_are_sorted() {
+    let compiled = harness::project_with(SOURCE, DebugLevel::Lines);
+    let map = map(&compiled.wasm.bytes);
+    let mappings = map["mappings"].as_str().expect("the mappings of a map");
+    let segments = segments(mappings);
+    let mut previous = None;
+
+    for segment in &segments {
+        if let Some(previous) = previous {
+            assert!(
+                segment.address > previous,
+                "the segments to be sorted by address: {previous} then {}",
+                segment.address,
+            );
+        }
+
+        previous = Some(segment.address);
     }
 }
 
@@ -331,4 +407,170 @@ fn number(
         AttributeValue::Udata(value) => Some(value),
         other => panic!("`{name:?}` to be a number, and it is {other:?}"),
     }
+}
+
+/// The URL of the source map of an emitted module, read from its custom section.
+fn map_url(bytes: &[u8]) -> Option<&str> {
+    for payload in Parser::new(0).parse_all(bytes) {
+        let Payload::CustomSection(section) = payload.expect("the emitted module to parse") else {
+            continue;
+        };
+
+        if section.name() != "sourceMappingURL" {
+            continue;
+        }
+
+        let data = section.data();
+        let (length, prefix) = leb(data);
+        let url = &data[prefix..prefix + length];
+
+        return Some(std::str::from_utf8(url).expect("the URL of a map to be text"));
+    }
+
+    None
+}
+
+/// The map of an emitted module, decoded from the `data:` URL of its custom section.
+fn map(bytes: &[u8]) -> Value {
+    let url = map_url(bytes).expect("a module at this level to carry a source map");
+    let encoded = url
+        .strip_prefix("data:application/json;charset=utf-8;base64,")
+        .expect("a map to be a `data:` URL of JSON");
+
+    serde_json::from_slice(&base64(encoded)).expect("a map to be JSON")
+}
+
+/// The strings of a JSON array of the map, which holds strings only.
+fn strings(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .expect("an array of the map")
+        .iter()
+        .map(|item| item.as_str().expect("a string of the map").to_owned())
+        .collect()
+}
+
+/// The number a LEB128 carries, and how many bytes it takes.
+fn leb(bytes: &[u8]) -> (usize, usize) {
+    let mut value = 0usize;
+    let mut shift = 0;
+
+    for (index, byte) in bytes.iter().enumerate() {
+        value |= usize::from(byte & 0x7F) << shift;
+
+        if byte & 0x80 == 0 {
+            return (value, index + 1);
+        }
+
+        shift += 7;
+    }
+
+    panic!("a LEB128 to end inside the bytes it is read from");
+}
+
+/// The alphabet of base64, which is also the alphabet of the VLQ digits of a map.
+const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/// The bytes a base64 string carries, which is what a `data:` URL of a map holds.
+fn base64(text: &str) -> Vec<u8> {
+    let mut bits = 0u32;
+    let mut count = 0u32;
+    let mut bytes = Vec::new();
+
+    for character in text.bytes() {
+        if character == b'=' {
+            continue;
+        }
+
+        let digit = BASE64
+            .iter()
+            .position(|it| *it == character)
+            .unwrap_or_else(|| panic!("`{}` is not base64", char::from(character)))
+            as u32;
+
+        bits = (bits << 6) | digit;
+        count += 6;
+
+        if count >= 8 {
+            count -= 8;
+            bytes.push((bits >> count) as u8);
+            bits &= (1 << count) - 1;
+        }
+    }
+
+    bytes
+}
+
+/// One segment of a map: where an instruction stands, and what it was read from.
+#[derive(Debug, Clone, Copy, Default)]
+struct Segment {
+    /// The module byte offset of the instruction.
+    address: i64,
+    /// The place of its file in the map.
+    file: i64,
+    /// The line of the file, counting from zero.
+    line: i64,
+    /// The column of the line, counting from zero.
+    column: i64,
+}
+
+/// The segments of a `mappings` string, in the order they were written.
+fn segments(mappings: &str) -> Vec<Segment> {
+    let mut found = Vec::new();
+    let mut fields = [0i64; 4];
+    let mut values: Vec<i64> = Vec::new();
+    let mut value = 0u64;
+    let mut shift = 0u32;
+
+    for character in mappings.bytes() {
+        if character == b',' {
+            push(&mut found, &mut fields, &mut values);
+            continue;
+        }
+
+        let digit = BASE64
+            .iter()
+            .position(|it| *it == character)
+            .unwrap_or_else(|| panic!("`{}` is not a character of a map", char::from(character)))
+            as u64;
+
+        value |= (digit & 0x1F) << shift;
+        shift += 5;
+
+        if digit & 0x20 == 0 {
+            // The lowest bit is the sign, which is what zigzag encoding is.
+            let magnitude = (value >> 1) as i64;
+
+            values.push(if value & 1 == 0 {
+                magnitude
+            } else {
+                -magnitude
+            });
+            value = 0;
+            shift = 0;
+        }
+    }
+
+    push(&mut found, &mut fields, &mut values);
+
+    found
+}
+
+/// Reads one segment off the values it was written as, and clears them.
+fn push(found: &mut Vec<Segment>, fields: &mut [i64; 4], values: &mut Vec<i64>) {
+    if values.is_empty() {
+        return;
+    }
+
+    for (field, delta) in values.iter().enumerate() {
+        fields[field] += delta;
+    }
+
+    found.push(Segment {
+        address: fields[0],
+        file: fields[1],
+        line: fields[2],
+        column: fields[3],
+    });
+    values.clear();
 }

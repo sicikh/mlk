@@ -281,6 +281,12 @@ impl Engine {
                     self.next_param += 1;
                     params.push(param.clone());
 
+                    // The variable is the parameter from here on. Binding it is what makes the
+                    // occurrences a stored type still holds --- the type of the lambda a `let`
+                    // generalized, above all --- read as that parameter, and what keeps a second
+                    // occurrence of the variable from being named a second time.
+                    self.vars[var.0 as usize].binding = Some(InferTy::Param(param.clone()));
+
                     InferTy::Param(param)
                 } else {
                     // The variable belongs to a `let` that is still being inferred, or to the
@@ -307,16 +313,30 @@ impl Engine {
         }
     }
 
-    /// Replaces the listed parameters with fresh variables.
+    /// Replaces the listed parameters with fresh variables: one variable per parameter, and the
+    /// same variable wherever the parameter occurs in the scheme.
     pub(crate) fn instantiate(&mut self, ty: &InferTy, params: &[TypeVarId]) -> InferTy {
+        let fresh: Vec<InferTy> = params.iter().map(|_| self.fresh_var()).collect();
+
+        self.substitute(ty, params, &fresh)
+    }
+
+    /// What [`Engine::instantiate`] walks with: the fresh variable of every parameter, in the
+    /// order of the parameters.
+    fn substitute(&self, ty: &InferTy, params: &[TypeVarId], fresh: &[InferTy]) -> InferTy {
         match self.repr(ty) {
-            InferTy::Param(var) if params.contains(&var) => self.fresh_var(),
+            InferTy::Param(var) => {
+                match params.iter().position(|param| *param == var) {
+                    Some(index) => fresh[index].clone(),
+                    None => InferTy::Param(var),
+                }
+            },
             InferTy::Class { class, args } => {
                 InferTy::Class {
                     class,
                     args: args
                         .iter()
-                        .map(|arg| self.instantiate(arg, params))
+                        .map(|arg| self.substitute(arg, params, fresh))
                         .collect(),
                 }
             },
@@ -324,9 +344,9 @@ impl Engine {
                 InferTy::Fn {
                     params: ps
                         .iter()
-                        .map(|param| self.instantiate(param, params))
+                        .map(|param| self.substitute(param, params, fresh))
                         .collect(),
-                    ret: Box::new(self.instantiate(&ret, params)),
+                    ret: Box::new(self.substitute(&ret, params, fresh)),
                 }
             },
             ty => ty,
@@ -527,6 +547,35 @@ mod tests {
         let second = engine.instantiate(&scheme.ty, &scheme.params);
         assert!(matches!(&first, InferTy::Var(_)));
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn a_parameter_is_one_fresh_variable_wherever_it_occurs() {
+        let (owner, _) = entities();
+        let mut engine = Engine::new(owner);
+
+        engine.enter();
+        let var = engine.fresh_var();
+        engine.leave();
+
+        // The scheme of `fn(x) -> x`: the parameter is read in the parameters and in the
+        // result, and is one variable of the entity either way.
+        let scheme = engine.generalize(&InferTy::Fn {
+            params: vec![var.clone()],
+            ret: Box::new(var),
+        });
+        assert_eq!(scheme.params.len(), 1);
+        assert_eq!(scheme.ty, InferTy::Fn {
+            params: vec![InferTy::Param(scheme.params[0].clone())],
+            ret: Box::new(InferTy::Param(scheme.params[0].clone())),
+        },);
+
+        let InferTy::Fn { params, ret } = engine.instantiate(&scheme.ty, &scheme.params) else {
+            panic!("a function");
+        };
+
+        assert!(matches!(params[0], InferTy::Var(_)));
+        assert_eq!(params[0], *ret);
     }
 
     #[test]

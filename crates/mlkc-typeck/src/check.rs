@@ -840,7 +840,7 @@ mod tests {
 
     use mlkc_hir_def::{
         Body, BodyEntityLoc, ClassLoc, EntityLoc, ItemKind, ItemLoc, ItemLocLike, ItemTree,
-        ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, UseLoc,
+        ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, TypeVarId, UseLoc,
     };
     use mlkc_hir_ty::Ty;
     use mlkc_lower::{lower_body, lower_module};
@@ -1322,6 +1322,47 @@ mod tests {
             checked.expr_type(body.root()),
             Some(&Ty::class(class(&tree, "Int"))),
         );
+    }
+
+    #[test]
+    fn a_lambda_bound_by_a_let_reads_as_the_parameter_it_was_generalized_over() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = let id = fn(x) -> x in id(1)\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let Expr::Let { expr: init, .. } = &body[body.root()] else {
+            panic!("a `let` is the root of the body");
+        };
+        let Expr::Lambda {
+            params,
+            body: lambda,
+            ..
+        } = &body[*init]
+        else {
+            panic!("the right side of the `let` to be a lambda");
+        };
+
+        // The lambda generalized over its parameter, and every place the variable of it was
+        // recorded at reads as that parameter: one parameter on both sides of the arrow, and
+        // nothing of it a mistake.
+        let param = Ty::Param(TypeVarId {
+            owner: EntityLoc::from(owner.clone()),
+            index: 0,
+        });
+        let function = Ty::function(vec![param.clone()], param.clone());
+
+        assert_eq!(checked.expr_type(*init), Some(&function));
+        assert_eq!(checked.pat_type(params[0].pat), Some(&param));
+        assert_eq!(checked.expr_type(*lambda), Some(&param));
     }
 
     #[test]

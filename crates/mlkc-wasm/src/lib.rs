@@ -2713,6 +2713,47 @@ mod tests {
     }
 
     #[test]
+    fn a_lambda_a_let_generalized_reads_as_the_parameter_and_not_as_a_mistake() {
+        // The program an editor painted as a mistake: the type of the lambda is the parameter
+        // the `let` generalized over, and no place of it is `{error}`.
+        const SOURCE: &str = "fun test(n: Int): Int = let id = fn(x) -> x in id(1)\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        let types = driver
+            .types_of("/main.mlk")
+            .expect("the file to be checked")
+            .expect("the module to have types");
+        let json = serde_json::to_value(&types).expect("the types to serialize");
+        let types = &json;
+
+        let nodes = types["bodies"][0]["nodes"]
+            .as_array()
+            .expect("the nodes of the body");
+        let rows: Vec<(&str, &str)> = nodes
+            .iter()
+            .map(|it| {
+                (
+                    it["kind"].as_str().expect("a kind"),
+                    it["ty"].as_str().expect("a type"),
+                )
+            })
+            .collect();
+
+        for (kind, ty) in &rows {
+            assert!(!ty.contains("{error}"), "{kind}: {ty}");
+        }
+
+        // The lambda, the parameter it binds, and the body of it are one parameter: the one
+        // the `let` generalized over. The call at `Int` is the `Int` it gives back.
+        assert!(rows.contains(&("expr", "('0) -> '0")), "{rows:?}");
+        assert!(rows.contains(&("pat", "'0")), "{rows:?}");
+        assert!(rows.contains(&("expr", "Int")), "{rows:?}");
+    }
+
+    #[test]
     fn the_mir_of_a_buffer_crosses_the_boundary_in_both_forms() {
         const SOURCE: &str = "fun main(): Int =\n    let x = 1 in\n    x\n";
 

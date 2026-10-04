@@ -211,19 +211,19 @@ CHECKED BODY
 
 ```
 CHECKED BODY
-  expr #0: {error}
-  expr #1: ({error}) -> {error}
-  expr #2: (Bool) -> {error}
+  expr #0: '0
+  expr #1: ('0) -> '0
+  expr #2: (Bool) -> Bool
   expr #3: Bool
-  expr #4: {error}
+  expr #4: Bool
   expr #5: (Int) -> Int
   expr #6: Int
   expr #7: Int
   expr #8: Int
   expr #9: Int
-  pat #0: ('0) -> '1
-  pat #1: {error}
-  pat #2: '2
+  pat #0: ('0) -> '0
+  pat #1: '0
+  pat #2: Bool
 ```
 
 ### MIR
@@ -483,8 +483,8 @@ fun generalized (entry b0)
     l0 = use l3
     return l0
 
-lambda #0: ({error}) -> {error} captures () (entry b0)
-  params: v0: {error}
+lambda #0: ('0) -> '0 captures () (entry b0)
+  params: v0: '0
   b0:
     l0(x) = use v0
     l1 = use l0
@@ -503,8 +503,8 @@ fun generalized (entry b0)
     v4 = call v0(v3)
     return v4
 
-lambda #0: ({error}) -> {error} captures () (entry b0)
-  params: v0: {error}
+lambda #0: ('0) -> '0 captures () (entry b0)
+  params: v0: '0
   b0:
     return v0
 ```
@@ -513,27 +513,28 @@ LIR:
 
 ```
 lir (entry b0) ret (ref i31)
-  locals: 0: (ref #6), 1: (ref i31), 2: eqref, 3: (ref i31)
+  locals: 0: (ref #6), 1: (ref i31), 2: (ref i31), 3: (ref i31)
   b0:
     v0 = ref.func $6
     v1(local 0) = struct.new #6(v0)
     v2 = i32.const 1
     v3(local 1) = ref.i31 v2
     v4 = struct.get #6.0 v1
-    v5(local 2) = call-ref #5 v4(v1, v3)
-    v6 = i32.const 42
-    v7(local 3) = ref.i31 v6
-    v8 = struct.get #6.0 v1
-    v9 = call-ref #5 v8(v1, v7)
-    v10 = ref.cast (ref i31) v9
-    return v10
+    v5 = call-ref #5 v4(v1, v3)
+    v6(local 2) = ref.cast (ref i31) v5
+    v7 = i32.const 42
+    v8(local 3) = ref.i31 v7
+    v9 = struct.get #6.0 v1
+    v10 = call-ref #5 v9(v1, v8)
+    v11 = ref.cast (ref i31) v10
+    return v11
 ```
 
 Structure:
 
 ```
   leaf b0
-  return v10
+  return v11
 ```
 
 Lambda #0:

@@ -111,14 +111,6 @@ pub enum TypeError {
         /// The type of the operands.
         ty: Ty,
     },
-    /// A lambda is written, and the language has no value of a function yet.
-    ///
-    /// The lambda is lowered into the HIR with the bindings its body captures; what turns one
-    /// into a value is the representation of a closure, which the language has yet to fix
-    /// ([ADR-0018][adr-0018]).
-    ///
-    /// [adr-0018]: ../../docs/adr/0018-values-as-words.md
-    Lambda,
 }
 
 impl TypeError {
@@ -180,11 +172,6 @@ impl TypeError {
             Self::NoEquality { ty } => {
                 format!("the language has no equality for two values of `{ty}` yet")
             },
-            Self::Lambda => {
-                "a lambda is a value of a function, and the language has no value of a function \
-                 yet"
-                .to_owned()
-            },
         }
     }
 
@@ -226,7 +213,6 @@ impl TypeError {
             Self::RecursiveType => "this type contains itself".to_owned(),
             Self::IntOutOfRange { .. } => "outside the range of `Int`".to_owned(),
             Self::NoEquality { .. } => "this type has no equality yet".to_owned(),
-            Self::Lambda => "the language has no value of a function yet".to_owned(),
             Self::Unresolved { .. } | Self::MissingSignature => String::new(),
         }
     }
@@ -249,13 +235,6 @@ impl TypeError {
             },
             Self::NoEquality { .. } => {
                 vec!["`Int` and `Bool` are the types with equality for now".to_owned()]
-            },
-            Self::Lambda => {
-                vec![
-                    "the translation of a lambda is deferred: the HIR holds the bindings its \
-                     body captures, and the stages after the check do not read one yet"
-                        .to_owned(),
-                ]
             },
             _ => Vec::new(),
         }
@@ -300,7 +279,6 @@ impl DiagKind for TypeError {
             Self::MissingSignature => "12",
             Self::IntOutOfRange { .. } => "13",
             Self::NoEquality { .. } => "14",
-            Self::Lambda => "15",
         }
     }
 }

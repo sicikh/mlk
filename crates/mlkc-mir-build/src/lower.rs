@@ -20,6 +20,14 @@
 //! meaning to lower, and the driver is what asks for MIR only when the body checks clean. The
 //! walk is total over such a body: what it cannot lower is a mistake the check should have
 //! reported, so it is an internal compiler exception and not a diagnostic ([adr-0019]).
+//!
+//! One construct is the exception: a lambda is a value of a function, and what one is in
+//! a machine is the environment it carries and the call it makes. The check accepts a lambda,
+//! and the lowering of one into MIR is deferred ([ADR-0018]), so a body that holds one is
+//! a body this walk cannot lower yet: it stops at the lambda rather than manufacturing
+//! a body for a construct the back end does not have.
+//!
+//! [ADR-0018]: ../../docs/adr/0018-values-as-words.md
 
 use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
@@ -238,10 +246,14 @@ impl Lowerer<'_> {
             Expr::If { .. } => {
                 ice!("the lowering met an `if` outside the rule that reads an `if`")
             },
-            // A lambda is a value of a function, and the check reports one: the lowering is
-            // total over the bodies the check accepted, and this is one the check did not.
+            // A lambda is a value of a function, and what one is in a machine is the environment
+            // it carries and the code it calls: the check accepts a lambda, and the construction
+            // of MIR for one is deferred ([ADR-0018]). The walk says so rather than manufacturing
+            // a body for a construct the back end does not have.
+            //
+            // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
             Expr::Lambda { .. } => {
-                ice!("the lowering met a lambda, and the check accepts no lambda")
+                ice!("the construction of MIR met a lambda, and the lowering of one is deferred")
             },
         }
     }

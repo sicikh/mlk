@@ -19,8 +19,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
-    ItemTree, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId, ProjectGraph,
-    UnaryOp,
+    ItemTree, LambdaParam, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId,
+    ProjectGraph, TypeRef, UnaryOp,
 };
 use mlkc_hir_ty::{Builtins, CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
 use mlkc_resolve::{Closure, Resolution};
@@ -135,10 +135,11 @@ pub fn check_body(
 
 /// Which position an expression is read in.
 ///
-/// A function is not a value the language has: the name of one is what a call calls, and a
-/// name read anywhere else denotes no value ([ADR-0019] closures).
+/// The name of a function is not a value the language has: what a call calls is a name, and
+/// a lambda is how a value of a function is written. A name read anywhere else denotes no
+/// value ([ADR-0018]).
 ///
-/// [ADR-0019]: ../../docs/adr/0019-mir.md
+/// [ADR-0018]: ../../docs/adr/0018-values-as-words.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Position {
     /// Where a value belongs.
@@ -261,16 +262,7 @@ impl Checker<'_> {
                 arms,
                 otherwise,
             } => self.if_expr(cond, then_, &arms, otherwise),
-            // A lambda is a value of a function, and the language has no value of a function
-            // yet: what one is is fixed where closures are represented ([ADR-0018]), and the
-            // translation of a lambda is the work of that stage ([ADR-0019]).
-            //
-            // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
-            // [ADR-0019]: ../../docs/adr/0019-mir.md
-            Expr::Lambda { .. } => {
-                self.report(TypeError::Lambda, expr);
-                InferTy::Error
-            },
+            Expr::Lambda { params, body, .. } => self.lambda(&params, body),
         };
 
         self.record_expr(expr, ty.clone());
@@ -439,8 +431,8 @@ impl Checker<'_> {
                 errors.append(&mut found);
 
                 match entity {
-                    // The language has no value of a function yet: the name of one is what a
-                    // call calls, and anywhere else it denotes no value.
+                    // The name of a function is what a call calls, and not a value the language
+                    // has: a lambda is how a value of a function is written.
                     Some(entity)
                         if position == Position::Value
                             && entity.item.kind() == ItemKind::Function =>
@@ -687,6 +679,82 @@ impl Checker<'_> {
         self.bind_pat(pat, &scheme);
 
         self.infer(body)
+    }
+
+    /// The type of a lambda: its parameters, and the type of its body.
+    ///
+    /// A parameter that writes a type takes it, and one that writes none takes a variable the
+    /// body works out. The parameters are bound in a level of their own, and are monomorphic
+    /// inside the body: a lambda is the signature of what it computes, and a signature is one
+    /// type. What the body leaves unresolved is a variable of the lambda's own level, and the
+    /// `let` the lambda is bound in is what generalizes it, if the lambda is bound at all.
+    ///
+    /// What the lambda captures is not read here: the HIR holds the bindings its body reads,
+    /// and the type of a lambda says nothing about the environment it carries ([ADR-0018]).
+    ///
+    /// [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+    fn lambda(&mut self, params: &[LambdaParam], body: ExprId) -> InferTy {
+        self.engine.enter();
+
+        let mut types = Vec::with_capacity(params.len());
+
+        for param in params {
+            let ty = self.parameter_type(param);
+
+            self.bind_pat(param.pat, &Scheme {
+                ty: ty.clone(),
+                params: Vec::new(),
+            });
+
+            types.push(ty);
+        }
+
+        let ret = self.infer(body);
+        self.engine.leave();
+
+        InferTy::Fn {
+            params: types,
+            ret: Box::new(ret),
+        }
+    }
+
+    /// The type a parameter of a lambda takes: the type it writes, or a variable the body and
+    /// the callers of the lambda work out.
+    ///
+    /// A type is read where a type belongs, and the lowering resolved the roots of a path of
+    /// a body against the module: a name that is no type of the module is a name of another
+    /// namespace, which the check is what reports --- the lowering reports a name that is not
+    /// there at all.
+    fn parameter_type(&mut self, param: &LambdaParam) -> InferTy {
+        let place = TypePlace::Pat(param.pat);
+
+        match &param.ty {
+            // `_` written for a parameter of a lambda is a type to infer, as a parameter that
+            // writes no type is: the body is where it is inferred from.
+            Some(TypeRef::Infer) | None => self.engine.fresh_var(),
+            Some(ty) => {
+                if let TypeRef::Path(path) = ty
+                    && matches!(path.anchor, PathAnchor::Unresolved)
+                    && let Some(name) = path.root.name()
+                    && self
+                        .tree
+                        .scope()
+                        .get(name)
+                        .is_some_and(|entry| entry.value.is_some() && entry.ty.is_none())
+                {
+                    self.report_at(TypeError::NotAType { name: name.clone() }, place);
+                    return InferTy::Error;
+                }
+
+                let (resolved, errors) = self.resolver.type_of(ty);
+
+                for error in errors {
+                    self.report_at(error, place.clone());
+                }
+
+                InferTy::of(&resolved)
+            },
+        }
     }
 
     /// Binds a pattern to a type: what the pattern binds is what the type is.
@@ -1137,9 +1205,129 @@ mod tests {
     }
 
     #[test]
-    fn a_lambda_is_reported_because_the_language_has_no_value_of_a_function() {
+    fn a_lambda_is_a_function_of_its_parameters() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun apply(value: Int): Int = fn(x) -> x + value\n");
+        let source = format!("{CLASSES}\nfun main(value: Int): Int = (fn(x) -> x + value)(1)\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let int = Ty::class(class(&tree, "Int"));
+        assert_eq!(checked.expr_type(body.root()), Some(&int));
+
+        let Expr::Call { callee, args } = &body[body.root()] else {
+            panic!("the root to be a call");
+        };
+        assert_eq!(args.len(), 1, "the call to pass one argument");
+
+        // What is called is the lambda, and the argument and the body fix what its parameter
+        // is: the sum makes it an `Int` --- it reads the `value` of the enclosing body as
+        // well --- and the call takes an `Int` and gives one back.
+        assert_eq!(
+            checked.expr_type(*callee),
+            Some(&Ty::function(vec![int.clone()], int.clone())),
+        );
+        assert_eq!(checked.expr_type(args[0]), Some(&int));
+
+        let Expr::Lambda { params, .. } = &body[*callee] else {
+            panic!("the callee to be a lambda");
+        };
+        assert_eq!(checked.pat_type(params[0].pat), Some(&int));
+    }
+
+    #[test]
+    fn a_lambda_parameter_takes_the_type_it_writes() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = (fn(x: Int) -> x)(1)\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let int = Ty::class(class(&tree, "Int"));
+        let Expr::Call { callee, .. } = &body[body.root()] else {
+            panic!("the root to be a call");
+        };
+
+        assert_eq!(
+            checked.expr_type(*callee),
+            Some(&Ty::function(vec![int.clone()], int.clone())),
+        );
+
+        let Expr::Lambda { params, .. } = &body[*callee] else {
+            panic!("the callee to be a lambda");
+        };
+        assert_eq!(checked.pat_type(params[0].pat), Some(&int));
+    }
+
+    #[test]
+    fn a_lambda_parameter_left_to_infer_is_inferred_from_the_body() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = (fn(x: _) -> x + 1)(2)\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let int = Ty::class(class(&tree, "Int"));
+        let Expr::Call { callee, .. } = &body[body.root()] else {
+            panic!("the root to be a call");
+        };
+
+        assert_eq!(
+            checked.expr_type(*callee),
+            Some(&Ty::function(vec![int.clone()], int.clone())),
+        );
+    }
+
+    #[test]
+    fn a_lambda_bound_by_a_let_is_used_at_two_types() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\nfun main(): Int =\n    let id = fn(x) -> x in\n    let _ = id(true) in\n    id(1)\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // The same lambda is read as a function of `Bool` and of `Int`: a lambda bound by
+        // a `let` is generalized like any other value of it.
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(
+            checked.expr_type(body.root()),
+            Some(&Ty::class(class(&tree, "Int"))),
+        );
+    }
+
+    #[test]
+    fn a_lambda_parameter_that_is_not_its_argument_is_reported() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = (fn(x: Int) -> x)(true)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1150,11 +1338,42 @@ mod tests {
         let (owner, body) = &bodies[0];
         let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
 
-        // A lambda is lowered with the bindings its body captures, and what turns one into
-        // a value is the representation of a closure, which the check does not have yet.
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(
-            matches!(diagnostics[0].error(), TypeError::Lambda),
+            matches!(
+                diagnostics[0].error(),
+                TypeError::TypeMismatch { expected, found }
+                    if *expected == Ty::class(class(&tree, "Int"))
+                        && *found == Ty::class(class(&tree, "Bool"))
+            ),
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
+    fn a_lambda_parameter_type_that_names_a_value_is_reported() {
+        let (id, ..) = ids();
+        let source =
+            format!("{CLASSES}\nfun value(): Int = 1\nfun main(): Int = (fn(x: value) -> x)(1)\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        // The module declares `value` before `main`, so the body of `main` is the last one.
+        let (owner, body) = bodies.last().expect("the body of `main`");
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // A name written where a type belongs is a type of the module, and a value of it is
+        // a mistake the check reports: the lowering reports a name that is not there at all.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(
+                diagnostics[0].error(),
+                TypeError::NotAType { name } if *name == Name::new("value")
+            ),
             "{diagnostics:?}",
         );
     }

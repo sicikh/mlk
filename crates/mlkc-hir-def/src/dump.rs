@@ -296,6 +296,12 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
             ));
 
             dump.depth += 1;
+
+            if !data.params.is_empty() {
+                let params: Vec<String> = data.params.iter().map(|pat| pat_ref(*pat)).collect();
+                dump.line(format!("params {}", params.join(", ")));
+            }
+
             dump.lines(&signature_lines(&data.signature, module, None));
             dump.depth -= 1;
         }
@@ -497,7 +503,8 @@ pub fn body_nodes(owner: &BodyEntityLoc, body: &Body) -> Node {
     children.push(root);
 
     for (id, data) in body.local_functions().iter() {
-        let mut inner = signature_lines(&data.signature, module, None);
+        let mut inner: Vec<Node> = data.params.iter().map(|pat| pat_node(body, *pat)).collect();
+        inner.extend(signature_lines(&data.signature, module, None));
         inner.push(root_node(
             body,
             module,
@@ -598,6 +605,9 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
             children.push(expr_node(body, module, *inner));
             children.extend(captures.iter().map(|pat| pat_node(body, *pat)));
         },
+        // The items of a `local` are entities of the body and are read where the body reads
+        // its entities; what the expression is made of is the expression after the `in`.
+        Expr::Local { body: inner, .. } => children.push(expr_node(body, module, *inner)),
         Expr::If {
             cond,
             then_,
@@ -983,6 +993,11 @@ fn expr_text(expr: &Expr, module: ModuleId) -> String {
                 expr_ref(*body),
                 captures.join(", "),
             )
+        },
+        Expr::Local { items, body } => {
+            let items: Vec<String> = items.iter().map(|item| format!("{item:?}")).collect();
+
+            format!("local ({}) in {}", items.join(", "), expr_ref(*body))
         },
         Expr::If {
             cond,
@@ -1381,6 +1396,7 @@ ITEM TREE
         });
         builder.set_root(root);
 
+        let helper_param = builder.alloc_pat(Pat::Wildcard);
         let helper = builder.declare_local_function(LocalFunctionData {
             name: Name::new("helper"),
             signature: Signature {
@@ -1392,6 +1408,7 @@ ITEM TREE
                 }],
                 ret: Some(TypeRef::Infer),
             },
+            params: vec![helper_param],
         });
         let literal = builder.alloc_expr(Expr::Literal(Literal::Int(7)));
         builder.set_local_function_root(helper, literal);
@@ -1416,11 +1433,13 @@ exprs
 pats
   pat#0  bind x
   pat#1  _
+  pat#2  _
 paths
   path#0  g -> fun g
   path#1  unknown -> unresolved
 functions
   fun#0  helper  root expr#5
+    params pat#2
     param: Int -> type Int
     ret: _
 "

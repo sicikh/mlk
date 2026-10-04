@@ -1,0 +1,77 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A function declared in a `local` declares no body: a function of a module may be implemented
+// elsewhere, and a `local` is where the body of its function is.
+
+fun declared(value: Int): Int =
+    local fun missing(x: Int): Int in
+    value
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::local_without_body
+
+ITEM TREE
+  fun declared  @2.0
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun declared in module #0
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  missing
+  expr#1  path path#0
+  expr#2  local (fun#0) in expr#1
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  value -> binding pat#0
+functions
+  fun#0  missing  root expr#0
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+## Lowering Diagnostics
+
+205..229: the function `missing` is declared inside a body and declares no body of its own, and nothing else implements it
+
+## Parse Diagnostics
+
+No diagnostics.

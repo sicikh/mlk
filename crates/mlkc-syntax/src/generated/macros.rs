@@ -82,6 +82,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::LetExpr::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::LOCAL_EXPR => {
+                        let $pattern = unsafe { $crate::LocalExpr::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::MODULE_PREAMBLE => {
                         let $pattern = unsafe { $crate::ModulePreamble::new_unchecked(node) };
                         $body

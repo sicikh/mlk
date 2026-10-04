@@ -98,7 +98,8 @@ pub mod type_ref;
 
 pub use crate::{
     body::{
-        BinaryOp, Body, BodyBuilder, Expr, ExprId, IfArm, LambdaParam, Literal, Pat, PatId, UnaryOp,
+        BinaryOp, Body, BodyBuilder, Expr, ExprId, IfArm, LambdaParam, Literal, LocalFunctionData,
+        Pat, PatId, UnaryOp,
     },
     def_map::{LocalEntry, LocalScope, LocalTarget, ModuleScope, Namespace, PerNs, ProjectDefMap},
     id::{

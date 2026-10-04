@@ -1,0 +1,427 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A `local` is lowered into the HIR as the expression after the `in` and the entities its items
+// declare: each item is a function of the enclosing body, with the name it is declared under, its
+// signature, the patterns of its parameters, and its root expression. The expressions of an item
+// live in the arenas of the body that wrote it.
+//
+// A function declared inside a body is given its own parameters only: what the body that declares
+// it binds is not part of it, and what it reads of the module it reaches without an environment.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Bool
+
+#[extern]
+fun consume(left: Int, right: Int): Int
+
+// A function declared in a `local` is called by the name it declares, and the path of the call is
+// anchored to the entity of the body.
+fun direct(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    double(value)
+
+// The names of the items are visible in the items themselves: an item may call itself and the
+// ones written next to it.
+fun mutual(value: Int): Int =
+    local
+        fun step(x: Int): Int = if x == 0 then 0 else step(x - 1)
+        fun twice(x: Int): Int = step(x) + step(x)
+    in
+        twice(value)
+
+// What an item binds itself is its own: a `let` written inside it is read by its body the way
+// a `let` is read anywhere else.
+fun bound(value: Int): Int =
+    local fun add(x: Int): Int = let next = x + 1 in next + x in
+    add(value)
+
+// A name a `local` declares is a name of the body: it shadows a parameter the body was entered
+// with, and the paths of the `local` read the item.
+fun renamed(value: Int): Int =
+    local fun value(): Int = 1 in
+    value() + 2
+
+// A `let` written inside a `local` shadows the name of an item, and the name is the binding from
+// there on.
+fun shadowed(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    let double = value in
+    double + 1
+
+// A parameter the item ignores is a wildcard, as the parameter of a module function is, and the
+// signature of the item is resolved against the types of the module.
+fun ignored(value: Bool): Int =
+    local fun nothing(_: Bool): Int = 0 in
+    nothing(value)
+
+// A `local` inside a `local`: the body of an item is an expression of the enclosing body, and the
+// items of the inner one are entities of the same body.
+fun nested(value: Int): Int =
+    local fun outer(x: Int): Int =
+        local fun inner(y: Int): Int = y + 1 in
+        inner(x)
+    in
+        outer(value)
+
+// The pipeline is an expression of the body wherever it is written: the body of an item is an
+// expression like any other, and the binding a pipeline makes is the item's own.
+fun piped(value: Int): Int =
+    local fun pass(x: Int): Int = x |> consume(_, 1) in
+    if value == 0 then 0 else pass(value)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::local
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  type Bool  @2.1
+    attributes: #[builtin]
+    visibility: private
+  fun consume  @2.2
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun direct  @2.3
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun mutual  @2.4
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun bound  @2.5
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun renamed  @2.6
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun shadowed  @2.7
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun ignored  @2.8
+    visibility: private
+    param: Bool -> type Bool
+    ret: Int -> type Int
+  fun nested  @2.9
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun piped  @2.10
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun direct in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun mutual in module #0
+
+root expr#20
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 0
+  expr#2  binary expr#0 == expr#1
+  expr#3  literal 0
+  expr#4  path path#1
+  expr#5  path path#0
+  expr#6  literal 1
+  expr#7  binary expr#5 - expr#6
+  expr#8  call expr#4 (expr#7)
+  expr#9  if expr#2 then expr#3 else expr#8
+  expr#10  path path#1
+  expr#11  path path#2
+  expr#12  call expr#10 (expr#11)
+  expr#13  path path#1
+  expr#14  path path#2
+  expr#15  call expr#13 (expr#14)
+  expr#16  binary expr#12 + expr#15
+  expr#17  path path#3
+  expr#18  path path#4
+  expr#19  call expr#17 (expr#18)
+  expr#20  local (fun#0, fun#1) in expr#19
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  step -> local fun#0
+  path#2  x -> binding pat#2
+  path#3  twice -> local fun#1
+  path#4  value -> binding pat#0
+functions
+  fun#0  step  root expr#9
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun#1  twice  root expr#16
+    params pat#2
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun bound in module #0
+
+root expr#10
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#1
+  expr#4  path path#0
+  expr#5  binary expr#3 + expr#4
+  expr#6  let pat#2 = expr#2 in expr#5
+  expr#7  path path#2
+  expr#8  path path#3
+  expr#9  call expr#7 (expr#8)
+  expr#10  local (fun#0) in expr#9
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind next
+paths
+  path#0  x -> binding pat#1
+  path#1  next -> binding pat#2
+  path#2  add -> local fun#0
+  path#3  value -> binding pat#0
+functions
+  fun#0  add  root expr#6
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun renamed in module #0
+
+root expr#5
+params
+  pat#0
+exprs
+  expr#0  literal 1
+  expr#1  path path#0
+  expr#2  call expr#1 ()
+  expr#3  literal 2
+  expr#4  binary expr#2 + expr#3
+  expr#5  local (fun#0) in expr#4
+pats
+  pat#0  bind value
+paths
+  path#0  value -> local fun#0
+functions
+  fun#0  value  root expr#0
+    ret: Int -> type Int
+```
+
+```
+BODY fun shadowed in module #0
+
+root expr#8
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  literal 1
+  expr#6  binary expr#4 + expr#5
+  expr#7  let pat#2 = expr#3 in expr#6
+  expr#8  local (fun#0) in expr#7
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind double
+paths
+  path#0  x -> binding pat#1
+  path#1  value -> binding pat#0
+  path#2  double -> binding pat#2
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun ignored in module #0
+
+root expr#4
+params
+  pat#0
+exprs
+  expr#0  literal 0
+  expr#1  path path#0
+  expr#2  path path#1
+  expr#3  call expr#1 (expr#2)
+  expr#4  local (fun#0) in expr#3
+pats
+  pat#0  bind value
+  pat#1  _
+paths
+  path#0  nothing -> local fun#0
+  path#1  value -> binding pat#0
+functions
+  fun#0  nothing  root expr#0
+    params pat#1
+    param: Bool -> type Bool
+    ret: Int -> type Int
+```
+
+```
+BODY fun nested in module #0
+
+root expr#10
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#1) in expr#5
+  expr#7  path path#3
+  expr#8  path path#4
+  expr#9  call expr#7 (expr#8)
+  expr#10  local (fun#0) in expr#9
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind y
+paths
+  path#0  y -> binding pat#2
+  path#1  inner -> local fun#1
+  path#2  x -> binding pat#1
+  path#3  outer -> local fun#0
+  path#4  value -> binding pat#0
+functions
+  fun#0  outer  root expr#6
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun#1  inner  root expr#2
+    params pat#2
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun piped in module #0
+
+root expr#14
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  literal 1
+  expr#4  call expr#1 (expr#2, expr#3)
+  expr#5  let pat#2 = expr#0 in expr#4
+  expr#6  path path#3
+  expr#7  literal 0
+  expr#8  binary expr#6 == expr#7
+  expr#9  literal 0
+  expr#10  path path#4
+  expr#11  path path#3
+  expr#12  call expr#10 (expr#11)
+  expr#13  if expr#8 then expr#9 else expr#12
+  expr#14  local (fun#0) in expr#13
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind <mlkc@pipeline-0>
+paths
+  path#0  x -> binding pat#1
+  path#1  consume -> fun consume
+  path#2  <mlkc@pipeline-0> -> binding pat#2
+  path#3  value -> binding pat#0
+  path#4  pass -> local fun#0
+functions
+  fun#0  pass  root expr#5
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

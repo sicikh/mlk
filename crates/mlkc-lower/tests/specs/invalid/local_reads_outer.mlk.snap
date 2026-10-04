@@ -1,0 +1,222 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A function declared inside a body is given its own parameters only: what the body that declares
+// it binds is not part of it, and reading one is a mistake.
+
+#[builtin]
+type Int
+
+#[extern]
+fun consume(left: Int, right: Int): Int
+
+// A parameter of the body that declares the function.
+fun parameter(value: Int): Int =
+    local fun add(x: Int): Int = x + value in
+    add(1)
+
+// A `let` of the body that declares the function.
+fun bound(value: Int): Int =
+    let other = value + 1 in
+    local fun add(x: Int): Int = x + other in
+    add(1)
+
+// A lambda written in the body of the function reads the binding of the enclosing body, and the
+// read is the mistake of the function it is written in.
+fun through_lambda(value: Int): Int =
+    local fun applied(): Int = (fn(x) -> x + value)(1) in
+    applied()
+
+// A `_` written in a function declared among the arguments of a step names the value the pipeline
+// of the enclosing body passes, which is a binding of that body as well.
+fun piped(value: Int): Int =
+    value |> consume(_, local fun passed(): Int = _ in passed())
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::local_reads_outer
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  fun consume  @2.1
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun parameter  @2.2
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun bound  @2.3
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun through_lambda  @2.4
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun piped  @2.5
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun parameter in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#2
+  expr#4  literal 1
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  value -> binding pat#0
+  path#2  add -> local fun#0
+functions
+  fun#0  add  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun bound in module #0
+
+root expr#10
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  binary expr#3 + expr#4
+  expr#6  path path#3
+  expr#7  literal 1
+  expr#8  call expr#6 (expr#7)
+  expr#9  local (fun#0) in expr#8
+  expr#10  let pat#1 = expr#2 in expr#9
+pats
+  pat#0  bind value
+  pat#1  bind other
+  pat#2  bind x
+paths
+  path#0  value -> binding pat#0
+  path#1  x -> binding pat#2
+  path#2  other -> binding pat#1
+  path#3  add -> local fun#0
+functions
+  fun#0  add  root expr#5
+    params pat#2
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun through_lambda in module #0
+
+root expr#8
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  lambda (pat#1) -> expr#2 captures (pat#0)
+  expr#4  literal 1
+  expr#5  call expr#3 (expr#4)
+  expr#6  path path#2
+  expr#7  call expr#6 ()
+  expr#8  local (fun#0) in expr#7
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  value -> binding pat#0
+  path#2  applied -> local fun#0
+functions
+  fun#0  applied  root expr#5
+    ret: Int -> type Int
+```
+
+```
+BODY fun piped in module #0
+
+root expr#8
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  path path#2
+  expr#4  path path#3
+  expr#5  call expr#4 ()
+  expr#6  local (fun#0) in expr#5
+  expr#7  call expr#1 (expr#2, expr#6)
+  expr#8  let pat#1 = expr#0 in expr#7
+pats
+  pat#0  bind value
+  pat#1  bind <mlkc@pipeline-0>
+paths
+  path#0  value -> binding pat#0
+  path#1  consume -> fun consume
+  path#2  <mlkc@pipeline-0> -> binding pat#1
+  path#3  passed -> local fun#0
+functions
+  fun#0  passed  root expr#3
+    ret: Int -> type Int
+```
+
+## Lowering Diagnostics
+
+358..363: `add` is declared inside a body and reads `value`, which is a binding of the body that declares it: a function declared inside a body is given its own parameters only
+525..530: `add` is declared inside a body and reads `other`, which is a binding of the body that declares it: a function declared inside a body is given its own parameters only
+783..788: `applied` is declared inside a body and reads `value`, which is a binding of the body that declares it: a function declared inside a body is given its own parameters only
+1063..1064: `passed` is declared inside a body and reads the value a pipeline of the body that declares it passes: a function declared inside a body is given its own parameters only
+
+## Parse Diagnostics
+
+No diagnostics.

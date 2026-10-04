@@ -1,0 +1,16 @@
+// What is wrong with a `local` as syntax: an item that is not a declaration of a module, an item
+// whose body the parser could not read, and the `in` that ends the list that is not written.
+
+fun broken_item(value: Int): Int =
+    local
+        let x = 1 in
+        x
+
+fun broken_body(value: Int): Int =
+    local fun add(x: Int): Int = x + in
+    value
+
+// The `in` is not written, so the list of items runs to the end of the file and the expression
+// after it is not there.
+fun missing_in(value: Int): Int =
+    local fun double(x: Int): Int = x * 2

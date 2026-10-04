@@ -134,7 +134,15 @@ LambdaExpr { kw<"fn"> LambdaParameters "->" Expr }
 
 LambdaParameters { "(" (Parameter ("," Parameter)*)? ")" }
 
-PrimaryExpr { IfExpr | LetExpr | LambdaExpr | Placeholder | Literal | PathExpr | ParenExpr }
+// A `local`: the items of a module written where a value belongs, and the expression their names
+// are visible in. The list ends at the `in`, which is what the expression after it starts from.
+LocalExpr { kw<"local"> ModuleItem* kw<"in"> Expr }
+
+// An item of a module, as a `local` writes one: a declaration, with the attributes it carries in
+// front of it.
+ModuleItem { Attribute* (FunDecl | TypeDecl | UseDecl) }
+
+PrimaryExpr { IfExpr | LetExpr | LambdaExpr | LocalExpr | Placeholder | Literal | PathExpr | ParenExpr }
 
 // A place for the value a pipeline passes: `x |> f(_)`. A place is a leaf of the expression
 // grammar, and the parser of the compiler reads one only among the arguments of the call on

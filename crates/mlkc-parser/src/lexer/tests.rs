@@ -190,8 +190,8 @@ fn underscore_is_not_an_identifier() {
 #[test]
 fn keywords() {
     let keywords = [
-        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "module", "project", "pub",
-        "then", "true", "type", "use",
+        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
+        "project", "pub", "then", "true", "type", "use",
     ];
 
     for keyword in keywords {
@@ -236,6 +236,14 @@ fn keywords_are_not_identifiers() {
         IDENT:7,
         WHITESPACE:1,
         IDENT:5
+    }
+
+    // `local` is a keyword, and a name that starts with it is a name.
+    assert_lex! {
+        "locals local-x",
+        IDENT:6,
+        WHITESPACE:1,
+        IDENT:7
     }
 
     // The keyword is a word, and a name that holds it is a name.

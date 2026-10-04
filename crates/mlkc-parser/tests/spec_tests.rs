@@ -77,6 +77,11 @@ spec_tests! {
     // it computes, and what the body extends to.
     lambdas: "valid/lambdas.mlk",
 
+    // A `local`: the items of a module written where a value belongs, and the expression their
+    // names are visible in. Each item is read as the item of a module it is, and the list is
+    // a list of them.
+    local: "valid/local.mlk",
+
     // A `let` without its `in`: the binding expression is parsed and the diagnostic points
     // at the place where the body was supposed to start.
     missing_in: "invalid/missing_in.mlk",
@@ -124,6 +129,10 @@ spec_tests! {
     // What is wrong with a lambda as syntax: a parameter that is not a pattern, the arrow and the
     // body that are not written, and a parameter list that is never closed.
     broken_lambdas: "invalid/lambdas.mlk",
+
+    // What is wrong with a `local` as syntax: an item that is not a declaration, an item whose
+    // body the parser could not read, and the `in` that ends the list that is not written.
+    broken_local: "invalid/local.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

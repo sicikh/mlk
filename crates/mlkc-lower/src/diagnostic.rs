@@ -9,7 +9,9 @@
 use std::fmt;
 
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Level};
-use mlkc_hir_def::{ClassLoc, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, Name, PlainPath};
+use mlkc_hir_def::{
+    ClassLoc, EntityLoc, FunctionLoc, ItemKind, ItemLoc, ItemLocLike, Name, PlainPath,
+};
 use mlkc_span::Span;
 
 /// What a module says that the HIR cannot hold, and what the language does not allow.
@@ -163,6 +165,54 @@ pub enum LoweringError {
         /// The name the path is rooted at.
         name: Name,
     },
+    /// A function declared inside a body declares no body of its own.
+    ///
+    /// A function of a module may be implemented elsewhere --- an external function, a builtin
+    /// --- and a `local` declares a function where the body of it is: there is nothing else it
+    /// could be, and a declaration without a body is a declaration nothing implements.
+    LocalFunctionWithoutBody {
+        /// The name the function is declared under.
+        name: Name,
+    },
+    /// A function declared inside a body carries an attribute.
+    ///
+    /// The attributes of the language --- `extern`, `builtin`, `entry` --- are read on the items
+    /// of a module: what one says about a declaration is how an item of a module is implemented
+    /// or reached, and a function declared inside a body is implemented by its own body and
+    /// reached by its own name. No attribute means anything on one of those yet.
+    LocalFunctionAttribute {
+        /// The function.
+        function: Name,
+        /// The attribute as it is written.
+        attribute: Name,
+    },
+    /// A function declared inside a body is declared public.
+    ///
+    /// What `pub` reaches is a module, and a function declared inside a body is not an item of
+    /// one: nothing outside the body sees it.
+    LocalFunctionVisibility {
+        /// The function.
+        function: Name,
+    },
+    /// A function declared inside a body reads a binding of the body that declares it.
+    ///
+    /// A function declared inside a body is given its own parameters only: without an
+    /// environment of its own, a name the body that declares it binds is out of its reach.
+    LocalFunctionReadsOuterBinding {
+        /// The function.
+        function: Name,
+        /// The name the function reads, or `None` when it reads the value a pipeline of the body
+        /// that declares it passes, which is bound under a name no module can write.
+        name: Option<Name>,
+    },
+    /// A `local` declares an item the language does not hold inside a body yet.
+    ///
+    /// The items of a `local` are the items of a module, and the language has to work out what
+    /// each of them is inside a body: a function is read today, and the rest of them is not.
+    LocalItemNotRead {
+        /// The kind of the item.
+        kind: ItemKind,
+    },
 }
 
 impl LoweringError {
@@ -287,6 +337,48 @@ impl LoweringError {
                     declaration.item,
                 )
             },
+            Self::LocalFunctionWithoutBody { name } => {
+                format!(
+                    "the function `{name:?}` is declared inside a body and declares no body of \
+                 its own, and nothing else implements it",
+                )
+            },
+            Self::LocalFunctionAttribute {
+                function,
+                attribute,
+            } => {
+                format!(
+                    "the attribute `#[{attribute:?}]` is written on `{function:?}`, a function \
+                 declared inside a body, and no attribute is read on one yet",
+                )
+            },
+            Self::LocalFunctionVisibility { function } => {
+                format!(
+                    "`{function:?}` is declared inside a body and is public, and a function \
+                 declared inside a body is not visible outside it",
+                )
+            },
+            Self::LocalFunctionReadsOuterBinding { function, name } => {
+                let read = match name {
+                    Some(name) => {
+                        format!("reads `{name:?}`, which is a binding of the body that declares it")
+                    },
+                    None => {
+                        "reads the value a pipeline of the body that declares it passes".to_owned()
+                    },
+                };
+
+                format!(
+                    "`{function:?}` is declared inside a body and {read}: a function declared \
+                 inside a body is given its own parameters only",
+                )
+            },
+            Self::LocalItemNotRead { kind } => {
+                format!(
+                    "a `{}` declared inside a body is not read yet",
+                    kind.keyword(),
+                )
+            },
         }
     }
 }
@@ -326,6 +418,11 @@ impl DiagKind for LoweringError {
             Self::EntryType { .. } => "16",
             Self::EntryFunctionNotPublic { .. } => "17",
             Self::EntryFunctionNotWritten { .. } => "18",
+            Self::LocalFunctionWithoutBody { .. } => "19",
+            Self::LocalFunctionAttribute { .. } => "20",
+            Self::LocalFunctionVisibility { .. } => "21",
+            Self::LocalFunctionReadsOuterBinding { .. } => "22",
+            Self::LocalItemNotRead { .. } => "23",
         }
     }
 }

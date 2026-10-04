@@ -411,6 +411,11 @@ impl Lowerer<'_, '_> {
             Expr::Lambda { .. } => {
                 ice!("the lowering met a lambda outside the rule that reads one")
             },
+            // A `local` declares items inside a body, and the check reports one: the lowering is
+            // total over the bodies the check accepted, and this is one the check did not.
+            Expr::Local { .. } => {
+                ice!("the lowering met a `local`, and the check accepts no `local`")
+            },
         }
     }
 

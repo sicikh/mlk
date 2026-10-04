@@ -40,8 +40,8 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         ("|>", "PIPE"),
     ],
     keywords: &[
-        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "module", "project", "pub",
-        "then", "true", "type", "use",
+        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
+        "project", "pub", "then", "true", "type", "use",
     ],
     literals: &["INT_LITERAL", "STRING_LITERAL"],
     tokens: &[
@@ -97,6 +97,7 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "LET_EXPR",
         "LAMBDA_EXPR",
         "LAMBDA_PARAMETER_LIST",
+        "LOCAL_EXPR",
         "PAREN_EXPR",
         "TYPE",
         "PATH_TYPE",

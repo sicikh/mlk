@@ -140,8 +140,8 @@ impl ParseNodeList for ModuleItemListParse {
     }
 }
 
-/// Parses a single item of a module.
-fn parse_module_item(p: &mut MlkParser) -> ParsedSyntax {
+/// Whether the parser is at a single item of a module.
+pub(crate) fn parse_module_item(p: &mut MlkParser) -> ParsedSyntax {
     if is_at_use(p) {
         parse_use_decl(p)
     } else if is_at_declaration(p, FUN_KW) {
@@ -218,7 +218,7 @@ fn parse_use_alias(p: &mut MlkParser) -> ParsedSyntax {
 // test mlk a_function_may_be_public
 // pub fun main(): Int =
 //     42
-fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
+pub(crate) fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
     if !is_at_declaration(p, FUN_KW) {
         return ParsedSyntax::Absent;
     }

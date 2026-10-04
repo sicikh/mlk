@@ -814,6 +814,59 @@ pub struct LetExprFields {
     pub body: SyntaxResult<Expr>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct LocalExpr {
+    pub(crate) syntax: SyntaxNode,
+}
+impl LocalExpr {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> LocalExprFields {
+        LocalExprFields {
+            local_token: self.local_token(),
+            items: self.items(),
+            in_token: self.in_token(),
+            body: self.body(),
+        }
+    }
+    pub fn local_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn items(&self) -> ModuleItemList {
+        support::list(&self.syntax, 1usize)
+    }
+    pub fn in_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 2usize)
+    }
+    pub fn body(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 3usize)
+    }
+}
+impl Serialize for LocalExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "LocalExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct LocalExprFields {
+    pub local_token: SyntaxResult<SyntaxToken>,
+    pub items: ModuleItemList,
+    pub in_token: SyntaxResult<SyntaxToken>,
+    pub body: SyntaxResult<Expr>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ModulePreamble {
     pub(crate) syntax: SyntaxNode,
 }
@@ -1878,6 +1931,7 @@ pub enum Expr {
     LambdaExpr(LambdaExpr),
     LetExpr(LetExpr),
     Literal(Literal),
+    LocalExpr(LocalExpr),
     ParenExpr(ParenExpr),
     PathExpr(PathExpr),
     PipeExpr(PipeExpr),
@@ -1899,6 +1953,7 @@ impl Serialize for Expr {
             Self::LambdaExpr(it) => it.serialize(serializer),
             Self::LetExpr(it) => it.serialize(serializer),
             Self::Literal(it) => it.serialize(serializer),
+            Self::LocalExpr(it) => it.serialize(serializer),
             Self::ParenExpr(it) => it.serialize(serializer),
             Self::PathExpr(it) => it.serialize(serializer),
             Self::PipeExpr(it) => it.serialize(serializer),
@@ -1954,6 +2009,12 @@ impl Expr {
     pub fn as_literal(&self) -> Option<&Literal> {
         match &self {
             Self::Literal(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_local_expr(&self) -> Option<&LocalExpr> {
+        match &self {
+            Self::LocalExpr(item) => Some(item),
             _ => None,
         }
     }
@@ -3017,6 +3078,59 @@ impl From<LetExpr> for SyntaxNode {
 }
 impl From<LetExpr> for SyntaxElement {
     fn from(n: LetExpr) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for LocalExpr {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(LOCAL_EXPR as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == LOCAL_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for LocalExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("LocalExpr")
+                .field(
+                    "local_token",
+                    &support::DebugSyntaxResult(self.local_token()),
+                )
+                .field("items", &self.items())
+                .field("in_token", &support::DebugSyntaxResult(self.in_token()))
+                .field("body", &support::DebugSyntaxResult(self.body()))
+                .finish()
+        } else {
+            f.debug_struct("LocalExpr").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<LocalExpr> for SyntaxNode {
+    fn from(n: LocalExpr) -> Self {
+        n.syntax
+    }
+}
+impl From<LocalExpr> for SyntaxElement {
+    fn from(n: LocalExpr) -> Self {
         n.syntax.into()
     }
 }
@@ -4293,6 +4407,11 @@ impl From<LetExpr> for Expr {
         Self::LetExpr(node)
     }
 }
+impl From<LocalExpr> for Expr {
+    fn from(node: LocalExpr) -> Self {
+        Self::LocalExpr(node)
+    }
+}
 impl From<ParenExpr> for Expr {
     fn from(node: ParenExpr) -> Self {
         Self::ParenExpr(node)
@@ -4333,6 +4452,7 @@ impl AstNode for Expr {
         .union(LambdaExpr::KIND_SET)
         .union(LetExpr::KIND_SET)
         .union(Literal::KIND_SET)
+        .union(LocalExpr::KIND_SET)
         .union(ParenExpr::KIND_SET)
         .union(PathExpr::KIND_SET)
         .union(PipeExpr::KIND_SET)
@@ -4342,9 +4462,8 @@ impl AstNode for Expr {
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
             BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | IF_EXPR | LAMBDA_EXPR | LET_EXPR
-            | PAREN_EXPR | PATH_EXPR | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL | UNARY_EXPR => {
-                true
-            },
+            | LOCAL_EXPR | PAREN_EXPR | PATH_EXPR | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL
+            | UNARY_EXPR => true,
             k if Literal::can_cast(k) => true,
             _ => false,
         }
@@ -4358,6 +4477,7 @@ impl AstNode for Expr {
             IF_EXPR => Self::IfExpr(IfExpr { syntax }),
             LAMBDA_EXPR => Self::LambdaExpr(LambdaExpr { syntax }),
             LET_EXPR => Self::LetExpr(LetExpr { syntax }),
+            LOCAL_EXPR => Self::LocalExpr(LocalExpr { syntax }),
             PAREN_EXPR => Self::ParenExpr(ParenExpr { syntax }),
             PATH_EXPR => Self::PathExpr(PathExpr { syntax }),
             PIPE_EXPR => Self::PipeExpr(PipeExpr { syntax }),
@@ -4382,6 +4502,7 @@ impl AstNode for Expr {
             Self::IfExpr(it) => it.syntax(),
             Self::LambdaExpr(it) => it.syntax(),
             Self::LetExpr(it) => it.syntax(),
+            Self::LocalExpr(it) => it.syntax(),
             Self::ParenExpr(it) => it.syntax(),
             Self::PathExpr(it) => it.syntax(),
             Self::PipeExpr(it) => it.syntax(),
@@ -4400,6 +4521,7 @@ impl AstNode for Expr {
             Self::IfExpr(it) => it.into_syntax(),
             Self::LambdaExpr(it) => it.into_syntax(),
             Self::LetExpr(it) => it.into_syntax(),
+            Self::LocalExpr(it) => it.into_syntax(),
             Self::ParenExpr(it) => it.into_syntax(),
             Self::PathExpr(it) => it.into_syntax(),
             Self::PipeExpr(it) => it.into_syntax(),
@@ -4421,6 +4543,7 @@ impl std::fmt::Debug for Expr {
             Self::LambdaExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::LetExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::Literal(it) => std::fmt::Debug::fmt(it, f),
+            Self::LocalExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::ParenExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::PathExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::PipeExpr(it) => std::fmt::Debug::fmt(it, f),
@@ -4441,6 +4564,7 @@ impl From<Expr> for SyntaxNode {
             Expr::LambdaExpr(it) => it.into_syntax(),
             Expr::LetExpr(it) => it.into_syntax(),
             Expr::Literal(it) => it.into_syntax(),
+            Expr::LocalExpr(it) => it.into_syntax(),
             Expr::ParenExpr(it) => it.into_syntax(),
             Expr::PathExpr(it) => it.into_syntax(),
             Expr::PipeExpr(it) => it.into_syntax(),
@@ -4921,6 +5045,11 @@ impl std::fmt::Display for LambdaExpr {
     }
 }
 impl std::fmt::Display for LetExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for LocalExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }

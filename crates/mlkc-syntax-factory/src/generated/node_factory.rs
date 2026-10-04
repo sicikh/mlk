@@ -231,6 +231,19 @@ pub fn let_expr(
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
+pub fn local_expr(
+    local_token: SyntaxToken,
+    items: ModuleItemList,
+    in_token: SyntaxToken,
+    body: Expr,
+) -> LocalExpr {
+    LocalExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::LOCAL_EXPR, [
+        Some(SyntaxElement::Token(local_token)),
+        Some(SyntaxElement::Node(items.into_syntax())),
+        Some(SyntaxElement::Token(in_token)),
+        Some(SyntaxElement::Node(body.into_syntax())),
+    ]))
+}
 pub fn module_preamble(
     attributes: AttributeList,
     module_token: SyntaxToken,

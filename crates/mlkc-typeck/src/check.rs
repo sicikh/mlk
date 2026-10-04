@@ -263,6 +263,15 @@ impl Checker<'_> {
                 otherwise,
             } => self.if_expr(cond, then_, &arms, otherwise),
             Expr::Lambda { params, body, .. } => self.lambda(&params, body),
+            // A `local` declares items inside a body, and the check does not read one yet: what
+            // a name of an item denotes is a function declared inside a body, and the check has
+            // no type for one of those ([ADR-0017]).
+            //
+            // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+            Expr::Local { .. } => {
+                self.report(TypeError::Local, expr);
+                InferTy::Error
+            },
         };
 
         self.record_expr(expr, ty.clone());
@@ -401,8 +410,9 @@ impl Checker<'_> {
                     None => InferTy::Error,
                 }
             },
-            // The entities declared inside a body are checked with it, and the language
-            // declares none yet.
+            // The entities declared inside a body are checked with it, and the check has no type
+            // for one yet: a `local` is reported where it is written, and a path that names an
+            // entity of one is absorbed.
             PathAnchor::Local(_) => InferTy::Error,
             // A type variable is a type, and a value belongs here.
             PathAnchor::TypeVar(_) => {
@@ -1240,6 +1250,32 @@ mod tests {
             panic!("the callee to be a lambda");
         };
         assert_eq!(checked.pat_type(params[0].pat), Some(&int));
+    }
+
+    #[test]
+    fn a_local_is_reported_because_the_check_does_not_read_one_yet() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\nfun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
+             double(value)\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // A `local` is lowered with its items as entities of the body, and what a name of one
+        // denotes is a function declared inside a body, which the check does not read yet.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(diagnostics[0].error(), TypeError::Local),
+            "{diagnostics:?}",
+        );
     }
 
     #[test]

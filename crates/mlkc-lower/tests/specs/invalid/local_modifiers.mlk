@@ -1,0 +1,18 @@
+// The attributes and the visibility of a declaration are read on the items of a module: a
+// function declared inside a body carries neither.
+
+#[builtin]
+type Int
+
+fun published(value: Int): Int =
+    local pub fun double(x: Int): Int = x * 2 in
+    double(value)
+
+fun attributed(value: Int): Int =
+    local #[extern] fun double(x: Int): Int = x * 2 in
+    double(value)
+
+// An attribute the language has not is a name nothing knows, wherever it is written.
+fun unknown(value: Int): Int =
+    local #[inline] fun double(x: Int): Int = x * 2 in
+    double(value)

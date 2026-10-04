@@ -6,8 +6,9 @@
 //! against the names of the module.
 
 use mlkc_hir_def::{
-    BinaryOp, BodyBuilder, Expr, ExprId, IfArm, ItemTree, LambdaParam, Literal, Name, Namespace,
-    Pat, PatId, PathAnchor, PathData, UnaryOp,
+    Attributes, BinaryOp, BodyBuilder, Expr, ExprId, IfArm, ItemKind, ItemTree, LambdaParam,
+    Literal, LocalDefId, LocalFunctionData, Name, Namespace, Pat, PatId, PathAnchor, PathData,
+    UnaryOp,
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
@@ -15,8 +16,9 @@ use mlkc_span::Span;
 use mlkc_syntax::{
     AnyParameter, BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, IfArm as IfArmSyntax,
     IfExpr as IfExprSyntax, LambdaExpr as LambdaExprSyntax, LetExpr, Literal as LiteralSyntax,
-    Pat as PatSyntax, Path as PathSyntax, PathExpr, PipeExpr, PlaceholderExpr, SyntaxKind,
-    SyntaxToken, TextRange, TextSize, UfcsCall, UnaryExpr, inner_string_text,
+    LocalExpr as LocalExprSyntax, ModuleItem, Pat as PatSyntax, Path as PathSyntax, PathExpr,
+    PipeExpr, PlaceholderExpr, SyntaxKind, SyntaxNode, SyntaxToken, TextRange, TextSize, UfcsCall,
+    UnaryExpr, inner_string_text,
 };
 use mlkc_vfs::FileId;
 
@@ -38,7 +40,8 @@ pub(crate) fn lower(tree: &ItemTree, decl: &FunDecl) -> Option<LoweredBody> {
     let mut lowering = BodyLowering {
         tree,
         builder: BodyBuilder::new(),
-        bindings: Vec::new(),
+        names: Vec::new(),
+        outer: None,
         pipes: 0,
         pipe: None,
         diagnostics: Vec::new(),
@@ -83,8 +86,16 @@ struct BodyLowering<'a> {
     /// The surface of the module the body is in, which a path of the body is anchored against.
     tree: &'a ItemTree,
     builder: BodyBuilder,
-    /// The names the body binds, the innermost last, with the pattern that binds each of them.
-    bindings: Vec<(Name, PatId)>,
+    /// The names the body declares, the innermost last, with what each of them denotes: a
+    /// binding the body made, or a function declared inside it.
+    names: Vec<(Name, PathAnchor)>,
+    /// The environment of the function declared in a `local` that is being lowered, if one is:
+    /// the height the names of the function itself start at, and the name of the function.
+    ///
+    /// A function declared inside a body is given its own parameters only: a binding below the
+    /// height is a name of the body that declares the function, and the body of the function may
+    /// not read one.
+    outer: Option<(usize, Name)>,
     /// How many pipelines the body has lowered, which is what numbers the bindings of them.
     pipes: usize,
     /// The value the innermost pipeline passes, if one is being read: the name the binding of
@@ -115,8 +126,11 @@ impl BodyLowering<'_> {
             }
 
             self.builder.push_param(pat);
-            self.bindings
-                .extend(names.into_iter().map(|name| (name, pat)));
+            self.names.extend(
+                names
+                    .into_iter()
+                    .map(|name| (name, PathAnchor::Binding(pat))),
+            );
         }
     }
 
@@ -138,6 +152,7 @@ impl BodyLowering<'_> {
             ExprSyntax::IfExpr(if_expr) => self.if_expr(if_expr),
             ExprSyntax::LetExpr(let_expr) => self.let_expr(let_expr),
             ExprSyntax::LambdaExpr(lambda) => self.lambda_expr(lambda),
+            ExprSyntax::LocalExpr(local) => self.local_expr(local),
             // A parenthesized expression is the expression it holds: how the source is
             // grouped is the parser's business, and what it hands over is a tree already.
             ExprSyntax::ParenExpr(paren) => self.optional(paren.expr().ok()),
@@ -217,7 +232,7 @@ impl BodyLowering<'_> {
         };
 
         let anchor = match data.segments.as_slice() {
-            [] => self.anchor(name),
+            [] => self.anchor(path, name),
             _ => self.tree.scope().anchor(name, Namespace::Module),
         };
         data.anchor = anchor;
@@ -241,7 +256,7 @@ impl BodyLowering<'_> {
     ///
     /// [adr-0004]: ../../docs/adr/0004-module-system.md
     fn report_unresolved(&mut self, path: &PathSyntax, name: &Name) {
-        if self.binding(name).is_some() || path::names_a_name(self.tree, name) {
+        if self.declares(name) || path::names_a_name(self.tree, name) {
             return;
         }
 
@@ -377,9 +392,15 @@ impl BodyLowering<'_> {
 
         // The step is read with the binding in scope: a `_` among the arguments of its call is
         // the value the pipeline passes, and a step written inside the arguments of another
-        // one binds its own value.
-        let outer = self.pipe.replace((name, pat));
+        // one binds its own value. The binding is a name of the body the step is written in, and
+        // it is held with the other names of the body for as long as the step is read.
+        let outer = self.pipe.replace((name.clone(), pat));
+        let mark = self.names.len();
+        self.names.push((name, PathAnchor::Binding(pat)));
+
         let step = self.optional(pipe.step().ok());
+
+        self.names.truncate(mark);
         self.pipe = outer;
 
         self.builder.alloc_expr(Expr::Let {
@@ -410,12 +431,29 @@ impl BodyLowering<'_> {
     /// of one name --- the name the lowering gave the binding --- anchored to the pattern that
     /// binds it. The place itself says nothing else, and the expression it becomes reads as the
     /// `_` it stands for, which is what a host marks for it.
-    fn placeholder(&mut self, _place: &PlaceholderExpr) -> ExprId {
+    ///
+    /// The binding a place stands for is a binding of the body, and a function declared in
+    /// a `local` may not read one: a `_` in the body of one that names the value of a pipeline
+    /// the enclosing body wrote is reported like any other outer name
+    /// ([`BodyLowering::report_outer_binding`]).
+    fn placeholder(&mut self, place: &PlaceholderExpr) -> ExprId {
         // A `_` is a value only among the arguments of a step, and one written anywhere else
         // is what the parser reported: a tree that holds one has no binding for it to be.
         let Some((name, pat)) = self.pipe.clone() else {
             return self.missing();
         };
+
+        let index = self
+            .names
+            .iter()
+            .position(|(_, anchor)| matches!(anchor, PathAnchor::Binding(bound) if *bound == pat));
+
+        if let Some((height, function)) = self.outer.clone()
+            && index.is_some_and(|index| index < height)
+        {
+            let written = span(self.file(), place.syntax());
+            self.report_outer_binding(written, &function, None);
+        }
 
         let path = self
             .builder
@@ -504,11 +542,14 @@ impl BodyLowering<'_> {
         let (pat, names) = self.pattern(let_expr.pat().ok());
         let expr = self.optional(let_expr.expr().ok());
 
-        let mark = self.bindings.len();
-        self.bindings
-            .extend(names.into_iter().map(|name| (name, pat)));
+        let mark = self.names.len();
+        self.names.extend(
+            names
+                .into_iter()
+                .map(|name| (name, PathAnchor::Binding(pat))),
+        );
         let body = self.optional(let_expr.body().ok());
-        self.bindings.truncate(mark);
+        self.names.truncate(mark);
 
         self.builder.alloc_expr(Expr::Let { pat, expr, body })
     }
@@ -546,15 +587,19 @@ impl BodyLowering<'_> {
             });
 
             params.push(LambdaParam { pat, ty });
-            bound.extend(names.into_iter().map(|name| (name, pat)));
+            bound.extend(
+                names
+                    .into_iter()
+                    .map(|name| (name, PathAnchor::Binding(pat))),
+            );
         }
 
-        let mark = self.bindings.len();
-        self.bindings.extend(bound);
+        let mark = self.names.len();
+        self.names.extend(bound);
 
         let body = self.optional(lambda.body().ok());
 
-        self.bindings.truncate(mark);
+        self.names.truncate(mark);
 
         let pats: Vec<PatId> = params.iter().map(|param| param.pat).collect();
         let captures = self.builder.captures(body, &pats);
@@ -564,6 +609,163 @@ impl BodyLowering<'_> {
             body,
             captures,
         })
+    }
+
+    /// Lowers a `local`: the items it declares, and the expression they are visible in.
+    ///
+    /// The items are the items of a module written where a value belongs ([`ModuleItem`]):
+    /// a function declared here is an entity of the enclosing body ([ADR-0010]), and what it is
+    /// made of --- its signature, the patterns of its parameters, its root --- is read from the
+    /// body, with the expressions of it living in the arenas of the body that wrote it
+    /// ([ADR-0003]).
+    ///
+    /// Every name is added before a body is lowered: an item sees the items written next to it
+    /// and itself, which is what a function that calls itself is written with.
+    ///
+    /// A function declared here is given its own parameters only: the environment of the item is
+    /// the height its own names start at, and a path of its body that names a binding below it is
+    /// what the body may not read ([`BodyLowering::report_outer_binding`]).
+    ///
+    /// [ADR-0003]: ../../docs/adr/0003-id-based-ir.md
+    /// [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
+    fn local_expr(&mut self, local: &LocalExprSyntax) -> ExprId {
+        let file = self.file();
+        let mark = self.names.len();
+        let mut declared = Vec::new();
+        let mut items = Vec::new();
+
+        // The items are read before the body of any of them: a name is visible in the whole of
+        // the `local`, and not only after the item that declares it.
+        for node in local.items().syntax().children() {
+            let Some(item) = ModuleItem::cast(node) else {
+                continue;
+            };
+
+            // The items are the items of a module, and the language does not hold all of them
+            // inside a body yet: a function is what a `local` declares today, and the rest is
+            // what a reader is told about.
+            let decl = match item {
+                ModuleItem::FunDecl(decl) => decl,
+                ModuleItem::TypeDecl(decl) => {
+                    self.report_unread_local_item(ItemKind::Class, decl.syntax());
+                    continue;
+                },
+                ModuleItem::UseDecl(decl) => {
+                    self.report_unread_local_item(ItemKind::Use, decl.syntax());
+                    continue;
+                },
+                // An item the parser could not read is what the parse reported, and the HIR
+                // holds what the module does say: a broken item says nothing.
+                ModuleItem::BogusDecl(_) => continue,
+            };
+
+            let name = name(decl.name());
+
+            // The attributes and the visibility of a declaration are read on the items of
+            // a module, and a function declared inside a body carries none the language reads.
+            self.local_function_modifiers(&decl, &name);
+
+            let signature = decl::signature(&decl, file, &mut self.diagnostics);
+            let mut params = Vec::new();
+            let mut bound = Vec::new();
+
+            for parameter in decl::parameters(&decl) {
+                let (pat, names) = self.pattern(parameter.as_ref().and_then(|it| it.pat().ok()));
+                params.push(pat);
+                bound.extend(
+                    names
+                        .into_iter()
+                        .map(|name| (name, PathAnchor::Binding(pat))),
+                );
+            }
+
+            // A function declared inside a body is not implemented elsewhere, the way a function
+            // of a module may be: a `local` is where its body is, and one without a body is
+            // a declaration nothing implements.
+            if decl.body().is_none() {
+                let error = LoweringError::LocalFunctionWithoutBody { name: name.clone() };
+                let diagnostic = LoweringDiag::new(error, span(file, decl.syntax()));
+                self.diagnostics.push(diagnostic);
+            }
+
+            let id = self.builder.declare_local_function(LocalFunctionData {
+                name: name.clone(),
+                signature,
+                params,
+            });
+
+            self.names
+                .push((name.clone(), PathAnchor::Local(LocalDefId::Function(id))));
+            declared.push((id, decl, bound, name));
+            items.push(LocalDefId::Function(id));
+        }
+
+        // The body of an item is lowered with the parameters of the item in scope, and with the
+        // environment of the item fixed: a binding below the height where its own names start is
+        // a name of the enclosing body, which the body of the item may not read.
+        for (id, decl, bound, name) in declared {
+            let height = self.names.len();
+            let outer = self.outer.replace((height, name));
+
+            self.names.extend(bound);
+            let root = self.optional(decl.body().and_then(|body| body.expr().ok()));
+            self.names.truncate(height);
+
+            self.outer = outer;
+            self.builder.set_local_function_root(id, root);
+        }
+
+        let body = self.optional(local.body().ok());
+        self.names.truncate(mark);
+
+        self.builder.alloc_expr(Expr::Local { items, body })
+    }
+
+    /// Reports an item of a `local` the language does not hold inside a body yet.
+    fn report_unread_local_item(&mut self, kind: ItemKind, node: &SyntaxNode) {
+        let error = LoweringError::LocalItemNotRead { kind };
+        let diagnostic = LoweringDiag::new(error, span(self.file(), node));
+
+        self.diagnostics.push(diagnostic);
+    }
+
+    /// Reports the attributes and the visibility a function declared inside a body carries.
+    ///
+    /// What an attribute of the language says --- what implements an entity, where a program
+    /// begins --- is about an item of a module, and what `pub` reaches is a module as well:
+    /// a function declared inside a body carries neither.
+    fn local_function_modifiers(&mut self, decl: &FunDecl, function: &Name) {
+        let file = self.file();
+        let mut known = Attributes::default();
+
+        for attribute in decl::attributes(&decl.attributes()) {
+            let attribute_name = name(attribute.name());
+
+            // An attribute the language has is one that belongs to an item of a module; one it
+            // has not is a name nothing knows, wherever it is written.
+            let error = if known.insert(&attribute_name) {
+                LoweringError::LocalFunctionAttribute {
+                    function: function.clone(),
+                    attribute: attribute_name,
+                }
+            } else {
+                LoweringError::UnknownAttribute {
+                    name: attribute_name,
+                }
+            };
+
+            let diagnostic = LoweringDiag::new(error, span(file, attribute.syntax()));
+            self.diagnostics.push(diagnostic);
+        }
+
+        if let Some(token) = decl.visibility_token() {
+            let error = LoweringError::LocalFunctionVisibility {
+                function: function.clone(),
+            };
+            let diagnostic = LoweringDiag::new(error, Span::new(file, token.text_trimmed_range()));
+
+            self.diagnostics.push(diagnostic);
+        }
     }
 
     /// Lowers a pattern, and reads the names it binds.
@@ -633,27 +835,63 @@ impl BodyLowering<'_> {
         self.builder.alloc_expr(expr)
     }
 
-    /// What a name in the body denotes: a binding if the body has one, and otherwise what the
-    /// module declares.
+    /// What a name in the body denotes: a binding or a function the body declares if it has one,
+    /// and otherwise what the module declares.
     ///
-    /// The bindings come first, and the innermost of them: a `let` shadows a parameter of the
-    /// same name, which is the order the bindings are held in. A name that is not a binding of
-    /// the body is read where a value belongs: a path of an expression names a value, and what
-    /// the value is is worked out later.
-    fn anchor(&self, name: &Name) -> PathAnchor {
-        match self.binding(name) {
-            Some(pat) => PathAnchor::Binding(pat),
-            None => self.tree.scope().anchor(name, Namespace::Value),
+    /// The names of the body come first, and the innermost of them: a `let` shadows a parameter
+    /// of the same name, and a function declared in a `local` is shadowed by the binding of
+    /// a `let` written inside it, which is the order the names are held in. A name that is not
+    /// one of the body is read where a value belongs: a path of an expression names a value, and
+    /// what the value is is worked out later.
+    ///
+    /// A name that is a binding below the height of the function declared in a `local` that is
+    /// being lowered is a name of the enclosing body: a function declared inside a body is given
+    /// its own parameters only, and reading one is what it may not do
+    /// ([`BodyLowering::report_outer_binding`]).
+    fn anchor(&mut self, path: &PathSyntax, name: &Name) -> PathAnchor {
+        let found = self
+            .names
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, (declared, _))| declared == name)
+            .map(|(index, (_, anchor))| (index, anchor.clone()));
+
+        let Some((index, anchor)) = found else {
+            return self.tree.scope().anchor(name, Namespace::Value);
+        };
+
+        if let Some((height, function)) = self.outer.clone()
+            && index < height
+            && matches!(anchor, PathAnchor::Binding(_))
+            && let Some(written) = path::root_name(path)
+        {
+            let written = span(self.file(), &written.node);
+            self.report_outer_binding(written, &function, Some(name.clone()));
         }
+
+        anchor
     }
 
-    /// The innermost binding of a name in the body, if it binds one.
-    fn binding(&self, name: &Name) -> Option<PatId> {
-        self.bindings
-            .iter()
-            .rev()
-            .find(|(bound, _)| bound == name)
-            .map(|(_, pat)| *pat)
+    /// Reports a name of the enclosing body read inside a function declared in a `local`.
+    ///
+    /// A function declared inside a body is given its own parameters only: what the body that
+    /// declares it binds --- its parameters, its `let`s, the values a lambda around it carries,
+    /// and the value a pipeline of it passes --- is not part of it, and a name that reads one is
+    /// a mistake.
+    fn report_outer_binding(&mut self, written: Span, function: &Name, name: Option<Name>) {
+        let error = LoweringError::LocalFunctionReadsOuterBinding {
+            function: function.clone(),
+            name,
+        };
+        let diagnostic = LoweringDiag::new(error, written);
+
+        self.diagnostics.push(diagnostic);
+    }
+
+    /// Whether the body declares a name: a binding, or a function of a `local`.
+    fn declares(&self, name: &Name) -> bool {
+        self.names.iter().any(|(declared, _)| declared == name)
     }
 
     /// The file the body was read from, which is what a diagnostic points into.

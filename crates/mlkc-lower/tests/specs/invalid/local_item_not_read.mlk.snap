@@ -1,0 +1,94 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// The items of a `local` are the items of a module, and the language does not hold a type or an
+// import inside a body yet: the lowering reads the function and tells about the rest.
+
+#[builtin]
+type Int
+
+fun declared(value: Int): Int =
+    local
+        type Unit
+        use std::core::Int as Integer
+        fun double(x: Int): Int = x * 2
+    in
+        double(value)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::local_item_not_read
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  fun declared  @2.1
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun declared in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+## Lowering Diagnostics
+
+256..265: a `type` declared inside a body is not read yet
+274..303: a `use` declared inside a body is not read yet
+
+## Parse Diagnostics
+
+No diagnostics.

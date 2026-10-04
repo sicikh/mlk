@@ -195,6 +195,7 @@ Expr =
     | IfExpr
     | LetExpr
     | LambdaExpr
+    | LocalExpr
     | ParenExpr
     | BogusExpr
 
@@ -298,6 +299,23 @@ LambdaExpr =
     body: Expr
 
 LambdaParameterList = (AnyParameter (',' AnyParameter)*)
+
+// A `local`: the items it declares and the expression they are visible in: `local fun f(x) =
+// body in f(1)`.
+//
+// The items are the items of a module, written where a value belongs: the list is the one a
+// module is made of, and each item is read by the rule that reads one in a module. An item is an
+// entity of the enclosing body, its name is visible in the expression after the `in` and in the
+// items written next to it, and what the item is made of is stored in the arenas of the body that
+// wrote it ([ADR-0003]). A `local` is an expression, and what is written after the body is
+// written after the value it is.
+//
+// [ADR-0003]: ../../docs/adr/0003-id-based-ir.md
+LocalExpr =
+    'local'
+    items: ModuleItemList
+    'in'
+    body: Expr
 
 // A choice between expressions: a condition, the expression it selects, the `elif` arms
 // written after it, and the expression selected when no condition holds.

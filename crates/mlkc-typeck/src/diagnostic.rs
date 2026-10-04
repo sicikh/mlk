@@ -111,6 +111,14 @@ pub enum TypeError {
         /// The type of the operands.
         ty: Ty,
     },
+    /// A `local` declares items inside a body, and the check does not read one yet.
+    ///
+    /// The items are lowered into the HIR with their names, their signatures, the patterns of
+    /// their parameters and their roots; what a name of one denotes is a function declared
+    /// inside a body, which the check has yet to give a type ([ADR-0017][adr-0017]).
+    ///
+    /// [adr-0017]: ../../docs/adr/0017-resolved-types.md
+    Local,
 }
 
 impl TypeError {
@@ -172,6 +180,10 @@ impl TypeError {
             Self::NoEquality { ty } => {
                 format!("the language has no equality for two values of `{ty}` yet")
             },
+            Self::Local => {
+                "a `local` declares items inside a body, and the check does not read one yet"
+                    .to_owned()
+            },
         }
     }
 
@@ -213,6 +225,7 @@ impl TypeError {
             Self::RecursiveType => "this type contains itself".to_owned(),
             Self::IntOutOfRange { .. } => "outside the range of `Int`".to_owned(),
             Self::NoEquality { .. } => "this type has no equality yet".to_owned(),
+            Self::Local => "the check does not read a `local` yet".to_owned(),
             Self::Unresolved { .. } | Self::MissingSignature => String::new(),
         }
     }
@@ -235,6 +248,13 @@ impl TypeError {
             },
             Self::NoEquality { .. } => {
                 vec!["`Int` and `Bool` are the types with equality for now".to_owned()]
+            },
+            Self::Local => {
+                vec![
+                    "the items of a `local` are lowered into the HIR, and the stages after the \
+                 check do not read one yet"
+                        .to_owned(),
+                ]
             },
             _ => Vec::new(),
         }
@@ -279,6 +299,7 @@ impl DiagKind for TypeError {
             Self::MissingSignature => "12",
             Self::IntOutOfRange { .. } => "13",
             Self::NoEquality { .. } => "14",
+            Self::Local => "15",
         }
     }
 }

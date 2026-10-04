@@ -39,7 +39,7 @@ const syntax = styleTags({
     // which is what a pattern that binds nothing and a type that is inferred are written as:
     // a word the language does not have is not painted at all. A truth value is a keyword of
     // the lexer and a literal of the reader, so it is not listed here: see `tags.bool` below.
-    "as elif else fn fun if in let module project pub then type use _":
+    "as elif else fn fun if in let local module project pub then type use _":
         tags.keyword,
     // An attribute is painted whole, `#[extern]` and all, which the `/...` says: what the `#`
     // introduces is a word of the language rather than a name the code gives to something,

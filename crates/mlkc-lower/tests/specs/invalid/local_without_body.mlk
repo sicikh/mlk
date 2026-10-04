@@ -1,0 +1,6 @@
+// A function declared in a `local` declares no body: a function of a module may be implemented
+// elsewhere, and a `local` is where the body of its function is.
+
+fun declared(value: Int): Int =
+    local fun missing(x: Int): Int in
+    value

@@ -1,0 +1,164 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// The attributes and the visibility of a declaration are read on the items of a module: a
+// function declared inside a body carries neither.
+
+#[builtin]
+type Int
+
+fun published(value: Int): Int =
+    local pub fun double(x: Int): Int = x * 2 in
+    double(value)
+
+fun attributed(value: Int): Int =
+    local #[extern] fun double(x: Int): Int = x * 2 in
+    double(value)
+
+// An attribute the language has not is a name nothing knows, wherever it is written.
+fun unknown(value: Int): Int =
+    local #[inline] fun double(x: Int): Int = x * 2 in
+    double(value)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::local_modifiers
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  fun published  @2.1
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun attributed  @2.2
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun unknown  @2.3
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun published in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun attributed in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+```
+BODY fun unknown in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> type Int
+    ret: Int -> type Int
+```
+
+## Lowering Diagnostics
+
+208..211: `double` is declared inside a body and is public, and a function declared inside a body is not visible outside it
+310..319: the attribute `#[extern]` is written on `double`, a function declared inside a body, and no attribute is read on one yet
+501..510: the language has no attribute `inline`
+
+## Parse Diagnostics
+
+No diagnostics.

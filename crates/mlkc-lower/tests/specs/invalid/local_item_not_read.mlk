@@ -1,0 +1,13 @@
+// The items of a `local` are the items of a module, and the language does not hold a type or an
+// import inside a body yet: the lowering reads the function and tells about the rest.
+
+#[builtin]
+type Int
+
+fun declared(value: Int): Int =
+    local
+        type Unit
+        use std::core::Int as Integer
+        fun double(x: Int): Int = x * 2
+    in
+        double(value)

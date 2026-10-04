@@ -17,7 +17,7 @@
 //! [`parse_primary_expr`], from the loosest to the tightest.
 
 use mlkc_parser_core::{
-    parse_lists::ParseSeparatedList,
+    parse_lists::{ParseNodeList, ParseSeparatedList},
     parse_recovery::{ParseRecoveryTokenSet, RecoveryResult},
     parsed_syntax::ParsedSyntax::Present,
     prelude::*,
@@ -32,11 +32,11 @@ use crate::{
     parser::MlkParser,
     syntax::{
         auxiliary::parse_name,
-        module::parse_type_annotation,
+        module::{parse_module_item, parse_type_annotation},
         parse_error::{
-            expected_call_after_a_pipe, expected_expr, expected_name, expected_parameter,
-            expected_path, expected_path_after_the_dot, expected_pattern, expected_place,
-            place_outside_a_step,
+            expected_call_after_a_pipe, expected_declaration, expected_expr, expected_name,
+            expected_parameter, expected_path, expected_path_after_the_dot, expected_pattern,
+            expected_place, place_outside_a_step,
         },
         pat::{parse_pat, parse_pat_or_recover},
         ty::parse_path,
@@ -66,6 +66,7 @@ const EXPR_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![
     T![=],
     T![in],
     T![let],
+    T![local],
     T![then],
     T![elif],
     T![else]
@@ -88,6 +89,7 @@ const STEP_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![
     T![=],
     T![in],
     T![let],
+    T![local],
     T![|>],
     T![+],
     T![-],
@@ -440,6 +442,7 @@ fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
         IF_KW => parse_if_expr(p),
         LET_KW => parse_let_expr(p),
         FN_KW => parse_lambda_expr(p),
+        LOCAL_KW => parse_local_expr(p),
         L_PAREN => parse_paren_expr(p),
         UNDERSCORE => parse_placeholder_expr(p),
         _ => ParsedSyntax::Absent,
@@ -753,6 +756,91 @@ fn parse_lambda_parameter(p: &mut MlkParser) -> ParsedSyntax {
     parse_type_annotation(p).ok();
 
     Present(m.complete(p, PARAMETER))
+}
+
+/// The tokens a broken item of a `local` is recovered at: what follows an item, which is the
+/// `in` that ends the list, and what starts the next declaration of a module.
+const LOCAL_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
+    token_set![T![in], T![#], T![pub], T![fun], T![type], T![use]];
+
+/// Parses a `local`: the items it declares, and the expression they are visible in,
+/// `local fun f(x) = body in expr`.
+///
+/// The items are the items of a module, and each of them is read by the rule that reads one in
+/// a module: the list is the list of the module's items, and it ends at the `in`. The expression
+/// after it is parsed with [`parse_expr`]: a `local` extends as far as it can, the way a `let`
+/// and a lambda do.
+// test mlk a_local_declares_a_function_where_a_value_belongs
+// fun applied(value: Int): Int =
+//     local fun double(x: Int): Int = x * 2 in
+//     double(value)
+//
+// test mlk a_local_may_declare_several_functions
+// fun applied(value: Int): Int =
+//     local
+//         fun first(x: Int): Int = x + 1
+//         fun second(x: Int): Int = first(x) + 1
+//     in
+//         second(value)
+//
+// test mlk the_items_of_a_local_are_the_items_of_a_module
+// fun applied(value: Int): Int =
+//     local
+//         type Unit
+//         use std::core::Int as Integer
+//         fun double(x: Int): Int = x * 2
+//     in
+//         double(value)
+//
+// test mlk a_local_is_a_value_like_any_other
+// fun applied(value: Int): Int =
+//     (local fun double(x: Int): Int = x * 2 in double)(value)
+fn parse_local_expr(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(LOCAL_KW) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(LOCAL_KW);
+    LocalItemListParse.parse_list(p);
+    p.expect(T![in]);
+    parse_expr(p).or_add_diagnostic(p, expected_expr);
+
+    Present(m.complete(p, LOCAL_EXPR))
+}
+
+/// The items of a `local`: the declarations written between the keyword and the `in`.
+///
+/// The list is the list of the items of a module, read by the rule that reads them there, and
+/// it ends where a module's list does not: at the `in` that opens the expression the names of
+/// the items are visible in. The list may be empty, which declares nothing and reads as an
+/// expression like any other.
+struct LocalItemListParse;
+
+impl ParseNodeList for LocalItemListParse {
+    type Kind = SyntaxKind;
+    type Parser<'source> = MlkParser<'source>;
+
+    const LIST_KIND: SyntaxKind = MODULE_ITEM_LIST;
+
+    fn parse_element(&mut self, p: &mut MlkParser) -> ParsedSyntax {
+        parse_module_item(p)
+    }
+
+    fn is_at_list_end(&self, p: &mut MlkParser) -> bool {
+        // A `local` whose `in` is not written ends at the end of the file: the list has to stop
+        // somewhere, and what is left is what the `in` is reported by.
+        p.at(T![in]) || p.at(T![EOF])
+    }
+
+    fn recover(&mut self, p: &mut MlkParser, parsed_element: ParsedSyntax) -> RecoveryResult {
+        parsed_element.or_recover_with_token_set(
+            p,
+            &ParseRecoveryTokenSet::new(BOGUS_DECL, LOCAL_ITEM_RECOVERY_SET),
+            expected_declaration,
+        )
+    }
 }
 
 /// The arguments of a call: `f(a, b)`.

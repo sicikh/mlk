@@ -1,0 +1,61 @@
+// A `local`: functions declared where a value belongs. The keyword opens the list, the items are
+// the items of a module, and the expression after the `in` is what their names are visible in.
+// A `local` is an expression: what is written after it is written after the value it is.
+
+fun doubled(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    double(value)
+
+// The list may hold several items, and each of them is read by the rule that reads one in a
+// module: the parameter list, the return type and the body of a function declaration.
+fun stepped(value: Int): Int =
+    local
+        fun first(x: Int): Int = x + 1
+        fun second(x: Int): Int = first(x) + 1
+    in
+        second(value)
+
+// The items of a `local` are the items of a module: an import and a type declaration are read
+// where a function is, each by the rule that reads one in a module.
+fun declared(value: Int): Int =
+    local
+        type Unit
+        use std::core::Int as Integer
+        fun double(x: Int): Int = x * 2
+    in
+        double(value)
+
+// A `local` is a primary expression, as a `let` and a lambda are: it may stand where any value
+// stands, and a parenthesized one may be applied at once.
+fun applied(value: Int): Int =
+    (local fun double(x: Int): Int = x * 2 in double)(value)
+
+// The names of the items are visible in the items as well: an item may call one written after it,
+// and a function may call itself.
+fun recursive(value: Int): Int =
+    local
+        fun even(x: Int): Bool = if x == 0 then true else odd(x - 1)
+        fun odd(x: Int): Bool = if x == 0 then false else even(x - 1)
+    in
+        if even(value) then 1 else 0
+
+// A `local` written inside a `local`: the body of an item is an expression like any other.
+fun nested(value: Int): Int =
+    local fun outer(x: Int): Int =
+        local fun inner(y: Int): Int = y + 1 in
+        inner(x)
+    in
+        outer(value)
+
+// A list with no items declares nothing: what is written after the `in` is the value.
+fun empty(value: Int): Int =
+    local in value
+
+// A `local` bound by a `let`, and one written inside a lambda: the names of the items are the
+// names of the expression after the `in`, and of the items written next to them.
+fun bound(value: Int): Int =
+    let f = local fun double(x: Int): Int = x * 2 in double in
+    f(value)
+
+fun inside(value: Int): Int =
+    fn(x) -> local fun add(y: Int): Int = y + 1 in add(x)

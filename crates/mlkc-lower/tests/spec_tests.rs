@@ -96,6 +96,10 @@ spec_tests! {
     // body the body reads --- what the lambda captures.
     lambdas: "valid/lambdas.mlk",
 
+    // A `local`: the entities its items declare in the body, the patterns of their parameters,
+    // their roots, and the expression their names are visible in.
+    local: "valid/local.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",
@@ -171,6 +175,22 @@ spec_tests! {
     // A public function whose signature is not complete: what a caller of it depends on is the
     // surface of the module.
     public_without_signature: "invalid/public_without_signature.mlk",
+
+    // A function declared in a `local` without a body: nothing implements it, and the lowering
+    // is where a reader is told about it.
+    local_without_body: "invalid/local_without_body.mlk",
+
+    // A function declared in a `local` reads a binding of the body that declares it: a function
+    // declared inside a body is given its own parameters only.
+    local_reads_outer: "invalid/local_reads_outer.mlk",
+
+    // A function declared in a `local` carries an attribute or is public: what both of those
+    // say is about the items of a module.
+    local_modifiers: "invalid/local_modifiers.mlk",
+
+    // A `local` declares a type and an import: they are the items of a module, and the language
+    // does not hold them inside a body yet.
+    local_item_not_read: "invalid/local_item_not_read.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

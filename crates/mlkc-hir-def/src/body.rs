@@ -14,7 +14,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     def_map::LocalScope,
-    id::{LocalConstId, LocalFunctionId},
+    id::{LocalConstId, LocalDefId, LocalFunctionId},
     item_data::Signature,
     name::Name,
     path::{PathAnchor, PathData, PathId},
@@ -97,6 +97,25 @@ pub enum Expr {
         /// The bindings of the enclosing body the body reads, in the order they are first
         /// written, each once.
         captures: Vec<PatId>,
+    },
+    /// A `local`: the items it declares, and the expression they are visible in.
+    ///
+    /// The items are the items of a module written where a value belongs: each of them is an
+    /// entity of the enclosing body ([`LocalDefId`]), and what the entity is made of --- its
+    /// signature, the patterns of its parameters, its root expression --- is read from the body
+    /// itself. The expression after the `in` is what the names of the items are visible in, and
+    /// the items see one another and themselves, which is what a recursive function is written
+    /// with.
+    ///
+    /// A function declared inside a body is given its own parameters only: what the body that
+    /// declares it binds is not part of it, and a path of it that names one is a mistake the
+    /// lowering reports. What the body of one reads of the module it reaches without an
+    /// environment, the way a function of the module does.
+    Local {
+        /// The entities the items declare, in the order they are written.
+        items: Vec<LocalDefId>,
+        /// The expression the names of the items are visible in.
+        body: ExprId,
     },
     /// A choice between expressions: a condition, the expression it selects, the `elif` arms
     /// written after it, and the expression selected when no condition holds.
@@ -245,6 +264,12 @@ pub struct LocalFunctionData {
     pub name: Name,
     /// The signature a caller reads.
     pub signature: Signature,
+    /// The patterns of the parameters, in the order they are declared.
+    ///
+    /// The types of the parameters are the ones [`Self::signature`] holds, position by position:
+    /// a signature is what a caller reads, and the patterns are what the body of the function is
+    /// checked and lowered with.
+    pub params: Vec<PatId>,
 }
 
 /// What a constant declared inside a body is.
@@ -545,6 +570,11 @@ impl BodyBuilder {
                     }
                 }
             },
+            // A `local` declares items inside the body, and a function declared inside a body is
+            // given its own parameters only: it reads nothing of the body that declares it, so
+            // nothing of it is free in the body that holds the `local`. The expression after the
+            // `in` is read the way the body of a `let` is.
+            Expr::Local { body, .. } => self.free_variables(*body, bound, captures),
         }
     }
 
@@ -585,6 +615,12 @@ impl BodyBuilder {
                     }
                 }
             }
+        }
+
+        // The signature of a function declared inside a body is written in that body as well:
+        // a type is read where a type belongs, wherever it is written.
+        for data in self.local_functions.values_mut() {
+            data.signature.resolve(scope);
         }
 
         debug_assert_eq!(
@@ -691,6 +727,7 @@ mod tests {
         let local = builder.declare_local_function(LocalFunctionData {
             name: Name::new("helper"),
             signature: Signature::default(),
+            params: Vec::new(),
         });
         let root = builder.alloc_expr(Expr::Literal(Literal::Str(Interned::new_str("hi"))));
         builder.set_local_function_root(local, root);
@@ -776,5 +813,44 @@ mod tests {
 
         assert_eq!(builder.captures(sum, &[y]), [x, z]);
         assert_eq!(builder.captures(inner, &[x]), [z]);
+    }
+
+    #[test]
+    fn a_local_function_is_not_part_of_what_the_enclosing_body_captures() {
+        // `local fun add(y) = x + y in add(z)`: a function declared inside a body is given its
+        // own parameters only, so what the body of the item reads of the enclosing body is not
+        // free in the body that declares it --- the lowering reports such a read --- and what
+        // the `local` makes free is what the expression after the `in` reads.
+        let mut builder = BodyBuilder::new();
+        let (_, x_expr) = binding(&mut builder, "x");
+        let (y, y_expr) = binding(&mut builder, "y");
+        let (z, z_expr) = binding(&mut builder, "z");
+        let sum = builder.alloc_expr(Expr::Binary {
+            lhs: x_expr,
+            op: BinaryOp::Add,
+            rhs: y_expr,
+        });
+        let item = builder.declare_local_function(LocalFunctionData {
+            name: Name::new("add"),
+            signature: Signature::default(),
+            params: vec![y],
+        });
+        builder.set_local_function_root(item, sum);
+
+        let callee = builder.intern_path(PathData::ident(
+            Name::new("add"),
+            PathAnchor::Local(LocalDefId::Function(item)),
+        ));
+        let callee = builder.alloc_expr(Expr::Path(callee));
+        let call = builder.alloc_expr(Expr::Call {
+            callee,
+            args: vec![z_expr],
+        });
+        let local = builder.alloc_expr(Expr::Local {
+            items: vec![LocalDefId::Function(item)],
+            body: call,
+        });
+
+        assert_eq!(builder.captures(local, &[]), [z]);
     }
 }

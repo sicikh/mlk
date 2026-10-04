@@ -1,0 +1,30 @@
+// A function declared inside a body is given its own parameters only: what the body that declares
+// it binds is not part of it, and reading one is a mistake.
+
+#[builtin]
+type Int
+
+#[extern]
+fun consume(left: Int, right: Int): Int
+
+// A parameter of the body that declares the function.
+fun parameter(value: Int): Int =
+    local fun add(x: Int): Int = x + value in
+    add(1)
+
+// A `let` of the body that declares the function.
+fun bound(value: Int): Int =
+    let other = value + 1 in
+    local fun add(x: Int): Int = x + other in
+    add(1)
+
+// A lambda written in the body of the function reads the binding of the enclosing body, and the
+// read is the mistake of the function it is written in.
+fun through_lambda(value: Int): Int =
+    local fun applied(): Int = (fn(x) -> x + value)(1) in
+    applied()
+
+// A `_` written in a function declared among the arguments of a step names the value the pipeline
+// of the enclosing body passes, which is a binding of that body as well.
+fun piped(value: Int): Int =
+    value |> consume(_, local fun passed(): Int = _ in passed())

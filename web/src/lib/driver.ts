@@ -630,9 +630,13 @@ export interface RunEntry {
  *
  * It is what a host needs to instantiate the program --- the modules in the order they are
  * instantiated in, the module of the host functions, and the entry point --- and not a binary:
- * the host following these instructions is `driver.worker.ts`.
+ * the worker that runs the program follows these instructions, and so does the page that packs
+ * every module of it into an archive.
  */
 export interface Program {
+    /** The canonical name of the project the program is of: what a host names a build by. */
+    project: string;
+
     /** The modules of the program, providers before the modules that import them. */
     modules: RunModule[];
 
@@ -738,6 +742,16 @@ export interface Driver {
      */
     run(): Promise<Run>;
 
+    /**
+     * Builds the program the buffers make and hands it over, without running it
+     * ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
+     *
+     * A build is of the whole project, like a run, and of nothing else: what comes back is the
+     * manifest a run is of. A host that keeps the program rather than runs it --- the editor,
+     * which hands every module over as a file --- asks for this.
+     */
+    build(): Promise<Program>;
+
     /** What the stages of the pipeline reported, in the shape an editor marks the buffer with. */
     diagnostics(path: string): Promise<Diagnostic[]>;
 
@@ -781,6 +795,7 @@ export type DriverRequest =
     | { kind: "lir"; id: number; path: string }
     | { kind: "wat"; id: number; path: string }
     | { kind: "run"; id: number }
+    | { kind: "build"; id: number }
     | { kind: "diagnostics"; id: number; path: string }
     | { kind: "stats"; id: number };
 
@@ -941,6 +956,7 @@ export async function loadDriver(): Promise<Driver> {
         setOptions: (debug, opt) =>
             ask<boolean>((id) => ({ kind: "setOptions", id, debug, opt })),
         run: () => ask<Run>((id) => ({ kind: "run", id })),
+        build: () => ask<Program>((id) => ({ kind: "build", id })),
         diagnostics: (path) =>
             ask<Diagnostic[]>((id) => ({ kind: "diagnostics", id, path })),
         stats: () => ask<Stats>((id) => ({ kind: "stats", id })),

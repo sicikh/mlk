@@ -489,6 +489,78 @@ const STEPS = {
 			printed: lines.map((it) => text(it).trim())
 		})`,
 
+    // The header is what a person reaches for from anywhere: the tools of the project, marked
+    // and named, and not the name of the buffer, which is on its tab in the editor.
+    header: `const top = document.querySelector('header.top');
+		const tools = [...top.querySelectorAll('button')];
+		return JSON.stringify({
+			brand: text(top.querySelector('.brand')).trim(),
+			name: top.querySelector('.tool-name') !== null,
+			tools: tools.map((it) => ({
+				label: text(it.querySelector('.label')).trim(),
+				aria: it.getAttribute('aria-label') ?? '',
+				title: it.title,
+				mark: it.querySelector('svg') !== null,
+				primary: it.classList.contains('primary')
+			}))
+		})`,
+
+    // Compiling the project is the pipeline end to end with nothing run: every module of the
+    // project and of the library is compiled and linked into one archive, which is what a page
+    // hands a person --- one download holding every path of the build. A page writes a file by
+    // making a blob and starting the download of a link: this stands in for the blob and for
+    // the link, because a headless browser keeps no files, and what a person would get is the
+    // name and the bytes, which are read on the way.
+    compile: `window.__build = [];
+		window.__saved = [];
+		URL.createObjectURL = (blob) => {
+			window.__saved.push({ size: blob.size, type: blob.type });
+			blob.arrayBuffer().then((buffer) => {
+				const bytes = new Uint8Array(buffer);
+				const chunks = [];
+				for (let at = 0; at < bytes.length; at += 0x8000) {
+					chunks.push(String.fromCharCode(...bytes.subarray(at, at + 0x8000)));
+				}
+				window.__zip = btoa(chunks.join(''));
+			});
+			return 'blob:build-' + window.__saved.length;
+		};
+		const create = document.createElement.bind(document);
+		document.createElement = (name) => {
+			const element = create(name);
+			if (String(name).toLowerCase() === 'a') {
+				element.click = function () {
+					window.__build.push({
+						name: this.download,
+						blob: String(this.href).startsWith('blob:')
+					});
+				};
+			}
+			return element;
+		};
+		document.querySelector('[data-console=compiler]').click();
+		document.querySelector('[data-compile]').click();
+		return true`,
+
+    built: `return JSON.stringify({
+			files: window.__build ?? [],
+			saved: window.__saved ?? [],
+			lines: [...document.querySelectorAll('[data-panel=console] .line')]
+				.map((it) => text(it).trim())
+		})`,
+
+    // The archive itself, as the text a check reads bytes in: what it holds is its paths, and
+    // the paths are read off the directory at its end (see `entries`).
+    packed: `return window.__zip ?? ''`,
+
+    // A project with a mistake in it has no build a person can ask for: the tool is read rather
+    // than pressed, and what it says is the reason.
+    compileGuard: `const button = document.querySelector('[data-compile]');
+		return JSON.stringify({
+			disabled: button.disabled,
+			title: button.title
+		})`,
+
     // A body with a choice in it: the tab reads it as the blocks it branches into.
     typeBranch: `const content = document.querySelector('.cm-content');
     	content.focus();
@@ -853,6 +925,9 @@ const WAITS = {
     ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
 		return document.querySelector('[data-console=program].active') !== null &&
 			lines.some((it) => text(it).trim() === '5')`,
+    built: `return [...document.querySelectorAll('[data-panel=console] .line')]
+			.some((it) => text(it).includes('the build is'))`,
+    packed: `return (window.__zip ?? '').length > 0`,
     broken: `return diagnostics().length > 0`,
     bogus: `return inspector().textContent.includes('Bogus')`,
     long: `return inspector().textContent.includes('x79')`,
@@ -1025,6 +1100,9 @@ async function main() {
 
     const state = JSON.parse(await ask(STEPS.state));
 
+    // What the header holds, which is what a person reaches for from anywhere in the page.
+    const header = JSON.parse(await ask(STEPS.header));
+
     await ask(STEPS.showCst);
     await until(WAITS.cst, "the cst of the buffer");
     const cst = JSON.parse(await ask(STEPS.cst));
@@ -1179,6 +1257,18 @@ async function main() {
     await until(WAITS.ran, "the program to run");
     const ran = JSON.parse(await ask(STEPS.ran));
 
+    // The same project, built rather than run: every module of it is compiled and linked, and
+    // each is handed over as a file. A page writes a file by starting the download of a link,
+    // and what this reads is the names and the console, not the file system a page has none of.
+    await ask(STEPS.compile);
+    await until(WAITS.built, "the build of the project");
+    const built = JSON.parse(await ask(STEPS.built));
+
+    // The archive a person gets: what it holds is read off the directory at its end, because
+    // the paths inside are the whole of what an archive adds to a download of loose files.
+    await until(WAITS.packed, "the archive of the build");
+    built.entries = entries(Buffer.from(await ask(STEPS.packed), "base64"));
+
     // A body with a choice in it: the CFG form reads the block that branches and the blocks the
     // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
     // they meet in. The buffer is typed into the one that is in front.
@@ -1220,6 +1310,9 @@ async function main() {
     await until(WAITS.broken, "the diagnostics of the broken buffer");
     const broken = JSON.parse(await ask(STEPS.seen));
     const brokenGlance = JSON.parse(await ask(STEPS.status));
+
+    // A project with a mistake in it offers no build, and the tool says why.
+    const compileGuard = JSON.parse(await ask(STEPS.compileGuard));
 
     const marks = JSON.parse(await ask(STEPS.painted));
 
@@ -1368,6 +1461,9 @@ async function main() {
             mapWat,
             config,
             ran,
+            built,
+            compileGuard,
+            header,
             program,
             width,
             made,
@@ -1830,6 +1926,47 @@ function report(page, problems, warnings, asked) {
             page.ran.tab && page.ran.printed.includes("5"),
         ],
         [
+            // The header is the tools of the project, and the name of the buffer is not repeated
+            // in it: the tab of the editor says which buffer is in front. A tool is a mark and a
+            // word, and the run is the one painted as the action.
+            "the header holds the tools of the project, and not the name of the buffer",
+            page.header.brand === "MLK" &&
+                !page.header.name &&
+                page.header.tools.length === 3 &&
+                page.header.tools.map((it) => it.label).join(" ") ===
+                    "Check Compile Run" &&
+                page.header.tools.every((it) => it.mark && it.aria !== "") &&
+                page.header.tools[2].primary &&
+                page.header.tools.slice(0, 2).every((it) => !it.primary),
+        ],
+        [
+            // The chords are written where a pointer reads them without pressing either tool:
+            // a synthetic key is not sent here, because the engine this check drives hands one
+            // to the page's capture listener only sometimes, and the promise of the tools is
+            // what is read instead.
+            "the tools say which keys ask for them",
+            page.header.tools[0].title.includes("Ctrl+Shift+Enter") &&
+                page.header.tools[2].title.includes("Ctrl+Enter"),
+        ],
+        [
+            // A build is one archive rather than a file per module: a download cannot make a
+            // folder, and an archive is where the folders of a project survive. Every module is
+            // in it under the path its canonical name stands for, with the module of the host
+            // functions beside them, and the archive is named by the project.
+            "a build is handed over as one archive of the program",
+            page.built.saved.length === 1 &&
+                page.built.saved[0].type === "application/zip" &&
+                page.built.saved[0].size > 0 &&
+                page.built.files.length === 1 &&
+                page.built.files[0].name === "app.zip" &&
+                page.built.files[0].blob &&
+                [...page.built.entries].sort().join(" ") ===
+                    "app/main.wasm host.wasm std/core.wasm std/prelude.wasm std/runtime.wasm" &&
+                page.built.lines.some((it) =>
+                    it.includes("the build is 5 files in app.zip"),
+                ),
+        ],
+        [
             "the console has a program tab",
             page.program.tab && page.program.empty,
         ],
@@ -1854,6 +1991,13 @@ function report(page, problems, warnings, asked) {
             "the status line counts the diagnostics",
             page.brokenGlance.text.includes("error") &&
                 page.brokenGlance.active,
+        ],
+        [
+            // A project with a mistake in it is not a project to build: the tool is read rather
+            // than pressed, and what it says is the mistake.
+            "a project with a mistake in it offers no build",
+            page.compileGuard.disabled &&
+                page.compileGuard.title.includes("error"),
         ],
         [
             "the diagnostic is an error",
@@ -2039,6 +2183,12 @@ function report(page, problems, warnings, asked) {
         `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
     );
     console.log(
+        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.join(", ")}`,
+    );
+    console.log(
+        `a broken buffer ${page.compileGuard.disabled ? "refuses" : "takes"} a build`,
+    );
+    console.log(
         `the debug option gives the module ${page.dwarfWat.sections.length} custom section(s) of DWARF, ${page.bareWat.sections.length} with none, and ${page.mapWat.sections.length} with the source map`,
     );
     console.log(
@@ -2088,6 +2238,40 @@ function report(page, problems, warnings, asked) {
         );
 
     return held;
+}
+
+/**
+ * The paths an archive holds, in the order its directory gives them ([ZIP]).
+ *
+ * The directory stands at the end of an archive, and every entry of it names the path a file
+ * is written under: the paths are the whole of what an archive adds to a download of loose
+ * files, so a check that reads a build reads them here.
+ *
+ * [zip]: https://en.wikipedia.org/wiki/ZIP_(file_format)
+ */
+function entries(archive) {
+    const end = archive.length - 22;
+
+    if (archive.readUInt32LE(end) !== 0x06054b50)
+        throw new Error("the archive has no directory at its end");
+
+    const count = archive.readUInt16LE(end + 10);
+    const paths = [];
+    let at = archive.readUInt32LE(end + 16);
+
+    for (let index = 0; index < count; index++) {
+        if (archive.readUInt32LE(at) !== 0x02014b50)
+            throw new Error(`entry ${index} of the archive is not a header`);
+
+        const name = archive.readUInt16LE(at + 28);
+        const extra = archive.readUInt16LE(at + 30);
+        const comment = archive.readUInt16LE(at + 32);
+
+        paths.push(archive.subarray(at + 46, at + 46 + name).toString("utf8"));
+        at += 46 + name + extra + comment;
+    }
+
+    return paths;
 }
 
 /** Starts a process of its own group, so that taking it down takes down what it spawned. */

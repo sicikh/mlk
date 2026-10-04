@@ -119,6 +119,8 @@ function answer(
             return driver.wat(request.path);
         case "run":
             return run(driver.run());
+        case "build":
+            return driver.build();
         case "diagnostics":
             return driver.diagnostics(request.path);
         case "stats":

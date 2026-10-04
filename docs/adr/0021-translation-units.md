@@ -220,6 +220,13 @@ pub struct LinkPlan {
   Every other word crosses as an ordinary reference the host passes back untouched.
 - In `wasmtime`, the same plan is walked with a `Linker`.
 - In the CLI, the plan is written as `.wasm` files and a manifest.
+- In the editor, the plan is downloaded as one ZIP archive:
+  a `.wasm` per module, under the path of the canonical name of the module
+  (`app::main` becomes `app/main.wasm`),
+  with the module of the host functions beside them.
+  The bytes are the bytes a run instantiates;
+  the archive is what keeps every module in the folder its name names,
+  which a download of loose files cannot carry.
 
 Nothing merges modules, and no engine extension is required.
 

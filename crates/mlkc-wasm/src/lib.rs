@@ -6,12 +6,12 @@
 //!
 //! The boundary is the driver's own: one method per value a host may ask for --- the concrete
 //! tree, the typed view, the HIR, the types of a module, the MIR in both of its forms, the LIR
-//! the backend lowers it into, the WASM a module assembles to, the manifest of a run, and the
-//! diagnostics --- and a pull computes what it answers and nothing else. A host that shows the
-//! trees only when a person opens them asks for them only then, and the pipeline under the
-//! boundary recomputes nothing it already holds. No method bundles the others: what a host does
-//! not ask for is not built, and a host that speaks another protocol --- an editor, over LSP ---
-//! asks for the same pulls.
+//! the backend lowers it into, the WASM a module assembles to, the program a host runs or
+//! builds, and the diagnostics --- and a pull computes what it answers and nothing else. A
+//! host that shows the trees only when a person opens them asks for them only then, and the
+//! pipeline under the boundary recomputes nothing it already holds. No method bundles the
+//! others: what a host does not ask for is not built, and a host that speaks another protocol
+//! --- an editor, over LSP --- asks for the same pulls.
 //!
 //! The standard library is the one thing a host does not push: it is part of the compiler, and
 //! a browser has nowhere to read it from, so a host asks the driver for it
@@ -299,7 +299,19 @@ impl WasmDriver {
     /// [adr-0021]: ../../docs/adr/0021-translation-units.md
     #[wasm_bindgen(js_name = run)]
     pub fn run(&mut self) -> Result<JsValue, JsValue> {
-        to_js(&self.run_of()?)
+        to_js(&self.program_of()?)
+    }
+
+    /// The program the buffers make, built and linked, without running it ([ADR-0021]).
+    ///
+    /// A build is the manifest of a run and nothing done with it: nothing is instantiated, and
+    /// the entry point is not called. A host that keeps the program rather than runs it asks
+    /// for this --- the editor, which packs every module of it into an archive.
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    #[wasm_bindgen(js_name = build)]
+    pub fn build(&mut self) -> Result<JsValue, JsValue> {
+        to_js(&self.program_of()?)
     }
 
     /// What the stages of the pipeline reported, in the order they reported it.
@@ -484,8 +496,12 @@ impl WasmDriver {
         sources
     }
 
-    /// The manifest of a run of the project of the page.
-    fn run_of(&mut self) -> Result<Run, JsValue> {
+    /// The program of the project of the page: every module of the project and of the projects
+    /// it depends on, compiled and linked, as the manifest a run is of.
+    ///
+    /// The manifest is one value whichever way a host takes it: `run` instantiates it and calls
+    /// the entry point, and `build` keeps it.
+    fn program_of(&mut self) -> Result<Run, JsValue> {
         let plan = self.driver.link(&ProjectId::new(PROJECT)).ok_or_else(|| {
             failure("the program does not link: fix what the compiler reported and run again")
         })?;
@@ -495,7 +511,7 @@ impl WasmDriver {
             .map(|diagnostic| self.render(diagnostic))
             .collect();
 
-        Ok(run_manifest(&plan, diagnostics))
+        Ok(run_manifest(PROJECT, &plan, diagnostics))
     }
 
     /// A diagnostic of the pipeline as a host reads it.
@@ -637,6 +653,11 @@ fn custom_sections(bytes: &[u8]) -> Vec<WatSection> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Run {
+    /// The canonical name of the project the program is of: the project a host asked to link,
+    /// whose modules are the program and whose dependencies stand beside them. A host names
+    /// what it builds by this ([`WasmDriver::build`]).
+    project: String,
+
     /// The modules of the program, providers before the modules that import them.
     modules: Vec<RunModule>,
 
@@ -711,8 +732,9 @@ struct RunEntry {
     name: String,
 }
 
-/// The manifest of a run of `plan`, and what the host is told about it.
-fn run_manifest(plan: &LinkPlan, diagnostics: Vec<Diagnostic>) -> Run {
+/// The manifest of a run of `plan`, and what the host is told about it: the project the plan
+/// was linked for, and everything [`Run`] holds.
+fn run_manifest(project: &str, plan: &LinkPlan, diagnostics: Vec<Diagnostic>) -> Run {
     let mut modules = Vec::with_capacity(plan.order.len());
     let mut problems = Vec::new();
 
@@ -769,6 +791,7 @@ fn run_manifest(plan: &LinkPlan, diagnostics: Vec<Diagnostic>) -> Run {
     }
 
     Run {
+        project: project.to_owned(),
         modules,
         host: host_module(),
         entry,
@@ -3203,11 +3226,12 @@ mod tests {
             ),
         );
 
-        let run = driver.run_of().expect("the program to describe");
+        let run = driver.program_of().expect("the program to describe");
         let entry = run.entry.as_ref().expect("the program to declare an entry");
 
         assert_eq!(entry.module, "app::main");
         assert_eq!(entry.name, "main");
+        assert_eq!(run.project, "app");
         assert!(run.problems.is_empty(), "{:?}", run.problems);
         assert!(
             run.diagnostics.is_empty(),
@@ -3358,7 +3382,7 @@ mod tests {
             Some("pub fun twice(value: Int): Int =\n    value * 2\n".to_string()),
         );
 
-        let run = driver.run_of().expect("the program to describe");
+        let run = driver.program_of().expect("the program to describe");
 
         assert!(run.entry.is_none());
         assert_eq!(run.problems, ["the program declares no `#[entry]`"]);
@@ -3377,7 +3401,7 @@ mod tests {
             ),
         );
 
-        let run = driver.run_of().expect("the program to describe");
+        let run = driver.program_of().expect("the program to describe");
 
         assert_eq!(run.problems, [
             "the host does not implement the extern `app::main::putchar`"
@@ -3427,7 +3451,7 @@ mod tests {
         );
 
         // The buffer is a module of the project while it is there.
-        let run = driver.run_of().expect("the program to describe");
+        let run = driver.program_of().expect("the program to describe");
 
         assert!(
             run.modules.iter().any(|module| module.name == "app::gone"),
@@ -3439,7 +3463,7 @@ mod tests {
         assert!(driver.set_text("/gone.mlk", None));
 
         let _ = Stats::of(&mut driver.driver);
-        let run = driver.run_of().expect("the program to describe");
+        let run = driver.program_of().expect("the program to describe");
 
         assert!(
             !run.modules.iter().any(|module| module.name == "app::gone"),
@@ -3466,7 +3490,7 @@ mod tests {
             Some("pub fun gone(): Int =\n    2\n".to_string()),
         );
 
-        let run = driver.run_of().expect("the program to describe");
+        let run = driver.program_of().expect("the program to describe");
 
         assert!(run.modules.iter().any(|module| module.name == "app::gone"));
     }

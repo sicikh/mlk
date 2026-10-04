@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount, tick } from "svelte";
 
+    import { archive, type ArchivedFile } from "$lib/archive";
     import AstView from "$lib/components/AstView.svelte";
     import ConfigView from "$lib/components/ConfigView.svelte";
     import Console, { type Line } from "$lib/components/Console.svelte";
@@ -236,7 +237,7 @@ pub fun main() : Unit =
     let inspector = $state(380);
     let console = $state(160);
 
-    let driver: Driver | null = null;
+    let driver = $state.raw<Driver | null>(null);
 
     const diagnostics = $derived(reading?.diagnostics ?? []);
     const errors = $derived(
@@ -278,6 +279,24 @@ pub fun main() : Unit =
 
         return parts.length > 0 ? parts.join(" · ") : "no diagnostics";
     });
+
+    /**
+     * Why the build cannot begin, when it cannot: a tool that is read rather than pressed
+     * says what stands in the way of it.
+     *
+     * The errors are the ones the buffer in front reports, and they are read as the errors of
+     * the project: a body the checker could not type is a body the pipeline refuses to lower,
+     * and the module it belongs to is a module the link stage refuses to link ([ADR-0019]).
+     *
+     * [adr-0019]: ../../../docs/adr/0019-mir.md
+     */
+    const buildTitle = $derived(
+        driver === null
+            ? "the driver is loading"
+            : errors > 0
+              ? `${errors} error${errors === 1 ? " stands" : "s stand"} in the way of a build`
+              : "Compile the project and download its modules",
+    );
 
     /**
      * How many nodes of the buffer were checked to the type of a mistake.
@@ -553,8 +572,11 @@ pub fun main() : Unit =
         if (next !== "") select(next);
     }
 
-    /** Compiles every buffer: the same work the driver does per keystroke, said out loud. */
-    async function compile() {
+    /**
+     * Checks every buffer: what a look does for the buffer in front, said out loud for all of
+     * them, with the counters each read spent.
+     */
+    async function checkProject() {
         if (!driver) return;
 
         for (const it of buffers) {
@@ -589,6 +611,108 @@ pub fun main() : Unit =
             // and a narrow screen can only put one panel in front: it is the one that says it.
             view = "inspector";
         }
+    }
+
+    /**
+     * Compiles the project and hands it to a person as an archive ([ADR-0021]).
+     *
+     * A build is of the whole project rather than of the buffer in front: the driver compiles
+     * every module of it, the modules of the library included, links them into the manifest a
+     * run is of, and instantiates nothing. What a person gets is one ZIP holding a `.wasm` per
+     * module, under the path the canonical name of the module stands for, with the module of
+     * the host functions beside them: a browser has no file system, and an archive is the one
+     * file a download can carry the folders of a project in.
+     *
+     * [adr-0021]: ../../../docs/adr/0021-translation-units.md
+     */
+    async function compile() {
+        if (!driver) return;
+
+        say("note", "building the project…");
+
+        try {
+            const program = await driver.build();
+            const files: ArchivedFile[] = [
+                ...program.modules.map((it) => ({
+                    path: fileOf(it.name),
+                    bytes: it.bytes,
+                })),
+                { path: "host.wasm", bytes: program.host },
+            ];
+
+            for (const diagnostic of program.diagnostics)
+                say(
+                    diagnostic.level === "error" ? "error" : "note",
+                    `${diagnostic.level}[${diagnostic.category}::${diagnostic.code}]: ${diagnostic.message}`,
+                );
+
+            const named = `${pathOf(program.project)}.zip`;
+
+            save(named, archive(files));
+
+            say(
+                "note",
+                `the build is ${files.length} file${files.length === 1 ? "" : "s"} in ${named}: ${files
+                    .map((it) => it.path)
+                    .join(", ")}`,
+            );
+
+            for (const problem of program.problems) say("error", problem);
+
+            consoleTab = "compiler";
+            view = "console";
+        } catch (error) {
+            say("error", `the driver refused the build: ${String(error)}`);
+            tab = "diagnostics";
+            view = "inspector";
+        }
+    }
+
+    /**
+     * A canonical name as a path: `app::main` is `app/main`, and `app` is `app`.
+     *
+     * A canonical name is the project and the path of the module inside it, and a name a file
+     * system reads is a path under a directory. Anything a path may not hold becomes a dash,
+     * so a name can never name another directory, and a name of nothing is named rather than
+     * nameless.
+     */
+    function pathOf(name: string): string {
+        const path = name
+            .replace(/::/g, "/")
+            .replace(/[^A-Za-z0-9._/-]/g, "-")
+            .replace(/^\/+/, "");
+
+        return path || "module";
+    }
+
+    /**
+     * The file a module of a build is written as: its canonical name, with the extension of
+     * what a module is ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
+     */
+    function fileOf(name: string): string {
+        return `${pathOf(name)}.wasm`;
+    }
+
+    /**
+     * Hands one file to a person as a download.
+     *
+     * A page has no file system, and the way it gives a file is the download of a link: the
+     * bytes are a blob, the link stands in the document while it is taken, and the URL is let
+     * go of after it, so a build does not hold its own bytes alive.
+     */
+    function save(file: string, bytes: Uint8Array) {
+        const url = URL.createObjectURL(
+            new Blob([new Uint8Array(bytes)], { type: "application/zip" }),
+        );
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = file;
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url));
     }
 
     /**
@@ -742,23 +866,121 @@ pub fun main() : Unit =
             ];
         }
     }
+
+    /**
+     * The chords of the header: `Ctrl`/`Cmd` with `Enter` runs the program, and the same with
+     * `Shift` checks the project.
+     *
+     * A chord is taken in the capture phase, before the editor reads the key: `Ctrl+Enter` is
+     * a key of the editor's own, and a person asking for a run asks for the run rather than
+     * for the line the editor would open.
+     */
+    function chord(event: KeyboardEvent) {
+        if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (event.shiftKey) checkProject();
+        else run();
+    }
 </script>
 
 <svelte:head>
     <title>MLK editor</title>
 </svelte:head>
 
+<!-- A chord is of the page rather than of a panel, and it is taken before the panels read it. -->
+<svelte:window onkeydowncapture={chord} />
+
 <div
     class="ide"
     data-view={view}
     style="--files: {files}px; --inspector: {inspector}px; --console: {console}px"
 >
+    <!--
+        What a person reaches for from anywhere: the tools of the project, and not the name of
+        the buffer, which is on its tab in the editor. A tool is a mark and a word, and the word
+        is what a narrow header runs out of room for first (see the styles).
+    -->
     <header class="top">
         <span class="brand">MLK</span>
         <span class="grow"></span>
-        <span class="tool-name">{name(active)}</span>
-        <button class="tool" data-run onclick={run}>Run</button>
-        <button class="tool primary" onclick={compile}>Compile</button>
+        <button
+            class="tool"
+            data-check
+            aria-label="Check the project"
+            title="Check every buffer (Ctrl+Shift+Enter)"
+            onclick={checkProject}
+        >
+            <svg
+                class="mark"
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+            >
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path
+                    d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                />
+            </svg>
+            <span class="label">Check</span>
+        </button>
+        <button
+            class="tool"
+            data-compile
+            aria-label="Compile the project"
+            title={buildTitle}
+            disabled={!driver || errors > 0}
+            onclick={compile}
+        >
+            <svg
+                class="mark"
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+            >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span class="label">Compile</span>
+        </button>
+        <button
+            class="tool primary"
+            data-run
+            aria-label="Run the program"
+            title="Run the program (Ctrl+Enter)"
+            onclick={run}
+        >
+            <svg
+                class="mark"
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="currentColor"
+                aria-hidden="true"
+                focusable="false"
+            >
+                <path d="M8 5v14l11-7z" />
+            </svg>
+            <span class="label">Run</span>
+        </button>
     </header>
 
     <!--
@@ -1185,12 +1407,6 @@ pub fun main() : Unit =
         flex: 1;
     }
 
-    .tool-name {
-        color: var(--muted);
-        font-family: var(--mono);
-        font-size: 12px;
-    }
-
     .empty {
         margin: 0;
         padding: 1rem;
@@ -1201,16 +1417,32 @@ pub fun main() : Unit =
         font-family: var(--mono);
     }
 
+    /*
+     * The tools of the header: a mark and a word each. A tool is quiet until a pointer is on
+     * it --- what a person reaches for from anywhere is the run, and it is the one tool painted
+     * as the action rather than as a tool.
+     */
     .tool {
-        padding: 0.2rem 0.7rem;
-        background: var(--raised);
-        border: 1px solid var(--border);
+        display: inline-flex;
+        gap: 0.4rem;
+        align-items: center;
+        padding: 0.3rem 0.65rem;
+        border: 1px solid transparent;
         border-radius: var(--radius);
+        color: var(--muted);
         font-size: 12px;
     }
 
-    .tool:hover {
-        border-color: #38414f;
+    .tool:hover:not(:disabled) {
+        background: var(--raised);
+        border-color: var(--border);
+        color: var(--text);
+    }
+
+    /* A build the project cannot give is not a tool a person can ask: it is read, not pressed. */
+    .tool:disabled {
+        cursor: default;
+        opacity: 0.4;
     }
 
     .tool.primary {
@@ -1219,8 +1451,12 @@ pub fun main() : Unit =
         color: #d8e6ff;
     }
 
-    .tool.primary:hover {
+    .tool.primary:hover:not(:disabled) {
         background: #33507f;
+    }
+
+    .mark {
+        flex: none;
     }
 
     /*
@@ -1459,18 +1695,15 @@ pub fun main() : Unit =
             padding: 0.55rem 0.7rem;
         }
 
-        /* A header is one line here, and a name too long for it says so rather than pushing
-           the tools off the screen. */
-        .tool-name {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        /* A header is one line here, and the words of the tools are what it runs out of room
+           for first: a tool keeps its mark, and its name is read by a reader of the label. */
+        .tool .label {
+            display: none;
         }
 
         .tool {
             min-height: 36px;
-            padding: 0.35rem 0.8rem;
+            padding: 0.35rem 0.7rem;
         }
     }
 </style>

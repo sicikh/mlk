@@ -95,6 +95,9 @@ and a module carries exactly what it names:
 - **`SourceMap`.** The `name` section and a source map:
   a JSON version 3 map in a `data:` URL in the `sourceMappingURL` custom section,
   with `sourcesContent` carrying the text of every file the bodies were read from.
+  A module downloaded from the editor ([ADR-0021][0021-translation-units.md])
+  is therefore a file that carries its sources with it:
+  nothing has to be written beside a `.wasm` for a browser to show the code.
   A segment stands on generated line zero,
   and its generated column is the byte offset of the instruction in the module
   --- the convention Emscripten writes and every engine reads

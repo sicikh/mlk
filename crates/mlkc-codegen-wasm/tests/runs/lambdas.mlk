@@ -1,0 +1,33 @@
+// What a lambda computes, printed by the host: the interpreter in both forms of MIR and the
+// modules instantiated by `wasmtime` have to print the same thing.
+
+//- /main.mlk
+// A lambda that captures a parameter of the body it is written in.
+fun captured(base: Int): Int =
+    let add = fn(x: Int) -> x + base in
+    add(2)
+
+// A lambda that captures nothing: its code is all it is.
+fun free(value: Int): Int =
+    let double = fn(x: Int) -> x + x in
+    double(value)
+
+// A lambda written in a lambda: the inner one captures a parameter of the outer one and
+// a binding of the body that wrote them both, and the call runs the code the outer one returns.
+fun nested(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> fn(y: Int) -> x + y + base in
+    add(1)(1)
+
+// A lambda bound by a `let` is generalized: the same closure is called at `Bool` and at `Int`.
+fun generalized(): Int =
+    let id = fn(x) -> x in
+    let _ = id(true) in
+    id(42)
+
+#[entry]
+pub fun main(): Unit =
+    let first = print-int(captured(40)) in
+    let second = print-int(free(21)) in
+    let third = print-int(nested()) in
+    print-int(generalized())

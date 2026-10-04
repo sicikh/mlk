@@ -7,6 +7,11 @@
 //!
 //! [adr-0018]: ../../docs/adr/0018-values-as-words.md
 
+use std::sync::Arc;
+
+use mlkc_hir_def::{EntityLoc, FunctionLoc};
+use mlkc_mir::LambdaId;
+
 /// One word.
 ///
 /// The variants are the kinds the language can have of a word today; a structure and a string
@@ -21,6 +26,27 @@ pub enum Value {
     Bool(bool),
     /// The unit value.
     Unit,
+    /// A closure: the code of a lambda, and the words it captured ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    Closure(Arc<Closure>),
+}
+
+/// The code of a lambda and the words it captured, which is what a closure is ([ADR-0026]).
+///
+/// A lambda is code the body that wrote it holds: the code is addressed by the entity of that
+/// body and by the place of the lambda in the body's arena, and the words are what
+/// `Rvalue::Capture` reads when the code runs.
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Closure {
+    /// The body that wrote the lambda.
+    pub writer: EntityLoc<FunctionLoc>,
+    /// The lambda, in the arena of the writer.
+    pub lambda: LambdaId,
+    /// The captured words, in the order the closure was created.
+    pub captures: Vec<Value>,
 }
 
 impl Value {
@@ -33,6 +59,8 @@ impl Value {
             Self::Int(value) => Some(*value),
             Self::Bool(value) => Some(i32::from(*value)),
             Self::Unit => Some(0),
+            // A closure is a reference: it is not an immediate, whatever it captured.
+            Self::Closure(_) => None,
         }
     }
 

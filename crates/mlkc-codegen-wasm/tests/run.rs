@@ -49,6 +49,10 @@ runs! {
     // Four modules linked in a chain: a call of a call, a boolean, and a choice are read back
     // the same way by the interpreter and by the modules.
     messages: "messages",
+
+    // `main` prints what lambdas compute: one that captures, one that captures nothing, one
+    // written in another, and one bound by a `let` and called at two types.
+    lambdas: "lambdas",
 }
 
 /// Runs the run `name`, and checks it against its snapshot.

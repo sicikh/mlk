@@ -12,11 +12,11 @@ use std::{fmt, sync::Arc};
 
 use mlkc_hir_def::{EntityLoc, FunctionLoc, ItemLocLike};
 use mlkc_mir::{
-    BlockTarget, Body, Callee, Const, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator,
+    BlockTarget, Callee, CodeRef, Const, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator,
 };
 use mlkc_span::Span;
 
-use crate::{Extern, Program, Value};
+use crate::{Closure, Extern, Program, Value};
 
 /// The functions of the program that are not written in it.
 ///
@@ -143,6 +143,10 @@ struct Interpreter<'a> {
 /// A read of a word that was not written is a trap and not a panic: the interpreter checks the
 /// invariant the same way the verifier states it, and reports the place it met.
 struct Frame {
+    /// The body that wrote the code being run: what a closure created here is a lambda of.
+    writer: EntityLoc<FunctionLoc>,
+    /// What the lambda being run captured; empty in the body of an entity.
+    captures: Vec<Value>,
     values: Vec<Option<Value>>,
     locals: Vec<Option<Value>>,
 }
@@ -162,30 +166,57 @@ impl<'a> Interpreter<'a> {
 
         let body = Arc::clone(body);
 
-        self.eval_body(&body, args)
+        self.eval_code(body.code(), function, &[], args)
     }
 
-    /// Runs one body: a frame holds its words, and the loop walks its blocks.
-    fn eval_body(&mut self, body: &Body, args: &[Value]) -> Result<Value, Trap> {
+    /// Calls a closure: the code of its lambda, entered with what it captured ([ADR-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    fn call_closure(&mut self, closure: &Closure, args: &[Value]) -> Result<Value, Trap> {
+        let Some(body) = self.program.body(&closure.writer) else {
+            return Err(Trap::MissingBody {
+                entity: closure.writer.clone(),
+            });
+        };
+
+        let body = Arc::clone(body);
+        let lambda = &body.lambdas[closure.lambda];
+
+        self.eval_code(lambda.code(), &closure.writer, &closure.captures, args)
+    }
+
+    /// Runs one piece of code --- a body's or a lambda's --- and gives back the word it returns.
+    ///
+    /// `writer` is the body the code was found under, which is the entity a call names; the
+    /// captures are what the lambda being run captured, and are empty for the body of an entity.
+    fn eval_code(
+        &mut self,
+        code: CodeRef<'_>,
+        writer: &EntityLoc<FunctionLoc>,
+        captures: &[Value],
+        args: &[Value],
+    ) -> Result<Value, Trap> {
         assert_eq!(
             args.len(),
-            body.params.len(),
-            "a call passes one word per parameter of the body",
+            code.params.len(),
+            "a call passes one word per parameter of the code",
         );
 
         let mut frame = Frame {
-            values: vec![None; body.values.len()],
-            locals: vec![None; body.locals.len()],
+            writer: writer.clone(),
+            captures: captures.to_vec(),
+            values: vec![None; code.values.len()],
+            locals: vec![None; code.locals.len()],
         };
 
-        for (parameter, argument) in body.params.iter().zip(args) {
+        for (parameter, argument) in code.params.iter().zip(args) {
             frame.values[parameter.index()] = Some(argument.clone());
         }
 
-        let mut block = body.entry;
+        let mut block = code.entry;
 
         loop {
-            let data = &body.blocks[block];
+            let data = &code.blocks[block];
 
             for stmt in &data.stmts {
                 self.stmt(&mut frame, stmt)?;
@@ -193,7 +224,7 @@ impl<'a> Interpreter<'a> {
 
             match &data.term {
                 Terminator::Goto { target, span } => {
-                    self.edge(body, &mut frame, target, *span)?;
+                    self.edge(code, &mut frame, target, *span)?;
                     block = target.block;
                 },
                 Terminator::Branch {
@@ -205,7 +236,7 @@ impl<'a> Interpreter<'a> {
                     let cond = self.operand(&frame, cond, *span)?;
                     let target = if cond.truth() { then_ } else { else_ };
 
-                    self.edge(body, &mut frame, target, *span)?;
+                    self.edge(code, &mut frame, target, *span)?;
                     block = target.block;
                 },
                 Terminator::Switch {
@@ -225,7 +256,7 @@ impl<'a> Interpreter<'a> {
                         }
                     }
 
-                    self.edge(body, &mut frame, target, *span)?;
+                    self.edge(code, &mut frame, target, *span)?;
                     block = target.block;
                 },
                 Terminator::Return { value, span } => {
@@ -253,24 +284,31 @@ impl<'a> Interpreter<'a> {
             Rvalue::Call { callee, args } => {
                 let args = self.operands(frame, args, stmt.span)?;
 
-                self.callee(callee, &args, stmt.span)?
+                self.callee(frame, callee, &args, stmt.span)?
             },
             // A closure is code plus the words it captured, and `Capture` reads one of them
-            // ([ADR-0026][adr-0026]); the value model of the interpreter is its own, and the
-            // lowering of both waits for a decision that is not MIR's.
+            // ([ADR-0026][adr-0026]): the code is the lambda, and the words are the operands,
+            // which are read the way every other rvalue reads its own.
             //
             // [adr-0026]: ../../docs/adr/0026-closure-representation.md
-            Rvalue::Closure { .. } => {
-                return Err(Trap::Unsupported {
-                    what: "a closure",
-                    span: stmt.span,
-                });
+            Rvalue::Closure { lambda, captures } => {
+                let captures = self.operands(frame, captures, stmt.span)?;
+
+                Value::Closure(Arc::new(Closure {
+                    writer: frame.writer.clone(),
+                    lambda: *lambda,
+                    captures,
+                }))
             },
-            Rvalue::Capture { .. } => {
-                return Err(Trap::Unsupported {
-                    what: "a capture",
-                    span: stmt.span,
-                });
+            Rvalue::Capture { index } => {
+                let index = *index as usize;
+
+                assert!(
+                    index < frame.captures.len(),
+                    "a capture the lambda did not take",
+                );
+
+                frame.captures[index].clone()
             },
         };
 
@@ -367,7 +405,13 @@ impl<'a> Interpreter<'a> {
     }
 
     /// Calls what a callee says, and gives back the word it returns.
-    fn callee(&mut self, callee: &Callee, args: &[Value], span: Span) -> Result<Value, Trap> {
+    fn callee(
+        &mut self,
+        frame: &Frame,
+        callee: &Callee,
+        args: &[Value],
+        span: Span,
+    ) -> Result<Value, Trap> {
         match callee {
             Callee::Entity(function) => self.call(function, args),
             Callee::Local(_) => {
@@ -376,11 +420,17 @@ impl<'a> Interpreter<'a> {
                     span,
                 })
             },
-            Callee::Indirect(_) => {
-                Err(Trap::Unsupported {
-                    what: "an indirect call",
-                    span,
-                })
+            Callee::Indirect(operand) => {
+                let callee = self.operand(frame, operand, span)?;
+
+                let Value::Closure(closure) = callee else {
+                    return Err(Trap::Unsupported {
+                        what: "a call of a value that is not a closure",
+                        span,
+                    });
+                };
+
+                self.call_closure(&closure, args)
             },
         }
     }
@@ -388,7 +438,7 @@ impl<'a> Interpreter<'a> {
     /// Emits an edge: every argument first, then the parameters of the target.
     fn edge(
         &mut self,
-        body: &Body,
+        code: CodeRef<'_>,
         frame: &mut Frame,
         target: &BlockTarget,
         span: Span,
@@ -399,7 +449,7 @@ impl<'a> Interpreter<'a> {
             args.push(self.operand(frame, argument, span)?);
         }
 
-        let params = &body.blocks[target.block].params;
+        let params = &code.blocks[target.block].params;
 
         assert_eq!(
             params.len(),

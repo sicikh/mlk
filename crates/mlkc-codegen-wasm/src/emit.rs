@@ -115,7 +115,7 @@ pub struct ValueDebug {
 /// A backend does not reject a well-formed body for its shape ([ADR-0022][adr-0022]); what it
 /// reports is a construct it does not lower *yet*, and the driver drops the artifact with it.
 /// Such a construct is selected only for a feature the language has and the backend does not:
-/// a string constant, a call to a function declared inside a body, and an indirect call.
+/// a string constant, and a call to a function declared inside a body.
 ///
 /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 #[derive(Debug, Clone, PartialEq, Eq)]

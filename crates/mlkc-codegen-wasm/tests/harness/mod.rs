@@ -174,7 +174,9 @@ pub fn project_with(fixture: &str, debug: DebugInfo) -> Compiled {
 /// Panics for the reasons [`project`] does, and when the project does not link.
 pub fn run_project(fixture: &str) -> RunProject {
     let (mut driver, project) = setup(fixture);
-    let plan = driver.link(&project).expect("the project to link");
+    let plan = driver
+        .link(&project)
+        .unwrap_or_else(|| panic!("the project to link: {}", reported(&mut driver, &project)));
     let mut modules = Vec::new();
     let mut names = Vec::new();
     let mut entry = None;
@@ -260,6 +262,28 @@ pub fn run_project(fixture: &str) -> RunProject {
         ssa,
         externs,
     }
+}
+
+/// What the driver reported about every module of a project, for a link that did not happen.
+fn reported(driver: &mut Driver, project: &ProjectId) -> String {
+    let Some(index) = driver.module_index(project) else {
+        return "the project is not one the driver holds".to_owned();
+    };
+
+    let mut report = String::new();
+
+    for (path, module) in index.iter() {
+        let path = path.iter().map(Name::as_str).collect::<Vec<_>>().join("::");
+        let diagnostics = driver.diagnostics(module.0);
+
+        report.push_str(&format!("\n{path}: {diagnostics:?}"));
+    }
+
+    if let Some(ice) = driver.ice() {
+        report.push_str(&format!("\n\n{ice}"));
+    }
+
+    report
 }
 
 /// The driver a fixture is compiled by: the standard library, the project that depends on it,

@@ -170,6 +170,102 @@ fun fib(value: Int): Int =
 }
 
 #[test]
+fn a_lambda_captures_and_is_called() {
+    let program = program(
+        "\
+fun main(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> x + base in
+    add(2)
+",
+    );
+
+    // What the lambda captured is what `Capture` reads when its code runs.
+    assert_eq!(program.run("app::main::main", &[]), Ok(Value::Int(42)));
+}
+
+#[test]
+fn a_lambda_that_captures_nothing_is_called() {
+    let program = program(
+        "\
+fun main(): Int =
+    let double = fn(x: Int) -> x + x in
+    double(21)
+",
+    );
+
+    assert_eq!(program.run("app::main::main", &[]), Ok(Value::Int(42)));
+}
+
+#[test]
+fn a_closure_is_one_value_called_more_than_once() {
+    let program = program(
+        "\
+fun main(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> x + base in
+    add(1) + add(2)
+",
+    );
+
+    assert_eq!(program.run("app::main::main", &[]), Ok(Value::Int(83)));
+}
+
+#[test]
+fn a_generalized_lambda_is_called_at_two_types() {
+    let program = program(
+        "\
+fun main(): Int =
+    let id = fn(x) -> x in
+    let _ = id(true) in
+    id(42)
+",
+    );
+
+    // One closure over words: the two uses choose the values that flow through it, and the
+    // interpreter calls the same code either way.
+    assert_eq!(program.run("app::main::main", &[]), Ok(Value::Int(42)));
+}
+
+#[test]
+fn a_lambda_inside_a_lambda_captures_both_frames() {
+    let program = program(
+        "\
+fun main(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> fn(y: Int) -> x + y + base in
+    add(1)(1)
+",
+    );
+
+    // The inner lambda captures the parameter of the outer one as well as the binding of the
+    // body that wrote them both; calling the closure the outer one gives back runs the inner code.
+    assert_eq!(program.run("app::main::main", &[]), Ok(Value::Int(42)));
+}
+
+#[test]
+fn a_closure_that_two_branches_produce_joins() {
+    let program = program(
+        "\
+fun pick(flag: Bool, bonus: Int): Int =
+    let add = if flag then fn(x: Int) -> x + bonus else fn(x: Int) -> x + bonus + 1 in
+    add(2)
+",
+    );
+
+    // A join of two closures is one value, whatever the branch captured: what the call runs is
+    // the code of the closure the branch created.
+    assert_eq!(
+        program.run("app::main::pick", &[Value::Bool(true), Value::Int(40)]),
+        Ok(Value::Int(42)),
+    );
+    assert_eq!(
+        program.run("app::main::pick", &[Value::Bool(false), Value::Int(40)]),
+        Ok(Value::Int(43)),
+    );
+}
+
+#[test]
 fn a_host_reads_what_the_program_prints() {
     let program = program(
         "\

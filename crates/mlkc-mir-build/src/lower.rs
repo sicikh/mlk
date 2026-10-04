@@ -216,6 +216,16 @@ impl Lowerer<'_, '_> {
             self.parameter(param.pat);
         }
 
+        let param_names = params
+            .iter()
+            .map(|param| {
+                match &self.body[param.pat] {
+                    Pat::Bind(name) => Some(name.clone()),
+                    Pat::Missing | Pat::Wildcard => None,
+                }
+            })
+            .collect();
+
         let value = self.expr(root);
         let span = self.span_expr(root);
         self.seal(Terminator::Return {
@@ -229,6 +239,7 @@ impl Lowerer<'_, '_> {
             ty,
             captures,
             params: code.params,
+            param_names,
             entry: code.entry,
             blocks: code.blocks,
             values: code.values,

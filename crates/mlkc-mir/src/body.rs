@@ -78,6 +78,8 @@ pub struct LambdaData {
     pub captures: Vec<CaptureData>,
     /// The parameters, in the order they are declared.
     pub params: Vec<ValueId>,
+    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
+    pub param_names: Vec<Option<Name>>,
     /// The block the lambda enters.
     pub entry: BlockId,
     /// The blocks.

@@ -64,6 +64,7 @@ fn construct_ssa_lambda(lambda: &LambdaData) -> LambdaData {
         ty: lambda.ty.clone(),
         captures: lambda.captures.clone(),
         params: code.params,
+        param_names: lambda.param_names.clone(),
         entry: code.entry,
         blocks: code.blocks,
         values: code.values,

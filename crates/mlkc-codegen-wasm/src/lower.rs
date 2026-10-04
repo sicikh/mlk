@@ -72,7 +72,7 @@ fn lower_children(
             owner: ctx.owner,
             name: &name,
             signature: &plan.signature,
-            param_names: &[],
+            param_names: &plan.param_names,
             layout: ctx.layout,
             lambda: Some(plan),
         };

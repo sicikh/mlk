@@ -107,6 +107,9 @@ pub struct LambdaPlan {
     pub index: u32,
     /// What the lambda takes and gives back, without the environment.
     pub signature: FnSignature,
+    /// The names of the ABI parameters of the lifted function: the environment first, which no
+    /// name binds, and then the parameters the lambda declared.
+    pub param_names: Vec<Option<Name>>,
     /// The shapes of its captures, in the order they are stored.
     pub captures: Vec<AbiType>,
     /// The `$fn` and `$closure` types of its shape.
@@ -164,7 +167,8 @@ pub struct EmittedFunction {
     pub exported: bool,
     /// How many parameters the function's declared signature takes.
     pub arity: u32,
-    /// The name every parameter was declared under, in order.
+    /// The name of every ABI parameter, in order: a lambda is entered with its environment
+    /// first, which no name binds.
     pub param_names: Vec<Option<Name>>,
     /// The WASM type of the function: a plain function type for an entity, the `$fn` of its
     /// shape for a lambda.
@@ -416,6 +420,9 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
         for lambda in lambda_order(function.body.code(), &function.body.lambdas) {
             let data = &function.body.lambdas[lambda];
             let signature = signature_of_lambda(&data.ty);
+            let param_names = std::iter::once(None)
+                .chain(data.param_names.iter().cloned())
+                .collect();
             let shape = signature.shape(&builtins);
             let captures: Vec<AbiType> = data
                 .captures
@@ -430,6 +437,7 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
             pending.push(((function.owner.clone(), lambda), PendingLambda {
                 index,
                 signature,
+                param_names,
                 captures,
                 at,
                 env,
@@ -461,6 +469,7 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
         by_lambda.insert(key, LambdaPlan {
             index: lambda.index,
             signature: lambda.signature,
+            param_names: lambda.param_names,
             captures: lambda.captures,
             types,
             env: lambda.env.map(|env| env_base + env as u32),
@@ -483,6 +492,7 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
 struct PendingLambda {
     index: u32,
     signature: FnSignature,
+    param_names: Vec<Option<Name>>,
     captures: Vec<AbiType>,
     at: usize,
     env: Option<usize>,
@@ -814,7 +824,7 @@ fn emit_tree(
                 writer.clone(),
                 lambda_name(writer, *lambda),
                 plan.signature.clone(),
-                Vec::new(),
+                plan.param_names.clone(),
                 false,
                 Some(plan),
             )

@@ -43,7 +43,8 @@ pub struct FunctionCtx<'a> {
     pub name: &'a str,
     /// What the function takes and gives back, without the environment.
     pub signature: &'a FnSignature,
-    /// The name every parameter was declared under, in order.
+    /// The name of every ABI parameter, in order: a lambda is entered with its environment
+    /// first, which no name binds.
     pub param_names: &'a [Option<Name>],
     /// How the functions of the module are numbered, and what they are.
     pub layout: &'a ModuleLayout,

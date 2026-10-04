@@ -53,8 +53,8 @@ expression: snapshot
     ref.i31
     return
   )
-  (func $main::<mlkc@lambda-0> (;2;) (type 2) (param (ref 3) (ref i31)) (result (ref i31))
-    local.get 1
+  (func $main::<mlkc@lambda-0> (;2;) (type 2) (param (ref 3)) (param $x (ref i31)) (result (ref i31))
+    local.get $x
     i31.get_s
     local.get 0
     ref.as_non_null
@@ -65,10 +65,10 @@ expression: snapshot
     ref.i31
     return
   )
-  (func $main::<mlkc@lambda-1> (;3;) (type 2) (param (ref 3) (ref i31)) (result (ref i31))
-    local.get 1
+  (func $main::<mlkc@lambda-1> (;3;) (type 2) (param (ref 3)) (param $x (ref i31)) (result (ref i31))
+    local.get $x
     i31.get_s
-    local.get 1
+    local.get $x
     i31.get_s
     i32.add
     ref.i31
@@ -91,8 +91,8 @@ expression: snapshot
     call_ref 2
     return
   )
-  (func $announce::<mlkc@lambda-0> (;5;) (type 2) (param (ref 3) (ref i31)) (result (ref i31))
-    local.get 1
+  (func $announce::<mlkc@lambda-0> (;5;) (type 2) (param (ref 3)) (param $value (ref i31)) (result (ref i31))
+    local.get $value
     call $print-int
     return
   )

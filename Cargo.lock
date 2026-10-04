@@ -1015,9 +1015,13 @@ dependencies = [
  "bpaf",
  "mlkc-diagnostics",
  "mlkc-driver",
+ "mlkc-hir-def",
  "mlkc-line-index",
  "mlkc-span",
+ "mlkc-stdlib",
  "mlkc-vfs",
+ "serde_json",
+ "wasmtime",
 ]
 
 [[package]]
@@ -1078,6 +1082,7 @@ dependencies = [
  "mlkc-typeck",
  "mlkc-vfs",
  "rustc-hash",
+ "serde",
  "wasmparser 0.245.1",
 ]
 
@@ -2298,6 +2303,7 @@ version = "49.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64b67114739063bb72bb8ed2b4994b8b22809d354432db68553ad529850f9536"
 dependencies = [
+ "anyhow",
  "hashbrown 0.17.1",
  "libm",
  "serde",

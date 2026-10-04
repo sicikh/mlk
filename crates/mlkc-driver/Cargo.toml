@@ -27,6 +27,7 @@ mlkc-syntax.workspace = true
 mlkc-typeck.workspace = true
 mlkc-vfs.workspace = true
 rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 insta.workspace = true

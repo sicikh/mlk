@@ -626,16 +626,54 @@ export interface RunEntry {
 }
 
 /**
+ * The manifest of a build: what a host reads to run a program whose modules are files
+ * ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
+ *
+ * A build written out is a directory of modules and this file beside them: a host that holds
+ * the modules in memory does not read it, and a host that reads them from files cannot do
+ * without it. It is written into the archive the editor hands over (see `$lib/archive`), and
+ * `mlkc run` reads it back.
+ */
+export interface Manifest {
+    /** The canonical name of the project the program is of: what a host names a build by. */
+    project: string;
+
+    /** The modules of the program, providers before the modules that import them. */
+    modules: ManifestModule[];
+
+    /** The file the shim for a host that cannot make GC values is written as, if there is one. */
+    host: string | null;
+
+    /** Where the program begins: `null` when the project declares no entry point. */
+    entry: RunEntry | null;
+}
+
+/** One module of a build: the file it is written as, and what it needs and offers. */
+export interface ManifestModule {
+    /** The canonical name of the module: the name the modules after it import it by. */
+    name: string;
+
+    /** The path of the file the module is written as, relative to the build. */
+    file: string;
+
+    /** The functions the module imports: an external one is what a host implements. */
+    imports: RunImport[];
+
+    /** The functions the module exports. */
+    exports: RunExport[];
+}
+
+/**
  * The program the buffers make: the manifest of a run ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
  *
  * It is what a host needs to instantiate the program --- the modules in the order they are
  * instantiated in, the module of the host functions, and the entry point --- and not a binary:
  * the worker that runs the program follows these instructions, and so does the page that packs
- * every module of it into an archive.
+ * every module of it into an archive, where the manifest travels beside the modules.
  */
 export interface Program {
-    /** The canonical name of the project the program is of: what a host names a build by. */
-    project: string;
+    /** What a host that reads the program from files reads ([`Manifest`]). */
+    manifest: Manifest;
 
     /** The modules of the program, providers before the modules that import them. */
     modules: RunModule[];

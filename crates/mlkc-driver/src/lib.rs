@@ -142,8 +142,13 @@
 //! The assertion at the end of the driver module is what keeps that true.
 
 mod driver;
+mod manifest;
 
-pub use crate::driver::{
-    Clock, DebugInfo, Diagnostics, Driver, IceReport, LinkError, LinkPlan, Lowered, ModuleBody,
-    OptLevel, Options, Parse, Pass, Stats, StdFile, Tally, Unit, codegen_diagnostic, system_clock,
+pub use crate::{
+    driver::{
+        Clock, DebugInfo, Diagnostics, Driver, IceReport, LinkError, LinkPlan, Lowered, ModuleBody,
+        OptLevel, Options, Parse, Pass, Stats, StdFile, Tally, Unit, codegen_diagnostic,
+        system_clock,
+    },
+    manifest::{Manifest, ManifestEntry, ManifestExport, ManifestImport, ManifestModule},
 };

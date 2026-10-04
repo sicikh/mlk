@@ -1265,9 +1265,19 @@ async function main() {
     const built = JSON.parse(await ask(STEPS.built));
 
     // The archive a person gets: what it holds is read off the directory at its end, because
-    // the paths inside are the whole of what an archive adds to a download of loose files.
+    // the paths inside are the whole of what an archive adds to a download of loose files, and
+    // the manifest is read out of the archive, because it is what a host that reads the build
+    // from files reads.
     await until(WAITS.packed, "the archive of the build");
-    built.entries = entries(Buffer.from(await ask(STEPS.packed), "base64"));
+    const packed = Buffer.from(await ask(STEPS.packed), "base64");
+
+    built.entries = entries(packed);
+
+    const described = built.entries.find((it) => it.name === "manifest.json");
+
+    if (!described) throw new Error("the build holds no manifest");
+
+    built.manifest = JSON.parse(contents(packed, described).toString("utf8"));
 
     // A body with a choice in it: the CFG form reads the block that branches and the blocks the
     // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
@@ -1951,8 +1961,8 @@ function report(page, problems, warnings, asked) {
         [
             // A build is one archive rather than a file per module: a download cannot make a
             // folder, and an archive is where the folders of a project survive. Every module is
-            // in it under the path its canonical name stands for, with the module of the host
-            // functions beside them, and the archive is named by the project.
+            // in it under the file its manifest names, with the module of the host functions
+            // and the manifest itself beside it, and the archive is named by the project.
             "a build is handed over as one archive of the program",
             page.built.saved.length === 1 &&
                 page.built.saved[0].type === "application/zip" &&
@@ -1960,11 +1970,36 @@ function report(page, problems, warnings, asked) {
                 page.built.files.length === 1 &&
                 page.built.files[0].name === "app.zip" &&
                 page.built.files[0].blob &&
-                [...page.built.entries].sort().join(" ") ===
-                    "app/main.wasm host.wasm std/core.wasm std/prelude.wasm std/runtime.wasm" &&
+                page.built.entries
+                    .map((it) => it.name)
+                    .sort()
+                    .join(" ") ===
+                    "app/main.wasm host.wasm manifest.json std/core.wasm std/prelude.wasm std/runtime.wasm" &&
                 page.built.lines.some((it) =>
-                    it.includes("the build is 5 files in app.zip"),
+                    it.includes("the build is 6 files in app.zip"),
                 ),
+        ],
+        [
+            // The manifest is what a host that reads the build from files reads: the project,
+            // the file every module is written as, and where the program begins.
+            "the manifest of the build travels beside the modules",
+            page.built.manifest.project === "app" &&
+                page.built.manifest.host === "host.wasm" &&
+                page.built.manifest.entry.module === "app::main" &&
+                page.built.manifest.entry.name === "main" &&
+                page.built.manifest.modules
+                    .map((it) => it.file)
+                    .sort()
+                    .join(" ") ===
+                    "app/main.wasm std/core.wasm std/prelude.wasm std/runtime.wasm" &&
+                page.built.manifest.modules
+                    .find((it) => it.name === "app::main")
+                    .imports.some(
+                        (it) =>
+                            it.external &&
+                            it.module === "std::runtime" &&
+                            it.name === "print-int",
+                    ),
         ],
         [
             "the console has a program tab",
@@ -2183,7 +2218,10 @@ function report(page, problems, warnings, asked) {
         `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
     );
     console.log(
-        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.join(", ")}`,
+        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.map((it) => it.name).join(", ")}`,
+    );
+    console.log(
+        `the manifest of the build is of the project ${page.built.manifest.project}, and its entry is ${page.built.manifest.entry ? `${page.built.manifest.entry.module}::${page.built.manifest.entry.name}` : "nothing"}`,
     );
     console.log(
         `a broken buffer ${page.compileGuard.disabled ? "refuses" : "takes"} a build`,
@@ -2241,11 +2279,13 @@ function report(page, problems, warnings, asked) {
 }
 
 /**
- * The paths an archive holds, in the order its directory gives them ([ZIP]).
+/**
+ * The files an archive holds: the path of each, where its header stands, and how long it is
+ * ([ZIP]).
  *
  * The directory stands at the end of an archive, and every entry of it names the path a file
- * is written under: the paths are the whole of what an archive adds to a download of loose
- * files, so a check that reads a build reads them here.
+ * is written under and where that file stands: a check that reads a build reads the paths
+ * here, because the paths are the whole of what an archive adds to a download of loose files.
  *
  * [zip]: https://en.wikipedia.org/wiki/ZIP_(file_format)
  */
@@ -2256,7 +2296,7 @@ function entries(archive) {
         throw new Error("the archive has no directory at its end");
 
     const count = archive.readUInt16LE(end + 10);
-    const paths = [];
+    const files = [];
     let at = archive.readUInt32LE(end + 16);
 
     for (let index = 0; index < count; index++) {
@@ -2267,11 +2307,26 @@ function entries(archive) {
         const extra = archive.readUInt16LE(at + 30);
         const comment = archive.readUInt16LE(at + 32);
 
-        paths.push(archive.subarray(at + 46, at + 46 + name).toString("utf8"));
+        files.push({
+            name: archive.subarray(at + 46, at + 46 + name).toString("utf8"),
+            at: archive.readUInt32LE(at + 42),
+            size: archive.readUInt32LE(at + 24),
+        });
         at += 46 + name + extra + comment;
     }
 
-    return paths;
+    return files;
+}
+
+/** The bytes of one file of an archive, read where its entry says they stand. */
+function contents(archive, entry) {
+    const name = archive.readUInt16LE(entry.at + 26);
+    const extra = archive.readUInt16LE(entry.at + 28);
+
+    return archive.subarray(
+        entry.at + 30 + name + extra,
+        entry.at + 30 + name + extra + entry.size,
+    );
 }
 
 /** Starts a process of its own group, so that taking it down takes down what it spawned. */

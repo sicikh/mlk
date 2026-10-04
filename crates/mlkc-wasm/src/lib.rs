@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 use mlkc_codegen_wasm::{Sources, compile_module};
 use mlkc_driver::{
-    DebugInfo, Driver, LinkPlan, Lowered, OptLevel, Options, Parse, codegen_diagnostic,
+    DebugInfo, Driver, LinkPlan, Lowered, Manifest, OptLevel, Options, Parse, codegen_diagnostic,
 };
 use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, Name, ProjectData, ProjectId, dump};
 use mlkc_hir_ty::Ty;
@@ -653,10 +653,9 @@ fn custom_sections(bytes: &[u8]) -> Vec<WatSection> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Run {
-    /// The canonical name of the project the program is of: the project a host asked to link,
-    /// whose modules are the program and whose dependencies stand beside them. A host names
-    /// what it builds by this ([`WasmDriver::build`]).
-    project: String,
+    /// What a host that writes the program out as files reads: the project, the file every
+    /// module is written as, and where the program begins ([`Manifest`]).
+    manifest: Manifest,
 
     /// The modules of the program, providers before the modules that import them.
     modules: Vec<RunModule>,
@@ -791,7 +790,7 @@ fn run_manifest(project: &str, plan: &LinkPlan, diagnostics: Vec<Diagnostic>) ->
     }
 
     Run {
-        project: project.to_owned(),
+        manifest: Manifest::of(project, plan, Some(HOST_FILE)),
         modules,
         host: host_module(),
         entry,
@@ -805,6 +804,10 @@ fn run_manifest(project: &str, plan: &LinkPlan, diagnostics: Vec<Diagnostic>) ->
 /// The program never sees it: what a module of the language imports is the extern, and this is
 /// the module the shim asks a host for it from.
 const HOST_MODULE: &str = "host";
+
+/// The name the module of the host functions is written as, when a build is written as files
+/// ([`Manifest::host`]).
+const HOST_FILE: &str = "host.wasm";
 
 /// The host functions a run implements, by the name a program imports them under.
 ///
@@ -3231,7 +3234,14 @@ mod tests {
 
         assert_eq!(entry.module, "app::main");
         assert_eq!(entry.name, "main");
-        assert_eq!(run.project, "app");
+        assert_eq!(run.manifest.project, "app");
+        assert_eq!(
+            run.manifest
+                .entry
+                .as_ref()
+                .map(|it| (it.module.as_str(), it.name.as_str())),
+            Some(("app::main", "main")),
+        );
         assert!(run.problems.is_empty(), "{:?}", run.problems);
         assert!(
             run.diagnostics.is_empty(),

@@ -219,16 +219,37 @@ pub struct LinkPlan {
   which takes an `i31` immediate apart and hands the host the number inside it.
   Every other word crosses as an ordinary reference the host passes back untouched.
 - In `wasmtime`, the same plan is walked with a `Linker`.
-- In the CLI, the plan is written as `.wasm` files and a manifest.
+- In the CLI, the plan is written as `.wasm` files and a manifest,
+  and `mlkc run` runs a build from the directory it was written into
+  or from the archive the editor hands the same files over in.
 - In the editor, the plan is downloaded as one ZIP archive:
-  a `.wasm` per module, under the path of the canonical name of the module
-  (`app::main` becomes `app/main.wasm`),
-  with the module of the host functions beside them.
+  a `.wasm` per module, under the file the manifest names for it,
+  with the module of the host functions and the manifest itself beside them.
   The bytes are the bytes a run instantiates;
   the archive is what keeps every module in the folder its name names,
   which a download of loose files cannot carry.
 
 Nothing merges modules, and no engine extension is required.
+
+### The manifest
+
+A plan a host writes as files is written with a manifest beside them ([`Manifest`]),
+because a plan the host no longer holds cannot answer a question about itself.
+The manifest is JSON, and it says what a host needs to run the build:
+
+- `project` --- the canonical name of the project the program is of;
+- `modules` --- the modules in the order they are instantiated in,
+  each with the file it is written as,
+  what it imports (`external` marks an extern a host implements),
+  and what it exports;
+- `host` --- the file of the shim for a host that cannot make GC values, when a build has one;
+- `entry` --- the module and the name a host calls to run the program,
+  or nothing when the project declares no entry point.
+
+The name of a file is a pure function of the canonical name of a module (`Manifest::file_of`):
+`app::main` is `app/main.wasm`.
+A host reads the manifest rather than the names of the files it happens to find,
+so nothing about a build is guessed from a directory listing.
 
 ### What is compiled when an edit happens
 

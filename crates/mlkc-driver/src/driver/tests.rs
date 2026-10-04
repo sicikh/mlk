@@ -2139,6 +2139,48 @@ fn the_link_plan_holds_every_module_in_an_order_and_the_entry_point() {
 }
 
 #[test]
+fn the_manifest_of_a_plan_names_the_files_and_the_entry() {
+    let mut driver = std_project_of(LINKED);
+    let plan = driver.link(&project()).expect("the project to link");
+    let manifest = crate::Manifest::of("the-project", &plan, Some("host.wasm"));
+
+    assert_eq!(manifest.project, "the-project");
+    assert_eq!(manifest.host.as_deref(), Some("host.wasm"));
+
+    let files: Vec<&str> = manifest
+        .modules
+        .iter()
+        .map(|module| module.file.as_str())
+        .collect();
+
+    // The manifest lists the modules in the order they are instantiated in, and every one of
+    // them under the file its canonical name stands for.
+    assert_eq!(files, [
+        "std/core.wasm",
+        "std/prelude.wasm",
+        "std/runtime.wasm",
+        "the-project/math.wasm",
+        "the-project/main.wasm",
+    ]);
+
+    let main = manifest.modules.last().expect("the module of the entry");
+
+    assert_eq!(main.name, "the-project::main");
+    assert!(
+        main.imports.iter().any(|import| {
+            import.external && import.module == "std::runtime" && import.name == "print-int"
+        }),
+        "the extern to be marked as one a host implements: {:?}",
+        main.imports,
+    );
+
+    let entry = manifest.entry.clone().expect("the entry point");
+
+    assert_eq!(entry.module, "the-project::main");
+    assert_eq!(entry.name, "main");
+}
+
+#[test]
 fn a_second_link_is_the_value_the_first_one_returned() {
     let mut driver = std_project_of(LINKED);
 

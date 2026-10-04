@@ -84,7 +84,7 @@ wasm-bindgen = "0.2.128"
 wasm-encoder = "0.245.1"
 wasmparser = "0.245.1"
 wasmprinter = "0.245.1"
-wasmtime = { version = "49.0.1", default-features = false, features = ["cranelift", "gc", "gc-drc", "runtime", "std"] }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-drc", "runtime", "std"] }
 windows-sys = "0.61.2"
 xshell = "0.2.7"
 

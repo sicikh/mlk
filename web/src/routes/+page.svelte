@@ -619,8 +619,8 @@ pub fun main() : Unit =
      * A build is of the whole project rather than of the buffer in front: the driver compiles
      * every module of it, the modules of the library included, links them into the manifest a
      * run is of, and instantiates nothing. What a person gets is one ZIP holding a `.wasm` per
-     * module, under the path the canonical name of the module stands for, with the module of
-     * the host functions beside them: a browser has no file system, and an archive is the one
+     * module, under the file its manifest names, with the module of the host functions and the
+     * manifest itself beside them: a browser has no file system, and an archive is the one
      * file a download can carry the folders of a project in.
      *
      * [adr-0021]: ../../../docs/adr/0021-translation-units.md
@@ -632,13 +632,31 @@ pub fun main() : Unit =
 
         try {
             const program = await driver.build();
-            const files: ArchivedFile[] = [
-                ...program.modules.map((it) => ({
-                    path: fileOf(it.name),
-                    bytes: it.bytes,
-                })),
-                { path: "host.wasm", bytes: program.host },
-            ];
+            const manifest = program.manifest;
+            const held = new Map(
+                program.modules.map((it) => [it.name, it.bytes]),
+            );
+            const files: ArchivedFile[] = manifest.modules.map((it) => {
+                const bytes = held.get(it.name);
+
+                if (!bytes)
+                    throw new Error(
+                        `the manifest names the module \`${it.name}\`, and the build holds none`,
+                    );
+
+                return { path: it.file, bytes };
+            });
+
+            if (manifest.host !== null)
+                files.push({ path: manifest.host, bytes: program.host });
+
+            // The manifest travels beside the modules, under the name a host reads it by.
+            files.push({
+                path: "manifest.json",
+                bytes: new TextEncoder().encode(
+                    `${JSON.stringify(manifest, null, 4)}\n`,
+                ),
+            });
 
             for (const diagnostic of program.diagnostics)
                 say(
@@ -646,7 +664,7 @@ pub fun main() : Unit =
                     `${diagnostic.level}[${diagnostic.category}::${diagnostic.code}]: ${diagnostic.message}`,
                 );
 
-            const named = `${pathOf(program.project)}.zip`;
+            const named = `${pathOf(manifest.project)}.zip`;
 
             save(named, archive(files));
 
@@ -683,14 +701,6 @@ pub fun main() : Unit =
             .replace(/^\/+/, "");
 
         return path || "module";
-    }
-
-    /**
-     * The file a module of a build is written as: its canonical name, with the extension of
-     * what a module is ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
-     */
-    function fileOf(name: string): string {
-        return `${pathOf(name)}.wasm`;
     }
 
     /**

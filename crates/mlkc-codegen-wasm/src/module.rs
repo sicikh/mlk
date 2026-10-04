@@ -620,25 +620,10 @@ pub(crate) fn lambda_order(code: CodeRef<'_>, lambdas: &Arena<LambdaData>) -> Ve
 
 /// The lambdas a piece of code creates itself, in the order it creates them.
 pub(crate) fn lambda_children(code: CodeRef<'_>) -> Vec<LambdaId> {
-    let mut children = Vec::new();
-
-    for (_, block) in code.blocks.iter() {
-        for stmt in &block.stmts {
-            let StmtKind::Assign {
-                rvalue: Rvalue::Closure { lambda, .. },
-                ..
-            } = &stmt.kind
-            else {
-                continue;
-            };
-
-            if !children.contains(lambda) {
-                children.push(*lambda);
-            }
-        }
-    }
-
-    children
+    mlkc_mir::lambda_closures(code)
+        .into_iter()
+        .map(|closure| closure.lambda)
+        .collect()
 }
 
 /// What debug information `assemble_module` is asked for ([ADR-0025][adr-0025]).

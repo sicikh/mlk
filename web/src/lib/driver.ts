@@ -285,12 +285,11 @@ export interface MirLocal {
 
 /** One body of the MIR. */
 export interface MirBody {
-    /** The entity the body belongs to: `fun main`. */
+    /** The entity the body belongs to: `fun main`, and `lambda #0` for a lambda of it. */
     owner: string;
 
     /**
-     * Where the declaration that owns the body is written, in bytes, or nothing where it is
-     * written nowhere.
+     * Where the body is written, in bytes, or nothing where it is written nowhere.
      */
     range: [number, number] | null;
 
@@ -308,6 +307,12 @@ export interface MirBody {
 
     /** The blocks, in the order they are allocated. */
     blocks: MirBlock[];
+
+    /**
+     * The lambdas the body wrote, each a body of its own in the order the body creates them,
+     * nested where the expression that creates them is written.
+     */
+    lambdas: MirBody[];
 }
 
 /**
@@ -426,12 +431,11 @@ export interface LirStructure {
 
 /** One body of the LIR. */
 export interface LirBody {
-    /** The entity the body belongs to: `fun main`. */
+    /** The entity the body belongs to: `fun main`, and `lambda #0` for a lambda of it. */
     owner: string;
 
     /**
-     * Where the declaration that owns the body is written, in bytes, or nothing where it is
-     * written nowhere.
+     * Where the body is written, in bytes, or nothing where it is written nowhere.
      */
     range: [number, number] | null;
 
@@ -458,6 +462,12 @@ export interface LirBody {
 
     /** The blocks, in the order they are allocated. */
     blocks: LirBlock[];
+
+    /**
+     * The lambdas the body wrote, each a lifted function of its own in the order the back end
+     * lowers them, nested where the expression that creates them is written.
+     */
+    lambdas: LirBody[];
 }
 
 /**

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Mir, MirBlock, MirLocal } from "$lib/driver";
+    import type { Mir, MirBlock, MirBody, MirLocal } from "$lib/driver";
 
     interface Props {
         /** The MIR of the buffer, in one of its two forms: the CFG form or the SSA form. */
@@ -64,108 +64,119 @@
     }
 </script>
 
-<div class="bodies" data-form={mir.form}>
-    {#each mir.bodies as body, index (index)}
-        <section class="body">
-            <button
-                class="owner"
-                data-line="owner"
-                title={body.owner}
-                {...pointing(body.range)}
-                onclick={() => onPick(body.range)}
-            >
-                {body.owner}
-                <span class="entry">entry {label(body.entry)}</span>
-            </button>
+{#snippet body(view: MirBody)}
+    <section class="body">
+        <button
+            class="owner"
+            data-line="owner"
+            title={view.owner}
+            {...pointing(view.range)}
+            onclick={() => onPick(view.range)}
+        >
+            {view.owner}
+            <span class="entry">entry {label(view.entry)}</span>
+        </button>
 
-            {#if body.params.length > 0}
-                <p class="params" data-line="params">
-                    <span class="tag">params</span>
-                    {#each body.params as value, at (at)}
-                        <button
-                            class="value"
-                            data-line="value"
-                            title="{value.label}: {value.ty}"
-                            {...pointing(value.range)}
-                            onclick={() => onPick(value.range)}
-                        >
-                            {value.label}<span class="ty">: {value.ty}</span>
-                        </button>
-                    {/each}
-                </p>
-            {/if}
-
-            {#if body.locals.length > 0}
-                <p class="params" data-line="locals">
-                    <span class="tag">locals</span>
-                    {#each body.locals as local, at (at)}
-                        <button
-                            class="value"
-                            data-line="local"
-                            title="{slot(local)}: {local.ty}"
-                            {...pointing(local.range)}
-                            onclick={() => onPick(local.range)}
-                        >
-                            {slot(local)}<span class="ty">: {local.ty}</span>
-                        </button>
-                    {/each}
-                </p>
-            {/if}
-
-            {#each body.blocks as block, at (at)}
-                {@const relation = edges(block)}
-                <div
-                    class="block"
-                    data-block={block.label}
-                    data-entry={at === body.entry ? "true" : "false"}
-                >
-                    <p class="head">
-                        <span class="label"
-                            >{block.label}{#if block.params.length > 0}({#each block.params as value, i (i)}<button
-                                        class="value"
-                                        data-line="value"
-                                        title="{value.label}: {value.ty}"
-                                        {...pointing(value.range)}
-                                        onclick={() => onPick(value.range)}
-                                        >{value.label}</button
-                                    >{#if i < block.params.length - 1}<span
-                                            class="comma"
-                                            >,
-                                        </span>{/if}{/each}){/if}<span
-                                class="colon">:</span
-                            ></span
-                        >
-                        {#if relation !== ""}<span class="edges"
-                                >{relation}</span
-                            >{/if}
-                    </p>
-
-                    {#each block.stmts as stmt, i (i)}
-                        <button
-                            class="line"
-                            data-line="stmt"
-                            data-kind={stmt.kind}
-                            title={stmt.text}
-                            {...pointing(stmt.range)}
-                            onclick={() => onPick(stmt.range)}
-                        >
-                            <span class="saying">{stmt.text}</span>
-                        </button>
-                    {/each}
-
+        {#if view.params.length > 0}
+            <p class="params" data-line="params">
+                <span class="tag">params</span>
+                {#each view.params as value, at (at)}
                     <button
-                        class="line term"
-                        data-line="term"
-                        data-kind={block.term.kind}
-                        title={block.term.text}
-                        {...pointing(block.term.range)}
-                        onclick={() => onPick(block.term.range)}
+                        class="value"
+                        data-line="value"
+                        title="{value.label}: {value.ty}"
+                        {...pointing(value.range)}
+                        onclick={() => onPick(value.range)}
                     >
-                        <span class="saying">{block.term.text}</span>
+                        {value.label}<span class="ty">: {value.ty}</span>
                     </button>
-                </div>
-            {/each}
-        </section>
+                {/each}
+            </p>
+        {/if}
+
+        {#if view.locals.length > 0}
+            <p class="params" data-line="locals">
+                <span class="tag">locals</span>
+                {#each view.locals as local, at (at)}
+                    <button
+                        class="value"
+                        data-line="local"
+                        title="{slot(local)}: {local.ty}"
+                        {...pointing(local.range)}
+                        onclick={() => onPick(local.range)}
+                    >
+                        {slot(local)}<span class="ty">: {local.ty}</span>
+                    </button>
+                {/each}
+            </p>
+        {/if}
+
+        {#each view.blocks as block, at (at)}
+            {@const relation = edges(block)}
+            <div
+                class="block"
+                data-block={block.label}
+                data-entry={at === view.entry ? "true" : "false"}
+            >
+                <p class="head">
+                    <span class="label"
+                        >{block.label}{#if block.params.length > 0}({#each block.params as value, i (i)}<button
+                                    class="value"
+                                    data-line="value"
+                                    title="{value.label}: {value.ty}"
+                                    {...pointing(value.range)}
+                                    onclick={() => onPick(value.range)}
+                                    >{value.label}</button
+                                >{#if i < block.params.length - 1}<span
+                                        class="comma"
+                                        >,
+                                    </span>{/if}{/each}){/if}<span class="colon"
+                            >:</span
+                        ></span
+                    >
+                    {#if relation !== ""}<span class="edges">{relation}</span
+                        >{/if}
+                </p>
+
+                {#each block.stmts as stmt, i (i)}
+                    <button
+                        class="line"
+                        data-line="stmt"
+                        data-kind={stmt.kind}
+                        title={stmt.text}
+                        {...pointing(stmt.range)}
+                        onclick={() => onPick(stmt.range)}
+                    >
+                        <span class="saying">{stmt.text}</span>
+                    </button>
+                {/each}
+
+                <button
+                    class="line term"
+                    data-line="term"
+                    data-kind={block.term.kind}
+                    title={block.term.text}
+                    {...pointing(block.term.range)}
+                    onclick={() => onPick(block.term.range)}
+                >
+                    <span class="saying">{block.term.text}</span>
+                </button>
+            </div>
+        {/each}
+
+        {#if view.lambdas.length > 0}
+            <div class="lambdas" data-lambdas>
+                {#each view.lambdas as child (child.owner)}
+                    {@render body(child)}
+                {/each}
+            </div>
+        {/if}
+    </section>
+{/snippet}
+
+<div class="bodies" data-form={mir.form}>
+    {#each mir.bodies as view, at (at)}
+        {@render body(view)}
     {/each}
 </div>
 
@@ -178,6 +189,18 @@
     .body {
         padding: 0.35rem 0.75rem 0.5rem;
         border-bottom: 1px solid var(--border);
+    }
+
+    /* A lambda is a body written in another one: its section stands inside its writer, and the
+       line at its left is what says so. */
+    .lambdas {
+        margin: 0.35rem 0 0 0.25rem;
+        border-left: 1px solid var(--border);
+    }
+
+    .lambdas .body {
+        padding-left: 0.6rem;
+        border-bottom: none;
     }
 
     .owner {

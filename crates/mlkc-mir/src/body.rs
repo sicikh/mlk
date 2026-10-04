@@ -101,6 +101,50 @@ pub struct CaptureData {
     pub span: Span,
 }
 
+/// A closure a piece of code creates: the lambda it is made of, and where it is written.
+///
+/// A lambda is created by exactly one `Rvalue::Closure`, in the code that wrote the expression
+/// ([ADR-0026][adr-0026]), and this is what a pass that walks the lambdas of a body reads.
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LambdaClosure {
+    /// The lambda the closure is made of.
+    pub lambda: LambdaId,
+    /// Where the expression that creates it is written.
+    pub span: Span,
+}
+
+/// The lambdas a piece of code creates itself, in the order it creates them.
+///
+/// The walk reads every block, because a lambda created in a block no path reaches is still
+/// a lambda of the code, and the order is the order the blocks and the statements list. A lambda
+/// the code creates once is listed once.
+pub fn lambda_closures(code: CodeRef<'_>) -> Vec<LambdaClosure> {
+    let mut closures: Vec<LambdaClosure> = Vec::new();
+
+    for (_, block) in code.blocks.iter() {
+        for stmt in &block.stmts {
+            let StmtKind::Assign {
+                rvalue: Rvalue::Closure { lambda, .. },
+                ..
+            } = &stmt.kind
+            else {
+                continue;
+            };
+
+            if !closures.iter().any(|closure| closure.lambda == *lambda) {
+                closures.push(LambdaClosure {
+                    lambda: *lambda,
+                    span: stmt.span,
+                });
+            }
+        }
+    }
+
+    closures
+}
+
 /// What a pass reads of a piece of code: the code of a [`Body`] or of a [`LambdaData`].
 ///
 /// A pass that works on code and not on the identity a body carries --- the SSA construction,

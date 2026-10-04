@@ -123,6 +123,14 @@ const UNIT =
     "fun log(flag: Bool): Unit =\n    if flag then\n        log(flag)\n";
 
 /**
+ * What is typed to watch the bodies of lambdas: a lambda written in a body, and a lambda written
+ * in that lambda. The MIR and LIR tabs read each of them as a body of its own, nested under the
+ * body that wrote it.
+ */
+const LAMBDA =
+    "fun main(): Int =\n    let add = fn(x: Int) -> fn(y: Int) -> x + y in\n    add(1)(2)\n";
+
+/**
  * What a tab of the MIR reads: which form it shows, the bodies, and the lines of their blocks.
  *
  * The lines are read as a person reads them: the text of every statement and terminator, which
@@ -132,6 +140,7 @@ const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 	return JSON.stringify({
 		form: inspector().querySelector('[data-form]')?.dataset.form,
 		owners: lines('owner'),
+		lambdas: [...inspector().querySelectorAll('[data-lambdas] [data-line=owner]')].map((it) => text(it)),
 		blocks: [...inspector().querySelectorAll('[data-block]')].map((it) => it.dataset.block),
 		entry: inspector().querySelectorAll('[data-entry=true]').length,
 		stmts: lines('stmt'),
@@ -152,6 +161,7 @@ const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 const LIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-line=' + kind + ']')].map((it) => text(it));
 	return JSON.stringify({
 		owners: lines('owner'),
+		lambdas: [...inspector().querySelectorAll('[data-lambdas] [data-line=owner]')].map((it) => text(it)),
 		blocks: [...inspector().querySelectorAll('[data-block]')].map((it) => it.dataset.block),
 		entry: inspector().querySelectorAll('[data-entry=true]').length,
 		insts: lines('inst'),
@@ -589,6 +599,14 @@ const STEPS = {
     	content.dispatchEvent(new Event('input', { bubbles: true }));
     	return true`,
 
+    // A lambda written in a body, and a lambda written in that one: the tabs read each of them
+    // as a body of its own, nested where it is written.
+    typeLambda: `const content = document.querySelector('.cm-content');
+    	content.focus();
+    	content.textContent = ${JSON.stringify(LAMBDA)};
+    	content.dispatchEvent(new Event('input', { bubbles: true }));
+    	return true`,
+
     // The keywords of a choice are the words of the language, and a truth value is a literal:
     // the editor paints the first as it paints every keyword, and the second as it paints a
     // number.
@@ -925,6 +943,8 @@ const WAITS = {
     branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
     unit: `return inspector().textContent.includes('const unit')`,
     unitSsa: `return inspector().textContent.includes('call fun log')`,
+    lambda: `return inspector().querySelector('[data-form=cfg] [data-lambdas] [data-block]') !== null`,
+    lambdaLir: `return inspector().querySelector('[data-lir] [data-lambdas] [data-block]') !== null`,
     wat: `const view = inspector().querySelector('[data-wat]');
 		return view !== null && view.querySelector('.cm-content') !== null`,
     debugTables: `const head = inspector().querySelector('[data-wat-sections]');
@@ -1336,6 +1356,19 @@ async function main() {
     await until(WAITS.unitSsa, "the unit of the ssa form");
     const unitSsa = JSON.parse(await ask(STEPS.ssa));
 
+    // A lambda is a body written in another one: the tabs read it nested under the body that
+    // wrote it, and a lambda written in a lambda is nested under its writer.
+    await ask(STEPS.typeLambda);
+    await sleep(300);
+
+    await ask(STEPS.showMir);
+    await until(WAITS.lambda, "the lambda of the mir");
+    const lambdaMir = JSON.parse(await ask(STEPS.mir));
+
+    await ask(STEPS.showLir);
+    await until(WAITS.lambdaLir, "the lambda of the lir");
+    const lambdaLir = JSON.parse(await ask(STEPS.lir));
+
     await ask(STEPS.open);
     await ask(STEPS.typePath);
     await ask(STEPS.submitPath);
@@ -1486,6 +1519,8 @@ async function main() {
             branchWords,
             unit,
             unitSsa,
+            lambdaMir,
+            lambdaLir,
             wat,
             watPaint,
             watMarks,
@@ -1857,6 +1892,32 @@ function report(page, problems, warnings, asked) {
                 page.unitSsa.branches === 1 &&
                 page.unitSsa.blockParams.length === 1 &&
                 page.unitSsa.term.some((it) => it.startsWith("return v")),
+        ],
+        [
+            // A lambda is written in a body and not in a list of its own: the tab nests it under
+            // the body that wrote it, and the lambda written in the lambda under that.
+            "the cfg tab reads the body of a lambda where it is written",
+            page.lambdaMir.form === "cfg" &&
+                page.lambdaMir.owners.some((it) => it.startsWith("fun main")) &&
+                page.lambdaMir.lambdas.length === 2 &&
+                page.lambdaMir.lambdas[0].startsWith("lambda #1") &&
+                page.lambdaMir.lambdas[1].startsWith("lambda #0") &&
+                page.lambdaMir.stmts.some((it) =>
+                    it.includes("closure lambda#1"),
+                ) &&
+                page.lambdaMir.blocks.length === 3,
+        ],
+        [
+            // A lifted lambda is a function of the module in everything but its name: the tab
+            // reads its body, and the closure it makes is what `ref.func` and `struct.new` are.
+            "the lir tab reads the body of a lifted lambda",
+            page.lambdaLir.lambdas.length === 2 &&
+                page.lambdaLir.lambdas[0].startsWith("lambda #1") &&
+                page.lambdaLir.lambdas[1].startsWith("lambda #0") &&
+                page.lambdaLir.blocks.length === 3 &&
+                page.lambdaLir.kinds.includes("ref.func") &&
+                page.lambdaLir.kinds.includes("struct.new") &&
+                page.lambdaLir.kinds.includes("call-ref"),
         ],
         ["the editor marks what it reported", page.marks.marks > 0],
         ["a buffer can be made at a path", page.made.file],
@@ -2263,6 +2324,9 @@ function report(page, problems, warnings, asked) {
     );
     console.log(
         `a choice without an else reads ${page.unit.stmts.filter((it) => it.includes("const unit")).length} unit(s) in its ${page.unit.blocks.length} block(s)`,
+    );
+    console.log(
+        `a lambda reads as ${JSON.stringify(page.lambdaMir.lambdas)} in the mir and ${JSON.stringify(page.lambdaLir.lambdas)} in the lir, of ${page.lambdaMir.blocks.length} and ${page.lambdaLir.blocks.length} block(s)`,
     );
     console.log(
         `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,

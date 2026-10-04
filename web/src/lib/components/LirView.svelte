@@ -2,6 +2,7 @@
     import type {
         Lir,
         LirBlock,
+        LirBody,
         LirLocal,
         LirStructureLine,
         LirValue,
@@ -26,6 +27,10 @@
     /**
      * The frames a person folded, by the body and the line they stand at: a reading of a deep
      * structure is a person's choice, and the choice outlives a buffer read again.
+     *
+     * A body is named by its place in the tree --- `2`, and `2.0` for the first lambda of the
+     * third body --- because a lambda has no name of its own and two of them may be written in
+     * bodies far apart.
      */
     let folded = $state<string[]>([]);
 
@@ -92,12 +97,12 @@
     }
 
     /** When a frame of the structure was folded: the body and the line it stands at. */
-    function key(body: number, at: number): string {
+    function key(body: string, at: number): string {
         return `${body}:${at}`;
     }
 
     /** Folds a frame, or unfolds one a person opened again. */
-    function toggle(body: number, at: number) {
+    function toggle(body: string, at: number) {
         const id = key(body, at);
 
         folded = folded.includes(id)
@@ -111,7 +116,7 @@
      * A frame holds every line deeper than it, up to the next line at its own depth; an `if`
      * holds its else arm as well, because the arm stands at the depth of the `if` itself.
      */
-    function hidden_lines(lines: LirStructureLine[], body: number): boolean[] {
+    function hidden_lines(lines: LirStructureLine[], body: string): boolean[] {
         const hidden = lines.map(() => false);
 
         for (const id of folded) {
@@ -141,151 +146,162 @@
     }
 </script>
 
-<div class="bodies" data-lir>
-    {#each lir.bodies as body, index (index)}
-        <section class="body">
-            <button
-                class="owner"
-                data-line="owner"
-                title={body.owner}
-                {...pointing(body.range)}
-                onclick={() => onPick(body.range)}
-            >
-                {body.owner}
-                <span class="entry">entry {label(body.entry)}</span>
-                <span class="entry">ret {body.ret}</span>
-            </button>
+{#snippet body(view: LirBody, path: string)}
+    <section class="body">
+        <button
+            class="owner"
+            data-line="owner"
+            title={view.owner}
+            {...pointing(view.range)}
+            onclick={() => onPick(view.range)}
+        >
+            {view.owner}
+            <span class="entry">entry {label(view.entry)}</span>
+            <span class="entry">ret {view.ret}</span>
+        </button>
 
-            {#if body.params.length > 0}
-                <p class="params" data-line="params">
-                    <span class="tag">params</span>
-                    {#each body.params as value_, at (at)}
-                        <button
-                            class="value"
-                            data-line="value"
-                            title={value_text(value_)}
-                            {...pointing(value_.range)}
-                            onclick={() => onPick(value_.range)}
-                        >
-                            {value_.label}<span class="ty">: {value_.ty}</span>
-                        </button>
-                    {/each}
-                </p>
-            {/if}
-
-            {#if body.locals.length > 0}
-                <p class="params" data-line="locals">
-                    <span class="tag">locals</span>
-                    {#each body.locals as held, at (at)}
-                        <span
-                            class="value local"
-                            data-line="local"
-                            title={local(held)}>{local(held)}</span
-                        >
-                    {/each}
-                </p>
-            {/if}
-
-            {#if body.structure !== null}
-                {@const hidden = hidden_lines(body.structure.lines, index)}
-                <div class="structure" data-structure>
-                    <p class="params">
-                        <span class="tag">structure</span>
-                    </p>
-
-                    {#each body.structure.lines as node, at (at)}
-                        {#if !hidden[at]}
-                            <div
-                                class="frame"
-                                style="padding-left: {node.depth * 0.75}rem"
-                            >
-                                {#if holds(node.kind)}
-                                    <button
-                                        class="fold"
-                                        data-fold={node.kind}
-                                        title={folded.includes(key(index, at))
-                                            ? "Unfold"
-                                            : "Fold"}
-                                        onclick={() => toggle(index, at)}
-                                        >{folded.includes(key(index, at))
-                                            ? "▸"
-                                            : "▾"}</button
-                                    >
-                                {:else}
-                                    <span class="fold"></span>
-                                {/if}
-
-                                <button
-                                    class="line"
-                                    data-line="structure"
-                                    data-kind={node.kind}
-                                    data-depth={node.depth}
-                                    title={node.text}
-                                    {...pointing(node.range)}
-                                    onclick={() => onPick(node.range)}
-                                >
-                                    <span class="saying">{node.text}</span>
-                                </button>
-                            </div>
-                        {/if}
-                    {/each}
-                </div>
-            {/if}
-
-            {#each body.blocks as block, at (at)}
-                {@const relation = edges(block)}
-                <div
-                    class="block"
-                    data-block={block.label}
-                    data-entry={at === body.entry ? "true" : "false"}
-                >
-                    <p class="head">
-                        <span class="label"
-                            >{block.label}{#if block.params.length > 0}({#each block.params as value_, i (i)}<button
-                                        class="value"
-                                        data-line="value"
-                                        title={value_text(value_)}
-                                        {...pointing(value_.range)}
-                                        onclick={() => onPick(value_.range)}
-                                        >{value_text(value_)}</button
-                                    >{#if i < block.params.length - 1}<span
-                                            class="comma"
-                                            >,
-                                        </span>{/if}{/each}){/if}<span
-                                class="colon">:</span
-                            ></span
-                        >
-                        {#if relation !== ""}<span class="edges"
-                                >{relation}</span
-                            >{/if}
-                    </p>
-
-                    {#each block.insts as inst, i (i)}
-                        <button
-                            class="line"
-                            data-line="inst"
-                            data-kind={inst.kind}
-                            title={inst.text}
-                            {...pointing(inst.range)}
-                            onclick={() => onPick(inst.range)}
-                        >
-                            <span class="saying">{inst.text}</span>
-                        </button>
-                    {/each}
-
+        {#if view.params.length > 0}
+            <p class="params" data-line="params">
+                <span class="tag">params</span>
+                {#each view.params as value_, at (at)}
                     <button
-                        class="line term"
-                        data-line="term"
-                        data-kind={block.term.kind}
-                        title={block.term.text}
-                        {...pointing(block.term.range)}
-                        onclick={() => onPick(block.term.range)}
+                        class="value"
+                        data-line="value"
+                        title={value_text(value_)}
+                        {...pointing(value_.range)}
+                        onclick={() => onPick(value_.range)}
                     >
-                        <span class="saying">{block.term.text}</span>
+                        {value_.label}<span class="ty">: {value_.ty}</span>
                     </button>
-                </div>
-            {/each}
-        </section>
+                {/each}
+            </p>
+        {/if}
+
+        {#if view.locals.length > 0}
+            <p class="params" data-line="locals">
+                <span class="tag">locals</span>
+                {#each view.locals as held, at (at)}
+                    <span
+                        class="value local"
+                        data-line="local"
+                        title={local(held)}>{local(held)}</span
+                    >
+                {/each}
+            </p>
+        {/if}
+
+        {#if view.structure !== null}
+            {@const hidden = hidden_lines(view.structure.lines, path)}
+            <div class="structure" data-structure>
+                <p class="params">
+                    <span class="tag">structure</span>
+                </p>
+
+                {#each view.structure.lines as node, at (at)}
+                    {#if !hidden[at]}
+                        <div
+                            class="frame"
+                            style="padding-left: {node.depth * 0.75}rem"
+                        >
+                            {#if holds(node.kind)}
+                                <button
+                                    class="fold"
+                                    data-fold={node.kind}
+                                    title={folded.includes(key(path, at))
+                                        ? "Unfold"
+                                        : "Fold"}
+                                    onclick={() => toggle(path, at)}
+                                    >{folded.includes(key(path, at))
+                                        ? "▸"
+                                        : "▾"}</button
+                                >
+                            {:else}
+                                <span class="fold"></span>
+                            {/if}
+
+                            <button
+                                class="line"
+                                data-line="structure"
+                                data-kind={node.kind}
+                                data-depth={node.depth}
+                                title={node.text}
+                                {...pointing(node.range)}
+                                onclick={() => onPick(node.range)}
+                            >
+                                <span class="saying">{node.text}</span>
+                            </button>
+                        </div>
+                    {/if}
+                {/each}
+            </div>
+        {/if}
+
+        {#each view.blocks as block, at (at)}
+            {@const relation = edges(block)}
+            <div
+                class="block"
+                data-block={block.label}
+                data-entry={at === view.entry ? "true" : "false"}
+            >
+                <p class="head">
+                    <span class="label"
+                        >{block.label}{#if block.params.length > 0}({#each block.params as value_, i (i)}<button
+                                    class="value"
+                                    data-line="value"
+                                    title={value_text(value_)}
+                                    {...pointing(value_.range)}
+                                    onclick={() => onPick(value_.range)}
+                                    >{value_text(value_)}</button
+                                >{#if i < block.params.length - 1}<span
+                                        class="comma"
+                                        >,
+                                    </span>{/if}{/each}){/if}<span class="colon"
+                            >:</span
+                        ></span
+                    >
+                    {#if relation !== ""}<span class="edges">{relation}</span
+                        >{/if}
+                </p>
+
+                {#each block.insts as inst, i (i)}
+                    <button
+                        class="line"
+                        data-line="inst"
+                        data-kind={inst.kind}
+                        title={inst.text}
+                        {...pointing(inst.range)}
+                        onclick={() => onPick(inst.range)}
+                    >
+                        <span class="saying">{inst.text}</span>
+                    </button>
+                {/each}
+
+                <button
+                    class="line term"
+                    data-line="term"
+                    data-kind={block.term.kind}
+                    title={block.term.text}
+                    {...pointing(block.term.range)}
+                    onclick={() => onPick(block.term.range)}
+                >
+                    <span class="saying">{block.term.text}</span>
+                </button>
+            </div>
+        {/each}
+
+        {#if view.lambdas.length > 0}
+            <div class="lambdas" data-lambdas>
+                {#each view.lambdas as child, i (i)}
+                    {@render body(child, `${path}.${i}`)}
+                {/each}
+            </div>
+        {/if}
+    </section>
+{/snippet}
+
+<div class="bodies" data-lir>
+    {#each lir.bodies as view, at (at)}
+        {@render body(view, `${at}`)}
     {/each}
 </div>
 
@@ -298,6 +314,18 @@
     .body {
         padding: 0.35rem 0.75rem 0.5rem;
         border-bottom: 1px solid var(--border);
+    }
+
+    /* A lambda is a lifted function written in another one: its section stands inside its
+       writer, and the line at its left is what says so. */
+    .lambdas {
+        margin: 0.35rem 0 0 0.25rem;
+        border-left: 1px solid var(--border);
+    }
+
+    .lambdas .body {
+        padding-left: 0.6rem;
+        border-bottom: none;
     }
 
     .owner {

@@ -1,0 +1,1048 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  fun direct  @2.0
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun mutual  @2.1
+    visibility: private
+    param: Int -> use Int
+    ret: Bool -> use Bool
+  fun with_a_lambda  @2.2
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun from_a_lambda  @2.3
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun nested_local  @2.4
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun direct`
+
+```
+BODY fun direct in module #3
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+`fun mutual`
+
+```
+BODY fun mutual in module #3
+
+root expr#23
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 0
+  expr#2  binary expr#0 == expr#1
+  expr#3  literal false
+  expr#4  path path#1
+  expr#5  path path#0
+  expr#6  literal 1
+  expr#7  binary expr#5 - expr#6
+  expr#8  call expr#4 (expr#7)
+  expr#9  if expr#2 then expr#3 else expr#8
+  expr#10  path path#2
+  expr#11  literal 0
+  expr#12  binary expr#10 == expr#11
+  expr#13  literal true
+  expr#14  path path#3
+  expr#15  path path#2
+  expr#16  literal 1
+  expr#17  binary expr#15 - expr#16
+  expr#18  call expr#14 (expr#17)
+  expr#19  if expr#12 then expr#13 else expr#18
+  expr#20  path path#1
+  expr#21  path path#4
+  expr#22  call expr#20 (expr#21)
+  expr#23  local (fun#0, fun#1) in expr#22
+pats
+  pat#0  bind value
+  pat#1  bind n
+  pat#2  bind n
+paths
+  path#0  n -> binding pat#1
+  path#1  even -> local fun#1
+  path#2  n -> binding pat#2
+  path#3  odd -> local fun#0
+  path#4  value -> binding pat#0
+functions
+  fun#0  odd  root expr#9
+    params pat#1
+    param: Int -> use Int
+    ret: Bool -> use Bool
+  fun#1  even  root expr#19
+    params pat#2
+    param: Int -> use Int
+    ret: Bool -> use Bool
+```
+
+`fun with_a_lambda`
+
+```
+BODY fun with_a_lambda in module #3
+
+root expr#9
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  lambda (pat#2: Int -> use Int) -> expr#2 captures (pat#1)
+  expr#4  literal 1
+  expr#5  call expr#3 (expr#4)
+  expr#6  path path#2
+  expr#7  path path#3
+  expr#8  call expr#6 (expr#7)
+  expr#9  local (fun#0) in expr#8
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind y
+paths
+  path#0  y -> binding pat#2
+  path#1  x -> binding pat#1
+  path#2  apply -> local fun#0
+  path#3  value -> binding pat#0
+functions
+  fun#0  apply  root expr#5
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+`fun from_a_lambda`
+
+```
+BODY fun from_a_lambda in module #3
+
+root expr#11
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  lambda (pat#3: Int -> use Int) -> expr#5 captures ()
+  expr#7  path path#3
+  expr#8  path path#4
+  expr#9  call expr#7 (expr#8)
+  expr#10  let pat#2 = expr#6 in expr#9
+  expr#11  local (fun#0) in expr#10
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind apply
+  pat#3  bind y
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  y -> binding pat#3
+  path#3  apply -> binding pat#2
+  path#4  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+`fun nested_local`
+
+```
+BODY fun nested_local in module #3
+
+root expr#10
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#1) in expr#5
+  expr#7  path path#3
+  expr#8  path path#4
+  expr#9  call expr#7 (expr#8)
+  expr#10  local (fun#0) in expr#9
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind y
+paths
+  path#0  y -> binding pat#2
+  path#1  inner -> local fun#1
+  path#2  x -> binding pat#1
+  path#3  outer -> local fun#0
+  path#4  value -> binding pat#0
+functions
+  fun#0  outer  root expr#6
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun#1  inner  root expr#2
+    params pat#2
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+### Resolution
+
+```
+SCOPE
+  direct
+    value: fun direct in module #3 (private)
+  mutual
+    value: fun mutual in module #3 (private)
+  with_a_lambda
+    value: fun with_a_lambda in module #3 (private)
+  from_a_lambda
+    value: fun from_a_lambda in module #3 (private)
+  nested_local
+    value: fun nested_local in module #3 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
+```
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun direct: (Int) -> Int
+  fun mutual: (Int) -> Bool
+  fun with_a_lambda: (Int) -> Int
+  fun from_a_lambda: (Int) -> Int
+  fun nested_local: (Int) -> Int
+```
+
+### Checked Bodies
+
+`fun direct`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  pat #0: Int
+  pat #1: Int
+  local fun#0: (Int) -> Int
+```
+
+`fun mutual`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  expr #3: Bool
+  expr #4: (Int) -> Bool
+  expr #5: Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Bool
+  expr #9: Bool
+  expr #10: Int
+  expr #11: Int
+  expr #12: Bool
+  expr #13: Bool
+  expr #14: (Int) -> Bool
+  expr #15: Int
+  expr #16: Int
+  expr #17: Int
+  expr #18: Bool
+  expr #19: Bool
+  expr #20: (Int) -> Bool
+  expr #21: Int
+  expr #22: Bool
+  expr #23: Bool
+  pat #0: Int
+  pat #1: Int
+  pat #2: Int
+  local fun#0: (Int) -> Bool
+  local fun#1: (Int) -> Bool
+```
+
+`fun with_a_lambda`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: (Int) -> Int
+  expr #7: Int
+  expr #8: Int
+  expr #9: Int
+  pat #0: Int
+  pat #1: Int
+  pat #2: Int
+  local fun#0: (Int) -> Int
+```
+
+`fun from_a_lambda`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: (Int) -> Int
+  expr #7: (Int) -> Int
+  expr #8: Int
+  expr #9: Int
+  expr #10: Int
+  expr #11: Int
+  pat #0: Int
+  pat #1: Int
+  pat #2: (Int) -> Int
+  pat #3: Int
+  local fun#0: (Int) -> Int
+```
+
+`fun nested_local`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  expr #7: (Int) -> Int
+  expr #8: Int
+  expr #9: Int
+  expr #10: Int
+  pat #0: Int
+  pat #1: Int
+  pat #2: Int
+  local fun#0: (Int) -> Int
+  local fun#1: (Int) -> Int
+```
+
+### MIR
+
+`fun direct`
+
+CFG form:
+
+```
+fun direct (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#0(l3)
+    l1 = use l2
+    return l1
+
+local fun#0 double: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l3 = const 2
+    l1 = prim int-mul(l2, l3)
+    return l1
+```
+
+SSA form:
+
+```
+fun direct (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+
+local fun#0 double: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 2
+    v2 = prim int-mul(v0, v1)
+    return v2
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = call-local fun#0(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+Local function #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = i32.const 2
+    v2 = i31.get_s v0
+    v3 = i32.mul v2, v1
+    v4 = ref.i31 v3
+    return v4
+```
+
+Structure:
+
+```
+  leaf b0
+  return v4
+```
+
+`fun mutual`
+
+CFG form:
+
+```
+fun mutual (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#1(l3)
+    l1 = use l2
+    return l1
+
+local fun#0 odd: (Int) -> Bool (entry b0)
+  params: v0: Int
+  b0:
+    l0(n) = use v0
+    l3 = use l0
+    l4 = const 0
+    l2 = prim int-eq(l3, l4)
+    branch l2 -> b1, b2
+  b1:
+    l5 = const false
+    l1 = use l5
+    goto b3
+  b2:
+    l8 = use l0
+    l9 = const 1
+    l7 = prim int-sub(l8, l9)
+    l6 = call fun#1(l7)
+    l1 = use l6
+    goto b3
+  b3:
+    return l1
+
+local fun#1 even: (Int) -> Bool (entry b0)
+  params: v0: Int
+  b0:
+    l0(n) = use v0
+    l3 = use l0
+    l4 = const 0
+    l2 = prim int-eq(l3, l4)
+    branch l2 -> b1, b2
+  b1:
+    l5 = const true
+    l1 = use l5
+    goto b3
+  b2:
+    l8 = use l0
+    l9 = const 1
+    l7 = prim int-sub(l8, l9)
+    l6 = call fun#0(l7)
+    l1 = use l6
+    goto b3
+  b3:
+    return l1
+```
+
+SSA form:
+
+```
+fun mutual (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#1(v0)
+    return v1
+
+local fun#0 odd: (Int) -> Bool (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 0
+    v2 = prim int-eq(v0, v1)
+    branch v2 -> b1, b2
+  b1:
+    v6 = const false
+    goto b3(v6)
+  b2:
+    v3 = const 1
+    v4 = prim int-sub(v0, v3)
+    v5 = call fun#1(v4)
+    goto b3(v5)
+  b3(v7):
+    return v7
+
+local fun#1 even: (Int) -> Bool (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 0
+    v2 = prim int-eq(v0, v1)
+    branch v2 -> b1, b2
+  b1:
+    v6 = const true
+    goto b3(v6)
+  b2:
+    v3 = const 1
+    v4 = prim int-sub(v0, v3)
+    v5 = call fun#0(v4)
+    goto b3(v5)
+  b3(v7):
+    return v7
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = call-local fun#1(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+Local function #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31)
+  b0:
+    v2 = i32.const 0
+    v3 = i31.get_s v0
+    v4 = i32.eq v3, v2
+    branch v4 -> b1, b2
+  b1:
+    v10 = i32.const 0
+    v11 = ref.i31 v10
+    goto b3(v11)
+  b2:
+    v5 = i32.const 1
+    v6 = i31.get_s v0
+    v7 = i32.sub v6, v5
+    v8 = ref.i31 v7
+    v9 = call-local fun#1(v8)
+    goto b3(v9)
+  b3(v1(local 1): (ref i31)):
+    return v1
+```
+
+Structure:
+
+```
+  block b3:
+    leaf b0
+    if v4:
+      leaf b1
+      params b3(v11)
+      br 1 -> b3
+    else:
+      leaf b2
+      params b3(v9)
+      br 1 -> b3
+  leaf b3
+  return v1
+```
+
+Local function #1:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31)
+  b0:
+    v2 = i32.const 0
+    v3 = i31.get_s v0
+    v4 = i32.eq v3, v2
+    branch v4 -> b1, b2
+  b1:
+    v10 = i32.const 1
+    v11 = ref.i31 v10
+    goto b3(v11)
+  b2:
+    v5 = i32.const 1
+    v6 = i31.get_s v0
+    v7 = i32.sub v6, v5
+    v8 = ref.i31 v7
+    v9 = call-local fun#0(v8)
+    goto b3(v9)
+  b3(v1(local 1): (ref i31)):
+    return v1
+```
+
+Structure:
+
+```
+  block b3:
+    leaf b0
+    if v4:
+      leaf b1
+      params b3(v11)
+      br 1 -> b3
+    else:
+      leaf b2
+      params b3(v9)
+      br 1 -> b3
+  leaf b3
+  return v1
+```
+
+`fun with_a_lambda`
+
+CFG form:
+
+```
+fun with_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#0(l3)
+    l1 = use l2
+    return l1
+
+lambda #0: (Int) -> Int captures (x: Int) (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = capture #0
+    l1(y) = use v0
+    l3 = use l1
+    l4 = use l0
+    l2 = prim int-add(l3, l4)
+    return l2
+
+local fun#0 apply: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = const 1
+    l3 = closure lambda#0 (l0)
+    l1 = call l3(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun with_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+
+lambda #0: (Int) -> Int captures (x: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = prim int-add(v0, v1)
+    return v2
+
+local fun#0 apply: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 1
+    v2 = closure lambda#0 (v0)
+    v3 = call v2(v1)
+    return v3
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = call-local fun#0(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+Local function #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref i31), 2: (ref #3)
+  b0:
+    v1 = i32.const 1
+    v2(local 1) = ref.i31 v1
+    v3 = ref.func $7
+    v4(local 2) = struct.new #3(v3, v0)
+    v5 = struct.get #2.0 v4
+    v6 = call-ref #1 v5(v4, v2)
+    return v6
+```
+
+Structure:
+
+```
+  leaf b0
+  return v6
+```
+
+Lambda #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref #2), v1: (ref i31)
+  locals: 
+  b0:
+    v2 = ref.cast (ref #3) v0
+    v3 = struct.get #3.1 v2
+    v4 = i31.get_s v1
+    v5 = i31.get_s v3
+    v6 = i32.add v4, v5
+    v7 = ref.i31 v6
+    return v7
+```
+
+Structure:
+
+```
+  leaf b0
+  return v7
+```
+
+`fun from_a_lambda`
+
+CFG form:
+
+```
+fun from_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = closure lambda#0 ()
+    l4(apply) = use l3
+    l6 = use l0
+    l5 = call l4(l6)
+    l2 = use l5
+    l1 = use l2
+    return l1
+
+lambda #0: (Int) -> Int captures () (entry b0)
+  params: v0: Int
+  b0:
+    l0(y) = use v0
+    l2 = use l0
+    l1 = call fun#0(l2)
+    return l1
+
+local fun#0 double: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l3 = const 2
+    l1 = prim int-mul(l2, l3)
+    return l1
+```
+
+SSA form:
+
+```
+fun from_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    v1 = closure lambda#0 ()
+    v2 = call v1(v0)
+    return v2
+
+lambda #0: (Int) -> Int captures () (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+
+local fun#0 double: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 2
+    v2 = prim int-mul(v0, v1)
+    return v2
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 1: (ref #2)
+  b0:
+    v1 = ref.func $9
+    v2(local 1) = struct.new #2(v1)
+    v3 = struct.get #2.0 v2
+    v4 = call-ref #1 v3(v2, v0)
+    return v4
+```
+
+Structure:
+
+```
+  leaf b0
+  return v4
+```
+
+Lambda #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref #2), v1: (ref i31)
+  locals: 
+  b0:
+    v2 = call-local fun#0(v1)
+    return v2
+```
+
+Structure:
+
+```
+  leaf b0
+  return v2
+```
+
+Local function #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = i32.const 2
+    v2 = i31.get_s v0
+    v3 = i32.mul v2, v1
+    v4 = ref.i31 v3
+    return v4
+```
+
+Structure:
+
+```
+  leaf b0
+  return v4
+```
+
+`fun nested_local`
+
+CFG form:
+
+```
+fun nested_local (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#0(l3)
+    l1 = use l2
+    return l1
+
+local fun#0 outer: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l3 = use l0
+    l2 = call fun#1(l3)
+    l1 = use l2
+    return l1
+
+local fun#1 inner: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    l0(y) = use v0
+    l2 = use l0
+    l3 = const 1
+    l1 = prim int-add(l2, l3)
+    return l1
+```
+
+SSA form:
+
+```
+fun nested_local (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+
+local fun#0 outer: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#1(v0)
+    return v1
+
+local fun#1 inner: (Int) -> Int (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 1
+    v2 = prim int-add(v0, v1)
+    return v2
+```
+
+LIR:
+
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = call-local fun#0(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+Local function #0:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = call-local fun#1(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+Local function #1:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    v1 = i32.const 1
+    v2 = i31.get_s v0
+    v3 = i32.add v2, v1
+    v4 = ref.i31 v3
+    return v4
+```
+
+Structure:
+
+```
+  leaf b0
+  return v4
+```
+
+### Diagnostics
+
+No diagnostics.

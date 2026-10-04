@@ -19,7 +19,9 @@
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
-use mlkc_hir_def::{BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, ItemLocLike, Name};
+use mlkc_hir_def::{
+    BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, ItemLocLike, LocalFunctionId, Name,
+};
 use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_la_arena::Arena;
 use mlkc_lir_wasm::Body as LirBody;
@@ -125,6 +127,21 @@ impl LambdaPlan {
     }
 }
 
+/// What the layout knows about a function declared in a `local` ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalPlan {
+    /// The index of the lifted function in the function index space.
+    pub index: u32,
+    /// The name the function is declared under, which the `name` section and a stack trace use.
+    pub name: String,
+    /// What the function takes and gives back.
+    pub signature: FnSignature,
+    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
+    pub param_names: Vec<Option<Name>>,
+}
+
 /// What a function of the index space is ([ADR-0026][adr-0026]).
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
@@ -139,9 +156,16 @@ pub enum FunctionKey {
         /// The lambda, by its place in the arena.
         lambda: LambdaId,
     },
+    /// A function declared in a `local`, lifted into a function of the module.
+    Local {
+        /// The entity whose body declared it; the function is an entry of that body's arena.
+        owner: BodyEntityLoc,
+        /// The function, by its place in the arena.
+        local: LocalFunctionId,
+    },
 }
 
-/// The LIR of one function and of the lambdas it wrote ([ADR-0026][adr-0026]).
+/// The LIR of one function and of the functions it wrote ([ADR-0026][adr-0026]).
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,6 +176,8 @@ pub struct LoweredFunction {
     pub body: LirBody,
     /// The LIR of the lambdas written in it, in the order the body creates them.
     pub lambdas: Vec<LoweredFunction>,
+    /// The LIR of the functions declared inside it, in the order the body declares them.
+    pub local_functions: Vec<LoweredFunction>,
 }
 
 /// One function the back end emitted: the artifact and what names it ([ADR-0026][adr-0026]).
@@ -256,6 +282,7 @@ pub struct ModuleLayout {
     imports: usize,
     by_entity: BTreeMap<EntityLoc<FunctionLoc>, u32>,
     by_lambda: BTreeMap<(BodyEntityLoc, LambdaId), LambdaPlan>,
+    by_local: BTreeMap<(BodyEntityLoc, LocalFunctionId), LocalPlan>,
     /// The plain function types of the type section, in index order.
     plain: Vec<FnShape>,
     /// The shape groups of the type section, in index order; the group of `shapes[i]` is at
@@ -287,6 +314,11 @@ impl ModuleLayout {
     /// What the layout knows about a lambda a body wrote.
     pub fn lambda(&self, owner: &BodyEntityLoc, lambda: LambdaId) -> Option<&LambdaPlan> {
         self.by_lambda.get(&(owner.clone(), lambda))
+    }
+
+    /// What the layout knows about a function declared in a `local`.
+    pub fn local(&self, owner: &BodyEntityLoc, local: LocalFunctionId) -> Option<&LocalPlan> {
+        self.by_local.get(&(owner.clone(), local))
     }
 
     /// The type of a plain function shape, the one the imports and the entity bodies use.
@@ -378,10 +410,11 @@ impl ModuleLayout {
 /// Numbers the functions of a module, and plans the types their closures use.
 ///
 /// The functions are the imports, then the entity functions in declaration order, each followed
-/// by its lambdas, depth first ([ADR-0026]). The types are planned in the order the module
-/// meets them: the plain function types, the shape groups of the closure family, and the
-/// environments; the shapes and the environments are deduplicated, so two lambdas that capture
-/// the same things share one type.
+/// by its lambdas, depth first, and then by the functions it declares in a `local`, each with its
+/// own lambdas ([ADR-0026]). The types are planned in the order the module meets them: the plain
+/// function types, the shape groups of the closure family, and the environments; the shapes and
+/// the environments are deduplicated, so two lambdas that capture the same things share one
+/// type.
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 pub fn layout(module: &ModuleMir) -> ModuleLayout {
@@ -389,6 +422,7 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
     let mut planner = Types::default();
     let mut signatures = Vec::with_capacity(module.imports.len() + module.functions.len());
     let mut by_entity = BTreeMap::new();
+    let mut by_local = BTreeMap::new();
     let mut pending = Vec::new();
 
     for import in &module.imports {
@@ -417,31 +451,49 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
             );
         }
 
-        for lambda in lambda_order(function.body.code(), &function.body.lambdas) {
-            let data = &function.body.lambdas[lambda];
-            let signature = signature_of_lambda(&data.ty);
-            let param_names = std::iter::once(None)
-                .chain(data.param_names.iter().cloned())
-                .collect();
-            let shape = signature.shape(&builtins);
-            let captures: Vec<AbiType> = data
-                .captures
-                .iter()
-                .map(|capture| refine::of_ty(&capture.ty, &builtins).abi())
-                .collect();
-            let at = planner.shape(&shape);
-            let env = (!captures.is_empty()).then(|| planner.env(&shape, &captures));
+        number_lambdas(
+            &mut planner,
+            &mut signatures,
+            &mut pending,
+            &function.owner,
+            function.body.code(),
+            &function.body.lambdas,
+            &builtins,
+        );
+
+        // A function declared in a `local` is lifted into a function of the module of its own,
+        // and the lambdas it wrote are the owner's: they are entries of the arena of the body
+        // that declares the function ([ADR-0026]).
+        //
+        // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+        for local in &function.body.local_functions {
+            let Some(data) = &local.local else {
+                continue;
+            };
+
+            let signature = signature_of_function(&data.ty);
             let index = signatures.len() as u32;
 
             signatures.push(signature.clone());
-            pending.push(((function.owner.clone(), lambda), PendingLambda {
+            planner.plain(&signature.shape(&builtins));
+            by_local.insert((function.owner.clone(), data.id), LocalPlan {
                 index,
+                name: data.name.to_string(),
                 signature,
-                param_names,
-                captures,
-                at,
-                env,
-            }));
+                param_names: data.param_names.clone(),
+            });
+
+            number_lambdas(
+                &mut planner,
+                &mut signatures,
+                &mut pending,
+                &function.owner,
+                local.code(),
+                &function.body.lambdas,
+                &builtins,
+            );
+
+            planner.calls(local.code(), &builtins);
         }
 
         // A call through a closure needs the shape's types whether or not a lambda of this
@@ -482,9 +534,49 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
         imports: module.imports.len(),
         by_entity,
         by_lambda,
+        by_local,
         plain,
         shapes,
         envs,
+    }
+}
+
+/// Numbers the lambdas of one piece of code: a signature and an entry in the plan of each, in
+/// the order the code creates them.
+fn number_lambdas(
+    planner: &mut Types,
+    signatures: &mut Vec<FnSignature>,
+    pending: &mut Vec<((BodyEntityLoc, LambdaId), PendingLambda)>,
+    owner: &BodyEntityLoc,
+    code: CodeRef<'_>,
+    lambdas: &Arena<LambdaData>,
+    builtins: &Builtins,
+) {
+    for lambda in lambda_order(code, lambdas) {
+        let data = &lambdas[lambda];
+        let signature = signature_of_function(&data.ty);
+        let param_names = std::iter::once(None)
+            .chain(data.param_names.iter().cloned())
+            .collect();
+        let shape = signature.shape(builtins);
+        let captures: Vec<AbiType> = data
+            .captures
+            .iter()
+            .map(|capture| refine::of_ty(&capture.ty, builtins).abi())
+            .collect();
+        let at = planner.shape(&shape);
+        let env = (!captures.is_empty()).then(|| planner.env(&shape, &captures));
+        let index = signatures.len() as u32;
+
+        signatures.push(signature.clone());
+        pending.push(((owner.clone(), lambda), PendingLambda {
+            index,
+            signature,
+            param_names,
+            captures,
+            at,
+            env,
+        }));
     }
 }
 
@@ -564,15 +656,15 @@ impl Types {
     }
 }
 
-/// The declared signature of a lambda: the function type the checker gave it.
+/// The declared signature of a function: the function type the checker gave it.
 ///
 /// # Panics
 ///
-/// Panics when the type is not a function type, which is a gap of the check: a lambda the
-/// check accepted is a function.
-fn signature_of_lambda(ty: &Ty) -> FnSignature {
+/// Panics when the type is not a function type, which is a gap of the check: a lambda and
+/// a function declared inside a body are functions the check accepted.
+fn signature_of_function(ty: &Ty) -> FnSignature {
     let Ty::Fn { params, ret } = ty else {
-        panic!("the lowering met a lambda the checker did not give a function type: {ty}");
+        panic!("the lowering met a function the checker did not give a function type: {ty}");
     };
 
     FnSignature {
@@ -773,7 +865,8 @@ pub fn compile_module(
     (wasm, diagnostics)
 }
 
-/// Emits one function of a lowered tree and then the lambdas it wrote.
+/// Emits one function of a lowered tree, then the lambdas it wrote, and then the functions it
+/// declares in a `local`.
 fn emit_tree(
     function: &LoweredFunction,
     by_entity: &BTreeMap<EntityLoc<FunctionLoc>, &ModuleFunction>,
@@ -814,6 +907,20 @@ fn emit_tree(
                 Some(plan),
             )
         },
+        FunctionKey::Local { owner, local } => {
+            let plan = layout
+                .local(owner, *local)
+                .expect("every function declared in a `local` to be numbered");
+
+            (
+                owner.clone(),
+                plan.name.clone(),
+                plan.signature.clone(),
+                plan.param_names.clone(),
+                false,
+                None,
+            )
+        },
     };
     let type_index = match lambda {
         Some(plan) => plan.types.fn_type,
@@ -846,6 +953,10 @@ fn emit_tree(
     });
 
     for child in &function.lambdas {
+        emit_tree(child, by_entity, layout, builtins, functions, diagnostics);
+    }
+
+    for child in &function.local_functions {
         emit_tree(child, by_entity, layout, builtins, functions, diagnostics);
     }
 }

@@ -72,6 +72,10 @@ project_specs! {
     // What a lambda lowers to: the code lifted into the body's flat arena with its captures, the
     // closure the body creates over the slots they hold, and the `Capture` reads inside the code.
     lambdas: "lambdas",
+
+    // What a function declared in a `local` lowers to: the signature the check gave it, the
+    // direct call of it, and the function of the module its code is lifted into.
+    locals: "locals",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

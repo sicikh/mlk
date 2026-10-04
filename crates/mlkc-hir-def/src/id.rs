@@ -285,6 +285,13 @@ impl std::fmt::Debug for LocalFunctionId {
     }
 }
 
+impl LocalFunctionId {
+    /// The place of the function in the arena of the body that declares it.
+    pub const fn index(self) -> usize {
+        self.0.index()
+    }
+}
+
 impl ArenaIndex for LocalFunctionId {
     fn into_raw(self) -> RawIdx {
         self.0.into_raw()

@@ -171,6 +171,70 @@ fn a_generalized_lambda_is_called_at_two_types() {
 }
 
 #[test]
+fn a_function_declared_in_a_local_is_called() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         local fun double(x: Int): Int = x * 2 in\n    \
+         double(21)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn functions_declared_in_a_local_call_each_other() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         local\n        \
+             fun odd(n: Int): Bool = if n == 0 then false else even(n - 1)\n        \
+             fun even(n: Int): Bool = if n == 0 then true else odd(n - 1)\n    \
+         in\n    \
+         if even(10) then 42 else 0\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn a_lambda_written_in_a_local_is_lifted() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         local fun apply(x: Int): Int = (fn(y: Int) -> y + x)(1) in\n    \
+         apply(41)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn a_lambda_calls_a_function_declared_in_a_local() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         local fun double(x: Int): Int = x * 2 in\n    \
+         let apply = fn(y: Int) -> double(y) in\n    \
+         apply(21)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
 fn a_lambda_inside_a_lambda_captures_both_frames() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \

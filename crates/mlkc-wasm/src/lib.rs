@@ -1345,12 +1345,34 @@ struct MirBody {
     /// The lambdas the body wrote, each a body of its own in the order the body creates them,
     /// nested where the expression that creates them is written.
     lambdas: Vec<MirBody>,
+
+    /// The functions the body declares in a `local`, each a body of its own in the order the
+    /// body declares them.
+    local_functions: Vec<MirBody>,
 }
 
 impl MirBody {
-    /// Reads one body of the MIR the way a host reads it, and the lambdas it wrote with it.
+    /// Reads one body of the MIR the way a host reads it, with the lambdas it wrote and the
+    /// functions it declares in a `local`.
     fn of(body: &mlkc_mir::Body, owner: String, range: Option<[u32; 2]>) -> Self {
-        Self::read(body, body.code(), owner, range)
+        let mut read = Self::read(body, body.code(), owner, range);
+
+        read.local_functions = body
+            .local_functions
+            .iter()
+            .map(|local| {
+                let name = local.local.as_ref().map_or_else(
+                    || "local fun".to_string(),
+                    |data| format!("fun {}", data.name),
+                );
+
+                // The lambdas of a function declared in a `local` are entries of the arena of
+                // the body that declares it, so the reading goes on with the owner's body.
+                Self::read(body, local.code(), name, None)
+            })
+            .collect();
+
+        read
     }
 
     /// Reads one piece of code --- a body's or a lambda's --- and the lambdas it wrote itself.
@@ -1447,6 +1469,7 @@ impl MirBody {
                 .collect(),
             blocks,
             lambdas,
+            local_functions: Vec::new(),
         }
     }
 }
@@ -1599,6 +1622,7 @@ impl Lir {
                 lowered.item_range(&place).map(covered),
                 owner.module().0,
                 &lir.lambdas,
+                &lir.local_functions,
             ));
         }
 
@@ -1638,16 +1662,22 @@ struct LirBody {
     /// The lambdas the body wrote, each a lifted function of its own in the order the back end
     /// lowers them, nested where the expression that creates them is written.
     lambdas: Vec<LirBody>,
+
+    /// The functions the body declares in a `local`, each a lifted function of its own in the
+    /// order the body declares them.
+    local_functions: Vec<LirBody>,
 }
 
 impl LirBody {
-    /// Reads one lifted function the way a host reads it, and the lambdas it wrote itself.
+    /// Reads one lifted function the way a host reads it, with the lambdas it wrote and the
+    /// functions it declares in a `local`.
     fn of(
         body: &mlkc_lir_wasm::Body,
         owner: String,
         range: Option<[u32; 2]>,
         file: FileId,
         lambdas: &[LoweredFunction],
+        local_functions: &[LoweredFunction],
     ) -> Self {
         let graph = mlkc_lir_wasm::cfg::Cfg::of(body);
         let parameters = body.params.len() as u32;
@@ -1724,8 +1754,8 @@ impl LirBody {
             .map(|child| {
                 let lambda = match &child.key {
                     FunctionKey::Lambda { lambda, .. } => *lambda,
-                    FunctionKey::Entity(_) => {
-                        panic!("a lambda of a body to be lifted as a lambda and not as an entity")
+                    FunctionKey::Entity(_) | FunctionKey::Local { .. } => {
+                        panic!("a lambda of a body to be lifted as a lambda and not as a function")
                     },
                 };
 
@@ -1735,6 +1765,28 @@ impl LirBody {
                     code_range(&child.body, file),
                     file,
                     &child.lambdas,
+                    &child.local_functions,
+                )
+            })
+            .collect();
+
+        let local_functions = local_functions
+            .iter()
+            .map(|child| {
+                let local = match &child.key {
+                    FunctionKey::Local { local, .. } => *local,
+                    FunctionKey::Entity(_) | FunctionKey::Lambda { .. } => {
+                        panic!("a function declared in a `local` to be lifted as one")
+                    },
+                };
+
+                Self::of(
+                    &child.body,
+                    format!("local fun #{}", local.index()),
+                    code_range(&child.body, file),
+                    file,
+                    &child.lambdas,
+                    &child.local_functions,
                 )
             })
             .collect();
@@ -1759,6 +1811,7 @@ impl LirBody {
             }),
             blocks,
             lambdas,
+            local_functions,
         }
     }
 }
@@ -3083,6 +3136,48 @@ mod tests {
         assert_eq!(
             json["bodies"][1]["lambdas"][0]["lambdas"][0]["owner"],
             "lambda #0"
+        );
+    }
+
+    #[test]
+    fn a_function_declared_in_a_local_crosses_the_boundary_as_a_body_of_its_own() {
+        const SOURCE: &str =
+            "fun main(): Int =\n    local fun double(x: Int): Int = x * 2 in\n    double(21)\n";
+
+        let mut driver = WasmDriver::new();
+        driver.register_library();
+        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+
+        // The MIR reads the function as a body of its own, nested where the body declares it,
+        // with the parameters its signature wrote and the code the arena of the owner holds.
+        let cfg = driver
+            .mir_of("/main.mlk", Form::Cfg)
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&cfg).expect("the MIR to serialize");
+        let double = &json["bodies"][0]["localFunctions"][0];
+        let params = double["params"].as_array().expect("the parameters");
+
+        assert_eq!(double["owner"], "fun double");
+        assert_eq!(params.len(), 1, "the function to declare one parameter");
+        assert_eq!(params[0]["ty"], "Int");
+        assert!(
+            !double["blocks"].as_array().expect("the blocks").is_empty(),
+            "the function to be a body of its own",
+        );
+
+        // The LIR reads the lifted function with its name, which the layout numbered it by.
+        let lir = driver
+            .lir_of("/main.mlk")
+            .expect("the file to be read")
+            .expect("the module to lower");
+        let json = serde_json::to_value(&lir).expect("the LIR to serialize");
+        let double = &json["bodies"][0]["localFunctions"][0];
+
+        assert_eq!(double["owner"], "local fun #0");
+        assert!(
+            !double["blocks"].as_array().expect("the blocks").is_empty(),
+            "the lifted function to be a body of its own",
         );
     }
 

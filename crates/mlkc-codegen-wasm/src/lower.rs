@@ -47,8 +47,57 @@ pub fn lower_function(mir: &MirBody, ctx: &FunctionCtx<'_>) -> LoweredFunction {
     };
     let body = lower_code(mir.code(), ctx);
     let lambdas = lower_children(mir.code(), &mir.lambdas, ctx);
+    let local_functions = mir
+        .local_functions
+        .iter()
+        .map(|local| lower_local(local, mir, ctx))
+        .collect();
 
-    LoweredFunction { key, body, lambdas }
+    LoweredFunction {
+        key,
+        body,
+        lambdas,
+        local_functions,
+    }
+}
+
+/// Lowers one function declared in a `local`: a function of the module of its own, entered
+/// without an environment.
+///
+/// The lambdas of the function are entries of the arena of the body that declares it: the arena
+/// is the owner's, and a lambda written in a function declared in a `local` is numbered with the
+/// rest of the owner's ([ADR-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+fn lower_local(local: &MirBody, owner: &MirBody, ctx: &FunctionCtx<'_>) -> LoweredFunction {
+    let data = local
+        .local
+        .as_ref()
+        .expect("a body in the list of functions declared in a `local` to be one");
+    let plan = ctx
+        .layout
+        .local(ctx.owner, data.id)
+        .unwrap_or_else(|| panic!("a function declared in a `local` the module did not number"));
+    let child = FunctionCtx {
+        owner: ctx.owner,
+        name: &plan.name,
+        signature: &plan.signature,
+        param_names: &plan.param_names,
+        layout: ctx.layout,
+        lambda: None,
+    };
+    let body = lower_code(local.code(), &child);
+    let lambdas = lower_children(local.code(), &owner.lambdas, &child);
+
+    LoweredFunction {
+        key: FunctionKey::Local {
+            owner: ctx.owner.clone(),
+            local: data.id,
+        },
+        body,
+        lambdas,
+        local_functions: Vec::new(),
+    }
 }
 
 /// Lowers the lambdas a piece of code wrote, depth first ([ADR-0026][adr-0026]).
@@ -86,6 +135,7 @@ fn lower_children(
             },
             body,
             lambdas,
+            local_functions: Vec::new(),
         });
     }
 

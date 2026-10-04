@@ -326,6 +326,13 @@ impl Body {
         &self.local_functions
     }
 
+    /// The ids of the functions declared inside the body, in the order they are declared.
+    pub fn local_function_ids(&self) -> impl Iterator<Item = LocalFunctionId> + '_ {
+        self.local_functions
+            .iter()
+            .map(|(id, _)| LocalFunctionId(id))
+    }
+
     /// The constants declared inside the body.
     pub fn local_consts(&self) -> &Arena<LocalConstData> {
         &self.local_consts

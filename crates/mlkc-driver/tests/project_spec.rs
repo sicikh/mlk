@@ -242,10 +242,17 @@ fn modules_of(fixture: &str) -> Vec<Module> {
     mlkc_fixture::modules(&source)
 }
 
-/// Writes the LIR of one function and of the lambdas it wrote.
+/// Writes the LIR of one function, of the lambdas it wrote, and of the functions it declares in
+/// a `local`.
 fn write_lir(snapshot: &mut String, function: &LoweredFunction) {
-    if let FunctionKey::Lambda { lambda, .. } = &function.key {
-        let _ = writeln!(snapshot, "Lambda #{}:", lambda.index());
+    match &function.key {
+        FunctionKey::Lambda { lambda, .. } => {
+            let _ = writeln!(snapshot, "Lambda #{}:", lambda.index());
+        },
+        FunctionKey::Local { local, .. } => {
+            let _ = writeln!(snapshot, "Local function #{}:", local.index());
+        },
+        FunctionKey::Entity(_) => {},
     }
 
     snapshot.push_str("```\n");
@@ -266,6 +273,10 @@ fn write_lir(snapshot: &mut String, function: &LoweredFunction) {
     }
 
     for child in &function.lambdas {
+        write_lir(snapshot, child);
+    }
+
+    for child in &function.local_functions {
         write_lir(snapshot, child);
     }
 }

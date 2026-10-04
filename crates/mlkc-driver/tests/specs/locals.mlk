@@ -1,0 +1,35 @@
+// What the middle of the pipeline makes of a function declared inside a body: the declarations
+// the body carries, the call of a name the check bound to one of them, and the code lifted into
+// a function of the module of its own. A function declared in a `local` reads nothing of the
+// body that declares it, and its signature says everything a caller needs, so it is never
+// generalized. A lambda written in the body is an entry of the body's arena, and a lambda that
+// calls a function declared in a `local` names it directly.
+
+//- /main.mlk
+fun direct(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    double(value)
+
+fun mutual(value: Int): Bool =
+    local
+        fun odd(n: Int): Bool = if n == 0 then false else even(n - 1)
+        fun even(n: Int): Bool = if n == 0 then true else odd(n - 1)
+    in
+    even(value)
+
+fun with_a_lambda(value: Int): Int =
+    local fun apply(x: Int): Int = (fn(y: Int) -> y + x)(1) in
+    apply(value)
+
+fun from_a_lambda(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    let apply = fn(y: Int) -> double(y) in
+    apply(value)
+
+fun nested_local(value: Int): Int =
+    local
+        fun outer(x: Int): Int =
+            local fun inner(y: Int): Int = y + 1 in
+            inner(x)
+    in
+    outer(value)

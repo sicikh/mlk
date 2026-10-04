@@ -38,7 +38,7 @@ pub struct Body {
     /// The entity whose body this is.
     pub owner: BodyEntityLoc,
     /// The function declared inside a body this body is, if it is one.
-    pub local: Option<LocalFunctionId>,
+    pub local: Option<LocalFunction>,
     /// The values the owner is entered with: one per parameter, in the order they are declared.
     ///
     /// A parameter is a value and not a slot: the first statements of the entry block bind the
@@ -60,6 +60,41 @@ pub struct Body {
     ///
     /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
     pub lambdas: Arena<LambdaData>,
+    /// The functions declared inside this body, in the order the body declares them
+    /// ([ADR-0019][adr-0019]).
+    ///
+    /// The list is flat: a function declared in a `local` written inside another one is an entry
+    /// of the same list, the way the arena of the HIR body is flat. A body of one is a body of
+    /// its own --- its parameters, its blocks and its slots are its own --- and the rest of what
+    /// the function is, the name it is declared under and the type the checker gave it, is
+    /// [`LocalFunction`].
+    ///
+    /// A function declared inside a body captures nothing: it is given its own parameters only,
+    /// and what it reads of the module it reaches without an environment. Its code is lifted
+    /// into a function of the module the back end numbers like any other ([ADR-0020]).
+    ///
+    /// [adr-0019]: ../../docs/adr/0019-mir.md
+    /// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+    pub local_functions: Vec<Body>,
+}
+
+/// A function declared inside a body, as the body it is ([ADR-0019][adr-0019]).
+///
+/// What a function declared inside a body is made of is the body itself; this is the identity
+/// around it: the place it holds in the arena of the body that declares it, the name it is
+/// declared under, the type the checker gave it, and the names of its parameters.
+///
+/// [adr-0019]: ../../docs/adr/0019-mir.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalFunction {
+    /// The function, by its place in the arena of the body that declares it.
+    pub id: LocalFunctionId,
+    /// The name the function is declared under.
+    pub name: Name,
+    /// The type the checker gave it: what a call of it takes and gives back.
+    pub ty: Ty,
+    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
+    pub param_names: Vec<Option<Name>>,
 }
 
 /// The code of one lambda: a control-flow graph over words, as a body is.
@@ -496,7 +531,7 @@ pub struct BlockTarget {
 #[derive(Debug, Default)]
 pub struct BodyBuilder {
     owner: Option<BodyEntityLoc>,
-    local: Option<LocalFunctionId>,
+    local: Option<LocalFunction>,
     params: Vec<ValueId>,
     blocks: Arena<Block>,
     values: Arena<ValueData>,
@@ -513,7 +548,7 @@ impl BodyBuilder {
     }
 
     /// Sets the function declared inside a body that the body is.
-    pub fn local_function(mut self, local: LocalFunctionId) -> Self {
+    pub fn local_function(mut self, local: LocalFunction) -> Self {
         self.local = Some(local);
         self
     }
@@ -580,6 +615,7 @@ impl BodyBuilder {
             values: self.values,
             locals: self.locals,
             lambdas: Arena::default(),
+            local_functions: Vec::new(),
         }
     }
 }

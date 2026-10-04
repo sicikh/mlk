@@ -19,8 +19,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
-    ItemTree, LambdaParam, Literal, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathId,
-    ProjectGraph, TypeRef, UnaryOp,
+    ItemTree, LambdaParam, Literal, LocalDefId, LocalFunctionId, ModuleId, Name, Namespace, Pat,
+    PatId, PathAnchor, PathId, ProjectGraph, TypeRef, UnaryOp,
 };
 use mlkc_hir_ty::{Builtins, CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
 use mlkc_resolve::{Closure, Resolution};
@@ -124,6 +124,7 @@ pub fn check_body(
         resolver: PathResolver::new(module, resolution, deps),
         deps,
         bindings: FxHashMap::default(),
+        local_types: FxHashMap::default(),
         expr_types: FxHashMap::default(),
         pat_types: FxHashMap::default(),
         diagnostics: Vec::new(),
@@ -177,6 +178,8 @@ struct Checker<'a> {
     deps: &'a CheckDeps,
     /// What the patterns of the body are bound to, generalized where a `let` generalized them.
     bindings: FxHashMap<PatId, Scheme>,
+    /// The type of every function declared inside the body, in the order they are checked.
+    local_types: FxHashMap<LocalDefId, InferTy>,
     /// The type of every expression checked so far.
     expr_types: FxHashMap<ExprId, InferTy>,
     /// The type of every pattern checked so far.
@@ -263,15 +266,7 @@ impl Checker<'_> {
                 otherwise,
             } => self.if_expr(cond, then_, &arms, otherwise),
             Expr::Lambda { params, body, .. } => self.lambda(&params, body),
-            // A `local` declares items inside a body, and the check does not read one yet: what
-            // a name of an item denotes is a function declared inside a body, and the check has
-            // no type for one of those ([ADR-0017]).
-            //
-            // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
-            Expr::Local { .. } => {
-                self.report(TypeError::Local, expr);
-                InferTy::Error
-            },
+            Expr::Local { items, body } => self.local_expr(expr, &items, body),
         };
 
         self.record_expr(expr, ty.clone());
@@ -410,10 +405,24 @@ impl Checker<'_> {
                     None => InferTy::Error,
                 }
             },
-            // The entities declared inside a body are checked with it, and the check has no type
-            // for one yet: a `local` is reported where it is written, and a path that names an
-            // entity of one is absorbed.
-            PathAnchor::Local(_) => InferTy::Error,
+            // A function declared inside a body: the type of it where a call reads it, and no
+            // value at all, the way the name of a function of a module is ([ADR-0018]).
+            //
+            // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+            PathAnchor::Local(local) => {
+                if position == Position::Value {
+                    errors.push(TypeError::NotAValue { name: path.name() });
+
+                    InferTy::Error
+                } else {
+                    // A function declared inside a body is checked before a call of it is read,
+                    // and a name of one the check did not reach is broken input.
+                    self.local_types
+                        .get(&local)
+                        .cloned()
+                        .unwrap_or(InferTy::Error)
+                }
+            },
             // A type variable is a type, and a value belongs here.
             PathAnchor::TypeVar(_) => {
                 errors.push(TypeError::NotAValue {
@@ -728,6 +737,126 @@ impl Checker<'_> {
         }
     }
 
+    /// The type of a `local`: the functions it declares, and the expression their names are
+    /// visible in.
+    ///
+    /// A function declared inside a body is checked with it: the patterns of its parameters are
+    /// bound to the types its signature writes, and its root is checked against the type of its
+    /// result. What a call of it reads is the type of the function, which is recorded with the
+    /// entities declared inside the body ([`CheckedBody::local_types`]).
+    ///
+    /// The signatures are read before any body: the items see one another, and a call of an item
+    /// written after the caller is answered by the signature of it.
+    fn local_expr(&mut self, expr: ExprId, items: &[LocalDefId], body: ExprId) -> InferTy {
+        let mut declared = Vec::new();
+
+        for item in items {
+            // The language declares functions inside a body today; the check of another kind of
+            // entity of a body is not written.
+            let LocalDefId::Function(id) = item else {
+                continue;
+            };
+
+            declared.push(self.local_function(expr, *id));
+        }
+
+        for function in &declared {
+            let params: Vec<InferTy> = function.params.iter().map(|(_, ty)| ty.clone()).collect();
+            let fn_ty = InferTy::Fn {
+                params,
+                ret: Box::new(function.ret.clone()),
+            };
+
+            self.local_types
+                .insert(LocalDefId::Function(function.id), fn_ty);
+        }
+
+        for function in declared {
+            for (pat, ty) in function.params {
+                self.bind_pat(pat, &Scheme {
+                    ty,
+                    params: Vec::new(),
+                });
+            }
+
+            if let Some(root) = self.body.local_function_root(function.id) {
+                self.check(root, &function.ret);
+            }
+        }
+
+        self.infer(body)
+    }
+
+    /// Reads the signature of one function declared inside a body: the types of its parameters,
+    /// and the type of its result.
+    ///
+    /// A signature is written where the function is declared, so a type it does not write is
+    /// a mistake and not something to infer: what a call of the function takes and gives back is
+    /// read before the body of the function is, the way the signature of a declaration of
+    /// a module is ([ADR-0017]).
+    ///
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    fn local_function(&mut self, place: ExprId, id: LocalFunctionId) -> DeclaredLocal {
+        let data = self.body[id].clone();
+        let mut params = Vec::with_capacity(data.params.len());
+
+        for (index, pat) in data.params.iter().enumerate() {
+            let annotation = data
+                .signature
+                .params
+                .get(index)
+                .and_then(|param| param.ty.as_ref());
+
+            match annotation {
+                Some(ty) if !matches!(ty, TypeRef::Infer) => {
+                    let (resolved, errors) = self.resolver.type_of(ty);
+
+                    for error in errors {
+                        self.report_at(error, TypePlace::Pat(*pat));
+                    }
+
+                    params.push((*pat, InferTy::of(&resolved)));
+                },
+                _ => {
+                    self.report_at(
+                        TypeError::LocalFunctionMissingType {
+                            function: data.name.clone(),
+                            parameter: Some(index),
+                        },
+                        TypePlace::Pat(*pat),
+                    );
+
+                    params.push((*pat, InferTy::Error));
+                },
+            }
+        }
+
+        let ret = match data.signature.ret.as_ref() {
+            Some(ty) if !matches!(ty, TypeRef::Infer) => {
+                let (resolved, errors) = self.resolver.type_of(ty);
+
+                for error in errors {
+                    self.report(error, place);
+                }
+
+                InferTy::of(&resolved)
+            },
+            _ => {
+                self.report(
+                    TypeError::LocalFunctionMissingType {
+                        function: data.name.clone(),
+                        parameter: None,
+                    },
+                    place,
+                );
+
+                InferTy::Error
+            },
+        };
+
+        DeclaredLocal { id, params, ret }
+    }
+
     /// The type a parameter of a lambda takes: the type it writes, or a variable the body and
     /// the callers of the lambda work out.
     ///
@@ -840,8 +969,23 @@ impl Checker<'_> {
             checked.set_pat_type(pat, self.engine.zonk(&ty));
         }
 
+        for (local, ty) in self.local_types {
+            checked.set_local_type(local, self.engine.zonk(&ty));
+        }
+
         (checked, self.diagnostics)
     }
+}
+
+/// One function declared inside a body, as the check of a `local` read it: the patterns of its
+/// parameters with the types they take, and the type of its result.
+struct DeclaredLocal {
+    /// The function in the arena of the body.
+    id: LocalFunctionId,
+    /// The pattern of every parameter, with the type it takes.
+    params: Vec<(PatId, InferTy)>,
+    /// The type of the result.
+    ret: InferTy,
 }
 
 #[cfg(test)]
@@ -850,7 +994,8 @@ mod tests {
 
     use mlkc_hir_def::{
         Body, BodyEntityLoc, ClassLoc, EntityLoc, ItemKind, ItemLoc, ItemLocLike, ItemTree,
-        ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, TypeVarId, UseLoc,
+        LocalDefId, ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, TypeVarId,
+        UseLoc,
     };
     use mlkc_hir_ty::Ty;
     use mlkc_lower::{lower_body, lower_module};
@@ -1253,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    fn a_local_is_reported_because_the_check_does_not_read_one_yet() {
+    fn a_function_declared_inside_a_body_is_checked_and_called() {
         let (id, ..) = ids();
         let source = format!(
             "{CLASSES}\nfun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
@@ -1267,13 +1412,181 @@ mod tests {
         let deps = deps.with_types(id, Arc::new(types));
 
         let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let int = Ty::class(class(&tree, "Int"));
+        assert_eq!(checked.expr_type(body.root()), Some(&int));
+
+        // The type of the function the `local` declares is recorded with the body, and it is
+        // the signature the function writes: a function declared inside a body is not
+        // generalized, the way a declaration of a module is not.
+        let local = body
+            .local_function_ids()
+            .next()
+            .expect("a function declared inside the body");
+        assert_eq!(
+            checked.local_type(LocalDefId::Function(local)),
+            Some(&Ty::function(vec![int.clone()], int.clone())),
+        );
+
+        // The parameter of the function takes the type its signature writes.
+        assert_eq!(checked.pat_type(body[local].params[0]), Some(&int));
+    }
+
+    #[test]
+    fn a_function_declared_inside_a_body_may_call_itself_and_the_ones_written_after_it() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\nfun main(value: Int): Bool = local\n    fun even(x: Int): Bool = if x == 0 \
+             then true else odd(x - 1)\n    fun odd(x: Int): Bool = if x == 0 then false \
+             else even(x - 1)\nin even(value)\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let boolean = Ty::class(class(&tree, "Bool"));
+        assert_eq!(checked.expr_type(body.root()), Some(&boolean));
+
+        // Both names are functions of the body, and each of them is checked against its own
+        // signature.
+        for local in body.local_function_ids() {
+            assert_eq!(
+                checked.local_type(LocalDefId::Function(local)),
+                Some(&Ty::function(
+                    vec![Ty::class(class(&tree, "Int"))],
+                    boolean.clone()
+                )),
+            );
+        }
+    }
+
+    #[test]
+    fn a_call_of_a_function_declared_inside_a_body_checks_its_arguments() {
+        let (id, ..) = ids();
+        let source = format!(
+            "{CLASSES}\nfun main(): Int = local fun double(x: Int): Int = x * 2 in double(true)\n"
+        );
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
         let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
 
-        // A `local` is lowered with its items as entities of the body, and what a name of one
-        // denotes is a function declared inside a body, which the check does not read yet.
+        // What a call passes is checked against the signature of the function it calls, the way
+        // a call of a function of the module is.
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(
-            matches!(diagnostics[0].error(), TypeError::Local),
+            matches!(
+                diagnostics[0].error(),
+                TypeError::TypeMismatch { expected, found }
+                    if *expected == Ty::class(class(&tree, "Int"))
+                        && *found == Ty::class(class(&tree, "Bool"))
+            ),
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
+    fn the_result_of_a_function_declared_inside_a_body_is_its_signature() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = local fun wrong(): Int = true in 0\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // The body of the function is checked against the type its signature gives back, and
+        // the expression after the `in` is checked on its own.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(
+                diagnostics[0].error(),
+                TypeError::TypeMismatch { expected, found }
+                    if *expected == Ty::class(class(&tree, "Int"))
+                        && *found == Ty::class(class(&tree, "Bool"))
+            ),
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
+    fn a_function_declared_inside_a_body_is_not_a_value() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = local fun one(): Int = 1 in one\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // The name of a function is what a call calls, and not a value the language has, the way
+        // the name of a function of a module is ([ADR-0018]).
+        //
+        // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(matches!(
+            diagnostics[0].error(),
+            TypeError::NotAValue { name } if name == &Name::new("one")
+        ));
+    }
+
+    #[test]
+    fn a_function_declared_inside_a_body_writes_its_types() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun main(): Int = local fun id(x) = x in id(1)\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // A signature is what a call of the function reads, and a type it does not write is
+        // a mistake: the parameter and the result are both reported.
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(
+            matches!(
+                diagnostics[0].error(),
+                TypeError::LocalFunctionMissingType {
+                    function,
+                    parameter: Some(0),
+                } if function == &Name::new("id")
+            ),
+            "{diagnostics:?}",
+        );
+        assert!(
+            matches!(
+                diagnostics[1].error(),
+                TypeError::LocalFunctionMissingType {
+                    function,
+                    parameter: None,
+                } if function == &Name::new("id")
+            ),
             "{diagnostics:?}",
         );
     }

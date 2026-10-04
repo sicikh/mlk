@@ -111,14 +111,19 @@ pub enum TypeError {
         /// The type of the operands.
         ty: Ty,
     },
-    /// A `local` declares items inside a body, and the check does not read one yet.
+    /// A function declared inside a body does not write a type its check needs.
     ///
-    /// The items are lowered into the HIR with their names, their signatures, the patterns of
-    /// their parameters and their roots; what a name of one denotes is a function declared
-    /// inside a body, which the check has yet to give a type ([ADR-0017][adr-0017]).
+    /// A function declared inside a body is read the way a declaration of a module is: what
+    /// a call of it takes and gives back is its signature, and inferring one from its body would
+    /// need an order between the functions a `local` declares ([ADR-0017]).
     ///
-    /// [adr-0017]: ../../docs/adr/0017-resolved-types.md
-    Local,
+    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+    LocalFunctionMissingType {
+        /// The function, by the name it is declared under.
+        function: Name,
+        /// Which parameter is not written, or `None` for the result.
+        parameter: Option<usize>,
+    },
 }
 
 impl TypeError {
@@ -180,9 +185,23 @@ impl TypeError {
             Self::NoEquality { ty } => {
                 format!("the language has no equality for two values of `{ty}` yet")
             },
-            Self::Local => {
-                "a `local` declares items inside a body, and the check does not read one yet"
-                    .to_owned()
+            Self::LocalFunctionMissingType {
+                function,
+                parameter: Some(index),
+            } => {
+                format!(
+                    "the function `{function:?}` is declared inside a body and does not declare \
+                 the type of its parameter #{index}",
+                )
+            },
+            Self::LocalFunctionMissingType {
+                function,
+                parameter: None,
+            } => {
+                format!(
+                    "the function `{function:?}` is declared inside a body and does not declare \
+                 the type of its result",
+                )
             },
         }
     }
@@ -225,7 +244,12 @@ impl TypeError {
             Self::RecursiveType => "this type contains itself".to_owned(),
             Self::IntOutOfRange { .. } => "outside the range of `Int`".to_owned(),
             Self::NoEquality { .. } => "this type has no equality yet".to_owned(),
-            Self::Local => "the check does not read a `local` yet".to_owned(),
+            Self::LocalFunctionMissingType {
+                parameter: Some(_), ..
+            } => "the type of this parameter is not written".to_owned(),
+            Self::LocalFunctionMissingType {
+                parameter: None, ..
+            } => "the type of this result is not written".to_owned(),
             Self::Unresolved { .. } | Self::MissingSignature => String::new(),
         }
     }
@@ -249,10 +273,10 @@ impl TypeError {
             Self::NoEquality { .. } => {
                 vec!["`Int` and `Bool` are the types with equality for now".to_owned()]
             },
-            Self::Local => {
+            Self::LocalFunctionMissingType { .. } => {
                 vec![
-                    "the items of a `local` are lowered into the HIR, and the stages after the \
-                 check do not read one yet"
+                    "a function declared inside a body writes its types, the way a declaration \
+                 of a module does, and inference of them is deferred"
                         .to_owned(),
                 ]
             },
@@ -299,7 +323,7 @@ impl DiagKind for TypeError {
             Self::MissingSignature => "12",
             Self::IntOutOfRange { .. } => "13",
             Self::NoEquality { .. } => "14",
-            Self::Local => "15",
+            Self::LocalFunctionMissingType { .. } => "15",
         }
     }
 }

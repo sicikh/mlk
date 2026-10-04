@@ -545,8 +545,23 @@ impl<'a> Emitter<'a> {
 
                 self.insn(span, Instruction::Call(*function));
             },
-            Op::CallLocal { .. } => {
-                self.unsupported("a call to a function declared inside a body", span);
+            Op::CallLocal { function, args } => {
+                let index = self
+                    .ctx
+                    .layout
+                    .local(self.ctx.owner, *function)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "a call to a function declared in a `local` the module did not number"
+                        )
+                    })
+                    .index;
+
+                for argument in args {
+                    self.value(*argument, span);
+                }
+
+                self.insn(span, Instruction::Call(index));
             },
             Op::CallRef {
                 signature,

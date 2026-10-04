@@ -53,6 +53,10 @@ runs! {
     // `main` prints what lambdas compute: one that captures, one that captures nothing, one
     // written in another, and one bound by a `let` and called at two types.
     lambdas: "lambdas",
+
+    // `main` prints what functions declared in a `local` compute: a direct call, two that call
+    // each other, a lambda written in one of them, and a lambda that calls one of them.
+    locals: "locals",
 }
 
 /// Runs the run `name`, and checks it against its snapshot.

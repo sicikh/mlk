@@ -38,8 +38,8 @@ pub(crate) mod test_support;
 pub use crate::{
     body::{
         Block, BlockId, BlockTarget, Body, BodyBuilder, Callee, CaptureData, Code, CodeRef, Const,
-        LambdaClosure, LambdaData, LambdaId, LocalData, LocalId, Operand, Place, PrimOp, Rvalue,
-        Stmt, StmtKind, Terminator, ValueData, ValueId, lambda_closures,
+        LambdaClosure, LambdaData, LambdaId, LocalData, LocalFunction, LocalId, Operand, Place,
+        PrimOp, Rvalue, Stmt, StmtKind, Terminator, ValueData, ValueId, lambda_closures,
     },
     verify::{Form, Invalid},
 };

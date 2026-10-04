@@ -544,10 +544,26 @@ impl<'a> Selector<'a> {
                 )
             },
             Callee::Local(function) => {
+                let plan = self
+                    .ctx
+                    .layout
+                    .local(self.ctx.owner, *function)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "a call to a function declared in a `local` the module did not number"
+                        )
+                    });
+                let shape = plan.signature.shape(self.ctx.layout.builtins());
                 let mut arguments = Vec::with_capacity(args.len());
 
-                for argument in args {
-                    arguments.push(self.operand_value(argument, span));
+                assert_eq!(
+                    args.len(),
+                    shape.params.len(),
+                    "a call to pass one argument per parameter of its callee",
+                );
+
+                for (argument, abi) in args.iter().zip(&shape.params) {
+                    arguments.push(self.operand_into(argument, *abi, span));
                 }
 
                 self.inst(
@@ -555,7 +571,7 @@ impl<'a> Selector<'a> {
                         function: *function,
                         args: arguments,
                     },
-                    Ty::EQREF,
+                    ty_of(shape.ret),
                     span,
                 )
             },

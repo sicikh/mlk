@@ -313,6 +313,12 @@ export interface MirBody {
      * nested where the expression that creates them is written.
      */
     lambdas: MirBody[];
+
+    /**
+     * The functions the body declares in a `local`, each a body of its own in the order the
+     * body declares them.
+     */
+    localFunctions: MirBody[];
 }
 
 /**
@@ -468,6 +474,12 @@ export interface LirBody {
      * lowers them, nested where the expression that creates them is written.
      */
     lambdas: LirBody[];
+
+    /**
+     * The functions the body declares in a `local`, each a lifted function of its own in the
+     * order the body declares them.
+     */
+    localFunctions: LirBody[];
 }
 
 /**

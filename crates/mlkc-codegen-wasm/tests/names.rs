@@ -83,3 +83,26 @@ fn a_lambda_names_the_parameters_it_declared() {
 
     compiled.validate();
 }
+
+/// A function declared in a `local` is a function of the module of its own: it is named by what
+/// the declaration wrote, and its parameters read as the source declared them.
+#[test]
+fn a_function_declared_in_a_local_names_its_parameters() {
+    let compiled = harness::project_with(
+        "//- /main.mlk\nfun main(): Int =\n    \
+         local fun double(x: Int): Int = x * 2 in\n    \
+         double(21)\n",
+        DebugInfo::None,
+    );
+    let (functions, locals) = names(&compiled.wasm.bytes);
+
+    let double = functions
+        .iter()
+        .find_map(|(index, name)| (name == "double").then_some(*index))
+        .expect("the lifted function to be named after the declaration");
+    let names = locals.get(&double).expect("the function to have locals");
+
+    assert_eq!(names.get(&0).map(String::as_str), Some("x"));
+
+    compiled.validate();
+}

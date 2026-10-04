@@ -111,6 +111,14 @@ pub enum Invalid {
         /// What is wrong with it.
         invalid: Box<Invalid>,
     },
+    /// A function declared inside the body does not hold the invariant of the form.
+    LocalFunction {
+        /// The function, by its place in the arena of the body that declares it, if the body is
+        /// the body of one at all.
+        local: Option<mlkc_hir_def::LocalFunctionId>,
+        /// What is wrong with it.
+        invalid: Box<Invalid>,
+    },
     /// A capture is read outside a lambda body.
     CaptureOutsideLambda,
     /// A capture index is not one of the lambda's captures.
@@ -213,6 +221,22 @@ impl fmt::Display for Invalid {
                     lambda.index()
                 )
             },
+            Self::LocalFunction { local, invalid } => {
+                match local {
+                    Some(local) => {
+                        write!(
+                            f,
+                            "the function {local:?} declared inside the body is not well-formed: {invalid}",
+                        )
+                    },
+                    None => {
+                        write!(
+                            f,
+                            "a body of a function declared inside the body is not well-formed: {invalid}",
+                        )
+                    },
+                }
+            },
             Self::CaptureOutsideLambda => {
                 f.write_str("a capture is read, and the body it is read in is not a lambda")
             },
@@ -237,7 +261,8 @@ impl Body {
         self.validate(Form::Ssa)
     }
 
-    /// Checks that the body and every lambda it wrote hold the invariant of `form`.
+    /// Checks that the body, every lambda it wrote, and every function declared inside it hold
+    /// the invariant of `form`.
     pub fn validate(&self, form: Form) -> Result<(), Invalid> {
         self.code().validate(form, None)?;
 
@@ -250,6 +275,17 @@ impl Body {
                         invalid: Box::new(invalid),
                     }
                 })?;
+        }
+
+        for local in &self.local_functions {
+            let id = local.local.as_ref().map(|data| data.id);
+
+            local.validate(form).map_err(|invalid| {
+                Invalid::LocalFunction {
+                    local: id,
+                    invalid: Box::new(invalid),
+                }
+            })?;
         }
 
         Ok(())

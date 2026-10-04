@@ -46,13 +46,39 @@ pub fn construct_ssa(body: &Body) -> Body {
 
     Body {
         owner: body.owner.clone(),
-        local: body.local,
+        local: body.local.clone(),
         params: code.params,
         entry: code.entry,
         blocks: code.blocks,
         values: code.values,
         locals: code.locals,
         lambdas,
+        local_functions: body
+            .local_functions
+            .iter()
+            .map(construct_ssa_local)
+            .collect(),
+    }
+}
+
+/// Builds the SSA form of one function declared inside a body.
+///
+/// The lambdas of the owner are the owner's, not the function's: a lambda written inside
+/// a function declared in a `local` is an entry of the arena of the body that declares the
+/// function, and the closure that creates it reads it by the same id.
+fn construct_ssa_local(local: &Body) -> Body {
+    let code = Ssa::new(local.code()).run();
+
+    Body {
+        owner: local.owner.clone(),
+        local: local.local.clone(),
+        params: code.params,
+        entry: code.entry,
+        blocks: code.blocks,
+        values: code.values,
+        locals: code.locals,
+        lambdas: Arena::default(),
+        local_functions: Vec::new(),
     }
 }
 

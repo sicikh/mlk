@@ -10,7 +10,7 @@
 
 use std::{fmt, sync::Arc};
 
-use mlkc_hir_def::{EntityLoc, FunctionLoc, ItemLocLike};
+use mlkc_hir_def::{EntityLoc, FunctionLoc, ItemLocLike, LocalFunctionId};
 use mlkc_mir::{
     BlockTarget, Callee, CodeRef, Const, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator,
 };
@@ -183,6 +183,36 @@ impl<'a> Interpreter<'a> {
         let lambda = &body.lambdas[closure.lambda];
 
         self.eval_code(lambda.code(), &closure.writer, &closure.captures, args)
+    }
+
+    /// Calls a function declared inside the body of `writer`, entered without an environment.
+    ///
+    /// The function is an entry of the owner's list, by its place in the arena of the body that
+    /// declares it; a call of it is a call of the module of its own, not a closure ([ADR-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    fn call_local(
+        &mut self,
+        writer: &EntityLoc<FunctionLoc>,
+        function: LocalFunctionId,
+        args: &[Value],
+        span: Span,
+    ) -> Result<Value, Trap> {
+        let Some(body) = self.program.body(writer) else {
+            return Err(Trap::MissingBody {
+                entity: writer.clone(),
+            });
+        };
+
+        let body = Arc::clone(body);
+        let Some(local) = body.local_functions.get(function.index()) else {
+            return Err(Trap::Unsupported {
+                what: "a call to a function declared inside a body that is not there",
+                span,
+            });
+        };
+
+        self.eval_code(local.code(), writer, &[], args)
     }
 
     /// Runs one piece of code --- a body's or a lambda's --- and gives back the word it returns.
@@ -414,12 +444,7 @@ impl<'a> Interpreter<'a> {
     ) -> Result<Value, Trap> {
         match callee {
             Callee::Entity(function) => self.call(function, args),
-            Callee::Local(_) => {
-                Err(Trap::Unsupported {
-                    what: "a call to a function declared inside a body",
-                    span,
-                })
-            },
+            Callee::Local(function) => self.call_local(&frame.writer, *function, args, span),
             Callee::Indirect(operand) => {
                 let callee = self.operand(frame, operand, span)?;
 

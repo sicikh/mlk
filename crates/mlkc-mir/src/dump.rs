@@ -15,14 +15,14 @@ use crate::{
     Rvalue, Stmt, StmtKind, Terminator, ValueId,
 };
 
-/// Reads a body as a person reads it: the code of the body, and the code of every lambda it
-/// wrote.
+/// Reads a body as a person reads it: the code of the body, the code of every lambda it wrote,
+/// and the code of every function declared inside it.
 pub fn body(body: &Body) -> String {
     let mut out = String::new();
     let mut header = format!("fun {}", owner_text(body));
 
-    if let Some(local) = body.local {
-        let _ = write!(header, " ({local:?})");
+    if let Some(local) = &body.local {
+        let _ = write!(header, " ({:?} {})", local.id, local.name);
     }
 
     code_text(&mut out, body.code(), &header);
@@ -38,6 +38,18 @@ pub fn body(body: &Body) -> String {
         let _ = writeln!(out);
 
         code_text(&mut out, lambda.code(), &header);
+    }
+
+    for local in &body.local_functions {
+        let Some(data) = &local.local else {
+            continue;
+        };
+
+        let header = format!("local {:?} {}: {}", data.id, data.name, data.ty);
+
+        let _ = writeln!(out);
+
+        code_text(&mut out, local.code(), &header);
     }
 
     out

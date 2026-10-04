@@ -235,8 +235,9 @@ impl Driver {
 
 /// The entities a call of a body names, in the order of their entities.
 ///
-/// A call written inside a lambda is a call of the module like any other: the lambdas of a body
-/// are walked with it ([ADR-0026][adr-0026]).
+/// A call written inside a lambda or inside a function declared in a `local` is a call of the
+/// module like any other: the lambdas and the functions a body declares are walked with it
+/// ([ADR-0026][adr-0026]).
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 fn callees_of(functions: &[ModuleFunction]) -> BTreeSet<EntityLoc<FunctionLoc>> {
@@ -258,14 +259,22 @@ fn callees_of(functions: &[ModuleFunction]) -> BTreeSet<EntityLoc<FunctionLoc>> 
         }
     }
 
+    fn collect_body(body: &mlkc_mir::Body, callees: &mut BTreeSet<EntityLoc<FunctionLoc>>) {
+        collect(body.code(), callees);
+
+        for (_, lambda) in body.lambdas.iter() {
+            collect(lambda.code(), callees);
+        }
+
+        for local in &body.local_functions {
+            collect_body(local, callees);
+        }
+    }
+
     let mut callees = BTreeSet::new();
 
     for function in functions {
-        collect(function.body.code(), &mut callees);
-
-        for (_, lambda) in function.body.lambdas.iter() {
-            collect(lambda.code(), &mut callees);
-        }
+        collect_body(&function.body, &mut callees);
     }
 
     callees

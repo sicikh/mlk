@@ -40,8 +40,8 @@ use mlkc_la_arena::{Arena, ArenaMap};
 use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
     Block, BlockId, BlockTarget, Body as MirBody, BodyBuilder, Callee, CaptureData, Const,
-    LambdaData, LocalData, LocalId, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator,
-    ValueData,
+    LambdaData, LocalData, LocalFunction, LocalId, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind,
+    Terminator, ValueData,
 };
 use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
@@ -80,6 +80,60 @@ pub fn lower_body(
     let module = owner.module();
     let mut walk = Walk::of(deps.graph(), deps.closure());
     let mut lambdas = Arena::new();
+    let mut local_functions = Vec::new();
+
+    // The functions declared inside the body are lowered first: the lambdas they wrote are
+    // entries of the same arena as the lambdas of the body itself ([ADR-0026]), and the body is
+    // handed the arena whole.
+    //
+    // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    for id in body.local_function_ids() {
+        let data = &body[id];
+        let ty = checked
+            .local_type(LocalDefId::Function(id))
+            .cloned()
+            .unwrap_or(Ty::Error);
+        let param_names = data
+            .params
+            .iter()
+            .map(|pat| {
+                match &body[*pat] {
+                    Pat::Bind(name) => Some(name.clone()),
+                    Pat::Missing | Pat::Wildcard => None,
+                }
+            })
+            .collect();
+        let root = body
+            .local_function_root(id)
+            .expect("a function declared inside a body to have a root");
+        let local = LocalFunction {
+            id,
+            name: data.name.clone(),
+            ty,
+            param_names,
+        };
+        let mut builder = BodyBuilder::new(owner.clone());
+        let entry = open_block(&mut builder);
+
+        let lowerer = Lowerer {
+            module,
+            body,
+            source_map,
+            checked,
+            deps,
+            resolution,
+            walk: &mut walk,
+            builder,
+            lambdas: &mut lambdas,
+            slots: ArenaMap::default(),
+            pat_slots: ArenaMap::default(),
+            current: entry,
+            stmts: Vec::new(),
+        };
+
+        local_functions.push(lowerer.run_local(entry, root, &data.params, local));
+    }
+
     let mut builder = BodyBuilder::new(owner.clone());
     let entry = open_block(&mut builder);
 
@@ -99,7 +153,10 @@ pub fn lower_body(
         stmts: Vec::new(),
     };
 
-    lowerer.run(entry)
+    let mut lowered = lowerer.run(entry);
+    lowered.local_functions = local_functions;
+
+    lowered
 }
 
 /// Opens a block: a placeholder the lowering fills when control reaches its end.
@@ -169,6 +226,32 @@ impl Lowerer<'_, '_> {
         body.lambdas = std::mem::take(self.lambdas);
 
         body
+    }
+
+    /// Lowers the body of one function declared inside a body and finishes it.
+    ///
+    /// A function declared inside a body captures nothing: it is given its own parameters only,
+    /// and there is no environment to bind. The parameters are bound the way the parameters of
+    /// a body are, and the rest of the walk is the walk of a body.
+    fn run_local(
+        mut self,
+        entry: BlockId,
+        root: ExprId,
+        params: &[PatId],
+        local: LocalFunction,
+    ) -> MirBody {
+        for pat in params {
+            self.parameter(*pat);
+        }
+
+        let value = self.expr(root);
+        let span = self.span_expr(root);
+        self.seal(Terminator::Return {
+            value: Operand::Local(value),
+            span,
+        });
+
+        self.builder.local_function(local).finish(entry)
     }
 
     /// Lowers the code of one lambda and finishes it.
@@ -411,10 +494,12 @@ impl Lowerer<'_, '_> {
             Expr::Lambda { .. } => {
                 ice!("the lowering met a lambda outside the rule that reads one")
             },
-            // A `local` declares items inside a body, and the check reports one: the lowering is
-            // total over the bodies the check accepted, and this is one the check did not.
-            Expr::Local { .. } => {
-                ice!("the lowering met a `local`, and the check accepts no `local`")
+            // A `local` is where the functions it declares are lowered, and what the expression
+            // computes is what stands after the `in`: a declaration is not a value.
+            Expr::Local { body: inner, .. } => {
+                let value = self.expr(*inner);
+
+                Rvalue::Use(Operand::Local(value))
             },
         }
     }
@@ -1278,6 +1363,101 @@ mod tests {
             dump_of(&mir),
             "fun identity (entry b0)\n  params: v0: Int\n  b0:\n    l0(value) = use v0\n    l2 = use l0\n    l3(x) = use l2\n    l4 = use l3\n    l1 = use l4\n    return l1\n",
         );
+    }
+
+    #[test]
+    fn a_function_declared_inside_a_body_is_a_body_of_its_own() {
+        let source = format!(
+            "{CLASSES}fun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
+             double(value)\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(mir.local_functions.len(), 1);
+
+        let local = &mir.local_functions[0];
+        let data = local
+            .local
+            .as_ref()
+            .expect("the body of a function declared inside a body");
+
+        assert_eq!(data.name, Name::new("double"));
+        assert_eq!(data.ty.to_string(), "(Int) -> Int");
+        assert_eq!(data.param_names, [Some(Name::new("x"))]);
+
+        // The call of the function is a `Callee::Local`, and the nested body is entered with
+        // the parameter of the function.
+        assert!(
+            mir.blocks
+                .iter()
+                .flat_map(|(_, block)| block.stmts.iter())
+                .any(|stmt| {
+                    matches!(&stmt.kind, StmtKind::Assign {
+                        rvalue: Rvalue::Call {
+                            callee: Callee::Local(_),
+                            ..
+                        },
+                        ..
+                    })
+                }),
+        );
+        assert_eq!(local.params.len(), 1);
+
+        // The dump reads the function under the body that declares it.
+        assert!(
+            dump_of(&mir).contains("local fun#0 double: (Int) -> Int (entry b0)"),
+            "{}",
+            dump_of(&mir),
+        );
+    }
+
+    #[test]
+    fn a_function_declared_inside_a_body_may_call_itself() {
+        let source = format!(
+            "{CLASSES}fun main(value: Int): Int = local fun down(x: Int): Int = \
+             if x == 0 then 0 else down(x - 1) in down(value)\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(mir.local_functions.len(), 1);
+
+        // The recursive call inside the function names the function itself.
+        let local = &mir.local_functions[0];
+        let calls = local
+            .blocks
+            .iter()
+            .flat_map(|(_, block)| block.stmts.iter())
+            .filter(|stmt| {
+                matches!(&stmt.kind, StmtKind::Assign {
+                    rvalue: Rvalue::Call {
+                        callee: Callee::Local(_),
+                        ..
+                    },
+                    ..
+                })
+            })
+            .count();
+
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn a_lambda_written_in_a_function_declared_inside_a_body_is_a_lambda_of_the_body() {
+        let source = format!(
+            "{CLASSES}fun main(): Int = local fun apply(): Int = (fn(x: Int) -> x)(1) in apply()\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        // The lambdas of the owner are one arena, whichever body of the owner wrote them: the
+        // body of the function declared inside the body carries none of its own.
+        assert_eq!(mir.lambdas.len(), 1);
+        assert!(mir.local_functions[0].lambdas.is_empty());
+        assert_eq!(ssa.lambdas.len(), 1);
+        assert!(ssa.local_functions[0].lambdas.is_empty());
     }
 
     #[test]

@@ -1,0 +1,56 @@
+// What a function declared in a `local` computes, printed by the host: the interpreter in both
+// forms of MIR and the modules instantiated by `wasmtime` have to print the same thing.
+
+//- /main.mlk
+// A function declared in a `local` is called directly: it reads nothing of the body that
+// declares it.
+fun direct(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    double(value)
+
+// Two functions declared together call each other, both ways.
+fun mutual(value: Int): Int =
+    local
+        fun odd(n: Int): Bool = if n == 0 then false else even(n - 1)
+        fun even(n: Int): Bool = if n == 0 then true else odd(n - 1)
+    in
+    if even(value) then 1 else 0
+
+// A lambda written in a function declared in a `local` is an entry of the arena of the body
+// that declares the function, and a lambda written in the body calls the function directly.
+fun through_a_lambda(value: Int): Int =
+    local fun apply(x: Int): Int = (fn(y: Int) -> y + x)(1) in
+    apply(value)
+
+fun from_a_lambda(value: Int): Int =
+    local fun double(x: Int): Int = x * 2 in
+    let apply = fn(y: Int) -> double(y) in
+    apply(value)
+
+// A host function called from a function declared in a `local`.
+fun printed(value: Int): Unit =
+    local fun put(n: Int): Unit = print-int(n) in
+    put(value)
+
+// A `local` written in a function declared in a `local`: every function is lifted into the
+// module, flat.
+fun nested_local(value: Int): Int =
+    local
+        fun outer(x: Int): Int =
+            local fun inner(y: Int): Int = y + 1 in
+            inner(x)
+    in
+    outer(value)
+
+#[entry]
+pub fun main(): Unit =
+    let first = printed(direct(21)) in
+    let second = printed(mutual(10)) in
+    let third = printed(through_a_lambda(40)) in
+    let fourth = printed(from_a_lambda(21)) in
+    let fifth = printed(nested_local(41)) in
+    let _ = first in
+    let _ = second in
+    let _ = third in
+    let _ = fourth in
+    fifth

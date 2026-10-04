@@ -288,15 +288,17 @@ fn rvalue_refinement(
         Rvalue::Prim { op, .. } => of_prim(*op),
         Rvalue::Call { callee, .. } => {
             match callee {
-                Callee::Entity(entity) => {
-                    layout.signature_of(entity).map_or(Refinement::Word, |sig| {
-                        // A call gives back the shape the signature declares; what it refines
-                        // to is the type of the result, which only the shape of a class can
-                        // make narrower than a word.
-                        of_ty(&sig.ret, layout.builtins())
-                    })
+                Callee::Direct(function) => {
+                    layout
+                        .signature_of(function)
+                        .map_or(Refinement::Word, |sig| {
+                            // A call gives back the shape the signature declares; what it refines
+                            // to is the type of the result, which only the shape of a class can
+                            // make narrower than a word.
+                            of_ty(&sig.ret, layout.builtins())
+                        })
                 },
-                Callee::Local(_) | Callee::Indirect(_) => of_ty(place_ty, layout.builtins()),
+                Callee::Indirect(_) => of_ty(place_ty, layout.builtins()),
             }
         },
         Rvalue::Closure { .. } => {

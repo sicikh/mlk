@@ -423,8 +423,7 @@ fun direct (entry b0)
     l2 = call fun#0(l3)
     l1 = use l2
     return l1
-
-local fun#0 double: (Int) -> Int (entry b0)
+fun direct::double (entry b0)
   params: v0: Int
   b0:
     l0(x) = use v0
@@ -442,8 +441,7 @@ fun direct (entry b0)
   b0:
     v1 = call fun#0(v0)
     return v1
-
-local fun#0 double: (Int) -> Int (entry b0)
+fun direct::double (entry b0)
   params: v0: Int
   b0:
     v1 = const 2
@@ -453,12 +451,13 @@ local fun#0 double: (Int) -> Int (entry b0)
 
 LIR:
 
+direct:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
   locals: 
   b0:
-    v1 = call-local fun#0(v0)
+    v1 = call $1(v0)
     return v1
 ```
 
@@ -469,7 +468,7 @@ Structure:
   return v1
 ```
 
-Local function #0:
+direct::double:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -502,8 +501,7 @@ fun mutual (entry b0)
     l2 = call fun#1(l3)
     l1 = use l2
     return l1
-
-local fun#0 odd: (Int) -> Bool (entry b0)
+fun mutual::odd (entry b0)
   params: v0: Int
   b0:
     l0(n) = use v0
@@ -524,8 +522,7 @@ local fun#0 odd: (Int) -> Bool (entry b0)
     goto b3
   b3:
     return l1
-
-local fun#1 even: (Int) -> Bool (entry b0)
+fun mutual::even (entry b0)
   params: v0: Int
   b0:
     l0(n) = use v0
@@ -556,8 +553,7 @@ fun mutual (entry b0)
   b0:
     v1 = call fun#1(v0)
     return v1
-
-local fun#0 odd: (Int) -> Bool (entry b0)
+fun mutual::odd (entry b0)
   params: v0: Int
   b0:
     v1 = const 0
@@ -573,8 +569,7 @@ local fun#0 odd: (Int) -> Bool (entry b0)
     goto b3(v5)
   b3(v7):
     return v7
-
-local fun#1 even: (Int) -> Bool (entry b0)
+fun mutual::even (entry b0)
   params: v0: Int
   b0:
     v1 = const 0
@@ -594,12 +589,13 @@ local fun#1 even: (Int) -> Bool (entry b0)
 
 LIR:
 
+mutual:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
   locals: 
   b0:
-    v1 = call-local fun#1(v0)
+    v1 = call $4(v0)
     return v1
 ```
 
@@ -610,7 +606,7 @@ Structure:
   return v1
 ```
 
-Local function #0:
+mutual::odd:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -629,7 +625,7 @@ lir (entry b0) ret (ref i31)
     v6 = i31.get_s v0
     v7 = i32.sub v6, v5
     v8 = ref.i31 v7
-    v9 = call-local fun#1(v8)
+    v9 = call $4(v8)
     goto b3(v9)
   b3(v1(local 1): (ref i31)):
     return v1
@@ -652,7 +648,7 @@ Structure:
   return v1
 ```
 
-Local function #1:
+mutual::even:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -671,7 +667,7 @@ lir (entry b0) ret (ref i31)
     v6 = i31.get_s v0
     v7 = i32.sub v6, v5
     v8 = ref.i31 v7
-    v9 = call-local fun#0(v8)
+    v9 = call $3(v8)
     goto b3(v9)
   b3(v1(local 1): (ref i31)):
     return v1
@@ -707,7 +703,14 @@ fun with_a_lambda (entry b0)
     l2 = call fun#0(l3)
     l1 = use l2
     return l1
-
+fun with_a_lambda::apply (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = const 1
+    l3 = closure lambda#0 (l0)
+    l1 = call l3(l2)
+    return l1
 lambda #0: (Int) -> Int captures (x: Int) (entry b0)
   params: v0: Int
   b0:
@@ -717,15 +720,6 @@ lambda #0: (Int) -> Int captures (x: Int) (entry b0)
     l4 = use l0
     l2 = prim int-add(l3, l4)
     return l2
-
-local fun#0 apply: (Int) -> Int (entry b0)
-  params: v0: Int
-  b0:
-    l0(x) = use v0
-    l2 = const 1
-    l3 = closure lambda#0 (l0)
-    l1 = call l3(l2)
-    return l1
 ```
 
 SSA form:
@@ -736,31 +730,30 @@ fun with_a_lambda (entry b0)
   b0:
     v1 = call fun#0(v0)
     return v1
-
-lambda #0: (Int) -> Int captures (x: Int) (entry b0)
-  params: v0: Int
-  b0:
-    v1 = capture #0
-    v2 = prim int-add(v0, v1)
-    return v2
-
-local fun#0 apply: (Int) -> Int (entry b0)
+fun with_a_lambda::apply (entry b0)
   params: v0: Int
   b0:
     v1 = const 1
     v2 = closure lambda#0 (v0)
     v3 = call v2(v1)
     return v3
+lambda #0: (Int) -> Int captures (x: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = prim int-add(v0, v1)
+    return v2
 ```
 
 LIR:
 
+with_a_lambda:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
   locals: 
   b0:
-    v1 = call-local fun#0(v0)
+    v1 = call $6(v0)
     return v1
 ```
 
@@ -771,7 +764,7 @@ Structure:
   return v1
 ```
 
-Local function #0:
+with_a_lambda::apply:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -793,7 +786,7 @@ Structure:
   return v6
 ```
 
-Lambda #0:
+with_a_lambda::<mlkc@lambda-0>:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref #2), v1: (ref i31)
@@ -831,22 +824,20 @@ fun from_a_lambda (entry b0)
     l2 = use l5
     l1 = use l2
     return l1
-
-lambda #0: (Int) -> Int captures () (entry b0)
-  params: v0: Int
-  b0:
-    l0(y) = use v0
-    l2 = use l0
-    l1 = call fun#0(l2)
-    return l1
-
-local fun#0 double: (Int) -> Int (entry b0)
+fun from_a_lambda::double (entry b0)
   params: v0: Int
   b0:
     l0(x) = use v0
     l2 = use l0
     l3 = const 2
     l1 = prim int-mul(l2, l3)
+    return l1
+lambda #0: (Int) -> Int captures () (entry b0)
+  params: v0: Int
+  b0:
+    l0(y) = use v0
+    l2 = use l0
+    l1 = call fun#0(l2)
     return l1
 ```
 
@@ -859,29 +850,28 @@ fun from_a_lambda (entry b0)
     v1 = closure lambda#0 ()
     v2 = call v1(v0)
     return v2
-
-lambda #0: (Int) -> Int captures () (entry b0)
-  params: v0: Int
-  b0:
-    v1 = call fun#0(v0)
-    return v1
-
-local fun#0 double: (Int) -> Int (entry b0)
+fun from_a_lambda::double (entry b0)
   params: v0: Int
   b0:
     v1 = const 2
     v2 = prim int-mul(v0, v1)
     return v2
+lambda #0: (Int) -> Int captures () (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
 ```
 
 LIR:
 
+from_a_lambda:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
   locals: 1: (ref #2)
   b0:
-    v1 = ref.func $9
+    v1 = ref.func $10
     v2(local 1) = struct.new #2(v1)
     v3 = struct.get #2.0 v2
     v4 = call-ref #1 v3(v2, v0)
@@ -895,24 +885,7 @@ Structure:
   return v4
 ```
 
-Lambda #0:
-```
-lir (entry b0) ret (ref i31)
-  params: v0: (ref #2), v1: (ref i31)
-  locals: 
-  b0:
-    v2 = call-local fun#0(v1)
-    return v2
-```
-
-Structure:
-
-```
-  leaf b0
-  return v2
-```
-
-Local function #0:
+from_a_lambda::double:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -932,6 +905,23 @@ Structure:
   return v4
 ```
 
+from_a_lambda::<mlkc@lambda-0>:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref #2), v1: (ref i31)
+  locals: 
+  b0:
+    v2 = call $9(v1)
+    return v2
+```
+
+Structure:
+
+```
+  leaf b0
+  return v2
+```
+
 `fun nested_local`
 
 CFG form:
@@ -945,8 +935,7 @@ fun nested_local (entry b0)
     l2 = call fun#0(l3)
     l1 = use l2
     return l1
-
-local fun#0 outer: (Int) -> Int (entry b0)
+fun nested_local::outer (entry b0)
   params: v0: Int
   b0:
     l0(x) = use v0
@@ -954,8 +943,7 @@ local fun#0 outer: (Int) -> Int (entry b0)
     l2 = call fun#1(l3)
     l1 = use l2
     return l1
-
-local fun#1 inner: (Int) -> Int (entry b0)
+fun nested_local::inner (entry b0)
   params: v0: Int
   b0:
     l0(y) = use v0
@@ -973,14 +961,12 @@ fun nested_local (entry b0)
   b0:
     v1 = call fun#0(v0)
     return v1
-
-local fun#0 outer: (Int) -> Int (entry b0)
+fun nested_local::outer (entry b0)
   params: v0: Int
   b0:
     v1 = call fun#1(v0)
     return v1
-
-local fun#1 inner: (Int) -> Int (entry b0)
+fun nested_local::inner (entry b0)
   params: v0: Int
   b0:
     v1 = const 1
@@ -990,12 +976,13 @@ local fun#1 inner: (Int) -> Int (entry b0)
 
 LIR:
 
+nested_local:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
   locals: 
   b0:
-    v1 = call-local fun#0(v0)
+    v1 = call $12(v0)
     return v1
 ```
 
@@ -1006,13 +993,13 @@ Structure:
   return v1
 ```
 
-Local function #0:
+nested_local::outer:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
   locals: 
   b0:
-    v1 = call-local fun#1(v0)
+    v1 = call $13(v0)
     return v1
 ```
 
@@ -1023,7 +1010,7 @@ Structure:
   return v1
 ```
 
-Local function #1:
+nested_local::inner:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)

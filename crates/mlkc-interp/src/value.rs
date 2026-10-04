@@ -9,8 +9,7 @@
 
 use std::sync::Arc;
 
-use mlkc_hir_def::{EntityLoc, FunctionLoc};
-use mlkc_mir::LambdaId;
+use mlkc_mir::FunctionLoc;
 
 /// One word.
 ///
@@ -34,17 +33,15 @@ pub enum Value {
 
 /// The code of a lambda and the words it captured, which is what a closure is ([ADR-0026]).
 ///
-/// A lambda is code the body that wrote it holds: the code is addressed by the entity of that
-/// body and by the place of the lambda in the body's arena, and the words are what
-/// `Rvalue::Capture` reads when the code runs.
+/// A lambda is a function of the module ([ADR-0019][adr-0019]): the code is addressed by the
+/// function it is, and the words are what `Rvalue::Capture` reads when the code runs.
 ///
+/// [adr-0019]: ../../docs/adr/0019-mir.md
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Closure {
-    /// The body that wrote the lambda.
-    pub writer: EntityLoc<FunctionLoc>,
-    /// The lambda, in the arena of the writer.
-    pub lambda: LambdaId,
+    /// The function the closure is code of.
+    pub function: FunctionLoc,
     /// The captured words, in the order the closure was created.
     pub captures: Vec<Value>,
 }

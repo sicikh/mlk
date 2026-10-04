@@ -196,6 +196,7 @@ fun helper (entry b0)
 
 LIR:
 
+helper:
 ```
 lir (entry b0) ret eqref
   locals: 
@@ -236,6 +237,7 @@ fun parameter (entry b0)
 
 LIR:
 
+parameter:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: eqref
@@ -276,6 +278,7 @@ fun inferred (entry b0)
 
 LIR:
 
+inferred:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: eqref
@@ -316,6 +319,7 @@ fun shown (entry b0)
 
 LIR:
 
+shown:
 ```
 lir (entry b0) ret eqref
   params: v0: (ref i31)

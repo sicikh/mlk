@@ -1516,9 +1516,10 @@ fn the_mir_of_a_body_is_the_cfg_form_of_it() {
     // slots the SSA construction will give definitions of their own ([ADR-0019]).
     //
     // [ADR-0019]: ../../docs/adr/0019-mir.md
-    assert_eq!(mir.owner, owner);
-    assert_eq!(mir.params.len(), 1);
-    assert_eq!(mir.validate_cfg(), Ok(()));
+    assert_eq!(mir.root().origin(), &owner);
+    assert_eq!(mir.len(), 1, "a body that declares no function of its own");
+    assert_eq!(mir.root().params.len(), 1);
+    assert_eq!(mir.root().validate_cfg(), Ok(()));
 }
 
 #[test]
@@ -1619,8 +1620,8 @@ fn the_ssa_form_of_a_body_is_reached_by_a_pass() {
         !Arc::ptr_eq(&cfg, &ssa),
         "the SSA form is a pass over the CFG form",
     );
-    assert_eq!(cfg.validate_cfg(), Ok(()));
-    assert_eq!(ssa.validate_ssa(), Ok(()));
+    assert_eq!(cfg.root().validate_cfg(), Ok(()));
+    assert_eq!(ssa.root().validate_ssa(), Ok(()));
 }
 
 #[test]
@@ -1641,9 +1642,15 @@ fn the_lir_of_a_body_is_reached_by_a_pass() {
     //
     // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
     assert!(Arc::ptr_eq(&lir, &again), "the slot was built twice");
-    assert_eq!(lir.body.validate(), Ok(()));
-    assert_eq!(lir.body.validate_locals(), Ok(()));
-    assert_eq!(lir.body.params.len(), ssa.params.len());
+
+    let function = lir
+        .functions
+        .first()
+        .expect("the body of the entity to be lowered");
+
+    assert_eq!(function.body.validate(), Ok(()));
+    assert_eq!(function.body.validate_locals(), Ok(()));
+    assert_eq!(function.body.params.len(), ssa.root().params.len());
     assert!(driver.ice().is_none(), "the driver bugged while lowering");
 }
 

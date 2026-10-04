@@ -367,6 +367,7 @@ fun pick (entry b0)
 
 LIR:
 
+pick:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -458,6 +459,7 @@ fun ordered (entry b0)
 
 LIR:
 
+ordered:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31), v1: (ref i31)
@@ -553,6 +555,7 @@ fun where_a_value_belongs (entry b0)
 
 LIR:
 
+where_a_value_belongs:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -642,6 +645,7 @@ fun through_a_let (entry b0)
 
 LIR:
 
+through_a_let:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -724,6 +728,7 @@ fun log (entry b0)
 
 LIR:
 
+log:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -815,6 +820,7 @@ fun log_ordered (entry b0)
 
 LIR:
 
+log_ordered:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31), v1: (ref i31)

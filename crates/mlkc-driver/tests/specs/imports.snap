@@ -113,6 +113,7 @@ fun origin (entry b0)
 
 LIR:
 
+origin:
 ```
 lir (entry b0) ret eqref
   locals: 
@@ -243,6 +244,7 @@ fun make (entry b0)
 
 LIR:
 
+make:
 ```
 lir (entry b0) ret eqref
   locals: 
@@ -419,6 +421,7 @@ fun handle (entry b0)
 
 LIR:
 
+handle:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: eqref, v1: eqref
@@ -461,6 +464,7 @@ fun read (entry b0)
 
 LIR:
 
+read:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: eqref

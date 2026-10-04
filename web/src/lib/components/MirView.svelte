@@ -163,22 +163,6 @@
                 </button>
             </div>
         {/each}
-
-        {#if view.lambdas.length > 0}
-            <div class="lambdas" data-lambdas>
-                {#each view.lambdas as child (child.owner)}
-                    {@render body(child)}
-                {/each}
-            </div>
-        {/if}
-
-        {#if view.localFunctions.length > 0}
-            <div class="lambdas" data-locals>
-                {#each view.localFunctions as child, i (i)}
-                    {@render body(child)}
-                {/each}
-            </div>
-        {/if}
     </section>
 {/snippet}
 
@@ -197,18 +181,6 @@
     .body {
         padding: 0.35rem 0.75rem 0.5rem;
         border-bottom: 1px solid var(--border);
-    }
-
-    /* A lambda or a function declared in a `local` is a body written in another one: its section
-       stands inside its writer, and the line at its left is what says so. */
-    .lambdas {
-        margin: 0.35rem 0 0 0.25rem;
-        border-left: 1px solid var(--border);
-    }
-
-    .lambdas .body {
-        padding-left: 0.6rem;
-        border-bottom: none;
     }
 
     .owner {

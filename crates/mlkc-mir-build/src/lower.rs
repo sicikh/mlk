@@ -21,33 +21,37 @@
 //! walk is total over such a body: what it cannot lower is a mistake the check should have
 //! reported, so it is an internal compiler exception and not a diagnostic ([adr-0019]).
 //!
-//! A lambda is lowered by lifting its code into the body's lambda arena and writing a closure
-//! in its place ([ADR-0026]): what the closure captures are the slots of the bindings the
-//! free-variable analysis found, and inside the lifted code a read of one of them is
-//! `Rvalue::Capture`, which the first statements of the entry block bind to slots of the
-//! lambda's own.
+//! A lambda and a function declared in a `local` are lowered into bodies of their own, flat
+//! ([ADR-0026]): the HIR keeps them inside the body that declares them, because a HIR body is
+//! the unit of incrementality, and MIR lifts them so that nothing after it treats them
+//! specially. Each is entered with its own parameters and its own code; a lambda is moreover
+//! entered with its environment at run time, and what it captured is
+//! [`Body::captures`](mlkc_mir::Body::captures).
 //!
 //! [ADR-0026]: ../../docs/adr/0026-closure-representation.md
 
+use std::sync::Arc;
+
 use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
-    BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, FunctionLoc, ItemTree,
-    LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathData,
-    UnaryOp,
+    BinaryOp, Body, BodyEntityLoc, BodyLoc, ClassLoc, EntityLoc, Expr, ExprId, ItemLocLike,
+    ItemTree, LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor,
+    PathData, UnaryOp,
 };
 use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, Ty};
-use mlkc_la_arena::{Arena, ArenaMap};
+use mlkc_la_arena::ArenaMap;
 use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
-    Block, BlockId, BlockTarget, Body as MirBody, BodyBuilder, Callee, CaptureData, Const,
-    LambdaData, LocalData, LocalFunction, LocalId, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind,
-    Terminator, ValueData,
+    Block, BlockId, BlockTarget, Bodies, Body as MirBody, BodyBuilder, Callee, CaptureData, Const,
+    FunctionLoc, LambdaId, LiftedId, LocalData, LocalId, Operand, Place, PrimOp, Rvalue, Stmt,
+    StmtKind, Terminator, ValueData,
 };
 use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
 use mlkc_typeck::CheckDeps;
 
-/// Lowers the checked body of an entity into the CFG form of MIR.
+/// Lowers the checked body of an entity into the CFG form of MIR: the body of the entity, and
+/// every function it declares, each a body of its own.
 ///
 /// `tree` is the surface of the module the body is of: the lowering checks that the entity and
 /// the body are of one module, and reads nothing else of it. `source_map` is where the nodes of
@@ -70,7 +74,7 @@ pub fn lower_body(
     checked: &CheckedBody,
     resolution: &Resolution,
     deps: &CheckDeps,
-) -> MirBody {
+) -> Bodies {
     debug_assert_eq!(
         owner.module(),
         tree.module(),
@@ -79,65 +83,22 @@ pub fn lower_body(
 
     let module = owner.module();
     let mut walk = Walk::of(deps.graph(), deps.closure());
-    let mut lambdas = Arena::new();
-    let mut local_functions = Vec::new();
+    let mut lambdas: Vec<Option<MirBody>> = Vec::new();
 
-    // The functions declared inside the body are lowered first: the lambdas they wrote are
-    // entries of the same arena as the lambdas of the body itself ([ADR-0026]), and the body is
-    // handed the arena whole.
-    //
-    // [adr-0026]: ../../docs/adr/0026-closure-representation.md
-    for id in body.local_function_ids() {
-        let data = &body[id];
-        let ty = checked
-            .local_type(LocalDefId::Function(id))
-            .cloned()
-            .unwrap_or(Ty::Error);
-        let param_names = data
-            .params
-            .iter()
-            .map(|pat| {
-                match &body[*pat] {
-                    Pat::Bind(name) => Some(name.clone()),
-                    Pat::Missing | Pat::Wildcard => None,
-                }
-            })
-            .collect();
-        let root = body
-            .local_function_root(id)
-            .expect("a function declared inside a body to have a root");
-        let local = LocalFunction {
-            id,
-            name: data.name.clone(),
-            ty,
-            param_names,
-        };
-        let mut builder = BodyBuilder::new(owner.clone());
-        let entry = open_block(&mut builder);
-
-        let lowerer = Lowerer {
-            module,
-            body,
-            source_map,
-            checked,
-            deps,
-            resolution,
-            walk: &mut walk,
-            builder,
-            lambdas: &mut lambdas,
-            slots: ArenaMap::default(),
-            pat_slots: ArenaMap::default(),
-            current: entry,
-            stmts: Vec::new(),
-        };
-
-        local_functions.push(lowerer.run_local(entry, root, &data.params, local));
-    }
-
-    let mut builder = BodyBuilder::new(owner.clone());
+    // The body of the entity itself, first: its code is what a reader starts from, and the
+    // bodies lifted out of it follow it.
+    let ty = deps
+        .types(module)
+        .and_then(|types| types.get(&EntityLoc::from(owner.clone())).cloned())
+        .unwrap_or(Ty::Error);
+    let function = FunctionLoc::Entity(owner.clone());
+    let mut builder = BodyBuilder::new(function.clone(), ty)
+        .name(owner.item.name().cloned())
+        .param_names(param_names(body, body.params()));
     let entry = open_block(&mut builder);
-
     let lowerer = Lowerer {
+        origin: owner.clone(),
+        function: function.clone(),
         module,
         body,
         source_map,
@@ -153,10 +114,74 @@ pub fn lower_body(
         stmts: Vec::new(),
     };
 
-    let mut lowered = lowerer.run(entry);
-    lowered.local_functions = local_functions;
+    let root = lowerer.run_root(entry);
 
-    lowered
+    // The functions declared in a `local`, in the order the arena of the HIR body holds them.
+    let mut locals = Vec::new();
+
+    for id in body.local_function_ids() {
+        let data = &body[id];
+        let ty = checked
+            .local_type(LocalDefId::Function(id))
+            .cloned()
+            .unwrap_or(Ty::Error);
+        let function = FunctionLoc::Lifted {
+            origin: owner.clone(),
+            id: LiftedId::Local(id),
+        };
+        let mut builder = BodyBuilder::new(function.clone(), ty)
+            .name(Some(data.name.clone()))
+            .param_names(param_names(body, &data.params));
+        let entry = open_block(&mut builder);
+        let root = body
+            .local_function_root(id)
+            .expect("a function declared inside a body to have a root");
+        let lowerer = Lowerer {
+            origin: owner.clone(),
+            function,
+            module,
+            body,
+            source_map,
+            checked,
+            deps,
+            resolution,
+            walk: &mut walk,
+            builder,
+            lambdas: &mut lambdas,
+            slots: ArenaMap::default(),
+            pat_slots: ArenaMap::default(),
+            current: entry,
+            stmts: Vec::new(),
+        };
+
+        locals.push(lowerer.run(entry, root, &data.params));
+    }
+
+    // The lambdas, in the order they were written; every entry was filled by the walk that
+    // wrote it.
+    let lifted = lambdas
+        .into_iter()
+        .map(|lambda| lambda.expect("every lambda the lowering allocated to be written"));
+    let mut bodies = Vec::with_capacity(1 + locals.len());
+
+    bodies.push(Arc::new(root));
+    bodies.extend(locals.into_iter().map(Arc::new));
+    bodies.extend(lifted.map(Arc::new));
+
+    Bodies { bodies }
+}
+
+/// The names of the parameters of a function, in order.
+fn param_names(body: &Body, params: &[PatId]) -> Vec<Option<Name>> {
+    params
+        .iter()
+        .map(|pat| {
+            match &body[*pat] {
+                Pat::Bind(name) => Some(name.clone()),
+                Pat::Missing | Pat::Wildcard => None,
+            }
+        })
+        .collect()
 }
 
 /// Opens a block: a placeholder the lowering fills when control reaches its end.
@@ -175,6 +200,10 @@ fn open_block(builder: &mut BodyBuilder) -> BlockId {
 
 /// The lowering of one body.
 struct Lowerer<'a, 'g> {
+    /// The entity whose HIR body is being lowered; every function lifted out of it names it.
+    origin: BodyEntityLoc,
+    /// The function being lowered.
+    function: FunctionLoc,
     /// The module the body is of.
     module: ModuleId,
     /// The HIR body.
@@ -192,11 +221,13 @@ struct Lowerer<'a, 'g> {
     walk: &'a mut Walk<'g>,
     /// The MIR body under construction.
     builder: BodyBuilder,
-    /// The lambdas written in the body, flat: the code a lambda lifts is one of these, and a
-    /// lambda written inside a lambda is another ([ADR-0026]).
+    /// The lambdas written while this HIR body is lowered, flat, by their place in the order
+    /// they were written. A body is allocated an entry when the walk meets the expression that
+    /// writes it, and the entry is filled once the lambda's own walk is over, so that a lambda
+    /// written inside a lambda is an entry of the same list ([ADR-0026]).
     ///
     /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-    lambdas: &'a mut Arena<LambdaData>,
+    lambdas: &'a mut Vec<Option<MirBody>>,
     /// The slot of every expression, once it is lowered.
     slots: ArenaMap<ExprId, LocalId>,
     /// The slot of every pattern, once it is bound.
@@ -209,37 +240,28 @@ struct Lowerer<'a, 'g> {
 }
 
 impl Lowerer<'_, '_> {
-    /// Lowers the body and finishes it.
-    fn run(mut self, entry: BlockId) -> MirBody {
+    /// Lowers the body of the entity itself and finishes it.
+    fn run_root(mut self, entry: BlockId) -> MirBody {
         for pat in self.body.params() {
             self.parameter(*pat);
         }
 
-        let root = self.expr(self.body.root());
-        let span = self.span_expr(self.body.root());
+        let root = self.body.root();
+        let value = self.expr(root);
+        let span = self.span_expr(root);
         self.seal(Terminator::Return {
-            value: Operand::Local(root),
+            value: Operand::Local(value),
             span,
         });
 
-        let mut body = self.builder.finish(entry);
-        body.lambdas = std::mem::take(self.lambdas);
-
-        body
+        self.builder.finish(entry)
     }
 
     /// Lowers the body of one function declared inside a body and finishes it.
     ///
     /// A function declared inside a body captures nothing: it is given its own parameters only,
-    /// and there is no environment to bind. The parameters are bound the way the parameters of
-    /// a body are, and the rest of the walk is the walk of a body.
-    fn run_local(
-        mut self,
-        entry: BlockId,
-        root: ExprId,
-        params: &[PatId],
-        local: LocalFunction,
-    ) -> MirBody {
+    /// and there is no environment to bind.
+    fn run(mut self, entry: BlockId, root: ExprId, params: &[PatId]) -> MirBody {
         for pat in params {
             self.parameter(*pat);
         }
@@ -251,7 +273,7 @@ impl Lowerer<'_, '_> {
             span,
         });
 
-        self.builder.local_function(local).finish(entry)
+        self.builder.finish(entry)
     }
 
     /// Lowers the code of one lambda and finishes it.
@@ -265,8 +287,7 @@ impl Lowerer<'_, '_> {
         root: ExprId,
         params: &[LambdaParam],
         capture_pats: &[PatId],
-        ty: Ty,
-    ) -> LambdaData {
+    ) -> MirBody {
         let mut captures = Vec::with_capacity(capture_pats.len());
 
         for (index, pat) in capture_pats.iter().enumerate() {
@@ -299,16 +320,6 @@ impl Lowerer<'_, '_> {
             self.parameter(param.pat);
         }
 
-        let param_names = params
-            .iter()
-            .map(|param| {
-                match &self.body[param.pat] {
-                    Pat::Bind(name) => Some(name.clone()),
-                    Pat::Missing | Pat::Wildcard => None,
-                }
-            })
-            .collect();
-
         let value = self.expr(root);
         let span = self.span_expr(root);
         self.seal(Terminator::Return {
@@ -316,18 +327,7 @@ impl Lowerer<'_, '_> {
             span,
         });
 
-        let code = self.builder.code(entry);
-
-        LambdaData {
-            ty,
-            captures,
-            params: code.params,
-            param_names,
-            entry: code.entry,
-            blocks: code.blocks,
-            values: code.values,
-            locals: code.locals,
-        }
+        self.builder.captures(captures).finish(entry)
     }
 
     /// Lowers one expression into a slot of its own, and answers that slot.
@@ -369,7 +369,7 @@ impl Lowerer<'_, '_> {
         slot
     }
 
-    /// Lowers a lambda: its code, lifted into the body's lambda arena, and the closure value.
+    /// Lowers a lambda: its code, lifted into a body of its own, and the closure value.
     ///
     /// The captures the HIR found are the operands of the closure, read in this frame; the code
     /// is lowered into a body of its own, whose reads of the captured bindings are
@@ -403,9 +403,25 @@ impl Lowerer<'_, '_> {
             }
         }
 
-        let mut builder = BodyBuilder::default();
+        // The lambda takes its place in the order the walk wrote it, before its own body is
+        // lowered: a lambda written inside it takes the next place, and the body of this one is
+        // filled in after the walk of everything it writes is over.
+        let id = LambdaId::new(self.lambdas.len() as u32);
+        let function = FunctionLoc::Lifted {
+            origin: self.origin.clone(),
+            id: LiftedId::Lambda(id),
+        };
+
+        self.lambdas.push(None);
+
+        let mut builder = BodyBuilder::new(function.clone(), ty).param_names(param_names(
+            self.body,
+            &params.iter().map(|param| param.pat).collect::<Vec<_>>(),
+        ));
         let entry = open_block(&mut builder);
         let lowerer = Lowerer {
+            origin: self.origin.clone(),
+            function,
             module: self.module,
             body: self.body,
             source_map: self.source_map,
@@ -421,11 +437,12 @@ impl Lowerer<'_, '_> {
             stmts: Vec::new(),
         };
 
-        let data = lowerer.run_lambda(entry, *body, params, captures, ty);
-        let lambda = self.lambdas.alloc(data);
+        let lowered = lowerer.run_lambda(entry, *body, params, captures);
+
+        self.lambdas[id.index()] = Some(lowered);
 
         Rvalue::Closure {
-            lambda,
+            lambda: id,
             captures: operands,
         }
     }
@@ -762,7 +779,12 @@ impl Lowerer<'_, '_> {
                     },
                 }
             },
-            PathAnchor::Local(LocalDefId::Function(local)) => Callee::Local(local),
+            PathAnchor::Local(LocalDefId::Function(local)) => {
+                Callee::Direct(FunctionLoc::Lifted {
+                    origin: self.origin.clone(),
+                    id: LiftedId::Local(local),
+                })
+            },
             PathAnchor::Local(LocalDefId::Const(_)) => {
                 ice!(
                     "the lowering met a call of the constant `{}`, and the check accepted it",
@@ -776,14 +798,14 @@ impl Lowerer<'_, '_> {
 
                 match entity {
                     Some(entity) => {
-                        match FunctionLoc::try_from(entity.item.clone()) {
-                            Ok(function) => {
-                                Callee::Entity(EntityLoc {
+                        match BodyLoc::try_from(entity.item.clone()) {
+                            Ok(item @ BodyLoc::Function(_)) => {
+                                Callee::Direct(FunctionLoc::Entity(EntityLoc {
                                     module: entity.module,
-                                    item: function,
-                                })
+                                    item,
+                                }))
                             },
-                            Err(_) => {
+                            _ => {
                                 ice!(
                                     "the lowering met a call of `{}`, which is not a function, and the \
                              check accepted it",
@@ -1032,8 +1054,9 @@ mod tests {
         }
     }
 
-    /// Checks the first body of `source`, lowers it, and answers the MIR and the SSA form of it.
-    fn lower(source: &str) -> (MirBody, MirBody) {
+    /// Checks the first body of `source`, lowers it, and answers the MIR and the SSA form of it:
+    /// the body of the entity and every function lifted out of it, flat.
+    fn lower(source: &str) -> (Bodies, Bodies) {
         let fixture = fixture(source);
         let (owner, body) = fixture.bodies.first().expect("a body of the fixture");
         let (checked, diagnostics) = check_body(
@@ -1069,18 +1092,25 @@ mod tests {
         );
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
-        assert_eq!(mir.lambdas.len(), 1);
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
+        assert_eq!(mir.len(), 2, "the body of the entity and its lambda");
 
-        // What the lambda captured is what its body reads of the enclosing body, and the read
-        // inside the lifted code is a `Capture`, bound to a slot of the lambda's own.
-        let (lambda, data) = mir.lambdas.iter().next().expect("a lambda");
+        // The lambda is a function of its own, with the type the checker gave it and what its
+        // body reads of the enclosing body; the read inside the lifted code is a `Capture`,
+        // bound to a slot of the lambda's own.
+        let lambda = mir
+            .bodies
+            .iter()
+            .find(|body| body.is_lambda())
+            .expect("the lifted lambda");
+        let id = lambda.function.lambda().expect("the id of a lambda");
 
-        assert_eq!(data.ty.to_string(), "(Int) -> Int");
-        assert_eq!(data.captures.len(), 1);
-        assert_eq!(data.captures[0].name, Some(Name::new("base")));
+        assert_eq!(lambda.ty.to_string(), "(Int) -> Int");
+        assert_eq!(lambda.captures.len(), 1);
+        assert_eq!(lambda.captures[0].name, Some(Name::new("base")));
         assert_eq!(
-            data.blocks
+            lambda
+                .blocks
                 .iter()
                 .flat_map(|(_, block)| block.stmts.iter())
                 .filter(|stmt| {
@@ -1095,6 +1125,7 @@ mod tests {
 
         // The enclosing body creates the closure over the slot the captured binding holds.
         let created = mir
+            .root()
             .blocks
             .iter()
             .flat_map(|(_, block)| block.stmts.iter())
@@ -1113,23 +1144,26 @@ mod tests {
             })
             .expect("the body to create a closure");
 
-        assert_eq!(created, (lambda, 1));
+        assert_eq!(created, (id, 1));
 
         // The SSA form of the lambda is built with the body's, and its captures are values of
         // its own frame, so it holds no slot.
-        assert_eq!(ssa.validate_ssa(), Ok(()));
-        assert_eq!(ssa.lambdas.len(), 1);
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
 
-        let (_, data) = ssa.lambdas.iter().next().expect("a lambda");
+        let lambda = ssa
+            .bodies
+            .iter()
+            .find(|body| body.is_lambda())
+            .expect("the lifted lambda");
 
         assert!(
-            data.locals.is_empty(),
+            lambda.locals.is_empty(),
             "the SSA form of a lambda has no slots"
         );
     }
 
     #[test]
-    fn a_nested_lambda_lives_in_the_arena_of_the_body_that_wrote_it() {
+    fn a_nested_lambda_is_a_function_of_the_body_that_wrote_it() {
         let source = format!(
             "{CLASSES}fun main(): Int = \
              let base = 40 in \
@@ -1138,26 +1172,27 @@ mod tests {
         );
         let (mir, _) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
+        assert_eq!(mir.len(), 3, "the body of the entity and two lambdas");
 
-        // Both lambdas are entries of the body's flat arena: the outer one captures the `let`,
-        // and the inner one captures the outer lambda's parameter and its capture.
-        assert_eq!(mir.lambdas.len(), 2);
-
-        let (outer, data) = mir
-            .lambdas
+        // Every lambda is a body of its own: the outer one captures the `let`, and the inner
+        // one captures the outer lambda's parameter and its capture.
+        let outer = mir
+            .bodies
             .iter()
-            .find(|(_, data)| data.captures.len() == 1)
+            .find(|body| body.captures.len() == 1)
             .expect("the outer lambda");
-        let (inner, inner_data) = mir
-            .lambdas
+        let inner = mir
+            .bodies
             .iter()
-            .find(|(_, data)| data.captures.len() == 2)
+            .find(|body| body.captures.len() == 2)
             .expect("the inner lambda");
+        let outer_id = outer.function.lambda().expect("the outer lambda's id");
+        let inner_id = inner.function.lambda().expect("the inner lambda's id");
 
-        assert_eq!(data.captures[0].name, Some(Name::new("base")));
-        assert_eq!(inner_data.captures[0].name, Some(Name::new("x")));
-        assert_eq!(inner_data.captures[1].name, Some(Name::new("base")));
+        assert_eq!(outer.captures[0].name, Some(Name::new("base")));
+        assert_eq!(inner.captures[0].name, Some(Name::new("x")));
+        assert_eq!(inner.captures[1].name, Some(Name::new("base")));
 
         // The body creates the outer lambda, and the outer lambda's code creates the inner one.
         let created = |code: CodeRef<'_>| -> Vec<LambdaId> {
@@ -1176,9 +1211,9 @@ mod tests {
                 .collect()
         };
 
-        assert_eq!(created(mir.code()), [outer]);
-        assert_eq!(created(mir.lambdas[outer].code()), [inner]);
-        assert_eq!(created(mir.lambdas[inner].code()), []);
+        assert_eq!(created(mir.root().code()), [outer_id]);
+        assert_eq!(created(by_lambda(&mir, outer_id).code()), [inner_id]);
+        assert_eq!(created(by_lambda(&mir, inner_id).code()), []);
     }
 
     #[test]
@@ -1189,7 +1224,7 @@ mod tests {
         );
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
 
         // The condition is a choice of its own: the walk of the condition leaves control in the
         // block the arms of it meet in, and the branch that reads it is written there --- the
@@ -1199,7 +1234,7 @@ mod tests {
             "fun pick (entry b0)\n  params: v0: Bool, v1: Bool, v2: Bool\n  b0:\n    l0(a) = use v0\n    l1(b) = use v1\n    l2(c) = use v2\n    l5 = use l0\n    branch l5 -> b4, b5\n  b1:\n    l8 = const 1\n    l3 = use l8\n    goto b3\n  b2:\n    l9 = const 2\n    l3 = use l9\n    goto b3\n  b3:\n    return l3\n  b4:\n    l6 = use l1\n    l4 = use l6\n    goto b6\n  b5:\n    l7 = use l2\n    l4 = use l7\n    goto b6\n  b6:\n    branch l4 -> b1, b2\n",
         );
 
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun pick (entry b0)\n  params: v0: Bool, v1: Bool, v2: Bool\n  b0:\n    branch v0 -> b4, b5\n  b1:\n    v5 = const 1\n    goto b3(v5)\n  b2:\n    v4 = const 2\n    goto b3(v4)\n  b3(v6):\n    return v6\n  b4:\n    goto b6(v1)\n  b5:\n    goto b6(v2)\n  b6(v3):\n    branch v3 -> b1, b2\n",
@@ -1211,7 +1246,7 @@ mod tests {
         let source = format!("{CLASSES}fun log(flag: Bool): Unit = if flag then log(flag)\n");
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
 
         // The block control falls into when no condition holds writes the unit the expression
         // is, so that what is written after the `if` reads one slot however many arms the
@@ -1221,7 +1256,7 @@ mod tests {
             "fun log (entry b0)\n  params: v0: Bool\n  b0:\n    l0(flag) = use v0\n    l2 = use l0\n    branch l2 -> b1, b2\n  b1:\n    l4 = use l0\n    l3 = call fun log(l4)\n    l1 = use l3\n    goto b3\n  b2:\n    l1 = const unit\n    goto b3\n  b3:\n    return l1\n",
         );
 
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun log (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v2 = call fun log(v0)\n    goto b3(v2)\n  b2:\n    v1 = const unit\n    goto b3(v1)\n  b3(v3):\n    return v3\n",
@@ -1233,7 +1268,7 @@ mod tests {
         let source = format!("{CLASSES}fun pick(flag: Bool): Int = if flag then 1 else 2\n");
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
 
         // The condition is evaluated in the entry block, which branches; every arm writes the
         // slot of the `if` and goes to the block the arms meet in, and what is written after
@@ -1245,7 +1280,7 @@ mod tests {
 
         // The value the arms agree on is born at the join: the SSA form gives it a parameter of
         // the block the arms meet in, and each arm passes its own value.
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v2 = const 1\n    goto b3(v2)\n  b2:\n    v1 = const 2\n    goto b3(v1)\n  b3(v3):\n    return v3\n",
@@ -1260,7 +1295,7 @@ mod tests {
         );
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
 
         // The `elif` is a condition of its own: the arm before it fails into the block that
         // evaluates it, and the block branches to the arm the condition selects and to the
@@ -1270,7 +1305,7 @@ mod tests {
             "fun pick (entry b0)\n  params: v0: Bool, v1: Bool\n  b0:\n    l0(low) = use v0\n    l1(high) = use v1\n    l3 = use l0\n    branch l3 -> b1, b2\n  b1:\n    l5 = const 1\n    l2 = use l5\n    goto b5\n  b2:\n    l4 = use l1\n    branch l4 -> b3, b4\n  b3:\n    l6 = const 2\n    l2 = use l6\n    goto b5\n  b4:\n    l7 = const 3\n    l2 = use l7\n    goto b5\n  b5:\n    return l2\n",
         );
 
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun pick (entry b0)\n  params: v0: Bool, v1: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v4 = const 1\n    goto b5(v4)\n  b2:\n    branch v1 -> b3, b4\n  b3:\n    v3 = const 2\n    goto b5(v3)\n  b4:\n    v2 = const 3\n    goto b5(v2)\n  b5(v5):\n    return v5\n",
@@ -1282,7 +1317,7 @@ mod tests {
         let source = format!("{CLASSES}fun pick(flag: Bool): Int = (if flag then 1 else 2) + 3\n");
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
 
         // What is written after the `if` is written in the block the arms meet in: the sum is
         // computed there, over the slot the arms wrote.
@@ -1291,7 +1326,7 @@ mod tests {
             "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    l0(flag) = use v0\n    l3 = use l0\n    branch l3 -> b1, b2\n  b1:\n    l4 = const 1\n    l2 = use l4\n    goto b3\n  b2:\n    l5 = const 2\n    l2 = use l5\n    goto b3\n  b3:\n    l6 = const 3\n    l1 = prim int-add(l2, l6)\n    return l1\n",
         );
 
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun pick (entry b0)\n  params: v0: Bool\n  b0:\n    branch v0 -> b1, b2\n  b1:\n    v2 = const 1\n    goto b3(v2)\n  b2:\n    v1 = const 2\n    goto b3(v1)\n  b3(v4):\n    v3 = const 3\n    v5 = prim int-add(v4, v3)\n    return v5\n",
@@ -1307,8 +1342,8 @@ mod tests {
 
         // The arm holds a `let` and an `if` of its own: what the arm writes is written where
         // the walk of the arm ended, and the join of the arm's own `if` that is.
-        assert_eq!(mir.validate_cfg(), Ok(()));
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
 
         assert_eq!(
             dump_of(&ssa),
@@ -1323,13 +1358,13 @@ mod tests {
 
         // A truth value is a word like any other: it lowers into the constant it is, and the
         // operator over two of them is the word-level one.
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
         assert_eq!(
             dump_of(&mir),
             "fun both (entry b0)\n  b0:\n    l1 = const true\n    l2 = const false\n    l0 = prim bool-and(l1, l2)\n    return l0\n",
         );
 
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun both (entry b0)\n  b0:\n    v0 = const true\n    v1 = const false\n    v2 = prim bool-and(v0, v1)\n    return v2\n",
@@ -1341,13 +1376,13 @@ mod tests {
         let source = format!("{CLASSES}fun double(value: Int): Int = value + value\n");
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
         assert_eq!(
             dump_of(&mir),
             "fun double (entry b0)\n  params: v0: Int\n  b0:\n    l0(value) = use v0\n    l2 = use l0\n    l3 = use l0\n    l1 = prim int-add(l2, l3)\n    return l1\n",
         );
 
-        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
         assert_eq!(
             dump_of(&ssa),
             "fun double (entry b0)\n  params: v0: Int\n  b0:\n    v1 = prim int-add(v0, v0)\n    return v1\n",
@@ -1373,43 +1408,51 @@ mod tests {
         );
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
-        assert_eq!(ssa.validate_ssa(), Ok(()));
-        assert_eq!(mir.local_functions.len(), 1);
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
+        assert_eq!(
+            mir.len(),
+            2,
+            "the body of the entity and the function it declares"
+        );
 
-        let local = &mir.local_functions[0];
-        let data = local
-            .local
-            .as_ref()
-            .expect("the body of a function declared inside a body");
+        let local = mir
+            .bodies
+            .iter()
+            .find(|body| body.name == Some(Name::new("double")))
+            .expect("the function declared in a `local`");
 
-        assert_eq!(data.name, Name::new("double"));
-        assert_eq!(data.ty.to_string(), "(Int) -> Int");
-        assert_eq!(data.param_names, [Some(Name::new("x"))]);
+        assert_eq!(local.ty.to_string(), "(Int) -> Int");
+        assert_eq!(local.param_names, [Some(Name::new("x"))]);
+        assert_eq!(local.params.len(), 1);
 
-        // The call of the function is a `Callee::Local`, and the nested body is entered with
-        // the parameter of the function.
+        // The call of the function is a direct call of the lifted function, and its code is the
+        // body the list holds.
         assert!(
-            mir.blocks
+            mir.root()
+                .blocks
                 .iter()
                 .flat_map(|(_, block)| block.stmts.iter())
                 .any(|stmt| {
                     matches!(&stmt.kind, StmtKind::Assign {
                         rvalue: Rvalue::Call {
-                            callee: Callee::Local(_),
+                            callee: Callee::Direct(FunctionLoc::Lifted {
+                                id: LiftedId::Local(_),
+                                ..
+                            }),
                             ..
                         },
                         ..
                     })
                 }),
         );
-        assert_eq!(local.params.len(), 1);
 
-        // The dump reads the function under the body that declares it.
+        // The dump reads the function under the header of a function of its own, named under
+        // the entity that declared it.
         assert!(
-            dump_of(&mir).contains("local fun#0 double: (Int) -> Int (entry b0)"),
+            dump_of_body(local).contains("fun main::double (entry b0)"),
             "{}",
-            dump_of(&mir),
+            dump_of_body(local),
         );
     }
 
@@ -1421,12 +1464,15 @@ mod tests {
         );
         let (mir, ssa) = lower(&source);
 
-        assert_eq!(mir.validate_cfg(), Ok(()));
-        assert_eq!(ssa.validate_ssa(), Ok(()));
-        assert_eq!(mir.local_functions.len(), 1);
+        assert_eq!(mir.root().validate_cfg(), Ok(()));
+        assert_eq!(ssa.root().validate_ssa(), Ok(()));
 
         // The recursive call inside the function names the function itself.
-        let local = &mir.local_functions[0];
+        let local = mir
+            .bodies
+            .iter()
+            .find(|body| body.name == Some(Name::new("down")))
+            .expect("the function declared in a `local`");
         let calls = local
             .blocks
             .iter()
@@ -1434,7 +1480,10 @@ mod tests {
             .filter(|stmt| {
                 matches!(&stmt.kind, StmtKind::Assign {
                     rvalue: Rvalue::Call {
-                        callee: Callee::Local(_),
+                        callee: Callee::Direct(FunctionLoc::Lifted {
+                            id: LiftedId::Local(_),
+                            ..
+                        }),
                         ..
                     },
                     ..
@@ -1446,18 +1495,23 @@ mod tests {
     }
 
     #[test]
-    fn a_lambda_written_in_a_function_declared_inside_a_body_is_a_lambda_of_the_body() {
+    fn a_lambda_written_in_a_function_declared_inside_a_body_is_a_body_of_the_owner() {
         let source = format!(
             "{CLASSES}fun main(): Int = local fun apply(): Int = (fn(x: Int) -> x)(1) in apply()\n"
         );
         let (mir, ssa) = lower(&source);
 
-        // The lambdas of the owner are one arena, whichever body of the owner wrote them: the
-        // body of the function declared inside the body carries none of its own.
-        assert_eq!(mir.lambdas.len(), 1);
-        assert!(mir.local_functions[0].lambdas.is_empty());
-        assert_eq!(ssa.lambdas.len(), 1);
-        assert!(ssa.local_functions[0].lambdas.is_empty());
+        // The lambda is a body of the HIR body, whichever function of it wrote the expression,
+        // and the SSA form builds it like every other body.
+        let lambda = mir
+            .bodies
+            .iter()
+            .find(|body| body.is_lambda())
+            .expect("the lifted lambda");
+
+        assert_eq!(lambda.origin(), mir.root().origin());
+        assert_eq!(mir.len(), 3, "the body, a function, and a lambda");
+        assert_eq!(ssa.len(), 3);
     }
 
     #[test]
@@ -1497,8 +1551,23 @@ mod tests {
         assert!(ice.message().contains("1099511627776"), "{ice}");
     }
 
-    /// The dump of a body, which the tests read the lowering and the SSA form by.
-    fn dump_of(body: &MirBody) -> String {
+    /// The dump of the body of the entity, which the tests read the lowering and the SSA form by.
+    fn dump_of(bodies: &Bodies) -> String {
+        mlkc_mir::dump::body(bodies.root())
+    }
+
+    /// The dump of one lifted body.
+    fn dump_of_body(body: &MirBody) -> String {
         mlkc_mir::dump::body(body)
+    }
+
+    /// The body of a lambda, by its id.
+    fn by_lambda(bodies: &Bodies, id: LambdaId) -> &MirBody {
+        bodies
+            .bodies
+            .iter()
+            .find(|body| body.function.lambda() == Some(id))
+            .map(Arc::as_ref)
+            .expect("the body of the lambda")
     }
 }

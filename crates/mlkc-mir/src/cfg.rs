@@ -113,14 +113,15 @@ mod tests {
 
     use super::*;
     use crate::{
-        Block, BlockId, BlockTarget, Body, BodyBuilder, Const, Operand, Place, Rvalue, Stmt,
-        StmtKind, Terminator, ValueData,
+        Block, BlockId, BlockTarget, Body, BodyBuilder, Const, FunctionLoc, Operand, Place, Rvalue,
+        Stmt, StmtKind, Terminator, ValueData,
     };
 
     /// A body of four blocks: an entry that branches to two of them, and a fourth that nothing
     /// reaches.
     fn body_of_four_blocks() -> (Body, BlockId, BlockId, BlockId) {
-        let mut builder = BodyBuilder::new(crate::test_support::owner());
+        let mut builder =
+            BodyBuilder::new(FunctionLoc::Entity(crate::test_support::owner()), Ty::Error);
         let cond = builder.param(ValueData {
             span: Span::dummy(),
             ty: Ty::Error,

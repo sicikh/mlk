@@ -259,6 +259,7 @@ fun get (entry b0)
 
 LIR:
 
+get:
 ```
 lir (entry b0) ret eqref
   locals: 

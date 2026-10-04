@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use mlkc_hir_def::BodyEntityLoc;
-use mlkc_mir::Body as MirBody;
+use mlkc_mir::Bodies;
 use mlkc_mir_build::{construct_ssa, lower_body as lower_mir};
 use mlkc_typeck::CheckDeps;
 
@@ -12,13 +12,17 @@ use super::{Driver, MirSlot, Pass, SsaSlot, Unit};
 impl Driver {
     /// The MIR of `owner` in the CFG form: the checked body lowered, before SSA ([ADR-0019]).
     ///
+    /// The value holds every function the HIR body declares, flat: the body of the entity first,
+    /// and the functions lifted out of it --- the functions declared in a `local`, and the
+    /// lambdas (§[`mlkc_mir::Bodies`]).
+    ///
     /// `None` when the body is not one the front end read clean: the file has no parse, the
     /// parser reported a mistake about it, the lowering of the HIR reported a mistake about the
     /// body, or the check of it did. A body whose meaning is a mistake has no MIR, so no back end
     /// meets an expression whose meaning is one.
     ///
     /// [ADR-0019]: ../../docs/adr/0019-mir.md
-    pub fn mir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<MirBody>> {
+    pub fn mir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<Bodies>> {
         self.checked_mir(owner)
     }
 
@@ -28,7 +32,7 @@ impl Driver {
     /// returned.
     ///
     /// [ADR-0019]: ../../docs/adr/0019-mir.md
-    pub fn mir_ssa(&mut self, owner: &BodyEntityLoc) -> Option<Arc<MirBody>> {
+    pub fn mir_ssa(&mut self, owner: &BodyEntityLoc) -> Option<Arc<Bodies>> {
         let cfg = self.mir(owner)?;
         let unit = Unit::Body(owner.clone());
         let held = self.ssas.get(owner);
@@ -75,7 +79,7 @@ impl Driver {
     }
 
     /// The MIR of one body in the CFG form, computed against the inputs of its check.
-    fn checked_mir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<MirBody>> {
+    fn checked_mir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<Bodies>> {
         let module = owner.module();
 
         // A file the parser reported a mistake about is not compiled: a body of it may hold an
@@ -131,11 +135,16 @@ impl Driver {
             return None;
         }
 
-        // The surfaces the check read are not handed over: the lowering reads the types of the
-        // check's value, and no surface of another module.
-        let deps = CheckDeps::new(inputs.builtins.clone())
+        // The surfaces the check read are handed over for the module's own types alone: the
+        // lowering reads the type of the function whose body it lowers --- what a lifted function
+        // is --- and no surface of another module.
+        let mut deps = CheckDeps::new(inputs.builtins.clone())
             .with_graph(Arc::clone(&self.projects))
             .with_closure(inputs.closure.clone());
+
+        if let Some(types) = inputs.types.get(&module) {
+            deps = deps.with_types(module, Arc::clone(types));
+        }
 
         let started = self.ticking();
         let value = self.guarded(

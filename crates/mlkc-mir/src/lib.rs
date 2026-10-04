@@ -6,8 +6,13 @@
 //! value is a word ([ADR-0018][adr-0018]): the operators say what they compute, and no type of
 //! the representation is written down.
 //!
+//! Every function of MIR is a function of its module: a function declared in a `local` and a
+//! lambda are lifted into bodies of their own ([ADR-0026][adr-0026]), so nothing after MIR reads
+//! a nesting. [`Bodies`] is the flat set one HIR body lowers into.
+//!
 //! [adr-0018]: ../../docs/adr/0018-values-as-words.md
 //! [adr-0019]: ../../docs/adr/0019-mir.md
+//! [adr-0026]: ../../docs/adr/0026-closure-representation.md
 //!
 //! # The two forms
 //!
@@ -23,7 +28,8 @@
 //!
 //! # Modules
 //!
-//! - [`body`] --- the data of one body, and the builder the stages build with.
+//! - [`body`] --- the data of one function, the set of functions of one HIR body, and the
+//!   builder the stages build with.
 //! - [`verify`] --- the verifier: what tells the two forms apart.
 //! - [`dump`] --- a reading of a body, for a person and for a diff.
 
@@ -37,9 +43,9 @@ pub(crate) mod test_support;
 
 pub use crate::{
     body::{
-        Block, BlockId, BlockTarget, Body, BodyBuilder, Callee, CaptureData, Code, CodeRef, Const,
-        LambdaClosure, LambdaData, LambdaId, LocalData, LocalFunction, LocalId, Operand, Place,
-        PrimOp, Rvalue, Stmt, StmtKind, Terminator, ValueData, ValueId, lambda_closures,
+        Block, BlockId, BlockTarget, Bodies, Body, BodyBuilder, Callee, CaptureData, Code, CodeRef,
+        Const, FunctionLoc, LambdaId, LiftedId, LocalData, LocalId, Operand, Place, PrimOp, Rvalue,
+        Stmt, StmtKind, Terminator, ValueData, ValueId,
     },
     verify::{Form, Invalid},
 };

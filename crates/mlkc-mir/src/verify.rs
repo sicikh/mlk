@@ -15,8 +15,8 @@
 use std::{collections::VecDeque, fmt};
 
 use crate::{
-    BlockId, Body, CaptureData, CodeRef, LambdaId, LocalId, Operand, Place, Rvalue, StmtKind,
-    Terminator, ValueId,
+    BlockId, Body, CaptureData, CodeRef, LocalId, Operand, Place, Rvalue, StmtKind, Terminator,
+    ValueId,
     cfg::{Cfg, targets},
 };
 
@@ -103,21 +103,6 @@ pub enum Invalid {
         value: ValueId,
         /// The block.
         block: BlockId,
-    },
-    /// A lambda of the body does not hold the invariant of the form.
-    Lambda {
-        /// The lambda.
-        lambda: LambdaId,
-        /// What is wrong with it.
-        invalid: Box<Invalid>,
-    },
-    /// A function declared inside the body does not hold the invariant of the form.
-    LocalFunction {
-        /// The function, by its place in the arena of the body that declares it, if the body is
-        /// the body of one at all.
-        local: Option<mlkc_hir_def::LocalFunctionId>,
-        /// What is wrong with it.
-        invalid: Box<Invalid>,
     },
     /// A capture is read outside a lambda body.
     CaptureOutsideLambda,
@@ -214,29 +199,6 @@ impl fmt::Display for Invalid {
                     block_text(*block),
                 )
             },
-            Self::Lambda { lambda, invalid } => {
-                write!(
-                    f,
-                    "lambda #{} is not well-formed: {invalid}",
-                    lambda.index()
-                )
-            },
-            Self::LocalFunction { local, invalid } => {
-                match local {
-                    Some(local) => {
-                        write!(
-                            f,
-                            "the function {local:?} declared inside the body is not well-formed: {invalid}",
-                        )
-                    },
-                    None => {
-                        write!(
-                            f,
-                            "a body of a function declared inside the body is not well-formed: {invalid}",
-                        )
-                    },
-                }
-            },
             Self::CaptureOutsideLambda => {
                 f.write_str("a capture is read, and the body it is read in is not a lambda")
             },
@@ -261,34 +223,16 @@ impl Body {
         self.validate(Form::Ssa)
     }
 
-    /// Checks that the body, every lambda it wrote, and every function declared inside it hold
-    /// the invariant of `form`.
+    /// Checks that the body holds the invariant of `form` ([ADR-0019][adr-0019]).
+    ///
+    /// A capture may be read only where the body is a lambda's, and only one the lambda took:
+    /// the captures of the body say which those are.
+    ///
+    /// [adr-0019]: ../../docs/adr/0019-mir.md
     pub fn validate(&self, form: Form) -> Result<(), Invalid> {
-        self.code().validate(form, None)?;
+        let captures = self.is_lambda().then_some(self.captures.as_slice());
 
-        for (lambda, data) in self.lambdas.iter() {
-            data.code()
-                .validate(form, Some(&data.captures))
-                .map_err(|invalid| {
-                    Invalid::Lambda {
-                        lambda,
-                        invalid: Box::new(invalid),
-                    }
-                })?;
-        }
-
-        for local in &self.local_functions {
-            let id = local.local.as_ref().map(|data| data.id);
-
-            local.validate(form).map_err(|invalid| {
-                Invalid::LocalFunction {
-                    local: id,
-                    invalid: Box::new(invalid),
-                }
-            })?;
-        }
-
-        Ok(())
+        self.code().validate(form, captures)
     }
 }
 
@@ -894,8 +838,14 @@ mod tests {
 
     use super::*;
     use crate::{
-        Block, BlockTarget, BodyBuilder, Const, LocalData, PrimOp, Stmt, ValueData, test_support,
+        Block, BlockTarget, BodyBuilder, Const, FunctionLoc, LocalData, PrimOp, Stmt, ValueData,
+        test_support,
     };
+
+    /// A builder of the body of a test function.
+    fn builder() -> BodyBuilder {
+        BodyBuilder::new(FunctionLoc::Entity(test_support::owner()), Ty::Error)
+    }
 
     fn value(builder: &mut BodyBuilder) -> ValueId {
         builder.value(ValueData {
@@ -921,7 +871,7 @@ mod tests {
 
     /// A CFG body of two blocks: the entry assigns a slot and branches to a block that reads it.
     fn cfg_body() -> Body {
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let int = parameter(&mut builder);
         let cond = parameter(&mut builder);
         let slot = slot(&mut builder);
@@ -965,7 +915,7 @@ mod tests {
     /// An SSA body of two blocks: the entry defines a value, and the join takes it as a
     /// parameter.
     fn ssa_body() -> Body {
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let int = parameter(&mut builder);
         let cond = parameter(&mut builder);
         let negated = value(&mut builder);
@@ -1021,7 +971,7 @@ mod tests {
 
     #[test]
     fn a_slot_read_where_no_path_assigns_it_is_a_mistake() {
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let slot = slot(&mut builder);
         let entry = builder.block(Block {
             params: Vec::new(),
@@ -1041,7 +991,7 @@ mod tests {
 
     #[test]
     fn a_body_of_one_statement_holds_the_invariant() {
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let slot = slot(&mut builder);
         let entry = builder.block(Block {
             params: Vec::new(),
@@ -1083,7 +1033,7 @@ mod tests {
     #[test]
     fn a_use_that_its_definition_does_not_dominate_is_a_mistake() {
         // The entry passes a value the join defines: the definition comes after the use.
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let cond = parameter(&mut builder);
         let defined = value(&mut builder);
         let join = value(&mut builder);
@@ -1130,7 +1080,7 @@ mod tests {
 
     #[test]
     fn a_use_before_the_definition_in_one_block_is_a_mistake() {
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let value = value(&mut builder);
         let entry = builder.block(Block {
             params: Vec::new(),
@@ -1179,7 +1129,7 @@ mod tests {
 
     #[test]
     fn a_value_of_a_body_that_nothing_defines_is_a_mistake() {
-        let mut builder = BodyBuilder::new(test_support::owner());
+        let mut builder = builder();
         let undefined = value(&mut builder);
         let entry = builder.block(Block {
             params: Vec::new(),

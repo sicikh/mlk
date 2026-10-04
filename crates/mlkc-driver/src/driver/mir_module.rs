@@ -6,6 +6,11 @@
 //! implements. What an import carries is the name the linker resolves --- the canonical path of
 //! the module the function belongs to, and the name of the function ([ADR-0021]).
 //!
+//! Every function is flat here: the body of an entity, a function declared in a `local`, and a
+//! lambda are functions of the module alike ([ADR-0019][adr-0019]), each named by the entity it
+//! was lifted out of and by what it is there --- `fib`, `fib::aux`, `fib::<mlkc@lambda-0>`.
+//!
+//! [adr-0019]: ../../docs/adr/0019-mir.md
 //! [adr-0021]: ../../docs/adr/0021-translation-units.md
 
 use std::{
@@ -15,9 +20,10 @@ use std::{
 
 use mlkc_codegen_wasm::{FnSignature, ModuleFunction, ModuleImport, ModuleMir};
 use mlkc_hir_def::{
-    BodyLoc, EntityData, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, ModuleId, Name, Pat,
+    BodyLoc, EntityData, EntityLoc, FunctionLoc, ItemLoc, ItemLocLike, ModuleId, Name,
 };
 use mlkc_hir_ty::Ty;
+use mlkc_mir::{Callee, FunctionLoc as MirFunctionLoc, Rvalue, StmtKind};
 
 use super::{Driver, Lowered, ModuleMirSlot, Pass, Unit, entries_are_the_same};
 
@@ -44,7 +50,7 @@ impl Driver {
         Some(format!("{}::{path}", project.as_str()))
     }
 
-    /// The module of `module`: the bodies of its functions, and the functions they call.
+    /// The module of `module`: the functions it declares, flat, and the functions they call.
     ///
     /// `None` when the module is not one the front end read clean, or when a body of it, a
     /// signature it writes, or an import of a callee cannot be read: a module that is not whole
@@ -60,14 +66,12 @@ impl Driver {
         for body in lowered.bodies() {
             let owner = body.owner();
             let BodyLoc::Function(_) = &owner.item else {
-                // A constant's body is a body, but it has no function ABI and nothing calls it.
+                // A constant's body is a body, but it has no function ABI and nothing calls it:
+                // it is not a function of the module, and neither is a function lifted out of it.
                 continue;
             };
 
-            let entity = EntityLoc::from(owner.clone());
-            let Some(Ty::Fn { params, ret }) = types.get(&entity) else {
-                return None;
-            };
+            let entity: EntityLoc = EntityLoc::from(owner.clone());
             let Some(EntityData::Function(data)) =
                 lowered.item_tree().entity_data(entity.item.clone())
             else {
@@ -76,46 +80,56 @@ impl Driver {
             let Some(function_name) = owner.item.name().map(ToString::to_string) else {
                 continue;
             };
+            let lifted = self.mir_ssa(owner)?;
 
-            let hir = &body.body().body;
-            let param_names = hir
-                .params()
-                .iter()
-                .map(|pat| {
-                    match &hir[*pat] {
-                        Pat::Bind(name) => Some(name.clone()),
-                        Pat::Missing | Pat::Wildcard => None,
-                    }
-                })
-                .collect();
-
-            let body = self.mir_ssa(owner)?;
-            bodies.push(Arc::clone(&body));
-
-            functions.push(ModuleFunction {
-                owner: owner.clone(),
-                name: function_name,
-                signature: FnSignature {
+            for mir_body in lifted.iter() {
+                let Ty::Fn { params, ret } = &mir_body.ty else {
+                    return None;
+                };
+                let signature = FnSignature {
                     params: params.clone(),
                     ret: ret.as_ref().clone(),
-                },
-                param_names,
-                exported: data.visibility.is_public(),
-                body,
-            });
+                };
+                let mut param_names = mir_body.param_names.clone();
+
+                // A lambda is entered with its environment first, which no name binds.
+                if mir_body.is_lambda() {
+                    param_names.insert(0, None);
+                }
+
+                let exported = matches!(mir_body.function, MirFunctionLoc::Entity(_))
+                    && data.visibility.is_public();
+
+                bodies.push(Arc::clone(mir_body));
+                functions.push(ModuleFunction {
+                    function: mir_body.function.clone(),
+                    name: mir_body
+                        .function
+                        .name(&function_name, mir_body.name.as_ref()),
+                    signature,
+                    param_names,
+                    exported,
+                    body: Arc::clone(mir_body),
+                });
+            }
         }
 
         let local: BTreeSet<EntityLoc<FunctionLoc>> = functions
             .iter()
             .filter_map(|function| {
-                match &function.owner.item {
-                    BodyLoc::Function(loc) => {
-                        Some(EntityLoc {
-                            module: function.owner.module,
-                            item: loc.clone(),
-                        })
+                match &function.function {
+                    MirFunctionLoc::Entity(owner) => {
+                        match &owner.item {
+                            BodyLoc::Function(loc) => {
+                                Some(EntityLoc {
+                                    module: owner.module,
+                                    item: loc.clone(),
+                                })
+                            },
+                            BodyLoc::Const(_) => None,
+                        }
                     },
-                    BodyLoc::Const(_) => None,
+                    MirFunctionLoc::Lifted { .. } => None,
                 }
             })
             .collect();
@@ -233,48 +247,28 @@ impl Driver {
     }
 }
 
-/// The entities a call of a body names, in the order of their entities.
-///
-/// A call written inside a lambda or inside a function declared in a `local` is a call of the
-/// module like any other: the lambdas and the functions a body declares are walked with it
-/// ([ADR-0026][adr-0026]).
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+/// The entities a call of a module names, whichever function of it wrote the call.
 fn callees_of(functions: &[ModuleFunction]) -> BTreeSet<EntityLoc<FunctionLoc>> {
-    use mlkc_mir::{Callee, CodeRef, Rvalue, StmtKind};
+    let mut callees = BTreeSet::new();
 
-    fn collect(code: CodeRef<'_>, callees: &mut BTreeSet<EntityLoc<FunctionLoc>>) {
-        for (_, block) in code.blocks.iter() {
+    for function in functions {
+        for (_, block) in function.body.code().blocks.iter() {
             for stmt in &block.stmts {
                 let StmtKind::Assign { rvalue, .. } = &stmt.kind;
 
                 if let Rvalue::Call {
-                    callee: Callee::Entity(entity),
+                    callee: Callee::Direct(MirFunctionLoc::Entity(owner)),
                     ..
                 } = rvalue
+                    && let BodyLoc::Function(loc) = &owner.item
                 {
-                    callees.insert(entity.clone());
+                    callees.insert(EntityLoc {
+                        module: owner.module,
+                        item: loc.clone(),
+                    });
                 }
             }
         }
-    }
-
-    fn collect_body(body: &mlkc_mir::Body, callees: &mut BTreeSet<EntityLoc<FunctionLoc>>) {
-        collect(body.code(), callees);
-
-        for (_, lambda) in body.lambdas.iter() {
-            collect(lambda.code(), callees);
-        }
-
-        for local in &body.local_functions {
-            collect_body(local, callees);
-        }
-    }
-
-    let mut callees = BTreeSet::new();
-
-    for function in functions {
-        collect_body(&function.body, &mut callees);
     }
 
     callees

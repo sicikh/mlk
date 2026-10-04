@@ -109,6 +109,7 @@ fun hidden (entry b0)
 
 LIR:
 
+hidden:
 ```
 lir (entry b0) ret (ref i31)
   locals: 

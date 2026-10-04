@@ -8,7 +8,7 @@
 //!
 //! [adr-0019]: ../../../docs/adr/0019-mir.md
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_driver::Driver;
 use mlkc_hir_def::{
@@ -224,8 +224,16 @@ fn programs(driver: &mut Driver, project: &ProjectId, name: &str, compiled: &mut
                 .mir_ssa(body.owner())
                 .expect("a clean body to have an SSA form");
 
-            compiled.cfg.insert(cfg);
-            compiled.ssa.insert(ssa);
+            // Every function the HIR body declares is a function of the program, flat: the body
+            // of the entity, the functions declared in a `local`, and the lambdas.
+            for mir_body in cfg.iter() {
+                compiled.cfg.insert(Arc::clone(mir_body));
+            }
+
+            for mir_body in ssa.iter() {
+                compiled.ssa.insert(Arc::clone(mir_body));
+            }
+
             compiled.entities.insert(key, owner);
         }
     }

@@ -16,81 +16,49 @@
 //!
 //! [adr-0019]: ../../docs/adr/0019-mir.md
 
+use std::sync::Arc;
+
 use mlkc_la_arena::Arena;
 use mlkc_mir::{
-    Block, BlockId, BlockTarget, Body, Callee, Code, CodeRef, LambdaData, LocalId, Operand, Place,
+    Block, BlockId, BlockTarget, Bodies, Body, Callee, Code, CodeRef, LocalId, Operand, Place,
     Rvalue, Stmt, StmtKind, Terminator, ValueData, ValueId, cfg::Cfg,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
-/// Builds the SSA form of a body that is in the CFG form, and of every lambda it wrote.
+/// Builds the SSA form of every body of a HIR body that is in the CFG form.
 ///
 /// # Panics
 ///
 /// A body that does not hold the CFG invariant is a bug of the stage that built it, and the
 /// construction is not a way to recover from one: the precondition is checked in debug builds.
-pub fn construct_ssa(body: &Body) -> Body {
-    debug_assert!(
-        body.validate_cfg().is_ok(),
-        "the SSA construction walks a body in the CFG form",
-    );
-
-    let mut lambdas = Arena::default();
-
-    for (id, lambda) in body.lambdas.iter() {
-        let _ = id;
-        lambdas.alloc(construct_ssa_lambda(lambda));
+pub fn construct_ssa(bodies: &Bodies) -> Bodies {
+    for body in &bodies.bodies {
+        debug_assert!(
+            body.validate_cfg().is_ok(),
+            "the SSA construction walks a body in the CFG form",
+        );
     }
 
-    let code = Ssa::new(body.code()).run();
-
-    Body {
-        owner: body.owner.clone(),
-        local: body.local.clone(),
-        params: code.params,
-        entry: code.entry,
-        blocks: code.blocks,
-        values: code.values,
-        locals: code.locals,
-        lambdas,
-        local_functions: body
-            .local_functions
+    Bodies {
+        bodies: bodies
+            .bodies
             .iter()
-            .map(construct_ssa_local)
+            .map(|body| Arc::new(ssa_body(body)))
             .collect(),
     }
 }
 
-/// Builds the SSA form of one function declared inside a body.
-///
-/// The lambdas of the owner are the owner's, not the function's: a lambda written inside
-/// a function declared in a `local` is an entry of the arena of the body that declares the
-/// function, and the closure that creates it reads it by the same id.
-fn construct_ssa_local(local: &Body) -> Body {
-    let code = Ssa::new(local.code()).run();
+/// Builds the SSA form of one body: its code, with the identity around it.
+fn ssa_body(body: &Body) -> Body {
+    let code = Ssa::new(body.code()).run();
 
     Body {
-        owner: local.owner.clone(),
-        local: local.local.clone(),
+        function: body.function.clone(),
+        name: body.name.clone(),
+        ty: body.ty.clone(),
+        param_names: body.param_names.clone(),
+        captures: body.captures.clone(),
         params: code.params,
-        entry: code.entry,
-        blocks: code.blocks,
-        values: code.values,
-        locals: code.locals,
-        lambdas: Arena::default(),
-        local_functions: Vec::new(),
-    }
-}
-
-/// Builds the SSA form of one lambda of a body.
-fn construct_ssa_lambda(lambda: &LambdaData) -> LambdaData {
-    let code = Ssa::new(lambda.code()).run();
-
-    LambdaData {
-        ty: lambda.ty.clone(),
-        captures: lambda.captures.clone(),
-        params: code.params,
-        param_names: lambda.param_names.clone(),
         entry: code.entry,
         blocks: code.blocks,
         values: code.values,
@@ -316,8 +284,7 @@ impl<'a> Ssa<'a> {
             Rvalue::Call { callee, args } => {
                 Rvalue::Call {
                     callee: match callee {
-                        Callee::Entity(entity) => Callee::Entity(entity.clone()),
-                        Callee::Local(local) => Callee::Local(*local),
+                        Callee::Direct(function) => Callee::Direct(function.clone()),
                         Callee::Indirect(operand) => Callee::Indirect(self.operand(operand, at)),
                     },
                     args: args.iter().map(|arg| self.operand(arg, at)).collect(),
@@ -680,8 +647,7 @@ fn remap_rvalue(rvalue: Rvalue, map: &impl Fn(ValueId) -> ValueId) -> Rvalue {
         Rvalue::Call { callee, args } => {
             Rvalue::Call {
                 callee: match callee {
-                    Callee::Entity(entity) => Callee::Entity(entity),
-                    Callee::Local(local) => Callee::Local(local),
+                    Callee::Direct(function) => Callee::Direct(function.clone()),
                     Callee::Indirect(operand) => Callee::Indirect(remap_operand(operand, map)),
                 },
                 args: args
@@ -792,6 +758,24 @@ mod tests {
 
     use super::*;
 
+    /// A builder of the body of a test function.
+    fn builder() -> BodyBuilder {
+        BodyBuilder::new(
+            mlkc_mir::FunctionLoc::Entity(crate::test_support::owner()),
+            Ty::Error,
+        )
+    }
+
+    /// The SSA form of one body, for a test that walks one.
+    fn ssa(body: Body) -> Body {
+        let bodies = Bodies {
+            bodies: vec![Arc::new(body)],
+        };
+        let constructed = construct_ssa(&bodies);
+
+        Arc::unwrap_or_clone(constructed.bodies.into_iter().next().expect("one body"))
+    }
+
     fn parameter(builder: &mut BodyBuilder) -> ValueId {
         builder.param(ValueData {
             span: Span::dummy(),
@@ -844,7 +828,7 @@ mod tests {
 
     #[test]
     fn a_body_of_one_block_loses_its_slots() {
-        let mut builder = BodyBuilder::new(crate::test_support::owner());
+        let mut builder = builder();
         let int = parameter(&mut builder);
         let x = slot(&mut builder, "x");
         let y = slot(&mut builder, "y");
@@ -859,7 +843,7 @@ mod tests {
             ],
             term: ret(Operand::Local(y)),
         });
-        let body = construct_ssa(&builder.finish(entry));
+        let body = ssa(builder.finish(entry));
 
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
@@ -870,7 +854,7 @@ mod tests {
 
     #[test]
     fn a_join_takes_a_parameter() {
-        let mut builder = BodyBuilder::new(crate::test_support::owner());
+        let mut builder = builder();
         let cond = parameter(&mut builder);
         let x = slot(&mut builder, "x");
         let y = slot(&mut builder, "y");
@@ -911,7 +895,7 @@ mod tests {
             term: ret(Operand::Local(y)),
         };
 
-        let body = construct_ssa(&builder.finish(entry));
+        let body = ssa(builder.finish(entry));
 
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
@@ -922,7 +906,7 @@ mod tests {
 
     #[test]
     fn a_parameter_that_carries_one_value_is_dropped() {
-        let mut builder = BodyBuilder::new(crate::test_support::owner());
+        let mut builder = builder();
         let cond = parameter(&mut builder);
         let x = slot(&mut builder, "x");
         let y = slot(&mut builder, "y");
@@ -963,7 +947,7 @@ mod tests {
             term: ret(Operand::Local(y)),
         };
 
-        let body = construct_ssa(&builder.finish(entry));
+        let body = ssa(builder.finish(entry));
 
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(
@@ -974,7 +958,7 @@ mod tests {
 
     #[test]
     fn a_loop_carries_its_value_in_a_parameter() {
-        let mut builder = BodyBuilder::new(crate::test_support::owner());
+        let mut builder = builder();
         let cond = parameter(&mut builder);
         let x = slot(&mut builder, "x");
         let y = slot(&mut builder, "y");
@@ -1019,7 +1003,7 @@ mod tests {
             term: ret(Operand::Local(z)),
         };
 
-        let body = construct_ssa(&builder.finish(entry));
+        let body = ssa(builder.finish(entry));
 
         assert_eq!(body.validate_ssa(), Ok(()));
         assert_eq!(

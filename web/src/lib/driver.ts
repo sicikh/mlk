@@ -285,7 +285,7 @@ export interface MirLocal {
 
 /** One body of the MIR. */
 export interface MirBody {
-    /** The entity the body belongs to: `fun main`, and `lambda #0` for a lambda of it. */
+    /** The function the body is: `fun main`, `fun main::aux`, `fun main::<mlkc@lambda-0>`. */
     owner: string;
 
     /**
@@ -296,7 +296,7 @@ export interface MirBody {
     /** The block the body is entered at, by position. */
     entry: number;
 
-    /** The parameters of the body: one per parameter of the owner. */
+    /** The parameters of the body: one per parameter of the function. */
     params: MirValue[];
 
     /**
@@ -307,18 +307,6 @@ export interface MirBody {
 
     /** The blocks, in the order they are allocated. */
     blocks: MirBlock[];
-
-    /**
-     * The lambdas the body wrote, each a body of its own in the order the body creates them,
-     * nested where the expression that creates them is written.
-     */
-    lambdas: MirBody[];
-
-    /**
-     * The functions the body declares in a `local`, each a body of its own in the order the
-     * body declares them.
-     */
-    localFunctions: MirBody[];
 }
 
 /**
@@ -327,12 +315,15 @@ export interface MirBody {
  * A body is read the way a person reads it: its blocks, the statements of a block, and the
  * terminator it ends in. Every line and every value carries the range of the buffer it was read
  * from, which is what the editor marks while a pointer is on the line.
+ *
+ * A function declared in a `local` and a lambda are bodies of the module like any other
+ * ([ADR-0019](../../../docs/adr/0019-mir.md)): MIR lifts them into functions of their own.
  */
 export interface Mir {
     /** Which form the bodies are read in: `cfg` or `ssa`. */
     form: string;
 
-    /** The bodies of the module that check clean, in the order it declares them. */
+    /** The functions of the module that check clean, flat, in the order the module numbers them. */
     bodies: MirBody[];
 }
 
@@ -437,7 +428,7 @@ export interface LirStructure {
 
 /** One body of the LIR. */
 export interface LirBody {
-    /** The entity the body belongs to: `fun main`, and `lambda #0` for a lambda of it. */
+    /** The function the body is: `fun main`, `fun main::aux`, `fun main::<mlkc@lambda-0>`. */
     owner: string;
 
     /**
@@ -451,7 +442,7 @@ export interface LirBody {
     /** What the body gives back: `(ref i31)`, `eqref`. */
     ret: string;
 
-    /** The parameters of the body: one per parameter of the owner. */
+    /** The parameters of the body: one per parameter of the function. */
     params: LirValue[];
 
     /**
@@ -468,18 +459,6 @@ export interface LirBody {
 
     /** The blocks, in the order they are allocated. */
     blocks: LirBlock[];
-
-    /**
-     * The lambdas the body wrote, each a lifted function of its own in the order the back end
-     * lowers them, nested where the expression that creates them is written.
-     */
-    lambdas: LirBody[];
-
-    /**
-     * The functions the body declares in a `local`, each a lifted function of its own in the
-     * order the body declares them.
-     */
-    localFunctions: LirBody[];
 }
 
 /**
@@ -491,9 +470,12 @@ export interface LirBody {
  * needs storage lives, and the tree of frames the encoder writes it as. Every line carries the
  * range of the buffer it was read from, which is what the editor marks while a pointer is on
  * the line.
+ *
+ * Every function of the module is a body of its own, flat: MIR lifted what a `local` declares
+ * and what a lambda is out of the body that wrote them ([ADR-0019](../../../docs/adr/0019-mir.md)).
  */
 export interface Lir {
-    /** The bodies of the module that check clean, in the order it declares them. */
+    /** The functions of the module that check clean, flat, in the order the module numbers them. */
     bodies: LirBody[];
 }
 

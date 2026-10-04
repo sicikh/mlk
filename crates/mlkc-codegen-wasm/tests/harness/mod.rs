@@ -14,7 +14,7 @@
 //! [adr-0021]: ../../../docs/adr/0021-translation-units.md
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -26,6 +26,7 @@ use mlkc_codegen_wasm::{
 use mlkc_driver::{Driver, LinkPlan};
 use mlkc_hir_def::{BodyLoc, EntityLoc, FunctionLoc, ModuleId, Name, ProjectData, ProjectId};
 use mlkc_interp::{Extern, Program};
+use mlkc_mir::FunctionLoc as MirFunctionLoc;
 use mlkc_vfs::VfsPath;
 
 /// The name the project of a fixture is compiled under.
@@ -151,7 +152,7 @@ pub fn project_with(fixture: &str, debug: DebugInfo) -> Compiled {
     let module = driver
         .mir_module(id)
         .expect("the module to be read by the front end");
-    let (wasm, diagnostics) = compile(&mut driver, &module, debug);
+    let (wasm, diagnostics) = compile(&mut driver, id, &module, debug);
 
     if let Some(report) = driver.ice() {
         panic!("the driver bugged:\n{report}");
@@ -215,12 +216,26 @@ pub fn run_project(fixture: &str) -> RunProject {
 
         for function in &module.functions {
             ssa.insert(Arc::clone(&function.body));
+        }
 
-            let body = driver
-                .mir(&function.owner)
+        // The CFG form of every function: a HIR body holds its own and the functions lifted out
+        // of it, flat, and the module lists them all ([`Driver::mir`]).
+        let mut origins = BTreeSet::new();
+
+        for function in &module.functions {
+            let origin = function.function.origin().clone();
+
+            if !origins.insert(origin.clone()) {
+                continue;
+            }
+
+            let bodies = driver
+                .mir(&origin)
                 .expect("a body the front end read clean to have a CFG form");
 
-            cfg.insert(body);
+            for body in bodies.iter() {
+                cfg.insert(Arc::clone(body));
+            }
         }
 
         if let Some((entry_module, entry_name)) = &plan.entry
@@ -231,7 +246,10 @@ pub fn run_project(fixture: &str) -> RunProject {
                 .iter()
                 .find(|function| &function.name == entry_name)
                 .expect("the entry to be a function of its module");
-            let BodyLoc::Function(loc) = &function.owner.item else {
+            let MirFunctionLoc::Entity(owner) = &function.function else {
+                panic!("the entry to be a function of the project");
+            };
+            let BodyLoc::Function(loc) = &owner.item else {
                 panic!("the entry to be a function");
             };
 
@@ -321,18 +339,13 @@ fn setup(fixture: &str) -> (Driver, ProjectId) {
 /// [adr-0022]: ../../../docs/adr/0022-wasm-lir.md
 fn compile(
     driver: &mut Driver,
+    module_id: ModuleId,
     module: &ModuleMir,
     debug: DebugInfo,
 ) -> (WasmModule, Vec<CodegenDiag>) {
-    let mut lirs = Vec::with_capacity(module.functions.len());
-
-    for function in &module.functions {
-        let lir = driver
-            .lir(&function.owner)
-            .expect("a function of the module to be lowered");
-
-        lirs.push(lir);
-    }
+    let lirs = driver
+        .module_lir(module_id)
+        .expect("the functions of the module to be lowered");
 
     compile_module(module, &lirs, debug, &sources(driver, module))
 }
@@ -342,12 +355,12 @@ fn compile(
 fn sources(driver: &mut Driver, module: &ModuleMir) -> Sources {
     let primary = module.functions.first().map_or_else(
         || module.name.clone(),
-        |function| driver.file_path(function.owner.module.0).to_string(),
+        |function| driver.file_path(function.function.module().0).to_string(),
     );
     let mut sources = Sources::new(primary);
 
     for function in &module.functions {
-        let file = function.owner.module.0;
+        let file = function.function.module().0;
 
         let Some(lines) = driver.line_index(file) else {
             continue;

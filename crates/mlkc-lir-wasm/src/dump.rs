@@ -194,9 +194,6 @@ pub fn op_text(op: &Op) -> String {
         Call { function, args } => {
             format!("call ${function}({})", value_labels(args))
         },
-        CallLocal { function, args } => {
-            format!("call-local {function:?}({})", value_labels(args))
-        },
         CallRef {
             signature,
             callee,

@@ -20,15 +20,16 @@
 
 use std::fmt;
 
-use mlkc_hir_def::{BodyEntityLoc, Name};
+use mlkc_hir_def::Name;
 use mlkc_lir_wasm::{BlockId, Body, Node, Op, RefTy, Terminator, Ty, ValueId};
+use mlkc_mir::FunctionLoc as MirFunctionLoc;
 use mlkc_span::Span;
 use wasm_encoder::{
     AbstractHeapType, BlockType, Function, HeapType, Instruction, RefType, ValType,
 };
 
 use crate::{
-    module::{FnSignature, LambdaPlan, ModuleLayout},
+    module::{ClosurePlan, FnSignature, ModuleLayout},
     select,
 };
 
@@ -37,8 +38,8 @@ use crate::{
 /// [adr-0009]: ../../docs/adr/0009-pass-contract.md
 #[derive(Debug)]
 pub struct FunctionCtx<'a> {
-    /// The entity whose body wrote the code; a lambda of it is lifted under the same owner.
-    pub owner: &'a BodyEntityLoc,
+    /// The function whose code this is.
+    pub function: &'a MirFunctionLoc,
     /// The name the function is called by, for the debug tables.
     pub name: &'a str,
     /// What the function takes and gives back, without the environment.
@@ -48,8 +49,8 @@ pub struct FunctionCtx<'a> {
     pub param_names: &'a [Option<Name>],
     /// How the functions of the module are numbered, and what they are.
     pub layout: &'a ModuleLayout,
-    /// The lambda whose body this is, and the types of it; `None` for the body of an entity.
-    pub lambda: Option<&'a LambdaPlan>,
+    /// The closure of a lambda whose body this is; `None` for a function that is not one.
+    pub lambda: Option<&'a ClosurePlan>,
 }
 
 impl FunctionCtx<'_> {
@@ -544,24 +545,6 @@ impl<'a> Emitter<'a> {
                 }
 
                 self.insn(span, Instruction::Call(*function));
-            },
-            Op::CallLocal { function, args } => {
-                let index = self
-                    .ctx
-                    .layout
-                    .local(self.ctx.owner, *function)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "a call to a function declared in a `local` the module did not number"
-                        )
-                    })
-                    .index;
-
-                for argument in args {
-                    self.value(*argument, span);
-                }
-
-                self.insn(span, Instruction::Call(index));
             },
             Op::CallRef {
                 signature,

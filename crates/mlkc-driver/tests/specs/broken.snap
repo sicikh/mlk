@@ -251,6 +251,7 @@ fun get (entry b0)
 
 LIR:
 
+get:
 ```
 lir (entry b0) ret eqref
   locals: 
@@ -290,6 +291,7 @@ fun size (entry b0)
 
 LIR:
 
+size:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref i31)
@@ -329,6 +331,7 @@ fun wrong (entry b0)
 
 LIR:
 
+wrong:
 ```
 lir (entry b0) ret eqref
   locals: 

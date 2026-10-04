@@ -7,7 +7,9 @@
 //!
 //! [adr-0019]: ../../docs/adr/0019-mir.md
 
-use mlkc_hir_def::{BodyEntityLoc, EntityLoc, FunctionLoc, LocalFunctionId, Name};
+use std::sync::Arc;
+
+use mlkc_hir_def::{BodyEntityLoc, LocalFunctionId, ModuleId, Name};
 use mlkc_hir_ty::Ty;
 use mlkc_intern::Interned;
 use mlkc_la_arena::{Arena, Idx};
@@ -22,24 +24,190 @@ pub type ValueId = Idx<ValueData>;
 /// The id of a slot inside one body.
 pub type LocalId = Idx<LocalData>;
 
-/// The id of a lambda in the arena of one body.
-pub type LambdaId = Idx<LambdaData>;
-
-/// The MIR of one body.
+/// The id of a lambda inside the HIR body that wrote it.
 ///
-/// The body of an entity that owns one is addressed by the entity's name; a function declared
-/// inside a body has [`Body::local`] set, and its owner is the entity that declares it. The
-/// lambdas written in the body --- and in its lambdas, all of them --- are [ADR-0026]'s
-/// [`Body::lambdas`].
+/// A lambda has no name and no identity that outlives the body it is written in: the number is
+/// its place in the order the lowering wrote it, and the HIR body is the rest of its name
+/// ([ADR-0003][adr-0003]).
+///
+/// [adr-0003]: ../../docs/adr/0003-id-based-ir.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LambdaId(u32);
+
+impl LambdaId {
+    /// The lambda with this place in the order the lowering wrote it.
+    pub const fn new(index: u32) -> Self {
+        Self(index)
+    }
+
+    /// The place of the lambda in the order the lowering wrote it.
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// What a lifted function is inside the HIR body that declares it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LiftedId {
+    /// A function declared in a `local`, by its place in the arena of the HIR body.
+    Local(LocalFunctionId),
+    /// A lambda written in the HIR body.
+    Lambda(LambdaId),
+}
+
+/// The location of a function of the project, as MIR addresses it.
+///
+/// Every function of MIR is a function of its module: the body of an entity, or a function
+/// lifted out of one --- a function declared in a `local`, or a lambda. The HIR keeps those
+/// inside the body that declares them, because a body is the unit of incrementality
+/// ([ADR-0003][adr-0003]); MIR lifts them into functions of their own, so that every stage after
+/// it handles a lifted function the way it handles one of the top level.
+///
+/// [adr-0003]: ../../docs/adr/0003-id-based-ir.md
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FunctionLoc {
+    /// The body of an entity of the project.
+    Entity(BodyEntityLoc),
+    /// A function lifted out of the body of an entity.
+    Lifted {
+        /// The entity whose body declared the function.
+        origin: BodyEntityLoc,
+        /// What the function is in that body.
+        id: LiftedId,
+    },
+}
+
+impl FunctionLoc {
+    /// The entity whose body declared the function.
+    pub fn origin(&self) -> &BodyEntityLoc {
+        match self {
+            Self::Entity(owner) => owner,
+            Self::Lifted { origin, .. } => origin,
+        }
+    }
+
+    /// The module the function belongs to.
+    pub fn module(&self) -> ModuleId {
+        self.origin().module()
+    }
+
+    /// The name of the function inside its module: the name of the entity it is, or the name of
+    /// that entity and what the function is under it --- `fib`, `fib::aux`,
+    /// `fib::<mlkc@lambda-0>`.
+    ///
+    /// `root` is the name of the entity whose body declared the function, and `declared` is the
+    /// name the function was declared under, for a function declared in a `local`.
+    pub fn name(&self, root: &str, declared: Option<&Name>) -> String {
+        match self {
+            Self::Entity(_) => root.to_owned(),
+            Self::Lifted {
+                id: LiftedId::Local(_),
+                ..
+            } => {
+                let declared =
+                    declared.expect("a function declared in a `local` to have a name of its own");
+
+                format!("{root}::{declared}")
+            },
+            Self::Lifted {
+                id: LiftedId::Lambda(lambda),
+                ..
+            } => format!("{root}::<mlkc@lambda-{}>", lambda.index()),
+        }
+    }
+
+    /// Whether the function is a lambda.
+    pub fn is_lambda(&self) -> bool {
+        matches!(self, Self::Lifted {
+            id: LiftedId::Lambda(_),
+            ..
+        })
+    }
+
+    /// The lambda the function is, if it is one.
+    pub fn lambda(&self) -> Option<LambdaId> {
+        match self {
+            Self::Lifted {
+                id: LiftedId::Lambda(lambda),
+                ..
+            } => Some(*lambda),
+            _ => None,
+        }
+    }
+}
+
+/// The MIR of one HIR body: every function it declares, each a body of its own.
+///
+/// The list is flat: the body of the entity first, and then the functions lifted out of it ---
+/// the functions declared in a `local`, and the lambdas --- in the order the lowering wrote
+/// them. The HIR body is the unit of incrementality ([ADR-0003][adr-0003]), so one value holds
+/// all of them; nothing after MIR reads the nesting, because there is none.
+///
+/// [adr-0003]: ../../docs/adr/0003-id-based-ir.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Bodies {
+    /// The bodies, the body of the entity itself first.
+    pub bodies: Vec<Arc<Body>>,
+}
+
+impl Bodies {
+    /// The body of the entity itself.
+    pub fn root(&self) -> &Arc<Body> {
+        self.bodies
+            .first()
+            .expect("a set of bodies to hold its root")
+    }
+
+    /// The body of a function, if the set holds it.
+    pub fn get(&self, function: &FunctionLoc) -> Option<&Arc<Body>> {
+        self.bodies.iter().find(|body| &body.function == function)
+    }
+
+    /// The bodies, the body of the entity first.
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<Body>> {
+        self.bodies.iter()
+    }
+
+    /// How many bodies the set holds.
+    pub fn len(&self) -> usize {
+        self.bodies.len()
+    }
+
+    /// Whether the set holds no body at all.
+    pub fn is_empty(&self) -> bool {
+        self.bodies.is_empty()
+    }
+}
+
+/// The MIR of one function: a control-flow graph over words, and what the function is.
+///
+/// The body of a function is a graph of its own --- its parameters, its blocks, its values, and
+/// its slots are its own, because a function becomes a function of the machine and every stage
+/// that works on code is stated per function ([ADR-0026][adr-0026]). A lambda is a function like
+/// any other, entered with its environment at run time and with what it captured in
+/// [`Body::captures`].
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Body {
-    /// The entity whose body this is.
-    pub owner: BodyEntityLoc,
-    /// The function declared inside a body this body is, if it is one.
-    pub local: Option<LocalFunction>,
-    /// The values the owner is entered with: one per parameter, in the order they are declared.
+    /// The function the body is.
+    pub function: FunctionLoc,
+    /// The name the function was declared under: the name of an entity, and of a function
+    /// declared in a `local`; `None` for a lambda, which has no name of its own.
+    pub name: Option<Name>,
+    /// The type the checker gave the function: what a call of it takes and gives back.
+    pub ty: Ty,
+    /// The names of the parameters, in order; `None` where the source binds no name. A lambda is
+    /// entered with its environment first at run time, which no name binds ([ADR-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    pub param_names: Vec<Option<Name>>,
+    /// What a lambda captured, in the free-variable order of the HIR; empty for any other
+    /// function ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    pub captures: Vec<CaptureData>,
+    /// The values the function is entered with: one per parameter, in the order they are declared.
     ///
     /// A parameter is a value and not a slot: the first statements of the entry block bind the
     /// parameter slots to it, and no form moves the list.
@@ -49,77 +217,6 @@ pub struct Body {
     /// The blocks.
     pub blocks: Arena<Block>,
     /// The values: the parameters of the body, and the definitions of the statements.
-    pub values: Arena<ValueData>,
-    /// The slots of the CFG form; empty once the SSA pass has run.
-    pub locals: Arena<LocalData>,
-    /// The lambdas written in the body, its own lambdas' lambdas among them, in the order the
-    /// lowering made them ([ADR-0026][adr-0026]).
-    ///
-    /// The arena is flat: a lambda of a lambda is an entry of the same arena, and which
-    /// lambda wrote it is read off the [`Rvalue::Closure`] that creates it.
-    ///
-    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-    pub lambdas: Arena<LambdaData>,
-    /// The functions declared inside this body, in the order the body declares them
-    /// ([ADR-0019][adr-0019]).
-    ///
-    /// The list is flat: a function declared in a `local` written inside another one is an entry
-    /// of the same list, the way the arena of the HIR body is flat. A body of one is a body of
-    /// its own --- its parameters, its blocks and its slots are its own --- and the rest of what
-    /// the function is, the name it is declared under and the type the checker gave it, is
-    /// [`LocalFunction`].
-    ///
-    /// A function declared inside a body captures nothing: it is given its own parameters only,
-    /// and what it reads of the module it reaches without an environment. Its code is lifted
-    /// into a function of the module the back end numbers like any other ([ADR-0020]).
-    ///
-    /// [adr-0019]: ../../docs/adr/0019-mir.md
-    /// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
-    pub local_functions: Vec<Body>,
-}
-
-/// A function declared inside a body, as the body it is ([ADR-0019][adr-0019]).
-///
-/// What a function declared inside a body is made of is the body itself; this is the identity
-/// around it: the place it holds in the arena of the body that declares it, the name it is
-/// declared under, the type the checker gave it, and the names of its parameters.
-///
-/// [adr-0019]: ../../docs/adr/0019-mir.md
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalFunction {
-    /// The function, by its place in the arena of the body that declares it.
-    pub id: LocalFunctionId,
-    /// The name the function is declared under.
-    pub name: Name,
-    /// The type the checker gave it: what a call of it takes and gives back.
-    pub ty: Ty,
-    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
-    pub param_names: Vec<Option<Name>>,
-}
-
-/// The code of one lambda: a control-flow graph over words, as a body is.
-///
-/// A lambda is a value whose code the back end lifts into a function of its own
-/// ([ADR-0026][adr-0026]): the type the checker gave it says how the code crosses the ABI, the
-/// captures say what its environment holds, and the rest is a body of its own --- with its own
-/// blocks, values, and slots, because an SSA form and a local space are per function.
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LambdaData {
-    /// The type the checker gave the lambda: what a closure of it takes and gives back.
-    pub ty: Ty,
-    /// The bindings the lambda captured, in the free-variable order of the HIR.
-    pub captures: Vec<CaptureData>,
-    /// The parameters, in the order they are declared.
-    pub params: Vec<ValueId>,
-    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
-    pub param_names: Vec<Option<Name>>,
-    /// The block the lambda enters.
-    pub entry: BlockId,
-    /// The blocks.
-    pub blocks: Arena<Block>,
-    /// The values: the parameters of the lambda, and the definitions of the statements.
     pub values: Arena<ValueData>,
     /// The slots of the CFG form; empty once the SSA pass has run.
     pub locals: Arena<LocalData>,
@@ -136,57 +233,10 @@ pub struct CaptureData {
     pub span: Span,
 }
 
-/// A closure a piece of code creates: the lambda it is made of, and where it is written.
-///
-/// A lambda is created by exactly one `Rvalue::Closure`, in the code that wrote the expression
-/// ([ADR-0026][adr-0026]), and this is what a pass that walks the lambdas of a body reads.
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LambdaClosure {
-    /// The lambda the closure is made of.
-    pub lambda: LambdaId,
-    /// Where the expression that creates it is written.
-    pub span: Span,
-}
-
-/// The lambdas a piece of code creates itself, in the order it creates them.
-///
-/// The walk reads every block, because a lambda created in a block no path reaches is still
-/// a lambda of the code, and the order is the order the blocks and the statements list. A lambda
-/// the code creates once is listed once.
-pub fn lambda_closures(code: CodeRef<'_>) -> Vec<LambdaClosure> {
-    let mut closures: Vec<LambdaClosure> = Vec::new();
-
-    for (_, block) in code.blocks.iter() {
-        for stmt in &block.stmts {
-            let StmtKind::Assign {
-                rvalue: Rvalue::Closure { lambda, .. },
-                ..
-            } = &stmt.kind
-            else {
-                continue;
-            };
-
-            if !closures.iter().any(|closure| closure.lambda == *lambda) {
-                closures.push(LambdaClosure {
-                    lambda: *lambda,
-                    span: stmt.span,
-                });
-            }
-        }
-    }
-
-    closures
-}
-
-/// What a pass reads of a piece of code: the code of a [`Body`] or of a [`LambdaData`].
+/// What a pass reads of a piece of code: the code of a [`Body`].
 ///
 /// A pass that works on code and not on the identity a body carries --- the SSA construction,
-/// the verifier, the dumps, the selection of the back end --- reads this, and one function
-/// serves the body of an entity and the body of a lambda alike ([ADR-0026][adr-0026]).
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+/// the verifier, the dumps, the selection of the back end --- reads this.
 #[derive(Debug, Clone, Copy)]
 pub struct CodeRef<'a> {
     /// The values the code is entered with, in the order they are declared.
@@ -240,18 +290,20 @@ impl Body {
             locals: &self.locals,
         }
     }
-}
 
-impl LambdaData {
-    /// What a pass reads of the lambda's code, whatever the lambda owns.
-    pub fn code(&self) -> CodeRef<'_> {
-        CodeRef {
-            params: &self.params,
-            entry: self.entry,
-            blocks: &self.blocks,
-            values: &self.values,
-            locals: &self.locals,
-        }
+    /// The entity whose body declared the function.
+    pub fn origin(&self) -> &BodyEntityLoc {
+        self.function.origin()
+    }
+
+    /// The module the function belongs to.
+    pub fn module(&self) -> ModuleId {
+        self.function.module()
+    }
+
+    /// Whether the body is the code of a lambda.
+    pub fn is_lambda(&self) -> bool {
+        self.function.is_lambda()
     }
 }
 
@@ -379,11 +431,10 @@ pub enum Rvalue {
 /// What a call calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Callee {
-    /// A function of the project, in this module or in another.
-    Entity(EntityLoc<FunctionLoc>),
-    /// A function declared inside the enclosing body.
-    Local(LocalFunctionId),
-    /// A function held in an operand: later, when functions become values.
+    /// A function of the project, in this module or in another: the body of an entity, a
+    /// function declared in a `local`, or a lambda.
+    Direct(FunctionLoc),
+    /// A function held in an operand: a closure.
     Indirect(Operand),
 }
 
@@ -528,10 +579,13 @@ pub struct BlockTarget {
 ///
 /// The builder owns the arenas, so that a stage allocates blocks, values, and slots in the
 /// order it meets them, and refers to a block it has not filled yet by its id.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BodyBuilder {
-    owner: Option<BodyEntityLoc>,
-    local: Option<LocalFunction>,
+    function: FunctionLoc,
+    name: Option<Name>,
+    ty: Ty,
+    param_names: Vec<Option<Name>>,
+    captures: Vec<CaptureData>,
     params: Vec<ValueId>,
     blocks: Arena<Block>,
     values: Arena<ValueData>,
@@ -539,17 +593,36 @@ pub struct BodyBuilder {
 }
 
 impl BodyBuilder {
-    /// A builder of the body of `owner`.
-    pub fn new(owner: BodyEntityLoc) -> Self {
+    /// A builder of the body of `function`, whose type the checker gave as `ty`.
+    pub fn new(function: FunctionLoc, ty: Ty) -> Self {
         Self {
-            owner: Some(owner),
-            ..Self::default()
+            function,
+            name: None,
+            ty,
+            param_names: Vec::new(),
+            captures: Vec::new(),
+            params: Vec::new(),
+            blocks: Arena::default(),
+            values: Arena::default(),
+            locals: Arena::default(),
         }
     }
 
-    /// Sets the function declared inside a body that the body is.
-    pub fn local_function(mut self, local: LocalFunction) -> Self {
-        self.local = Some(local);
+    /// Sets the name the function was declared under.
+    pub fn name(mut self, name: Option<Name>) -> Self {
+        self.name = name;
+        self
+    }
+
+    /// Sets the names of the parameters, in the order they are declared.
+    pub fn param_names(mut self, names: Vec<Option<Name>>) -> Self {
+        self.param_names = names;
+        self
+    }
+
+    /// Sets what a lambda captured, in the free-variable order of the HIR.
+    pub fn captures(mut self, captures: Vec<CaptureData>) -> Self {
+        self.captures = captures;
         self
     }
 
@@ -582,8 +655,9 @@ impl BodyBuilder {
 
     /// Finishes the code, entered at `entry`.
     ///
-    /// The code of a lambda is built the way the code of a body is; only the identity around it
-    /// tells the two apart ([`Body`], [`LambdaData`]).
+    /// What the code is and what a lambda of it captured is the identity around it and not the
+    /// code itself, so a caller that builds code and not a body of the language gets the code
+    /// ([`Code`]) and not a body.
     pub fn code(self, entry: BlockId) -> Code {
         Code {
             params: self.params,
@@ -595,27 +669,18 @@ impl BodyBuilder {
     }
 
     /// Finishes the body, entered at `entry`.
-    ///
-    /// The lambdas of the body are not the builder's: the lowering owns them and puts them in
-    /// when the walk is over.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the builder was made without an owner, which [`BodyBuilder::new`] does not
-    /// let a caller do.
     pub fn finish(self, entry: BlockId) -> Body {
-        let owner = self.owner.expect("a body has an owner");
-
         Body {
-            owner,
-            local: self.local,
+            function: self.function,
+            name: self.name,
+            ty: self.ty,
+            param_names: self.param_names,
+            captures: self.captures,
             params: self.params,
             entry,
             blocks: self.blocks,
             values: self.values,
             locals: self.locals,
-            lambdas: Arena::default(),
-            local_functions: Vec::new(),
         }
     }
 }
@@ -627,7 +692,8 @@ mod tests {
     #[test]
     fn a_body_reads_back_what_the_builder_allocated() {
         let owner = crate::test_support::owner();
-        let mut builder = BodyBuilder::new(owner.clone());
+        let function = FunctionLoc::Entity(owner.clone());
+        let mut builder = BodyBuilder::new(function.clone(), Ty::Error);
         let param = builder.param(ValueData {
             span: Span::dummy(),
             ty: Ty::Error,
@@ -669,7 +735,8 @@ mod tests {
         });
         let body = builder.finish(block);
 
-        assert_eq!(body.owner, owner);
+        assert_eq!(body.function, function);
+        assert_eq!(body.origin(), &owner);
         assert_eq!(body.params, [param]);
         assert_eq!(body.entry, block);
         assert_eq!(body.blocks[block].stmts.len(), 2);

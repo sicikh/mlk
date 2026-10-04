@@ -24,7 +24,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use mlkc_codegen_wasm::{LoweredFunction, ModuleMir};
+use mlkc_codegen_wasm::{LoweredFunctions, ModuleMir};
 use mlkc_diagnostics::{Diagnostic, Ice};
 use mlkc_hir_def::{
     BodyEntityLoc, Interface, ItemLocLike, ModuleId, ModuleIndex, ProjectDefMap, ProjectGraph,
@@ -32,7 +32,7 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
-use mlkc_mir::Body as MirBody;
+use mlkc_mir::{Bodies, Body as MirBody};
 use mlkc_resolve::{Closure, Resolution};
 use mlkc_rowan::NodeCache;
 use mlkc_typeck::{Builtins, TypeDiag};
@@ -326,7 +326,7 @@ struct MirSlot {
     /// The check the lowering read.
     checked: Checked,
     /// The value, retained so that the driver can hand it out and compare it later.
-    value: Arc<MirBody>,
+    value: Arc<Bodies>,
 }
 
 /// The SSA form of one body, and the CFG form it was computed from ([ADR-0019]).
@@ -334,9 +334,9 @@ struct MirSlot {
 /// [ADR-0019]: ../../docs/adr/0019-mir.md
 struct SsaSlot {
     /// The CFG form the pass read.
-    cfg: Arc<MirBody>,
+    cfg: Arc<Bodies>,
     /// The value, retained so that the driver can hand it out and compare it later.
-    value: Arc<MirBody>,
+    value: Arc<Bodies>,
 }
 
 /// The LIR of one body, and what the lowering read ([ADR-0022]).
@@ -349,11 +349,11 @@ struct SsaSlot {
 /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 struct LirSlot {
     /// The SSA form the pass read.
-    ssa: Arc<MirBody>,
+    ssa: Arc<Bodies>,
     /// The module the pass read.
     module: Arc<ModuleMir>,
     /// The value, retained so that the driver can hand it out and compare it later.
-    value: Arc<LoweredFunction>,
+    value: Arc<LoweredFunctions>,
 }
 
 /// The module of one module, and what building it read ([ADR-0021]).

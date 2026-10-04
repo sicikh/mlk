@@ -661,7 +661,7 @@ impl Body {
 
                 return Ok(());
             },
-            Call { .. } | CallLocal { .. } | CallRef { .. } => {
+            Call { .. } | CallRef { .. } => {
                 // The declared type of the result is what the context of the function says;
                 // the instruction checks nothing but that it is a reference.
                 if !self.values[inst.value].ty.is_ref() {

@@ -21,8 +21,9 @@ use mlkc_lir_wasm::{
     ValueData, ValueId,
 };
 use mlkc_mir::{
-    BlockId as MirBlockId, BlockTarget, Callee, CodeRef, Const, LambdaId, Operand, Place, PrimOp,
-    Rvalue, Stmt, StmtKind, Terminator as MirTerminator, ValueId as MirValueId,
+    BlockId as MirBlockId, BlockTarget, Callee, CodeRef, Const, FunctionLoc, LambdaId, LiftedId,
+    Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator as MirTerminator,
+    ValueId as MirValueId,
 };
 use mlkc_span::Span;
 
@@ -276,8 +277,12 @@ impl<'a> Selector<'a> {
     /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
     fn closure(&mut self, lambda: LambdaId, captures: &'a [Operand], span: Span) -> ValueId {
         let layout = self.ctx.layout;
+        let function = FunctionLoc::Lifted {
+            origin: self.ctx.function.origin().clone(),
+            id: LiftedId::Lambda(lambda),
+        };
         let plan = layout
-            .lambda(self.ctx.owner, lambda)
+            .closure(&function)
             .unwrap_or_else(|| panic!("a closure of a lambda the module did not number"));
         let code = self.inst(
             Op::RefFunc {
@@ -510,14 +515,14 @@ impl<'a> Selector<'a> {
     /// Selects a call, whose result is the shape its callee declares.
     fn call(&mut self, callee: &Callee, args: &'a [Operand], span: Span) -> ValueId {
         match callee {
-            Callee::Entity(entity) => {
-                let index = self.ctx.layout.function_index(entity).unwrap_or_else(|| {
+            Callee::Direct(function) => {
+                let index = self.ctx.layout.function_index(function).unwrap_or_else(|| {
                     panic!("a call to a function the module neither declares nor imports")
                 });
                 let signature = self
                     .ctx
                     .layout
-                    .signature_of(entity)
+                    .signature_of(function)
                     .expect("a function with an index to have a signature");
                 let shape = signature.shape(self.ctx.layout.builtins());
                 let mut arguments = Vec::with_capacity(args.len());
@@ -537,38 +542,6 @@ impl<'a> Selector<'a> {
                 self.inst(
                     Op::Call {
                         function: index,
-                        args: arguments,
-                    },
-                    ty_of(shape.ret),
-                    span,
-                )
-            },
-            Callee::Local(function) => {
-                let plan = self
-                    .ctx
-                    .layout
-                    .local(self.ctx.owner, *function)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "a call to a function declared in a `local` the module did not number"
-                        )
-                    });
-                let shape = plan.signature.shape(self.ctx.layout.builtins());
-                let mut arguments = Vec::with_capacity(args.len());
-
-                assert_eq!(
-                    args.len(),
-                    shape.params.len(),
-                    "a call to pass one argument per parameter of its callee",
-                );
-
-                for (argument, abi) in args.iter().zip(&shape.params) {
-                    arguments.push(self.operand_into(argument, *abi, span));
-                }
-
-                self.inst(
-                    Op::CallLocal {
-                        function: *function,
                         args: arguments,
                     },
                     ty_of(shape.ret),

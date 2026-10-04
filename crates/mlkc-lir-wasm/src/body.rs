@@ -13,7 +13,6 @@
 //!
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 
-use mlkc_hir_def::LocalFunctionId;
 use mlkc_intern::Interned;
 use mlkc_la_arena::{Arena, Idx};
 use mlkc_span::Span;
@@ -140,13 +139,6 @@ pub enum Op {
         /// The arguments, in the order they are passed.
         args: Vec<ValueId>,
     },
-    /// A call of a function declared inside the enclosing body.
-    CallLocal {
-        /// The function declared inside the body.
-        function: LocalFunctionId,
-        /// The arguments, in the order they are passed.
-        args: Vec<ValueId>,
-    },
     /// `call_ref $sig`: the call of the function a value holds.
     ///
     /// The arguments are the whole argument list of the target, the environment of a closure
@@ -211,7 +203,6 @@ impl Op {
             Self::RefCast(..) => "ref.cast",
             Self::RefEq(..) => "ref.eq",
             Self::Call { .. } => "call",
-            Self::CallLocal { .. } => "call-local",
             Self::CallRef { .. } => "call-ref",
             Self::RefFunc { .. } => "ref.func",
             Self::RefNull(_) => "ref.null",
@@ -245,7 +236,7 @@ impl Op {
             | Self::I32And(lhs, rhs)
             | Self::I32Or(lhs, rhs)
             | Self::RefEq(lhs, rhs) => vec![*lhs, *rhs],
-            Self::Call { args, .. } | Self::CallLocal { args, .. } => args.clone(),
+            Self::Call { args, .. } => args.clone(),
             Self::StructNew { fields, .. } => fields.clone(),
             Self::CallRef {
                 signature: _,
@@ -286,9 +277,7 @@ impl Op {
                 *lhs = map(*lhs);
                 *rhs = map(*rhs);
             },
-            Self::Call { args, .. }
-            | Self::CallLocal { args, .. }
-            | Self::StructNew { fields: args, .. } => {
+            Self::Call { args, .. } | Self::StructNew { fields: args, .. } => {
                 for arg in args {
                     *arg = map(*arg);
                 }

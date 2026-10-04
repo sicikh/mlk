@@ -19,13 +19,10 @@
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
-use mlkc_hir_def::{
-    BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, ItemLocLike, LocalFunctionId, Name,
-};
+use mlkc_hir_def::{BodyLoc, EntityLoc, FunctionLoc, Name};
 use mlkc_hir_ty::{Builtins, Ty};
-use mlkc_la_arena::Arena;
 use mlkc_lir_wasm::Body as LirBody;
-use mlkc_mir::{Body as MirBody, CodeRef, LambdaData, LambdaId, Rvalue, StmtKind};
+use mlkc_mir::{Body as MirBody, CodeRef, FunctionLoc as MirFunctionLoc, Rvalue, StmtKind};
 use wasm_encoder::{
     CodeSection, CompositeInnerType, CompositeType, ElementSection, Elements, EntityType,
     ExportKind, ExportSection, FieldType, FuncType, FunctionSection, HeapType, ImportSection,
@@ -104,14 +101,9 @@ pub struct ClosureTypes {
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LambdaPlan {
+pub struct ClosurePlan {
     /// The index of the lifted function in the function index space.
     pub index: u32,
-    /// What the lambda takes and gives back, without the environment.
-    pub signature: FnSignature,
-    /// The names of the ABI parameters of the lifted function: the environment first, which no
-    /// name binds, and then the parameters the lambda declared.
-    pub param_names: Vec<Option<Name>>,
     /// The shapes of its captures, in the order they are stored.
     pub captures: Vec<AbiType>,
     /// The `$fn` and `$closure` types of its shape.
@@ -120,64 +112,37 @@ pub struct LambdaPlan {
     pub env: Option<u32>,
 }
 
-impl LambdaPlan {
+impl ClosurePlan {
     /// Whether the lambda captured something, and so has an environment of its own.
     pub fn captures(&self) -> bool {
         !self.captures.is_empty()
     }
 }
 
-/// What the layout knows about a function declared in a `local` ([ADR-0026][adr-0026]).
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalPlan {
-    /// The index of the lifted function in the function index space.
-    pub index: u32,
-    /// The name the function is declared under, which the `name` section and a stack trace use.
-    pub name: String,
-    /// What the function takes and gives back.
-    pub signature: FnSignature,
-    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
-    pub param_names: Vec<Option<Name>>,
-}
-
-/// What a function of the index space is ([ADR-0026][adr-0026]).
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FunctionKey {
-    /// A function an entity declares.
-    Entity(EntityLoc<FunctionLoc>),
-    /// A lambda written in a body.
-    Lambda {
-        /// The entity whose body wrote it; the lambda is an entry of that body's arena.
-        owner: BodyEntityLoc,
-        /// The lambda, by its place in the arena.
-        lambda: LambdaId,
-    },
-    /// A function declared in a `local`, lifted into a function of the module.
-    Local {
-        /// The entity whose body declared it; the function is an entry of that body's arena.
-        owner: BodyEntityLoc,
-        /// The function, by its place in the arena.
-        local: LocalFunctionId,
-    },
-}
-
-/// The LIR of one function and of the functions it wrote ([ADR-0026][adr-0026]).
+/// The LIR of one function ([ADR-0026][adr-0026]).
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoweredFunction {
     /// What the function is.
-    pub key: FunctionKey,
+    pub function: MirFunctionLoc,
+    /// The name the function is called by: `fib`, `fib::aux`, `fib::<mlkc@lambda-0>`.
+    pub name: String,
     /// The LIR of the function.
     pub body: LirBody,
-    /// The LIR of the lambdas written in it, in the order the body creates them.
-    pub lambdas: Vec<LoweredFunction>,
-    /// The LIR of the functions declared inside it, in the order the body declares them.
-    pub local_functions: Vec<LoweredFunction>,
+}
+
+/// The LIR of one HIR body: every function it declares, flat.
+///
+/// The HIR body is the unit of incrementality ([ADR-0003][adr-0003]), so one value holds the
+/// body of its entity and every function lifted out of it; nothing after MIR reads the nesting,
+/// because there is none.
+///
+/// [adr-0003]: ../../docs/adr/0003-id-based-ir.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoweredFunctions {
+    /// The lowered functions, the body of the entity first, as the module numbers them.
+    pub functions: Vec<Arc<LoweredFunction>>,
 }
 
 /// One function the back end emitted: the artifact and what names it ([ADR-0026][adr-0026]).
@@ -186,7 +151,7 @@ pub struct LoweredFunction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmittedFunction {
     /// What the function is.
-    pub key: FunctionKey,
+    pub function: MirFunctionLoc,
     /// The name of the function, for the `name` section, an export, and a stack trace.
     pub name: String,
     /// Whether the module exports it; a lambda is never exported.
@@ -232,15 +197,16 @@ pub struct ModuleImport {
 /// One function of a module, as the back end reads it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleFunction {
-    /// The entity that owns the body.
-    pub owner: BodyEntityLoc,
-    /// The name the function is called by; the `name` section and the export use it.
+    /// What the function is: the body of an entity, a function declared in a `local`, or a lambda.
+    pub function: MirFunctionLoc,
+    /// The name the function is called by: `fib`, `fib::aux`, `fib::<mlkc@lambda-0>`.
     pub name: String,
-    /// What the function takes and gives back.
+    /// What the function takes and gives back, without an environment.
     pub signature: FnSignature,
-    /// The name every parameter was declared under, in order; `None` for a pattern with no name.
+    /// The name of every ABI parameter, in order: a lambda is entered with its environment
+    /// first, which no name binds.
     pub param_names: Vec<Option<Name>>,
-    /// Whether the function is exported from the module.
+    /// Whether the module exports it; only a function of an entity is ever exported.
     pub exported: bool,
     /// The SSA body of the function.
     pub body: Arc<MirBody>,
@@ -256,7 +222,8 @@ pub struct ModuleMir {
     pub builtins: Builtins,
     /// The functions the module imports, in the order their indices are assigned.
     pub imports: Vec<ModuleImport>,
-    /// The functions the module declares, in the order the module declares them.
+    /// Every function the module declares, flat: the bodies of its entities, the functions they
+    /// declare in a `local`, and the lambdas they write, in the order the module numbers them.
     pub functions: Vec<ModuleFunction>,
 }
 
@@ -265,8 +232,8 @@ pub struct ModuleMir {
 /// The layout is computed from the module alone, so the emitter and the assembler both derive
 /// the same indices, and a function body can embed the index of the function it calls and the
 /// index of the lambda a closure wraps. The index space is the one of WASM: the imports first,
-/// in the order the module lists them, and then the functions the module declares in
-/// declaration order, each immediately followed by its lambdas, depth first.
+/// in the order the module lists them, and then the functions the module declares, flat, in the
+/// order the module numbers them.
 ///
 /// The layout also plans the type section: the plain function types, the shape groups
 /// `{$fn, $closure}` of every function shape a closure is made of, and the environment type of
@@ -280,9 +247,11 @@ pub struct ModuleLayout {
     signatures: Vec<FnSignature>,
     /// How many of the signatures are imports; the rest are the module's own functions.
     imports: usize,
-    by_entity: BTreeMap<EntityLoc<FunctionLoc>, u32>,
-    by_lambda: BTreeMap<(BodyEntityLoc, LambdaId), LambdaPlan>,
-    by_local: BTreeMap<(BodyEntityLoc, LocalFunctionId), LocalPlan>,
+    /// The index of every function of the module, that of an import and of a declared function
+    /// alike.
+    by_function: BTreeMap<MirFunctionLoc, u32>,
+    /// The closures:
+    closures: BTreeMap<MirFunctionLoc, ClosurePlan>,
     /// The plain function types of the type section, in index order.
     plain: Vec<FnShape>,
     /// The shape groups of the type section, in index order; the group of `shapes[i]` is at
@@ -299,29 +268,24 @@ impl ModuleLayout {
         &self.builtins
     }
 
-    /// The index of the function an entity names, if the module declares or imports it.
-    pub fn function_index(&self, entity: &EntityLoc<FunctionLoc>) -> Option<u32> {
-        self.by_entity.get(entity).copied()
+    /// The index of a function of the module, if the module declares or imports it.
+    pub fn function_index(&self, function: &MirFunctionLoc) -> Option<u32> {
+        self.by_function.get(function).copied()
     }
 
-    /// The signature of the function an entity names, if the module declares or imports it.
-    pub fn signature_of(&self, entity: &EntityLoc<FunctionLoc>) -> Option<&FnSignature> {
-        let index = self.by_entity.get(entity)?;
+    /// The signature of a function of the module, if the module declares or imports it.
+    pub fn signature_of(&self, function: &MirFunctionLoc) -> Option<&FnSignature> {
+        let index = self.by_function.get(function)?;
 
         self.signatures.get(*index as usize)
     }
 
-    /// What the layout knows about a lambda a body wrote.
-    pub fn lambda(&self, owner: &BodyEntityLoc, lambda: LambdaId) -> Option<&LambdaPlan> {
-        self.by_lambda.get(&(owner.clone(), lambda))
+    /// What the layout knows about a lambda, if the function is one.
+    pub fn closure(&self, function: &MirFunctionLoc) -> Option<&ClosurePlan> {
+        self.closures.get(function)
     }
 
-    /// What the layout knows about a function declared in a `local`.
-    pub fn local(&self, owner: &BodyEntityLoc, local: LocalFunctionId) -> Option<&LocalPlan> {
-        self.by_local.get(&(owner.clone(), local))
-    }
-
-    /// The type of a plain function shape, the one the imports and the entity bodies use.
+    /// The type of a plain function shape, the one a function that is not a lambda uses.
     pub fn plain_type(&self, shape: &FnShape) -> Option<u32> {
         self.plain
             .iter()
@@ -409,20 +373,19 @@ impl ModuleLayout {
 
 /// Numbers the functions of a module, and plans the types their closures use.
 ///
-/// The functions are the imports, then the entity functions in declaration order, each followed
-/// by its lambdas, depth first, and then by the functions it declares in a `local`, each with its
-/// own lambdas ([ADR-0026]). The types are planned in the order the module meets them: the plain
-/// function types, the shape groups of the closure family, and the environments; the shapes and
-/// the environments are deduplicated, so two lambdas that capture the same things share one
-/// type.
+/// The functions are the imports, then the entity functions in the order the module numbers them:
+/// the body of an entity, the functions it declares in a `local`, and the lambdas it wrote, as the
+/// flat set of each HIR body lists them ([ADR-0026]). The types are planned in the order the module
+/// meets them: the plain function types, the shape groups of the closure family, and the
+/// environments; the shapes and the environments are deduplicated, so two lambdas that capture the
+/// same things share one type.
 ///
 /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 pub fn layout(module: &ModuleMir) -> ModuleLayout {
     let builtins = module.builtins.clone();
     let mut planner = Types::default();
     let mut signatures = Vec::with_capacity(module.imports.len() + module.functions.len());
-    let mut by_entity = BTreeMap::new();
-    let mut by_local = BTreeMap::new();
+    let mut by_function = BTreeMap::new();
     let mut pending = Vec::new();
 
     for import in &module.imports {
@@ -430,79 +393,49 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
 
         signatures.push(import.signature.clone());
         planner.plain(&import.signature.shape(&builtins));
-        by_entity.insert(import.entity.clone(), index);
+        by_function.insert(
+            MirFunctionLoc::Entity(mlkc_hir_def::EntityLoc {
+                module: import.entity.module,
+                item: BodyLoc::Function(import.entity.item.clone()),
+            }),
+            index,
+        );
     }
 
     for function in &module.functions {
         let index = signatures.len() as u32;
 
         signatures.push(function.signature.clone());
-        planner.plain(&function.signature.shape(&builtins));
+        by_function.insert(function.function.clone(), index);
 
-        // A body is a function's when the entity that owns it is one; a constant's body has no
-        // function to be called as.
-        if let BodyLoc::Function(loc) = &function.owner.item {
-            by_entity.insert(
-                EntityLoc {
-                    module: function.owner.module,
-                    item: loc.clone(),
-                },
-                index,
-            );
-        }
-
-        number_lambdas(
-            &mut planner,
-            &mut signatures,
-            &mut pending,
-            &function.owner,
-            function.body.code(),
-            &function.body.lambdas,
-            &builtins,
-        );
-
-        // A function declared in a `local` is lifted into a function of the module of its own,
-        // and the lambdas it wrote are the owner's: they are entries of the arena of the body
-        // that declares the function ([ADR-0026]).
+        // A lambda is a closure: its shape's group is planned, and so is the environment of what
+        // it captured. Every other function crosses the ABI as its own plain type ([ADR-0026]).
         //
         // [adr-0026]: ../../docs/adr/0026-closure-representation.md
-        for local in &function.body.local_functions {
-            let Some(data) = &local.local else {
-                continue;
-            };
+        if function.function.is_lambda() {
+            let shape = function.signature.shape(&builtins);
+            let captures: Vec<AbiType> = function
+                .body
+                .captures
+                .iter()
+                .map(|capture| refine::of_ty(&capture.ty, &builtins).abi())
+                .collect();
+            let at = planner.shape(&shape);
+            let env = (!captures.is_empty()).then(|| planner.env(&shape, &captures));
 
-            let signature = signature_of_function(&data.ty);
-            let index = signatures.len() as u32;
-
-            signatures.push(signature.clone());
-            planner.plain(&signature.shape(&builtins));
-            by_local.insert((function.owner.clone(), data.id), LocalPlan {
+            pending.push((function.function.clone(), PendingClosure {
                 index,
-                name: data.name.to_string(),
-                signature,
-                param_names: data.param_names.clone(),
-            });
-
-            number_lambdas(
-                &mut planner,
-                &mut signatures,
-                &mut pending,
-                &function.owner,
-                local.code(),
-                &function.body.lambdas,
-                &builtins,
-            );
-
-            planner.calls(local.code(), &builtins);
+                captures,
+                at,
+                env,
+            }));
+        } else {
+            planner.plain(&function.signature.shape(&builtins));
         }
 
         // A call through a closure needs the shape's types whether or not a lambda of this
         // module made the closure.
         planner.calls(function.body.code(), &builtins);
-
-        for (_, lambda) in function.body.lambdas.iter() {
-            planner.calls(lambda.code(), &builtins);
-        }
     }
 
     let plain = planner.plain;
@@ -510,21 +443,19 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
     let envs = planner.envs;
     let shape_base = plain.len() as u32;
     let env_base = shape_base + 2 * shapes.len() as u32;
-    let mut by_lambda = BTreeMap::new();
+    let mut closures = BTreeMap::new();
 
-    for (key, lambda) in pending {
+    for (function, closure) in pending {
         let types = ClosureTypes {
-            fn_type: shape_base + 2 * lambda.at as u32,
-            closure: shape_base + 2 * lambda.at as u32 + 1,
+            fn_type: shape_base + 2 * closure.at as u32,
+            closure: shape_base + 2 * closure.at as u32 + 1,
         };
 
-        by_lambda.insert(key, LambdaPlan {
-            index: lambda.index,
-            signature: lambda.signature,
-            param_names: lambda.param_names,
-            captures: lambda.captures,
+        closures.insert(function, ClosurePlan {
+            index: closure.index,
+            captures: closure.captures,
             types,
-            env: lambda.env.map(|env| env_base + env as u32),
+            env: closure.env.map(|env| env_base + env as u32),
         });
     }
 
@@ -532,59 +463,17 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
         builtins,
         signatures,
         imports: module.imports.len(),
-        by_entity,
-        by_lambda,
-        by_local,
+        by_function,
+        closures,
         plain,
         shapes,
         envs,
     }
 }
 
-/// Numbers the lambdas of one piece of code: a signature and an entry in the plan of each, in
-/// the order the code creates them.
-fn number_lambdas(
-    planner: &mut Types,
-    signatures: &mut Vec<FnSignature>,
-    pending: &mut Vec<((BodyEntityLoc, LambdaId), PendingLambda)>,
-    owner: &BodyEntityLoc,
-    code: CodeRef<'_>,
-    lambdas: &Arena<LambdaData>,
-    builtins: &Builtins,
-) {
-    for lambda in lambda_order(code, lambdas) {
-        let data = &lambdas[lambda];
-        let signature = signature_of_function(&data.ty);
-        let param_names = std::iter::once(None)
-            .chain(data.param_names.iter().cloned())
-            .collect();
-        let shape = signature.shape(builtins);
-        let captures: Vec<AbiType> = data
-            .captures
-            .iter()
-            .map(|capture| refine::of_ty(&capture.ty, builtins).abi())
-            .collect();
-        let at = planner.shape(&shape);
-        let env = (!captures.is_empty()).then(|| planner.env(&shape, &captures));
-        let index = signatures.len() as u32;
-
-        signatures.push(signature.clone());
-        pending.push(((owner.clone(), lambda), PendingLambda {
-            index,
-            signature,
-            param_names,
-            captures,
-            at,
-            env,
-        }));
-    }
-}
-
 /// A lambda the layout has to number, before the type indices are known.
-struct PendingLambda {
+struct PendingClosure {
     index: u32,
-    signature: FnSignature,
-    param_names: Vec<Option<Name>>,
     captures: Vec<AbiType>,
     at: usize,
     env: Option<usize>,
@@ -656,23 +545,6 @@ impl Types {
     }
 }
 
-/// The declared signature of a function: the function type the checker gave it.
-///
-/// # Panics
-///
-/// Panics when the type is not a function type, which is a gap of the check: a lambda and
-/// a function declared inside a body are functions the check accepted.
-fn signature_of_function(ty: &Ty) -> FnSignature {
-    let Ty::Fn { params, ret } = ty else {
-        panic!("the lowering met a function the checker did not give a function type: {ty}");
-    };
-
-    FnSignature {
-        params: params.clone(),
-        ret: ret.as_ref().clone(),
-    }
-}
-
 /// The ABI shape of the checked type of the operand a closure is called through.
 fn operand_shape(
     operand: &mlkc_mir::Operand,
@@ -684,38 +556,6 @@ fn operand_shape(
     };
 
     refine::closure_shape_of_ty(&code.values[*value].ty, builtins)
-}
-
-/// The lambdas a body wrote, depth first, in the order its code creates them.
-///
-/// A lambda is created by exactly one `Rvalue::Closure`, in the code that wrote the expression;
-/// the walk reads every block, because a lambda created in a block no path reaches is still a
-/// lambda of the body, and the order is the order the blocks and the statements list.
-pub(crate) fn lambda_order(code: CodeRef<'_>, lambdas: &Arena<LambdaData>) -> Vec<LambdaId> {
-    fn walk(code: CodeRef<'_>, lambdas: &Arena<LambdaData>, order: &mut Vec<LambdaId>) {
-        for child in lambda_children(code) {
-            if order.contains(&child) {
-                continue;
-            }
-
-            order.push(child);
-            walk(lambdas[child].code(), lambdas, order);
-        }
-    }
-
-    let mut order = Vec::new();
-
-    walk(code, lambdas, &mut order);
-
-    order
-}
-
-/// The lambdas a piece of code creates itself, in the order it creates them.
-pub(crate) fn lambda_children(code: CodeRef<'_>) -> Vec<LambdaId> {
-    mlkc_mir::lambda_closures(code)
-        .into_iter()
-        .map(|closure| closure.lambda)
-        .collect()
 }
 
 /// What debug information `assemble_module` is asked for ([ADR-0025][adr-0025]).
@@ -796,10 +636,10 @@ pub struct WasmModule {
 
 /// Compiles every function of a module, and assembles the module they become.
 ///
-/// This is the whole of the back end for one module: one function per entity body and one per
-/// lambda the bodies wrote, in the order the layout numbers them, and [`assemble_module`] over
-/// the artifacts. It is what the driver's link stage and a host that shows one module both
-/// read.
+/// This is the whole of the back end for one module: one function per entity body, per function
+/// declared in a `local`, and per lambda the bodies wrote, in the order the layout numbers them,
+/// and [`assemble_module`] over the artifacts. It is what the driver's link stage and a host that
+/// shows one module both read.
 ///
 /// `lirs` are the lowered bodies of the module's functions, in declaration order, as the
 /// driver pulled them ([ADR-0022][adr-0022]); `sources` are the files the bodies were read
@@ -826,31 +666,13 @@ pub fn compile_module(
 
     let layout = layout(module);
     let builtins = layout.builtins().clone();
-    let by_entity: BTreeMap<EntityLoc<FunctionLoc>, &ModuleFunction> = module
-        .functions
-        .iter()
-        .filter_map(|function| {
-            match &function.owner.item {
-                BodyLoc::Function(loc) => {
-                    Some((
-                        EntityLoc {
-                            module: function.owner.module,
-                            item: loc.clone(),
-                        },
-                        function,
-                    ))
-                },
-                BodyLoc::Const(_) => None,
-            }
-        })
-        .collect();
-    let mut functions = Vec::with_capacity(layout.len().saturating_sub(layout.imported()));
+    let mut functions = Vec::with_capacity(module.functions.len());
     let mut diagnostics = Vec::new();
 
-    for lir in lirs {
-        emit_tree(
-            lir,
-            &by_entity,
+    for (declared, lowered) in module.functions.iter().zip(lirs) {
+        emit_one(
+            declared,
+            lowered,
             &layout,
             &builtins,
             &mut functions,
@@ -865,120 +687,58 @@ pub fn compile_module(
     (wasm, diagnostics)
 }
 
-/// Emits one function of a lowered tree, then the lambdas it wrote, and then the functions it
-/// declares in a `local`.
-fn emit_tree(
-    function: &LoweredFunction,
-    by_entity: &BTreeMap<EntityLoc<FunctionLoc>, &ModuleFunction>,
+/// Emits one function of the module: its body, its name, and the artifact the assembler reads.
+fn emit_one(
+    function: &ModuleFunction,
+    lowered: &LoweredFunction,
     layout: &ModuleLayout,
     builtins: &Builtins,
     functions: &mut Vec<EmittedFunction>,
     diagnostics: &mut Vec<CodegenDiag>,
 ) {
-    let (owner, name, signature, param_names, exported, lambda) = match &function.key {
-        FunctionKey::Entity(entity) => {
-            let declared = by_entity
-                .get(entity)
-                .expect("every entity of the module to be emitted");
+    assert_eq!(
+        function.function, lowered.function,
+        "the LIR of a function to be the one the module declares",
+    );
 
-            (
-                declared.owner.clone(),
-                declared.name.clone(),
-                declared.signature.clone(),
-                declared.param_names.clone(),
-                declared.exported,
-                None,
-            )
-        },
-        FunctionKey::Lambda {
-            owner: writer,
-            lambda,
-        } => {
-            let plan = layout
-                .lambda(writer, *lambda)
-                .expect("every lambda of a body to be numbered");
-
-            (
-                writer.clone(),
-                lambda_name(writer, *lambda),
-                plan.signature.clone(),
-                plan.param_names.clone(),
-                false,
-                Some(plan),
-            )
-        },
-        FunctionKey::Local { owner, local } => {
-            let plan = layout
-                .local(owner, *local)
-                .expect("every function declared in a `local` to be numbered");
-
-            (
-                owner.clone(),
-                plan.name.clone(),
-                plan.signature.clone(),
-                plan.param_names.clone(),
-                false,
-                None,
-            )
-        },
-    };
+    let lambda = layout.closure(&function.function);
     let type_index = match lambda {
         Some(plan) => plan.types.fn_type,
         None => {
             layout
-                .plain_type(&signature.shape(builtins))
-                .expect("every entity signature to have a plain function type")
+                .plain_type(&function.signature.shape(builtins))
+                .expect("every function signature to have a plain function type")
         },
     };
-    let arity = signature.params.len() as u32;
+
     let ctx = FunctionCtx {
-        owner: &owner,
-        name: &name,
-        signature: &signature,
-        param_names: &param_names,
+        function: &function.function,
+        name: &function.name,
+        signature: &function.signature,
+        param_names: &function.param_names,
         layout,
         lambda,
     };
-    let (artifact, reports) = emit_function(&function.body, &ctx);
+    let (artifact, reports) = emit_function(&lowered.body, &ctx);
 
     diagnostics.extend(reports);
     functions.push(EmittedFunction {
-        key: function.key.clone(),
-        name,
-        exported,
-        arity,
-        param_names,
+        function: function.function.clone(),
+        name: function.name.clone(),
+        exported: function.exported,
+        arity: function.signature.params.len() as u32,
+        param_names: function.param_names.clone(),
         type_index,
         artifact,
     });
-
-    for child in &function.lambdas {
-        emit_tree(child, by_entity, layout, builtins, functions, diagnostics);
-    }
-
-    for child in &function.local_functions {
-        emit_tree(child, by_entity, layout, builtins, functions, diagnostics);
-    }
-}
-
-/// The name of a lifted function: its owner and its place in the body, because a lambda has no
-/// name of its own and a stack trace still needs one ([ADR-0026][adr-0026]).
-///
-/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-pub(crate) fn lambda_name(owner: &BodyEntityLoc, lambda: LambdaId) -> String {
-    let owner = owner
-        .item
-        .name()
-        .map_or_else(|| format!("{:?}", owner.item), ToString::to_string);
-
-    format!("{owner}::<mlkc@lambda-{}>", lambda.index())
 }
 
 /// Assembles the WASM module of `module` from the artifacts of its functions.
 ///
-/// `functions` are the artifacts of every function the module declares --- the entity bodies
-/// and the lambdas they wrote --- in the order the layout numbers them; `debug` is the format
-/// of debug information the module carries ([`DebugInfo`]).
+/// `functions` are the artifacts of every function the module declares --- the entity bodies,
+/// the functions they declare in a `local`, and the lambdas they wrote --- in the order the
+/// layout numbers them; `debug` is the format of debug information the module carries
+/// ([`DebugInfo`]).
 ///
 /// # Panics
 ///
@@ -1150,7 +910,7 @@ pub fn assemble_module(
     let declared: Vec<u32> = functions
         .iter()
         .enumerate()
-        .filter(|(_, function)| matches!(function.key, FunctionKey::Lambda { .. }))
+        .filter(|(_, function)| function.function.is_lambda())
         .map(|(index, _)| offset + index as u32)
         .collect();
 

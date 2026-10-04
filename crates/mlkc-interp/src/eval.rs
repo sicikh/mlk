@@ -10,9 +10,10 @@
 
 use std::{fmt, sync::Arc};
 
-use mlkc_hir_def::{EntityLoc, FunctionLoc, ItemLocLike, LocalFunctionId};
+use mlkc_hir_def::{BodyLoc, EntityLoc, FunctionLoc, ItemLocLike};
 use mlkc_mir::{
-    BlockTarget, Callee, CodeRef, Const, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator,
+    BlockTarget, Callee, CodeRef, Const, FunctionLoc as MirFunctionLoc, LiftedId, Operand, Place,
+    PrimOp, Rvalue, Stmt, StmtKind, Terminator,
 };
 use mlkc_span::Span;
 
@@ -57,7 +58,7 @@ pub enum Trap {
     /// The program called a function that is neither written in it nor declared external.
     MissingBody {
         /// The function.
-        entity: EntityLoc<FunctionLoc>,
+        function: MirFunctionLoc,
     },
     /// The interpreter does not run the construct yet.
     Unsupported {
@@ -92,11 +93,23 @@ impl fmt::Display for Trap {
             Self::Uninitialized { .. } => {
                 f.write_str("the program read a word that was not written")
             },
-            Self::MissingBody { entity } => {
-                let name = entity
-                    .item
-                    .name()
-                    .map_or_else(|| format!("{:?}", entity.item), ToString::to_string);
+            Self::MissingBody { function } => {
+                let name = match function {
+                    MirFunctionLoc::Entity(entity) => {
+                        entity
+                            .item
+                            .name()
+                            .map_or_else(|| format!("{:?}", entity.item), ToString::to_string)
+                    },
+                    MirFunctionLoc::Lifted {
+                        id: LiftedId::Local(local),
+                        ..
+                    } => format!("{local:?}"),
+                    MirFunctionLoc::Lifted {
+                        id: LiftedId::Lambda(lambda),
+                        ..
+                    } => format!("lambda#{}", lambda.index()),
+                };
 
                 write!(
                     f,
@@ -129,7 +142,12 @@ pub fn run(
     args: &[Value],
     host: &mut dyn Host,
 ) -> Result<Value, Trap> {
-    Interpreter { program, host }.call(function, args)
+    let function = MirFunctionLoc::Entity(mlkc_hir_def::EntityLoc {
+        module: function.module,
+        item: BodyLoc::Function(function.item.clone()),
+    });
+
+    Interpreter { program, host }.call(&function, args)
 }
 
 /// One run: the program it reads, and the host it asks.
@@ -143,9 +161,10 @@ struct Interpreter<'a> {
 /// A read of a word that was not written is a trap and not a panic: the interpreter checks the
 /// invariant the same way the verifier states it, and reports the place it met.
 struct Frame {
-    /// The body that wrote the code being run: what a closure created here is a lambda of.
-    writer: EntityLoc<FunctionLoc>,
-    /// What the lambda being run captured; empty in the body of an entity.
+    /// The function being run: what a closure created here is code of, and how a name of a
+    /// function of the module is addressed.
+    function: MirFunctionLoc,
+    /// What the lambda being run captured; empty for a function that is not a lambda.
     captures: Vec<Value>,
     values: Vec<Option<Value>>,
     locals: Vec<Option<Value>>,
@@ -153,14 +172,22 @@ struct Frame {
 
 impl<'a> Interpreter<'a> {
     /// Calls a function of the program, or the host of an extern one.
-    fn call(&mut self, function: &EntityLoc<FunctionLoc>, args: &[Value]) -> Result<Value, Trap> {
+    ///
+    /// A function the program does not write is one a host implements, which can only be an
+    /// entity of the project: a lambda and a function declared in a `local` are written in the
+    /// program that declares the body around them ([ADR-0021][adr-0021]).
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    fn call(&mut self, function: &MirFunctionLoc, args: &[Value]) -> Result<Value, Trap> {
         let Some(body) = self.program.body(function) else {
-            if let Some(external) = self.program.external(function) {
+            if let Some(entity) = entity_of(function)
+                && let Some(external) = self.program.external(&entity)
+            {
                 return self.host.call(external, args);
             }
 
             return Err(Trap::MissingBody {
-                entity: function.clone(),
+                function: function.clone(),
             });
         };
 
@@ -169,60 +196,30 @@ impl<'a> Interpreter<'a> {
         self.eval_code(body.code(), function, &[], args)
     }
 
-    /// Calls a closure: the code of its lambda, entered with what it captured ([ADR-0026]).
+    /// Calls a closure: the code of the function it is of, entered with what it captured
+    /// ([ADR-0026]).
     ///
     /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
     fn call_closure(&mut self, closure: &Closure, args: &[Value]) -> Result<Value, Trap> {
-        let Some(body) = self.program.body(&closure.writer) else {
+        let Some(body) = self.program.body(&closure.function) else {
             return Err(Trap::MissingBody {
-                entity: closure.writer.clone(),
+                function: closure.function.clone(),
             });
         };
 
         let body = Arc::clone(body);
-        let lambda = &body.lambdas[closure.lambda];
 
-        self.eval_code(lambda.code(), &closure.writer, &closure.captures, args)
+        self.eval_code(body.code(), &closure.function, &closure.captures, args)
     }
 
-    /// Calls a function declared inside the body of `writer`, entered without an environment.
+    /// Runs one function and gives back the word it returns.
     ///
-    /// The function is an entry of the owner's list, by its place in the arena of the body that
-    /// declares it; a call of it is a call of the module of its own, not a closure ([ADR-0026]).
-    ///
-    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
-    fn call_local(
-        &mut self,
-        writer: &EntityLoc<FunctionLoc>,
-        function: LocalFunctionId,
-        args: &[Value],
-        span: Span,
-    ) -> Result<Value, Trap> {
-        let Some(body) = self.program.body(writer) else {
-            return Err(Trap::MissingBody {
-                entity: writer.clone(),
-            });
-        };
-
-        let body = Arc::clone(body);
-        let Some(local) = body.local_functions.get(function.index()) else {
-            return Err(Trap::Unsupported {
-                what: "a call to a function declared inside a body that is not there",
-                span,
-            });
-        };
-
-        self.eval_code(local.code(), writer, &[], args)
-    }
-
-    /// Runs one piece of code --- a body's or a lambda's --- and gives back the word it returns.
-    ///
-    /// `writer` is the body the code was found under, which is the entity a call names; the
-    /// captures are what the lambda being run captured, and are empty for the body of an entity.
+    /// `function` is the function the code is; the captures are what the lambda being run
+    /// captured, and are empty for a function that is not one.
     fn eval_code(
         &mut self,
         code: CodeRef<'_>,
-        writer: &EntityLoc<FunctionLoc>,
+        function: &MirFunctionLoc,
         captures: &[Value],
         args: &[Value],
     ) -> Result<Value, Trap> {
@@ -233,7 +230,7 @@ impl<'a> Interpreter<'a> {
         );
 
         let mut frame = Frame {
-            writer: writer.clone(),
+            function: function.clone(),
             captures: captures.to_vec(),
             values: vec![None; code.values.len()],
             locals: vec![None; code.locals.len()],
@@ -317,16 +314,19 @@ impl<'a> Interpreter<'a> {
                 self.callee(frame, callee, &args, stmt.span)?
             },
             // A closure is code plus the words it captured, and `Capture` reads one of them
-            // ([ADR-0026][adr-0026]): the code is the lambda, and the words are the operands,
-            // which are read the way every other rvalue reads its own.
+            // ([ADR-0026][adr-0026]): the code is the lambda the body wrote, which MIR lifted
+            // into a function of the module, and the words are the operands, which are read the
+            // way every other rvalue reads its own.
             //
             // [adr-0026]: ../../docs/adr/0026-closure-representation.md
             Rvalue::Closure { lambda, captures } => {
                 let captures = self.operands(frame, captures, stmt.span)?;
 
                 Value::Closure(Arc::new(Closure {
-                    writer: frame.writer.clone(),
-                    lambda: *lambda,
+                    function: MirFunctionLoc::Lifted {
+                        origin: frame.function.origin().clone(),
+                        id: LiftedId::Lambda(*lambda),
+                    },
                     captures,
                 }))
             },
@@ -443,8 +443,7 @@ impl<'a> Interpreter<'a> {
         span: Span,
     ) -> Result<Value, Trap> {
         match callee {
-            Callee::Entity(function) => self.call(function, args),
-            Callee::Local(function) => self.call_local(&frame.writer, *function, args, span),
+            Callee::Direct(function) => self.call(function, args),
             Callee::Indirect(operand) => {
                 let callee = self.operand(frame, operand, span)?;
 
@@ -520,6 +519,22 @@ impl<'a> Interpreter<'a> {
             .map(|operand| self.operand(frame, operand, span))
             .collect()
     }
+}
+
+/// The entity a function is, where it is one: the body of an entity with a function ABI, and
+/// not a lifted function and not the body of a constant.
+fn entity_of(function: &MirFunctionLoc) -> Option<EntityLoc<FunctionLoc>> {
+    let MirFunctionLoc::Entity(owner) = function else {
+        return None;
+    };
+    let BodyLoc::Function(loc) = &owner.item else {
+        return None;
+    };
+
+    Some(EntityLoc {
+        module: owner.module,
+        item: loc.clone(),
+    })
 }
 
 /// The word a constant is.

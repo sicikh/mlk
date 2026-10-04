@@ -11,48 +11,57 @@ use std::fmt::Write as _;
 use mlkc_hir_def::ItemLocLike;
 
 use crate::{
-    BlockId, BlockTarget, Body, Callee, CaptureData, CodeRef, Const, LocalId, Operand, Place,
-    Rvalue, Stmt, StmtKind, Terminator, ValueId,
+    BlockId, BlockTarget, Body, Callee, CaptureData, CodeRef, Const, FunctionLoc, LiftedId,
+    LocalId, Operand, Place, Rvalue, Stmt, StmtKind, Terminator, ValueId,
 };
 
-/// Reads a body as a person reads it: the code of the body, the code of every lambda it wrote,
-/// and the code of every function declared inside it.
+/// Reads a body as a person reads it: the code of one function, under the header that names it.
 pub fn body(body: &Body) -> String {
     let mut out = String::new();
-    let mut header = format!("fun {}", owner_text(body));
 
-    if let Some(local) = &body.local {
-        let _ = write!(header, " ({:?} {})", local.id, local.name);
-    }
-
-    code_text(&mut out, body.code(), &header);
-
-    for (id, lambda) in body.lambdas.iter() {
-        let captures = labels(lambda.captures.iter().map(capture_text));
-        let header = format!(
-            "lambda #{}: {} captures ({captures})",
-            id.index(),
-            lambda.ty
-        );
-
-        let _ = writeln!(out);
-
-        code_text(&mut out, lambda.code(), &header);
-    }
-
-    for local in &body.local_functions {
-        let Some(data) = &local.local else {
-            continue;
-        };
-
-        let header = format!("local {:?} {}: {}", data.id, data.name, data.ty);
-
-        let _ = writeln!(out);
-
-        code_text(&mut out, local.code(), &header);
-    }
+    code_text(&mut out, body.code(), &header_text(body));
 
     out
+}
+
+/// The header line of a body: what the function is.
+fn header_text(body: &Body) -> String {
+    match &body.function {
+        FunctionLoc::Entity(entity) => {
+            let name = body
+                .name
+                .as_ref()
+                .or_else(|| entity.item.name())
+                .map_or_else(|| "<unnamed>".to_owned(), ToString::to_string);
+
+            format!("fun {name}")
+        },
+        FunctionLoc::Lifted {
+            id: LiftedId::Local(_),
+            ..
+        } => {
+            let root = body
+                .function
+                .origin()
+                .item
+                .name()
+                .map_or_else(|| "<unnamed>".to_owned(), ToString::to_string);
+
+            format!("fun {}", body.function.name(&root, body.name.as_ref()))
+        },
+        FunctionLoc::Lifted {
+            id: LiftedId::Lambda(lambda),
+            ..
+        } => {
+            let captures = labels(body.captures.iter().map(capture_text));
+
+            format!(
+                "lambda #{}: {} captures ({captures})",
+                lambda.index(),
+                body.ty
+            )
+        },
+    }
 }
 
 /// Reads one piece of code --- a body's or a lambda's --- under its header line.
@@ -88,14 +97,6 @@ fn code_text(out: &mut String, code: CodeRef<'_>, header: &str) {
 
         let _ = writeln!(out, "    {}", terminator_text(&block.term));
     }
-}
-
-/// The name of the owner of a body.
-fn owner_text(body: &Body) -> String {
-    body.owner
-        .item
-        .name()
-        .map_or_else(|| format!("{:?}", body.owner.item), ToString::to_string)
 }
 
 /// One capture of a lambda, as it is read.
@@ -161,14 +162,28 @@ fn rvalue_text(rvalue: &Rvalue) -> String {
 /// What a call calls.
 fn callee_text(callee: &Callee) -> String {
     match callee {
-        Callee::Entity(entity) => {
+        Callee::Direct(function) => function_text(function),
+        Callee::Indirect(operand) => operand_text(operand),
+    }
+}
+
+/// A function a call names, as it is read.
+fn function_text(function: &FunctionLoc) -> String {
+    match function {
+        FunctionLoc::Entity(entity) => {
             match entity.item.name() {
                 Some(name) => format!("fun {name}"),
                 None => format!("fun {:?}", entity.item),
             }
         },
-        Callee::Local(local) => format!("{local:?}"),
-        Callee::Indirect(operand) => operand_text(operand),
+        FunctionLoc::Lifted {
+            id: LiftedId::Local(local),
+            ..
+        } => format!("{local:?}"),
+        FunctionLoc::Lifted {
+            id: LiftedId::Lambda(lambda),
+            ..
+        } => format!("lambda#{}", lambda.index()),
     }
 }
 
@@ -266,13 +281,14 @@ mod tests {
 
     use super::body;
     use crate::{
-        Block, BlockTarget, BodyBuilder, Const, LocalData, Operand, Place, PrimOp, Rvalue, Stmt,
-        StmtKind, Terminator, ValueData,
+        Block, BlockTarget, BodyBuilder, Const, FunctionLoc, LocalData, Operand, Place, PrimOp,
+        Rvalue, Stmt, StmtKind, Terminator, ValueData,
     };
 
     #[test]
     fn a_body_reads_as_its_blocks() {
-        let mut builder = BodyBuilder::new(crate::test_support::owner());
+        let function = FunctionLoc::Entity(crate::test_support::owner());
+        let mut builder = BodyBuilder::new(function, Ty::Error);
         let value = builder.param(ValueData {
             span: Span::dummy(),
             ty: Ty::Error,

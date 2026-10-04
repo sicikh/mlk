@@ -244,7 +244,6 @@ fun capturing (entry b0)
     l3 = use l6
     l0 = use l3
     return l0
-
 lambda #0: (Int) -> Int captures (base: Int) (entry b0)
   params: v0: Int
   b0:
@@ -266,7 +265,6 @@ fun capturing (entry b0)
     v2 = const 2
     v3 = call v1(v2)
     return v3
-
 lambda #0: (Int) -> Int captures (base: Int) (entry b0)
   params: v0: Int
   b0:
@@ -277,6 +275,7 @@ lambda #0: (Int) -> Int captures (base: Int) (entry b0)
 
 LIR:
 
+capturing:
 ```
 lir (entry b0) ret (ref i31)
   locals: 0: (ref #7), 1: (ref i31)
@@ -299,7 +298,7 @@ Structure:
   return v7
 ```
 
-Lambda #0:
+capturing::<mlkc@lambda-0>:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref #2), v1: (ref i31)
@@ -330,7 +329,7 @@ fun nested (entry b0)
   b0:
     l1 = const 40
     l2(base) = use l1
-    l4 = closure lambda#1 (l2)
+    l4 = closure lambda#0 (l2)
     l5(add) = use l4
     l7 = const 1
     l9 = const 1
@@ -339,8 +338,14 @@ fun nested (entry b0)
     l3 = use l6
     l0 = use l3
     return l0
-
-lambda #0: (Int) -> Int captures (x: Int, base: Int) (entry b0)
+lambda #0: (Int) -> ((Int) -> Int) captures (base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    l0(base) = capture #0
+    l1(x) = use v0
+    l2 = closure lambda#1 (l1, l0)
+    return l2
+lambda #1: (Int) -> Int captures (x: Int, base: Int) (entry b0)
   params: v0: Int
   b0:
     l0(x) = capture #0
@@ -352,14 +357,6 @@ lambda #0: (Int) -> Int captures (x: Int, base: Int) (entry b0)
     l7 = use l1
     l3 = prim int-add(l4, l7)
     return l3
-
-lambda #1: (Int) -> ((Int) -> Int) captures (base: Int) (entry b0)
-  params: v0: Int
-  b0:
-    l0(base) = capture #0
-    l1(x) = use v0
-    l2 = closure lambda#0 (l1, l0)
-    return l2
 ```
 
 SSA form:
@@ -368,14 +365,19 @@ SSA form:
 fun nested (entry b0)
   b0:
     v0 = const 40
-    v1 = closure lambda#1 (v0)
+    v1 = closure lambda#0 (v0)
     v2 = const 1
     v3 = const 1
     v4 = call v1(v3)
     v5 = call v4(v2)
     return v5
-
-lambda #0: (Int) -> Int captures (x: Int, base: Int) (entry b0)
+lambda #0: (Int) -> ((Int) -> Int) captures (base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = closure lambda#1 (v0, v1)
+    return v2
+lambda #1: (Int) -> Int captures (x: Int, base: Int) (entry b0)
   params: v0: Int
   b0:
     v1 = capture #0
@@ -383,17 +385,11 @@ lambda #0: (Int) -> Int captures (x: Int, base: Int) (entry b0)
     v3 = prim int-add(v1, v0)
     v4 = prim int-add(v3, v2)
     return v4
-
-lambda #1: (Int) -> ((Int) -> Int) captures (base: Int) (entry b0)
-  params: v0: Int
-  b0:
-    v1 = capture #0
-    v2 = closure lambda#0 (v0, v1)
-    return v2
 ```
 
 LIR:
 
+nested:
 ```
 lir (entry b0) ret (ref i31)
   locals: 0: (ref #8), 1: (ref i31), 2: (ref i31), 3: (ref #2)
@@ -421,7 +417,7 @@ Structure:
   return v12
 ```
 
-Lambda #1:
+nested::<mlkc@lambda-0>:
 ```
 lir (entry b0) ret eqref
   params: v0: (ref #4), v1: (ref i31)
@@ -441,7 +437,7 @@ Structure:
   return v5
 ```
 
-Lambda #0:
+nested::<mlkc@lambda-1>:
 ```
 lir (entry b0) ret (ref i31)
   params: v0: (ref #2), v1: (ref i31)
@@ -482,7 +478,6 @@ fun generalized (entry b0)
     l3 = use l6
     l0 = use l3
     return l0
-
 lambda #0: ('0) -> '0 captures () (entry b0)
   params: v0: '0
   b0:
@@ -502,7 +497,6 @@ fun generalized (entry b0)
     v3 = const 42
     v4 = call v0(v3)
     return v4
-
 lambda #0: ('0) -> '0 captures () (entry b0)
   params: v0: '0
   b0:
@@ -511,6 +505,7 @@ lambda #0: ('0) -> '0 captures () (entry b0)
 
 LIR:
 
+generalized:
 ```
 lir (entry b0) ret (ref i31)
   locals: 0: (ref #6), 1: (ref i31), 2: (ref i31), 3: (ref i31)
@@ -537,7 +532,7 @@ Structure:
   return v11
 ```
 
-Lambda #0:
+generalized::<mlkc@lambda-0>:
 ```
 lir (entry b0) ret eqref
   params: v0: (ref #6), v1: eqref

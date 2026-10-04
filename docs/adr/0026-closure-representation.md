@@ -9,11 +9,11 @@ A lambda is a value the language has as far as the checker.
 The HIR holds `Expr::Lambda` with its parameters, its body, and the bindings its body reads,
 which the free-variable analysis works out ([`mlkc-hir-def`]);
 the checker gives it a `Ty::Fn` ([`mlkc-typeck`]);
-and MIR reserves `Callee::Indirect` "later, when functions become values" ([ADR-0019][0019-mir.md]).
+and MIR reserved `Callee::Indirect` for the day functions become values ([ADR-0019][0019-mir.md]).
 
-Two stages stand between that and a value a machine holds:
-MIR, which holds no construct that makes one,
-and the WASM back end, where an indirect call is a `CodegenDiag::Unsupported`
+Two stages stood between that and a value a machine holds:
+MIR, which held no construct that makes one,
+and the WASM back end, where an indirect call was a `CodegenDiag::Unsupported`
 "until closures exist" ([ADR-0020][0020-wasm-backend.md]).
 
 The word model fixes the outline already:
@@ -87,25 +87,49 @@ and the environment a lifted function reads is the closure value itself,
 so creating a closure is one allocation and calling it fetches the code from the value
 the call already holds.
 
-### A lambda is code the body writes, in the body that wrote it
+### A lambda is a lifted function of the module
 
 A lambda becomes a _lifted function_: a body of its own,
-held inside the MIR body that wrote it.
+next to the body that wrote it in the MIR of one HIR body ([ADR-0019][0019-mir.md]).
+The HIR keeps the lambda in the body that wrote it, because a HIR body is the unit of
+incrementality ([ADR-0003][0003-id-based-ir.md]);
+MIR lifts it, so that nothing after MIR reads a nesting.
 
 ```rust
 // mlkc-mir
-/// The id of a lambda in the arena of one body.
-pub type LambdaId = Idx<LambdaData>;
+/// The id of a lambda in the HIR body that wrote it.
+///
+/// A lambda has no name and no identity that outlives the body it is written in: the number
+/// is its place in the order the lowering wrote it, and the HIR body is the rest of its
+/// identity ([ADR-0003][0003-id-based-ir.md]).
+pub struct LambdaId(u32);
 
-pub struct Body {
-    // The fields of [ADR-0019][0019-mir.md], and:
-    /// The lambdas written in this body, in the order the lowering made them.
-    pub lambdas: Arena<LambdaData>,
+/// Where a function of MIR is: the body of an entity of the project, or a function lifted
+/// out of one --- a function declared in a `local`, or a lambda ([ADR-0019][0019-mir.md]).
+pub enum FunctionLoc {
+    Entity(BodyEntityLoc),
+    Lifted { origin: BodyEntityLoc, id: LiftedId },
 }
 
-/// The code of one lambda: a control-flow graph over words, as a body is.
-pub struct LambdaData {
-    /// The type the checker gave the lambda: what a closure of it takes and gives back.
+/// What a lifted function is inside the body that declared it.
+pub enum LiftedId {
+    /// A function declared in a `local`, by its place in the arena of the HIR body.
+    Local(LocalFunctionId),
+    /// A lambda written in the HIR body.
+    Lambda(LambdaId),
+}
+
+/// The MIR of one HIR body: every function it declares, each a body of its own.
+pub struct Bodies {
+    /// The bodies: the body of the entity first, then the lifted ones.
+    pub bodies: Vec<Arc<Body>>,
+}
+
+pub struct Body {
+    /// The function the body is.
+    pub function: FunctionLoc,
+    /// The type the checker gave the lambda:
+    /// what a closure of it takes and gives back.
     pub ty: Ty,
     /// The bindings the lambda captured, in the free-variable order of the HIR.
     pub captures: Vec<CaptureData>,
@@ -128,6 +152,13 @@ pub struct CaptureData {
 }
 ```
 
+`Bodies` is the value of one HIR body:
+the body of the entity first,
+then the functions declared in a `local` in declaration order,
+then the lambdas in the order the lowering wrote them.
+A lifted function is named inside its module by its `FunctionLoc`:
+`fib`, `fib::aux`, `fib::<mlkc@lambda-0>`.
+
 `Rvalue` gains two variants, and `Callee::Indirect` finally means what it was reserved for:
 
 ```rust
@@ -142,17 +173,19 @@ pub enum Rvalue {
     },
     /// The value of one binding the enclosing lambda captured; only in a lambda body.
     Capture {
-        /// Which capture, by its place in `LambdaData::captures`.
+        /// Which capture, by its place in `Body::captures`.
         index: u32,
     },
 }
 ```
 
-- **The lowering.** A lambda expression lowers the lambdas written inside it first,
-  then its body, and allocates the `LambdaData`;
-  the expression itself lowers to `Closure`,
+- **The lowering.** The functions a body declares are lifted as the body lowers:
+  a function declared in a `local` or a lambda becomes a body of its own,
+  and the value of one HIR body is the flat `Bodies` of them.
+  A lambda expression lowers to `Closure`,
   whose capture operands are the places the captured patterns are bound to in the enclosing
-  frame, read in the order the free-variable analysis gave.
+  frame, read in the order the free-variable analysis gave,
+  and whose `lambda` is the lifted body in the same set.
   Inside the lambda body a parameter lowers to its parameter value,
   a path anchored to a captured binding lowers to `Rvalue::Capture`,
   bound to a slot by the first statement of the entry block,
@@ -177,18 +210,18 @@ pub enum Rvalue {
   the environment argument the back end adds is that same value,
   and the lowering records the call's type from the checker as it does for any call.
 - **`ty` is the checker's type, and not the generalized one.**
-  `LambdaData::ty` is `CheckedBody`'s type of the lambda expression,
+  `Body::ty` is `CheckedBody`'s type of the lambda expression,
   so an unconstrained parameter is `Ty::Error` and a constrained one is its class;
   what the checker generalized at the `let` is the type of a _use_, not of this code
   (see "The key is the ABI shape").
-- **The verifier and the dump.** `Capture` is valid only inside a lambda body,
-  and its index is in range for that lambda's captures;
+- **The verifier and the dump.** `Capture` is valid only in a lifted lambda body,
+  and its index is in range for that body's captures;
   `Closure` passes exactly one operand per captured binding;
-  each lambda body is verified as the body it is, with the SSA invariant of its form.
+  each lifted function is verified as the body it is, with the SSA invariant of its form.
 
-#### Why the lambda's arenas are the lambda's
+#### Why every lifted function is a body of its own
 
-The blocks, values, and slots of a lambda are its own arenas,
+The blocks, values, and slots of a lifted function are its own arenas,
 separate from the arenas of the body that wrote it,
 because they mirror the partition the machine has:
 a lambda becomes a WASM function, and every stage that works on code is stated per function.
@@ -196,40 +229,42 @@ The SSA construction computes one dominator tree from one entry;
 the verifier checks one value space and one slot space;
 the local allocator of the back end numbers the locals of one function;
 the LIR lowering maps one body to one function.
-Flattened into the writer's arenas, one `ValueId` space would hold two functions,
+One `ValueId` space shared with the writer would hold two functions,
 and every pass would grow a partition it does not have
 — which function of this arena is this block in —
-that the nesting states for free.
+that one body per function states for free.
 
-The nesting also keeps the writer the only identity a lambda has.
-A lambda has no name and no signature of its own, and no edit changes it alone:
-a lambda is rebuilt exactly when the body that wrote it is,
-so the body remains the unit of invalidation and of memoization, as it already is,
+MIR states that shape flat: `Bodies` holds the body of the entity and every function lifted
+out of it, and nothing after MIR reads a nesting, because there is none ([ADR-0019][0019-mir.md]).
+The writer is still the only identity a lifted function has in the driver:
+a lambda has no name of its own and no edit changes it alone;
+it is rebuilt exactly when the HIR body that wrote it is,
+so the HIR body remains the unit of invalidation and of memoization, as it already is,
 and the driver's keys do not grow a granularity that
-[ADR-0008][0008-compiler-driver.md] defers
-(a key a lambda could be addressed by would be an arena index,
-which [ADR-0003][0003-id-based-ir.md] does not promise across rebuilds).
-The HIR keeps the expressions of a function declared inside a body in the enclosing body's
-arenas for the same reason.
+[ADR-0008][0008-compiler-driver.md] defers.
+In MIR a lifted function is addressed by its `FunctionLoc`, whose origin is that HIR body,
+and the `LambdaId` in it is a place in the order the lowering wrote,
+which [ADR-0003][0003-id-based-ir.md] does not promise across rebuilds
+— so the location is part of the value, and not a key of the driver.
 A lambda is moreover reachable only through the closure its writer creates,
 so nothing can pull its code without pulling the writer anyway.
 
 The consequence is deliberate:
-the per-body stages (the lowering, `mir-ssa`, and `lir`) are keyed and guarded per writer body,
+the per-body stages (the lowering, `mir-ssa`, and `lir`) are keyed and guarded per HIR body,
 and the value one of them produces holds the corresponding form
-of the writer and of every lambda written in it.
-The pass recurses through the nested bodies inside the one guarded call,
+of the writer and of every function lifted out of it.
+The pass lifts the functions inside the one guarded call,
 and a bug in a lambda's code is a bug of the writer's body,
 which is the finest identity the driver has for that code.
 If a later record narrows the driver's units,
-a nested body can be lifted into a unit of its own mechanically,
-because nothing outside the writer addresses it.
+a lifted function can be addressed by its `FunctionLoc`, which MIR already names it by,
+so nothing outside the writer needs to change.
 
-The driver's stages stay per body;
-the SSA construction, the verifier, and the dumps walk the nested bodies of the value they are
+The driver's stages stay per HIR body;
+the SSA construction, the verifier, and the dumps read each function of the value they are
 handed, and nothing else changes.
 A call written inside a lambda is a call of the module like any other:
-the stage that collects the callees of a module walks the nested bodies too,
+the stage that collects the callees of a module reads every function, lifted or not,
 and imports what they name.
 
 ### The WASM closure
@@ -258,7 +293,7 @@ A function value of checked type `P -> R` has types of two canonical kinds;
   A capture shape `C0, C1, ...` is one `$env(P -> R; C0, C1, ...)`,
   declared `sub final $closure(P -> R)`;
   its fields repeat the code as the prefix a subtype must repeat,
-  then the captured words in the order of `LambdaData::captures`,
+  then the captured words in the order of `Body::captures`,
   typed by the ABI of their checked types.
 - **The lifted function takes the closure first.**
   `$fn(P -> R)` is the signature of every lambda of that shape:
@@ -429,27 +464,42 @@ which the structures and strings of the language will use as they are lowered;
 this record uses them for the closure: one `struct.new` builds it,
 and `struct.get` reads its code and its captures.
 
-The module's layout numbers the functions and declares the types:
+The module's layout numbers the functions and declares the types ([ADR-0019][0019-mir.md]):
 
 ```rust
 // mlkc-codegen-wasm
-pub enum FunctionKey {
-    /// A function an entity declares.
-    Entity(EntityLoc<FunctionLoc>),
-    /// A lambda written in a body.
-    Lambda {
-        owner: BodyEntityLoc,
-        lambda: LambdaId,
-    },
+/// One function of a module, as the back end reads it.
+pub struct ModuleFunction {
+    /// The body of an entity, a function declared in a `local`, or a lambda.
+    pub function: FunctionLoc,
+    /// The name the function is called by: `fib`, `fib::aux`, `fib::<mlkc@lambda-0>`.
+    pub name: String,
+    /// What the function takes and gives back, without an environment.
+    pub signature: FnSignature,
+    /// Whether the module exports it; only a function of an entity is ever exported.
+    pub exported: bool,
+    /// The SSA body of the function.
+    pub body: Arc<MirBody>,
+}
+
+/// What the layout reserves for one lifted lambda.
+pub struct ClosurePlan {
+    /// The index of the lifted function in the function index space.
+    pub index: u32,
+    /// The shapes of its captures, in the order they are stored.
+    pub captures: Vec<AbiType>,
+    /// The `$fn` and `$closure` types of its shape.
+    pub types: ClosureTypes,
+    /// The type of its environment, where it captured something.
+    pub env: Option<u32>,
 }
 ```
 
-- Imports keep their order, then the functions the module declares in declaration order,
-  each immediately followed by its lambdas, depth first;
-  a function's index therefore depends only on the module.
-  (`FunctionKey` grows a `Local` variant when the functions declared inside bodies are lifted;
-  that is the sibling mechanism this record leaves reserved.)
-- The types of the closure family are collected from the bodies the layout walks and
+- Imports keep their order, then the functions the module declares in the order the module
+  numbers them: the HIR bodies in module order, and the body of each entity followed by the
+  functions lifted out of it, in the order `Bodies` lists them.
+  A function's index therefore depends only on the module.
+- The types of the closure family are collected from the lambdas the layout walks and
   deduplicated by key: one shape group per ABI shape, and one environment group per capture
   shape.
   The shape groups come first, then the environment groups, each naming the shape group it
@@ -457,34 +507,43 @@ pub enum FunctionKey {
   The grouping is a rule and not a choice of the assembler:
   an environment declared inside the shape's group would change the shape's identity with the
   captures, and two modules would stop sharing `$fn`.
-- A lambda is never imported and never exported;
-  it is reached through `ref.func` in the closure that wraps it.
-- The `lir` stage stays keyed by the body:
-  its value is the LIR of the owner's function and of every lambda written in it,
-  in the shape of the MIR it read:
+- A function lifted out of a body is never imported and never exported;
+  a lambda is reached through `ref.func` in the closure that wraps it.
+- The `lir` stage stays keyed by the HIR body:
+  its value is the LIR of the owner's function and of every function lifted out of it,
+  flat, in the shape of the MIR it read:
 
     ```rust
     // mlkc-codegen-wasm
     pub struct LoweredFunction {
+        /// What the function is.
+        pub function: FunctionLoc,
+        /// The name the function is called by.
+        pub name: String,
         /// The LIR of the function.
         pub body: Body,
-        /// The LIR of the lambdas written in it, in the order the body creates them.
-        pub lambdas: Vec<LoweredFunction>,
+    }
+
+    /// The LIR of one HIR body: every function it declares, flat.
+    pub struct LoweredFunctions {
+        pub functions: Vec<Arc<LoweredFunction>>,
     }
     ```
 
-    Encoding flattens that value in the order the layout numbers the functions.
-    Encoding a lifted function is encoding a body;
+    Encoding reads that value flat, in the order the layout numbers the functions;
+    encoding a lifted function is encoding a body;
     `emit_function` and `assemble_module` learn nothing about closures
     beyond the instructions they already encode.
 
 ### Names and debug information
 
-The name of a lifted function is derived from its owner and its place in the body,
-because a lambda has no name of its own and a stack trace still needs one:
+The name of a lifted function is derived from the body that wrote it and what it is there,
+because a lambda has no name of its own and a stack trace still needs one;
+a function declared in a `local` keeps the name it was declared under:
 
 ```text
 fib::<mlkc@lambda-0>
+fib::aux
 ```
 
 The spelling is the one the HIR already uses for names no module can write
@@ -536,9 +595,11 @@ statements, so a stepper walks into a lambda as into any other body.
 - **Tail calls.** `return_call_ref` is an instruction this shape can use;
   the semantics and the stack guarantees of tail calls are a decision of their own.
 - **Functions declared inside a body.**
-  `Callee::Local` and `Op::CallLocal` stay reserved for `LocalFunctionId`;
-  a local function differs from a lambda by having a name and a written signature,
-  and lifting it is the sibling of this mechanism.
+  A function declared in a `local` is lifted exactly as a lambda is,
+  under the same `FunctionLoc` with a different `LiftedId`,
+  and differs from a lambda by having a name and a written signature;
+  what it does not have is an environment: it reads nothing of the body that declares it,
+  which is a rule of the language and not of this representation.
 - **The interpreter.** It reads the same MIR construct —
   a closure is code plus captured words, and `Capture` indexes them —
   and its own value model is not this record's.
@@ -682,7 +743,7 @@ code (or the captures are threaded by hand).
 ## Links
 
 - Values as words, and the closure row this record fills in: [0018-values-as-words.md]
-- MIR, `Callee::Indirect`, and the body the lambdas live in: [0019-mir.md]
+- MIR, `Callee`, and the set of bodies a lifted function lives in: [0019-mir.md]
 - The WASM back end, refinements, and the call it left unsupported: [0020-wasm-backend.md]
 - Canonical types, the ABI, and separate compilation: [0021-translation-units.md]
 - The LIR the new instructions belong to: [0022-wasm-lir.md]

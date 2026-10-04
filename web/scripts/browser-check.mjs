@@ -124,8 +124,8 @@ const UNIT =
 
 /**
  * What is typed to watch the bodies of lambdas: a lambda written in a body, and a lambda written
- * in that lambda. The MIR and LIR tabs read each of them as a body of its own, nested under the
- * body that wrote it.
+ * in that lambda. The MIR and LIR tabs read each of them as a body of its own, flat, named under
+ * the body that wrote it ([ADR-0019](../../docs/adr/0019-mir.md)).
  */
 const LAMBDA =
     "fun main(): Int =\n    let add = fn(x: Int) -> fn(y: Int) -> x + y in\n    add(1)(2)\n";
@@ -140,7 +140,7 @@ const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 	return JSON.stringify({
 		form: inspector().querySelector('[data-form]')?.dataset.form,
 		owners: lines('owner'),
-		lambdas: [...inspector().querySelectorAll('[data-lambdas] [data-line=owner]')].map((it) => text(it)),
+		lambdas: lines('owner').filter((it) => it.includes('<mlkc@lambda-')),
 		blocks: [...inspector().querySelectorAll('[data-block]')].map((it) => it.dataset.block),
 		entry: inspector().querySelectorAll('[data-entry=true]').length,
 		stmts: lines('stmt'),
@@ -161,7 +161,7 @@ const MIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 const LIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-line=' + kind + ']')].map((it) => text(it));
 	return JSON.stringify({
 		owners: lines('owner'),
-		lambdas: [...inspector().querySelectorAll('[data-lambdas] [data-line=owner]')].map((it) => text(it)),
+		lambdas: lines('owner').filter((it) => it.includes('<mlkc@lambda-')),
 		blocks: [...inspector().querySelectorAll('[data-block]')].map((it) => it.dataset.block),
 		entry: inspector().querySelectorAll('[data-entry=true]').length,
 		insts: lines('inst'),
@@ -943,8 +943,8 @@ const WAITS = {
     branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
     unit: `return inspector().textContent.includes('const unit')`,
     unitSsa: `return inspector().textContent.includes('call fun log')`,
-    lambda: `return inspector().querySelector('[data-form=cfg] [data-lambdas] [data-block]') !== null`,
-    lambdaLir: `return inspector().querySelector('[data-lir] [data-lambdas] [data-block]') !== null`,
+    lambda: `return [...inspector().querySelectorAll('[data-form=cfg] [data-line=owner]')].some((it) => text(it).includes('<mlkc@lambda-'))`,
+    lambdaLir: `return [...inspector().querySelectorAll('[data-lir] [data-line=owner]')].some((it) => text(it).includes('<mlkc@lambda-'))`,
     wat: `const view = inspector().querySelector('[data-wat]');
 		return view !== null && view.querySelector('.cm-content') !== null`,
     debugTables: `const head = inspector().querySelector('[data-wat-sections]');
@@ -1356,8 +1356,8 @@ async function main() {
     await until(WAITS.unitSsa, "the unit of the ssa form");
     const unitSsa = JSON.parse(await ask(STEPS.ssa));
 
-    // A lambda is a body written in another one: the tabs read it nested under the body that
-    // wrote it, and a lambda written in a lambda is nested under its writer.
+    // A lambda is a body of the module like any other: the tabs read it flat, named under the
+    // body that wrote it, and a lambda written in a lambda is a body of the same set.
     await ask(STEPS.typeLambda);
     await sleep(300);
 
@@ -1894,16 +1894,20 @@ function report(page, problems, warnings, asked) {
                 page.unitSsa.term.some((it) => it.startsWith("return v")),
         ],
         [
-            // A lambda is written in a body and not in a list of its own: the tab nests it under
-            // the body that wrote it, and the lambda written in the lambda under that.
-            "the cfg tab reads the body of a lambda where it is written",
+            // A lambda is a function of the module, read flat and named under the body that
+            // wrote it; the closure that creates it points at the lifted function.
+            "the cfg tab reads the body of a lambda as a function of the module",
             page.lambdaMir.form === "cfg" &&
                 page.lambdaMir.owners.some((it) => it.startsWith("fun main")) &&
                 page.lambdaMir.lambdas.length === 2 &&
-                page.lambdaMir.lambdas[0].startsWith("lambda #1") &&
-                page.lambdaMir.lambdas[1].startsWith("lambda #0") &&
+                page.lambdaMir.lambdas[0].startsWith(
+                    "fun main::<mlkc@lambda-0>",
+                ) &&
+                page.lambdaMir.lambdas[1].startsWith(
+                    "fun main::<mlkc@lambda-1>",
+                ) &&
                 page.lambdaMir.stmts.some((it) =>
-                    it.includes("closure lambda#1"),
+                    it.includes("closure lambda#0"),
                 ) &&
                 page.lambdaMir.blocks.length === 3,
         ],
@@ -1912,8 +1916,12 @@ function report(page, problems, warnings, asked) {
             // reads its body, and the closure it makes is what `ref.func` and `struct.new` are.
             "the lir tab reads the body of a lifted lambda",
             page.lambdaLir.lambdas.length === 2 &&
-                page.lambdaLir.lambdas[0].startsWith("lambda #1") &&
-                page.lambdaLir.lambdas[1].startsWith("lambda #0") &&
+                page.lambdaLir.lambdas[0].startsWith(
+                    "fun main::<mlkc@lambda-0>",
+                ) &&
+                page.lambdaLir.lambdas[1].startsWith(
+                    "fun main::<mlkc@lambda-1>",
+                ) &&
                 page.lambdaLir.blocks.length === 3 &&
                 page.lambdaLir.kinds.includes("ref.func") &&
                 page.lambdaLir.kinds.includes("struct.new") &&

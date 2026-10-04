@@ -28,7 +28,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use mlkc_codegen_wasm::{FunctionKey, LoweredFunction};
+use mlkc_codegen_wasm::LoweredFunctions;
 use mlkc_diagnostics::Diagnostic;
 use mlkc_driver::{Diagnostics, Driver};
 use mlkc_fixture::Module;
@@ -168,7 +168,11 @@ pub(crate) fn run(fixture: &str) {
                 };
 
                 snapshot.push_str("CFG form:\n\n```\n");
-                snapshot.push_str(&mlkc_mir::dump::body(&mir));
+
+                for body in mir.iter() {
+                    snapshot.push_str(&mlkc_mir::dump::body(body));
+                }
+
                 snapshot.push_str("```\n\n");
 
                 let ssa = driver
@@ -176,7 +180,11 @@ pub(crate) fn run(fixture: &str) {
                     .expect("a body that is lowered to have an SSA form");
 
                 snapshot.push_str("SSA form:\n\n```\n");
-                snapshot.push_str(&mlkc_mir::dump::body(&ssa));
+
+                for body in ssa.iter() {
+                    snapshot.push_str(&mlkc_mir::dump::body(body));
+                }
+
                 snapshot.push_str("```\n\n");
 
                 // The LIR is what the WASM back end lowers the SSA form into: the target's own
@@ -242,42 +250,27 @@ fn modules_of(fixture: &str) -> Vec<Module> {
     mlkc_fixture::modules(&source)
 }
 
-/// Writes the LIR of one function, of the lambdas it wrote, and of the functions it declares in
-/// a `local`.
-fn write_lir(snapshot: &mut String, function: &LoweredFunction) {
-    match &function.key {
-        FunctionKey::Lambda { lambda, .. } => {
-            let _ = writeln!(snapshot, "Lambda #{}:", lambda.index());
-        },
-        FunctionKey::Local { local, .. } => {
-            let _ = writeln!(snapshot, "Local function #{}:", local.index());
-        },
-        FunctionKey::Entity(_) => {},
-    }
+/// Writes the LIR of every function of one HIR body, flat, each under the header of what it is.
+fn write_lir(snapshot: &mut String, functions: &LoweredFunctions) {
+    for function in &functions.functions {
+        let _ = writeln!(snapshot, "{}:", function.name);
 
-    snapshot.push_str("```\n");
-    snapshot.push_str(&mlkc_lir_wasm::dump::body(&function.body));
-    snapshot.push_str("```\n\n");
+        snapshot.push_str("```\n");
+        snapshot.push_str(&mlkc_lir_wasm::dump::body(&function.body));
+        snapshot.push_str("```\n\n");
 
-    // The structure is what the structuring pass makes of the control flow: the frames of the
-    // target around the blocks, or the dispatch form where the body has none.
-    snapshot.push_str("Structure:\n\n");
+        // The structure is what the structuring pass makes of the control flow: the frames of the
+        // target around the blocks, or the dispatch form where the body has none.
+        snapshot.push_str("Structure:\n\n");
 
-    match &function.body.structure {
-        Some(structure) => {
-            snapshot.push_str("```\n");
-            snapshot.push_str(&mlkc_lir_wasm::dump::structure(structure));
-            snapshot.push_str("```\n\n");
-        },
-        None => snapshot.push_str("Dispatched: the control flow is not structured.\n\n"),
-    }
-
-    for child in &function.lambdas {
-        write_lir(snapshot, child);
-    }
-
-    for child in &function.local_functions {
-        write_lir(snapshot, child);
+        match &function.body.structure {
+            Some(structure) => {
+                snapshot.push_str("```\n");
+                snapshot.push_str(&mlkc_lir_wasm::dump::structure(structure));
+                snapshot.push_str("```\n\n");
+            },
+            None => snapshot.push_str("Dispatched: the control flow is not structured.\n\n"),
+        }
     }
 }
 

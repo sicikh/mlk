@@ -26,6 +26,7 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_line_index::LineIndex;
+use mlkc_mir::FunctionLoc as MirFunctionLoc;
 use mlkc_span::Span;
 use mlkc_vfs::FileId;
 
@@ -191,11 +192,7 @@ impl Driver {
 
             for (_, module) in index.iter() {
                 let mir = self.mir_module(module)?;
-                let mut bodies = Vec::with_capacity(mir.functions.len());
-
-                for function in &mir.functions {
-                    bodies.push(self.lir(&function.owner)?);
-                }
+                let bodies = self.module_lir(module)?;
 
                 modules.insert(module, mir);
                 lirs.insert(module, bodies);
@@ -230,7 +227,11 @@ impl Driver {
                     item: loc.clone(),
                 };
                 let Some(function) = modules.get(&module)?.functions.iter().find(|function| {
-                    matches!(&function.owner.item, BodyLoc::Function(loc) if *loc == entity.item)
+                    matches!(
+                        &function.function,
+                        MirFunctionLoc::Entity(owner)
+                            if matches!(&owner.item, BodyLoc::Function(loc) if *loc == entity.item)
+                    )
                 }) else {
                     continue;
                 };

@@ -423,12 +423,16 @@ const STEPS = {
 		scroller.scrollTop = scroller.scrollHeight;
 		return true`,
 
-    // The debug level decides what tables a module carries: at `lines` the debug custom
-    // sections are written beside the name section, and at `none` they are not. The tables are
-    // not in the text of the module --- they are binary --- so what the editor shows of them is
-    // the list the head of the tab reads.
-    debugLines: `const select = document.querySelector('[data-debug]');
-		select.value = 'lines';
+    // The debug option decides what a module carries: the source map of a browser, the tables
+    // of DWARF, or nothing. The tables are not in the text of the module --- they are binary
+    // --- so what the editor shows of them is the list the head of the tab reads.
+    debugMap: `const select = document.querySelector('[data-debug]');
+		select.value = 'source-map';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		return true`,
+
+    debugDwarf: `const select = document.querySelector('[data-debug]');
+		select.value = 'dwarf-lines';
 		select.dispatchEvent(new Event('change', { bubbles: true }));
 		return true`,
 
@@ -808,8 +812,11 @@ const WAITS = {
 		return view !== null && view.querySelector('.cm-content') !== null`,
     debugTables: `const head = inspector().querySelector('[data-wat-sections]');
 		return head !== null && head.textContent.includes('.debug_line')`,
+    debugMap: `const head = inspector().querySelector('[data-wat-sections]');
+		return head !== null && head.textContent.includes('sourceMappingURL')`,
     debugNone: `const head = inspector().querySelector('[data-wat-sections]');
-		return head !== null && !head.textContent.includes('.debug')`,
+		return head !== null && !head.textContent.includes('sourceMappingURL') &&
+			!head.textContent.includes('.debug')`,
     ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
 		return document.querySelector('[data-console=program].active') !== null &&
 			lines.some((it) => text(it).trim() === '5')`,
@@ -1100,19 +1107,24 @@ async function main() {
     await sleep(200);
     const watEnd = JSON.parse(await ask(STEPS.wat));
 
-    // The debug level is an option of the driver: at `lines` the module carries the debug
-    // tables, and at `none` it carries the name section alone. The tables are read off the head
-    // of the tab, which is where a person reads them.
-    await ask(STEPS.debugLines);
+    // The debug option is an option of the driver: the source map of a browser, the tables of
+    // DWARF, and nothing are alternatives, and a module carries one of them. What each carries
+    // is read off the head of the tab, which is where a person reads it.
+    await ask(STEPS.debugDwarf);
     await until(WAITS.debugTables, "the debug tables of the module");
-    const debugWat = JSON.parse(await ask(STEPS.watSections));
+    const dwarfWat = JSON.parse(await ask(STEPS.watSections));
 
     await ask(STEPS.debugNone);
-    await until(WAITS.debugNone, "the module without debug tables");
-    const plainWat = JSON.parse(await ask(STEPS.watSections));
+    await until(WAITS.debugNone, "the module without debug information");
+    const bareWat = JSON.parse(await ask(STEPS.watSections));
+
+    await ask(STEPS.debugMap);
+    await until(WAITS.debugMap, "the source map of the module");
+    const mapWat = JSON.parse(await ask(STEPS.watSections));
 
     // And the program itself: the modules are instantiated in the order the link stage gives
-    // them, and the `#[entry]` is called. What `fib(5)` prints is what the program console holds.
+    // them, and the `#[entry]` is called. A run of a browser is under the map, which is where
+    // the option stands; what `fib(5)` prints is what the program console holds.
     await ask(STEPS.run);
     await until(WAITS.ran, "the program to run");
     const ran = JSON.parse(await ask(STEPS.ran));
@@ -1297,8 +1309,9 @@ async function main() {
             watFolded,
             watAgain,
             watEnd,
-            debugWat,
-            plainWat,
+            dwarfWat,
+            bareWat,
+            mapWat,
             ran,
             program,
             width,
@@ -1679,23 +1692,20 @@ function report(page, problems, warnings, asked) {
             page.watEnd.text.includes("app::main"),
         ],
         [
-            // The debug level is an option of the driver: at `lines` the module carries the
-            // debug tables and the source map, and at `none` the name section alone.
-            "the debug level decides what tables a module carries",
-            page.debugWat.sections.includes("name") &&
-                page.debugWat.sections.includes(".debug_line") &&
-                page.debugWat.sections.includes(".debug_info") &&
-                page.debugWat.sections.includes(".debug_abbrev") &&
-                !page.plainWat.sections.some((it) => it.startsWith(".debug")),
-        ],
-        [
-            // A browser reads a source map rather than DWARF, and the map follows the level as
-            // the tables do: it is a custom section of the module, which the head of the tab
-            // reads like any other. What the browser makes of it is the engine's part of the
-            // contract, checked where the engine is (ADR-0024).
-            "the module carries the source map where the level asks for it",
-            page.debugWat.sections.includes("sourceMappingURL") &&
-                !page.plainWat.sections.includes("sourceMappingURL"),
+            // The debug option is what a module carries: the source map of a browser, the
+            // tables of DWARF, or nothing but the name section. A module carries one of them,
+            // so an engine has no DWARF to prefer to the map (ADR-0025).
+            "the debug option decides what a module carries",
+            page.dwarfWat.sections.includes("name") &&
+                page.dwarfWat.sections.includes(".debug_line") &&
+                page.dwarfWat.sections.includes(".debug_info") &&
+                page.dwarfWat.sections.includes(".debug_abbrev") &&
+                !page.dwarfWat.sections.includes("sourceMappingURL") &&
+                page.bareWat.sections.includes("name") &&
+                !page.bareWat.sections.some((it) => it.startsWith(".debug")) &&
+                !page.bareWat.sections.includes("sourceMappingURL") &&
+                page.mapWat.sections.includes("sourceMappingURL") &&
+                !page.mapWat.sections.some((it) => it.startsWith(".debug")),
         ],
         [
             // The format is painted: an instruction is the accent of a keyword, a value type
@@ -1939,7 +1949,7 @@ function report(page, problems, warnings, asked) {
         `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
     );
     console.log(
-        `the module carries ${page.debugWat.sections.length} custom section(s) at \`lines\`, the source map among them, and ${page.plainWat.sections.length} at \`none\` without it`,
+        `the debug option gives the module ${page.dwarfWat.sections.length} custom section(s) of DWARF, ${page.bareWat.sections.length} with none, and ${page.mapWat.sections.length} with the source map`,
     );
     console.log(
         `of ${page.watMarks.rows} line(s) on the screen, ${page.watMarks.marks} carry a fold marker: the module ${page.watMarks.moduleMarked ? "folds" : "does not fold"}, a func head ${page.watMarks.headMarked ? "folds" : "does not fold"}, and a line of a body ${page.watMarks.bodyMarked ? "FOLDS" : "does not fold"}`,

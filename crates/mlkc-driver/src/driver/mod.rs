@@ -45,7 +45,7 @@ pub use self::{
     host::StdFile,
     link::{LinkError, LinkPlan, codegen_diagnostic},
     lower::{Lowered, ModuleBody},
-    options::{DebugLevel, OptLevel, Options},
+    options::{DebugInfo, OptLevel, Options},
     parse::Parse,
     stats::{Clock, Pass, Stats, Tally, Unit, system_clock},
 };
@@ -62,9 +62,9 @@ pub struct Driver {
     /// rather than owned so that a resolution can be handed the graph it was resolved against
     /// without copying it.
     projects: Arc<ProjectGraph>,
-    /// What the host asked the pipeline for ([ADR-0023][adr-0023]).
+    /// What the host asked the pipeline for ([ADR-0025][adr-0025]).
     ///
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     options: Options,
     /// How many changes the options went through; a value built under them keeps the number.
     options_version: u32,
@@ -384,10 +384,10 @@ struct ModuleMirSlot {
 ///
 /// A plan is a function of the modules of the program, of the options it was assembled under,
 /// and of nothing else: every import a compiled module carries is a name the module of the plan
-/// already has ([ADR-0023]).
+/// already has ([ADR-0025]).
 ///
 /// [adr-0021]: ../../docs/adr/0021-translation-units.md
-/// [adr-0023]: ../../docs/adr/0023-debug-information.md
+/// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 struct LinkSlot {
     /// The version of the options the plan was assembled under.
     options: u32,

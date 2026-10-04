@@ -17,7 +17,7 @@ use std::{
 };
 
 use mlkc_codegen_wasm::{
-    CodegenDiag, DebugLevel, FnSignature, ModuleMir, Sources, WasmModule, compile_module,
+    CodegenDiag, DebugInfo, FnSignature, ModuleMir, Sources, WasmModule, compile_module,
 };
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Label, Level};
 use mlkc_hir_def::{
@@ -144,14 +144,14 @@ struct LinkInputs {
     entries: Vec<EntryCandidate>,
     /// The classes of the language, which say what the unit is.
     builtins: Builtins,
-    /// How much debug information the assembled modules carry ([ADR-0023][adr-0023]).
+    /// What debug information the assembled modules carry ([ADR-0025][adr-0025]).
     ///
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
-    debug: DebugLevel,
-    /// What the debug tables read of the files the bodies were read from, by module
-    /// ([ADR-0023][adr-0023]).
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
+    debug: DebugInfo,
+    /// What the debug information reads of the files the bodies were read from, by module
+    /// ([ADR-0025][adr-0025]).
     ///
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     sources: BTreeMap<ModuleId, Sources>,
 }
 
@@ -317,34 +317,21 @@ impl Driver {
         Some(value)
     }
 
-    /// What the debug tables of every module read: the path, the text, and the lines of every
-    /// file of the program ([ADR-0023][adr-0023], [ADR-0024][adr-0024]).
+    /// What the debug information of every module reads: the path, the text, and the lines of
+    /// every file of the program ([ADR-0025][adr-0025]).
     ///
     /// Every module is handed every file, because a body may name a file of another module:
-    /// inlining moves code across them ([ADR-0022][adr-0022]), and a line of the table points
-    /// at where the code came from. The text is what the source map carries to a browser.
+    /// inlining moves code across them ([ADR-0022][adr-0022]), and a line of a map or of a
+    /// table points at where the code came from. A map and a table read different things of a
+    /// file --- the map carries its text, the table its lines --- so both are handed over.
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
-    /// [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     fn sources_of(
         &mut self,
         modules: &BTreeMap<ModuleId, Arc<ModuleMir>>,
     ) -> BTreeMap<ModuleId, Sources> {
         let mut sources = BTreeMap::new();
-
-        // A program assembled without debug information names no file, and the lines of one are
-        // never read: taking them anyway would time a pass nothing asked for.
-        if self.options.debug == DebugLevel::None {
-            for module in modules.keys() {
-                let primary = self.file_path(module.0).to_string();
-
-                sources.insert(*module, Sources::new(primary));
-            }
-
-            return sources;
-        }
-
         let mut files: Vec<(FileId, String, Arc<str>, Arc<LineIndex>)> = Vec::new();
 
         for module in modules.keys() {

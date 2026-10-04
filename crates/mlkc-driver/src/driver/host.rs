@@ -69,15 +69,15 @@ impl Driver {
         self.vfs.set_file_text(path, text)
     }
 
-    /// Configures the pipeline: how much debug information a module carries, and how hard the
-    /// passes optimize ([ADR-0023][adr-0023]).
+    /// Configures the pipeline: what debug information a module carries, and how hard the
+    /// passes optimize ([ADR-0025][adr-0025]).
     ///
     /// Returns whether the options changed; pushing them again changes nothing, and a value
     /// built under them stays where it was
     /// ([ADR-0008][adr-0008]).
     ///
     /// [adr-0008]: ../../docs/adr/0008-compiler-driver.md
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     pub fn set_options(&mut self, options: Options) -> bool {
         if options == self.options {
             return false;

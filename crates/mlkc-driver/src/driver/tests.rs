@@ -2164,55 +2164,70 @@ fn an_edit_of_a_body_links_the_program_again() {
 }
 
 /// The options the modules are assembled under are an input of the plan: pushing others builds
-/// it again, and pushing the same ones leaves it where it was ([ADR-0008], [ADR-0023]).
+/// it again, and pushing the same ones leaves it where it was ([ADR-0008], [ADR-0025]).
 ///
 /// [adr-0008]: ../../docs/adr/0008-compiler-driver.md
-/// [adr-0023]: ../../docs/adr/0023-debug-information.md
+/// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 #[test]
 fn the_options_decide_what_the_plan_is_assembled_under() {
     let mut driver = std_project_of(LINKED);
-    let quiet = driver.link(&project()).expect("the project to link");
+    // The default is the source map of a browser, which is what a run of the editor reads.
+    let mapped = driver.link(&project()).expect("the project to link");
 
     assert!(
-        !custom_sections(&quiet)
+        custom_sections(&mapped)
+            .iter()
+            .any(|name| name == "sourceMappingURL"),
+        "a plan assembled under the default option to carry the map: {:?}",
+        custom_sections(&mapped),
+    );
+    assert!(
+        !custom_sections(&mapped)
             .iter()
             .any(|name| name.starts_with(".debug")),
-        "a plan assembled without debug information to carry no debug tables: {:?}",
-        custom_sections(&quiet),
+        "a plan of a map to carry no DWARF: {:?}",
+        custom_sections(&mapped),
     );
 
     assert!(
         driver.set_options(Options {
-            debug: DebugLevel::Full,
+            debug: DebugInfo::DwarfFull,
             opt: OptLevel::None,
         }),
         "the options to change",
     );
 
-    let loud = driver.link(&project()).expect("the project to link");
+    let dwarf = driver.link(&project()).expect("the project to link");
 
     assert!(
-        !Arc::ptr_eq(&quiet, &loud),
+        !Arc::ptr_eq(&mapped, &dwarf),
         "the plan was not assembled again",
     );
     assert!(
-        custom_sections(&loud)
+        custom_sections(&dwarf)
             .iter()
             .any(|name| name == ".debug_line"),
-        "a plan assembled with debug information to carry line tables: {:?}",
-        custom_sections(&loud),
+        "a plan assembled with DWARF to carry line tables: {:?}",
+        custom_sections(&dwarf),
+    );
+    assert!(
+        !custom_sections(&dwarf)
+            .iter()
+            .any(|name| name == "sourceMappingURL"),
+        "a plan of tables to carry no map: {:?}",
+        custom_sections(&dwarf),
     );
 
     assert!(
         !driver.set_options(Options {
-            debug: DebugLevel::Full,
+            debug: DebugInfo::DwarfFull,
             opt: OptLevel::None,
         }),
         "pushing the same options to change nothing",
     );
     assert!(
         Arc::ptr_eq(
-            &loud,
+            &dwarf,
             &driver.link(&project()).expect("the project to link")
         ),
         "the plan was assembled again under the same options",

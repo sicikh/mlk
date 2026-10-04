@@ -1,9 +1,11 @@
-//! The debug tables of a module ([ADR-0023][adr-0023]).
+//! The debug information of a module ([ADR-0025][adr-0025]).
 //!
-//! A module assembled at [`DebugLevel::Lines`](crate::DebugLevel) or above carries DWARF
-//! custom sections: a line program that maps code offsets to the source a person reads, a
-//! compile unit per module, and a subprogram per function. The tables are written here, in one
-//! pass of the assembler, after the code section is laid out, so that every address is known.
+//! A module carries one format and not two. The map of a browser is written by
+//! [`crate::sourcemap`]: it points at the sources of a person, and it carries their text
+//! itself. The tables of DWARF are written here: a line program that maps code offsets to the
+//! source a person reads, a compile unit per module, and a subprogram per function. The
+//! tables are written in one pass of the assembler, after the code section is laid out, so that
+//! every address is known.
 //!
 //! A code address of WASM DWARF is an offset from the first byte of the contents of the code
 //! section --- the count, which follows the section's `id` and the size ([DWARF for
@@ -13,7 +15,7 @@
 //! body. The code section of a module is a byte count of the bodies the assembler writes, so the
 //! layout is computed here in the same order the assembler writes it.
 //!
-//! [adr-0023]: ../../docs/adr/0023-debug-information.md
+//! [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 //! [spec]: https://yurydelendik.github.io/webassembly-dwarf/
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -31,13 +33,14 @@ use mlkc_span::FileId;
 
 use crate::{emit::FuncArtifact, module::ModuleMir};
 
-/// What the debug tables read of the files a body was read from ([ADR-0023][adr-0023]).
+/// What the debug information reads of the files a body was read from
+/// ([ADR-0025][adr-0025]).
 ///
 /// The driver hands this to codegen as part of the input of the stage ([ADR-0009][adr-0009]);
 /// codegen never reads a file, and a line of a body is a fact of the input like any other.
 ///
-/// [adr-0023]: ../../docs/adr/0023-debug-information.md
 /// [adr-0009]: ../../docs/adr/0009-pass-contract.md
+/// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 #[derive(Debug, Clone, Default)]
 pub struct Sources {
     /// The path of the file the module is a source of: the primary source of the line program.
@@ -51,9 +54,9 @@ pub struct Sources {
 pub struct SourceFile {
     /// The path of the file, as a reader of the debugger sees it.
     pub path: String,
-    /// The text of the file, which the source map carries to a browser ([ADR-0024][adr-0024]).
+    /// The text of the file, which the source map carries to a browser ([ADR-0025][adr-0025]).
     ///
-    /// [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     pub text: Arc<str>,
     /// The line and the column of every offset of the file.
     pub lines: Arc<LineIndex>,

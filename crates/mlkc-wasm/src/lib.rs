@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 use mlkc_codegen_wasm::{Sources, compile_module};
 use mlkc_driver::{
-    DebugLevel, Driver, LinkPlan, Lowered, OptLevel, Options, Parse, codegen_diagnostic,
+    DebugInfo, Driver, LinkPlan, Lowered, OptLevel, Options, Parse, codegen_diagnostic,
 };
 use mlkc_hir_def::{ItemLoc, ItemLocLike, ModuleId, Name, ProjectData, ProjectId, dump};
 use mlkc_hir_ty::Ty;
@@ -127,21 +127,23 @@ impl WasmDriver {
         to_js(&self.register_library())
     }
 
-    /// Configures the pipeline: how much debug information a module carries, and how hard the
-    /// passes optimize ([ADR-0023]).
+    /// Configures the pipeline: what debug information a module carries, and how hard the
+    /// passes optimize ([ADR-0025]).
     ///
-    /// The levels cross the boundary as the words a host writes: `none`, `lines`, and `full`
-    /// for the debug information; `none` and `full` for the optimization. Returns whether the
-    /// options changed, which is what tells a host to read what depends on them again.
+    /// The formats cross the boundary as the words a host writes: `none`, `source-map`,
+    /// `dwarf-lines`, and `dwarf-full` for the debug information of a module; `none` and
+    /// `full` for the optimization. Returns whether the options changed, which is what tells
+    /// a host to read what depends on them again.
     ///
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     #[wasm_bindgen(js_name = setOptions)]
     pub fn set_options(&mut self, debug: &str, opt: &str) -> Result<bool, JsValue> {
         let debug = match debug {
-            "none" => DebugLevel::None,
-            "lines" => DebugLevel::Lines,
-            "full" => DebugLevel::Full,
-            other => return Err(failure(&format!("no debug level is called `{other}`"))),
+            "none" => DebugInfo::None,
+            "source-map" => DebugInfo::SourceMap,
+            "dwarf-lines" => DebugInfo::DwarfLines,
+            "dwarf-full" => DebugInfo::DwarfFull,
+            other => return Err(failure(&format!("no debug option is called `{other}`"))),
         };
         let opt = match opt {
             "none" => OptLevel::None,
@@ -442,8 +444,8 @@ impl WasmDriver {
         }))
     }
 
-    /// What the debug tables of a module read: the path, the text, and the lines of the file it
-    /// was read from ([ADR-0023][adr-0023], [ADR-0024][adr-0024]).
+    /// What the debug information of a module reads: the path, the text, and the lines of the
+    /// file it was read from ([ADR-0025][adr-0025]).
     ///
     /// Every function of the module names the same file today, and a body may name another
     /// one once inlining moves code across modules ([ADR-0022][adr-0022]); the page hands the
@@ -451,13 +453,8 @@ impl WasmDriver {
     /// the text a source map carries.
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
-    /// [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     fn sources_of(&mut self, module: &mlkc_codegen_wasm::ModuleMir) -> Sources {
-        if self.driver.options().debug == DebugLevel::None {
-            return Sources::default();
-        }
-
         let Some(first) = module.functions.first() else {
             return Sources::default();
         };
@@ -595,6 +592,11 @@ fn wat_text(bytes: &[u8]) -> Result<String, String> {
     Ok(kept)
 }
 
+/// Whether the name of a custom section is a table of DWARF.
+fn is_debug_section(name: &str) -> bool {
+    name.starts_with(".debug_") || name == "external_debug_info"
+}
+
 /// Whether a line of WAT is a debug custom section with its binary contents.
 fn is_debug_custom(line: &str) -> bool {
     let Some(rest) = line.trim_start().strip_prefix("(@custom \"") else {
@@ -602,7 +604,7 @@ fn is_debug_custom(line: &str) -> bool {
     };
     let name = rest.split('"').next().unwrap_or("");
 
-    name.starts_with(".debug_") || name == "external_debug_info"
+    is_debug_section(name)
 }
 
 /// The custom sections of a module, read off its bytes.
@@ -659,7 +661,8 @@ struct RunModule {
     /// name a stack trace shows.
     name: String,
 
-    /// The bytes of the WASM module.
+    /// The bytes of the WASM module: what the debug option asked for is in them, and the
+    /// browser runs under the source map ([`DebugInfo::SourceMap`]).
     bytes: Vec<u8>,
 
     /// The functions the module imports, in the order of their indices.
@@ -3187,6 +3190,9 @@ mod tests {
     fn a_run_carries_the_modules_a_host_wires_together() {
         let mut driver = WasmDriver::new();
         driver.register_library();
+        driver
+            .set_options("source-map", "none")
+            .expect("the options to be known");
         driver.set_text(
             "/main.mlk",
             Some(
@@ -3218,6 +3224,33 @@ mod tests {
                 .iter()
                 .any(|module| module.name == "std::runtime"),
             "the library is part of the program",
+        );
+
+        // The debug information of a browser is the source map, and the editor runs under the
+        // map alone ([`DebugInfo::SourceMap`]): the program carries it, and no table of DWARF
+        // is there for an engine to prefer to it.
+        for module in &run.modules {
+            let names: Vec<String> = custom_sections(&module.bytes)
+                .into_iter()
+                .map(|section| section.name)
+                .collect();
+
+            assert!(
+                names.iter().all(|name| !is_debug_section(name)),
+                "the run of {} to carry no DWARF: {names:?}",
+                module.name,
+            );
+        }
+
+        let main = run.modules.last().expect("the program to have a module");
+        let names: Vec<String> = custom_sections(&main.bytes)
+            .into_iter()
+            .map(|section| section.name)
+            .collect();
+
+        assert!(
+            names.iter().any(|name| name == "sourceMappingURL"),
+            "the debug information of a browser to be there: {names:?}",
         );
 
         // The host of the test: the numbers the program prints, in the order it prints them.

@@ -17,7 +17,7 @@
     import {
         loadDriver,
         type Cost,
-        type DebugLevel,
+        type DebugInfo,
         type Diagnostic,
         type Driver,
         type Hir,
@@ -148,14 +148,14 @@ pub fun main() : Unit =
     let tab = $state<Tab>("diagnostics");
 
     /**
-     * How the pipeline is configured: how much debug information the modules carry, and how
-     * hard the passes optimize ([ADR-0023](../../../docs/adr/0023-debug-information.md)).
+     * How the pipeline is configured: what debug information the modules carry, and how hard
+     * the passes optimize ([ADR-0025](../../../docs/adr/0025-debug-information-formats.md)).
      *
      * The options belong to the driver rather than to a buffer, and every value read after
      * they are pushed is built under them: the WAT shows the custom sections they add, and a
      * program run under them is the program they describe.
      */
-    let debug = $state<DebugLevel>("none");
+    let debug = $state<DebugInfo>("source-map");
     let opt = $state<OptLevel>("none");
 
     /**
@@ -587,14 +587,14 @@ pub fun main() : Unit =
     }
 
     /**
-     * Configures the pipeline for every read that follows ([ADR-0023](../../../docs/adr/0023-debug-information.md)).
+     * Configures the pipeline for every read that follows ([ADR-0025](../../../docs/adr/0025-debug-information-formats.md)).
      *
-     * The options are pushed to the driver, which is what makes a module carry the debug tables
-     * the level asks for; what the tabs hold was built under the options before it, so the
-     * values on the screen are read again. A push that changes nothing builds nothing: the
-     * driver hands back whether the options moved.
+     * The options are pushed to the driver, which is what makes a module carry the debug
+     * information the option names; what the tabs hold was built under the options before it,
+     * so the values on the screen are read again. A push that changes nothing builds nothing:
+     * the driver hands back whether the options moved.
      */
-    async function configure(nextDebug: DebugLevel, nextOpt: OptLevel) {
+    async function configure(nextDebug: DebugInfo, nextOpt: OptLevel) {
         if (!driver) return;
 
         debug = nextDebug;
@@ -679,17 +679,18 @@ pub fun main() : Unit =
         <span class="grow"></span>
         <label
             class="tool field"
-            title="How much debug information a module carries"
+            title="What debug information a module carries"
         >
             <select
                 data-debug
                 value={debug}
                 onchange={(it) =>
-                    configure(it.currentTarget.value as DebugLevel, opt)}
+                    configure(it.currentTarget.value as DebugInfo, opt)}
             >
                 <option value="none">Debug: none</option>
-                <option value="lines">Debug: lines</option>
-                <option value="full">Debug: full</option>
+                <option value="source-map">Debug: source map</option>
+                <option value="dwarf-lines">Debug: DWARF lines</option>
+                <option value="dwarf-full">Debug: DWARF full</option>
             </select>
         </label>
         <label class="tool field" title="How hard the passes optimize">

@@ -30,14 +30,13 @@
 //!
 //! # Debug information
 //!
-//! The debug level of a module ([`DebugLevel`]) says how much debug information it carries
-//! ([ADR-0023][adr-0023]): the name section at every level, line tables and a subprogram per
-//! function at [`DebugLevel::Lines`], and the DIEs of variables at [`DebugLevel::Full`]. The
-//! lines are read from the [`Origin`]s of the bodies and from the [`Sources`] the host hands to
-//! the assembler, and the addresses are the code-section offsets of the WASM DWARF convention.
-//! At [`DebugLevel::Lines`] and above the module also carries a source map
-//! ([ADR-0024][adr-0024]), the format a browser reads without an extension, with the text of
-//! every file its bodies were read from embedded in the module.
+//! The debug information of a module ([`DebugInfo`]) is one format and not two
+//! ([ADR-0025][adr-0025]): [`DebugInfo::SourceMap`] writes the map of a browser, with the text
+//! of every file embedded in the module, and [`DebugInfo::DwarfLines`] and
+//! [`DebugInfo::DwarfFull`] write the tables of DWARF, which `lldb` and `gdb` read. The files
+//! are read from the [`Origin`]s of the bodies and from the [`Sources`] the host hands to the
+//! assembler; the addresses are the code-section offsets of the WASM DWARF convention, and the
+//! columns of the map are byte offsets in the module.
 //!
 //! # What is not emitted yet
 //!
@@ -46,7 +45,7 @@
 //! body, indirect calls, and field access. A call to a function of another module, and a call to
 //! one declared `#[extern]`, is an import ([`ModuleImport`]), and the linker resolves it
 //! ([ADR-0021][adr-0021]). The DIEs of variables, locals allocated by live range, and folding
-//! constants in the LIR are the next milestones of [ADR-0020][adr-0020] and [ADR-0023][adr-0023].
+//! constants in the LIR are the next milestones of [ADR-0020][adr-0020] and [ADR-0025][adr-0025].
 //!
 //! [adr-0005]: ../../docs/adr/0005-compiler-pipeline.md
 //! [adr-0009]: ../../docs/adr/0009-pass-contract.md
@@ -54,8 +53,7 @@
 //! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
 //! [adr-0021]: ../../docs/adr/0021-translation-units.md
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-//! [adr-0023]: ../../docs/adr/0023-debug-information.md
-//! [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+//! [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 
 mod allocate;
 mod collapse;
@@ -73,7 +71,7 @@ pub use crate::{
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},
     lower::lower_function,
     module::{
-        DebugLevel, ExportDecl, FnShape, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
+        DebugInfo, ExportDecl, FnShape, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
         ModuleLayout, ModuleMir, WasmModule, assemble_module, compile_module, layout,
     },
     refine::{AbiType, Refinement},

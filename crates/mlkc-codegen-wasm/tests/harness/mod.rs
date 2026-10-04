@@ -21,7 +21,7 @@ use std::{
 };
 
 use mlkc_codegen_wasm::{
-    CodegenDiag, DebugLevel, FnShape, FunctionCtx, ModuleMir, Sources, WasmModule, assemble_module,
+    CodegenDiag, DebugInfo, FnShape, FunctionCtx, ModuleMir, Sources, WasmModule, assemble_module,
     emit_function, layout,
 };
 use mlkc_driver::{Driver, LinkPlan};
@@ -122,16 +122,16 @@ pub struct RunProject {
 /// one module, and when a pass of the driver bugged: a test writes programs the compiler is
 /// expected to compile, and anything else is the test's mistake or the compiler's bug.
 pub fn project(fixture: &str) -> Compiled {
-    project_with(fixture, DebugLevel::Full)
+    project_with(fixture, DebugInfo::DwarfFull)
 }
 
 /// Compiles the project a fixture writes at the debug level `debug`.
 ///
-/// The level is what the driver would ask for under its options ([ADR-0023]); the tests of the
-/// debug tables read what each level carries.
+/// The format is what the driver would ask for under its options ([ADR-0025]); the tests of
+/// the debug information read what each option carries.
 ///
-/// [adr-0023]: ../../../docs/adr/0023-debug-information.md
-pub fn project_with(fixture: &str, debug: DebugLevel) -> Compiled {
+/// [adr-0025]: ../../../docs/adr/0025-debug-information-formats.md
+pub fn project_with(fixture: &str, debug: DebugInfo) -> Compiled {
     let (mut driver, project) = setup(fixture);
     let index = driver
         .module_index(&project)
@@ -294,7 +294,7 @@ fn setup(fixture: &str) -> (Driver, ProjectId) {
 fn compile(
     driver: &mut Driver,
     module: &ModuleMir,
-    debug: DebugLevel,
+    debug: DebugInfo,
 ) -> (WasmModule, Vec<CodegenDiag>) {
     let layout = layout(module);
     let mut artifacts = Vec::new();
@@ -350,11 +350,11 @@ fn sources(driver: &mut Driver, module: &ModuleMir) -> Sources {
 
 /// Compiles one module, written as its source.
 pub fn module(source: &str) -> Compiled {
-    module_with(source, DebugLevel::Full)
+    module_with(source, DebugInfo::DwarfFull)
 }
 
 /// Compiles one module, written as its source, at the debug level `debug`.
-pub fn module_with(source: &str, debug: DebugLevel) -> Compiled {
+pub fn module_with(source: &str, debug: DebugInfo) -> Compiled {
     project_with(&format!("//- /main.mlk\n{source}"), debug)
 }
 

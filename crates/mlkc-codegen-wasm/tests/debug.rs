@@ -1,4 +1,4 @@
-//! The debug information of a compiled module ([ADR-0023][adr-0023], [ADR-0024][adr-0024]).
+//! The debug information of a compiled module ([ADR-0025][adr-0025]).
 //!
 //! A module assembled at the `Lines` level or above carries DWARF custom sections, and this is
 //! what reads them back: the line program points at the file and the line a body was read from,
@@ -9,11 +9,10 @@
 //! its body content, after the length prefix.
 //!
 //! The same module carries a source map, the format a browser reads without an extension
-//! ([ADR-0024][adr-0024]): it points at the same lines the line program does, counted in module
+//! ([ADR-0025][adr-0025]): it points at the same lines the line program does, counted in module
 //! bytes rather than code-section offsets, and it carries the text of the file itself.
 //!
-//! [adr-0023]: ../../../docs/adr/0023-debug-information.md
-//! [adr-0024]: ../../../docs/adr/0024-browser-debug-information.md
+//! [adr-0025]: ../../../docs/adr/0025-debug-information-formats.md
 
 mod harness;
 
@@ -23,7 +22,7 @@ use gimli::{
     AttributeValue, DebuggingInformationEntry, Dwarf, EndianSlice, LittleEndian,
     constants::{DW_AT_high_pc, DW_AT_low_pc, DW_AT_name, DW_TAG_subprogram},
 };
-use mlkc_codegen_wasm::DebugLevel;
+use mlkc_codegen_wasm::DebugInfo;
 use serde_json::Value;
 use wasmparser::{Parser, Payload};
 
@@ -37,37 +36,61 @@ const SOURCE: &str =
 /// The text of the file of the fixture: what a map of the module must carry.
 const FILE: &str = "pub fun first(): Int =\n    1\n\npub fun second(): Int =\n    2\n";
 
-/// The debug tables of a module follow the level it is assembled at.
+/// A module carries one format of debug information and not two ([`DebugInfo`]).
 #[test]
-fn the_debug_tables_follow_the_level() {
-    let none = harness::project_with(SOURCE, DebugLevel::None);
-    let lines = harness::project_with(SOURCE, DebugLevel::Lines);
-    let full = harness::project_with(SOURCE, DebugLevel::Full);
-
-    let sections = custom_sections(&none.wasm.bytes);
+fn the_debug_information_is_one_format() {
+    let bare = harness::project_with(SOURCE, DebugInfo::None);
+    let sections = custom_sections(&bare.wasm.bytes);
 
     assert!(
-        sections.keys().all(|name| !name.starts_with(".debug")),
-        "a module without debug information to carry no debug tables: {:?}",
+        sections.contains_key("name"),
+        "the name section to be a part of the module at every option",
+    );
+    assert!(
+        !sections.contains_key("sourceMappingURL")
+            && sections.keys().all(|name| !name.starts_with(".debug")),
+        "a module without debug information to carry nothing else: {:?}",
+        sections.keys().collect::<Vec<_>>(),
+    );
+
+    bare.validate();
+
+    let mapped = harness::project_with(SOURCE, DebugInfo::SourceMap);
+    let sections = custom_sections(&mapped.wasm.bytes);
+
+    assert!(
+        sections.contains_key("name"),
+        "the name section to be a part of the module at every option",
+    );
+    assert!(
+        sections.contains_key("sourceMappingURL"),
+        "the map to be what the browser option carries: {:?}",
         sections.keys().collect::<Vec<_>>(),
     );
     assert!(
-        sections.contains_key("name"),
-        "the name section to be a part of the module at every level",
+        sections.keys().all(|name| !name.starts_with(".debug")),
+        "a module of a map to carry no DWARF: {:?}",
+        sections.keys().collect::<Vec<_>>(),
     );
 
-    none.validate();
+    mapped.validate();
 
-    for compiled in [&lines, &full] {
+    for debug in [DebugInfo::DwarfLines, DebugInfo::DwarfFull] {
+        let compiled = harness::project_with(SOURCE, debug);
         let sections = custom_sections(&compiled.wasm.bytes);
 
         for name in [".debug_abbrev", ".debug_info", ".debug_line"] {
             assert!(
                 sections.contains_key(name),
-                "`{name}` to be written at this level: {:?}",
+                "`{name}` to be written at this option: {:?}",
                 sections.keys().collect::<Vec<_>>(),
             );
         }
+        assert!(
+            !sections.contains_key("sourceMappingURL"),
+            "a module of tables to carry no map: {:?}",
+            sections.keys().collect::<Vec<_>>(),
+        );
 
         compiled.validate();
     }
@@ -76,7 +99,7 @@ fn the_debug_tables_follow_the_level() {
 /// Every function is a subprogram that covers the body it was emitted as.
 #[test]
 fn every_function_is_a_subprogram_over_its_body() {
-    let compiled = harness::project_with(SOURCE, DebugLevel::Lines);
+    let compiled = harness::project_with(SOURCE, DebugInfo::DwarfLines);
     let (contents, bodies) = bodies(&compiled.wasm.bytes);
     let subprograms = subprograms(&compiled.wasm.bytes);
 
@@ -112,7 +135,7 @@ fn every_function_is_a_subprogram_over_its_body() {
 /// The line program names the file and the line of the source a body was read from.
 #[test]
 fn the_line_program_names_the_source_of_a_body() {
-    let compiled = harness::project_with(SOURCE, DebugLevel::Lines);
+    let compiled = harness::project_with(SOURCE, DebugInfo::DwarfLines);
     let (_, bodies) = bodies(&compiled.wasm.bytes);
     let rows = rows(&compiled.wasm.bytes);
     let subprograms = subprograms(&compiled.wasm.bytes);
@@ -166,32 +189,30 @@ fn the_line_program_names_the_source_of_a_body() {
     }
 }
 
-/// The map is carried where the tables are, and it carries the source itself.
+/// The map is carried by the option of a browser, and it carries the source itself.
 #[test]
-fn the_source_map_follows_the_debug_level() {
-    let none = harness::project_with(SOURCE, DebugLevel::None);
+fn the_source_map_is_what_a_browser_reads() {
+    let map = map(&harness::project_with(SOURCE, DebugInfo::SourceMap)
+        .wasm
+        .bytes);
 
-    assert!(
-        map_url(&none.wasm.bytes).is_none(),
-        "a module without debug information to carry no source map",
-    );
-
-    for debug in [DebugLevel::Lines, DebugLevel::Full] {
-        let map = map(&harness::project_with(SOURCE, debug).wasm.bytes);
-
-        assert_eq!(map["version"].as_u64(), Some(3));
-        assert_eq!(strings(&map["sources"]), ["/main.mlk"]);
-        assert_eq!(strings(&map["sourcesContent"]), [FILE]);
-    }
+    assert_eq!(map["version"].as_u64(), Some(3));
+    assert_eq!(strings(&map["sources"]), ["/main.mlk"]);
+    assert_eq!(strings(&map["sourcesContent"]), [FILE]);
 }
 
 /// Every segment of the map is a row of the line program, in module bytes and from zero.
+///
+/// The two are two builds of one project: the bodies are the same bytes, and a custom section
+/// is written after the code section, so an instruction stands at the same module offset in
+/// both, and the rows of one are what the segments of the other are compared with.
 #[test]
 fn the_segments_of_the_map_are_the_rows_of_the_line_program() {
-    let compiled = harness::project_with(SOURCE, DebugLevel::Lines);
-    let (contents, _) = bodies(&compiled.wasm.bytes);
-    let rows = rows(&compiled.wasm.bytes);
-    let map = map(&compiled.wasm.bytes);
+    let mapped = harness::project_with(SOURCE, DebugInfo::SourceMap);
+    let tables = harness::project_with(SOURCE, DebugInfo::DwarfLines);
+    let (contents, _) = bodies(&tables.wasm.bytes);
+    let rows = rows(&tables.wasm.bytes);
+    let map = map(&mapped.wasm.bytes);
     let sources = strings(&map["sources"]);
     let mappings = map["mappings"].as_str().expect("the mappings of a map");
     let segments = segments(mappings);
@@ -214,7 +235,7 @@ fn the_segments_of_the_map_are_the_rows_of_the_line_program() {
 /// The segments of the map are sorted by the byte they stand at, which a reader assumes.
 #[test]
 fn the_segments_of_the_map_are_sorted() {
-    let compiled = harness::project_with(SOURCE, DebugLevel::Lines);
+    let compiled = harness::project_with(SOURCE, DebugInfo::SourceMap);
     let map = map(&compiled.wasm.bytes);
     let mappings = map["mappings"].as_str().expect("the mappings of a map");
     let segments = segments(mappings);

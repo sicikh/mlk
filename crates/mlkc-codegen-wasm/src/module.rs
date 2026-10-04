@@ -229,28 +229,34 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
     }
 }
 
-/// How much debug information `assemble_module` is asked for ([ADR-0023][adr-0023]).
+/// What debug information `assemble_module` is asked for ([ADR-0025][adr-0025]).
 ///
-/// The level is configuration, which is an input, so the debug tables of a module are
-/// absent-or-equal for equal input ([ADR-0008][adr-0008]). A module carries the `name` section
-/// at every level; the DWARF custom sections are written by [`crate::dwarf`].
+/// A module carries one format and not two: a source map, which is what a browser reads
+/// ([`DebugInfo::SourceMap`]), or the tables of DWARF, which is what `lldb` and `gdb` read
+/// ([`DebugInfo::DwarfLines`], [`DebugInfo::DwarfFull`]), or none at all
+/// ([`DebugInfo::None`]). The option is configuration, which is an input, so the debug
+/// information of a module is equal for equal input ([ADR-0008][adr-0008]); the `name` section
+/// is written at every option.
 ///
 /// [adr-0008]: ../../docs/adr/0008-compiler-driver.md
-/// [adr-0023]: ../../docs/adr/0023-debug-information.md
+/// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum DebugLevel {
-    /// No debug information. The `name` section is still written.
-    #[default]
+pub enum DebugInfo {
+    /// No debug information: the `name` section alone, which every module carries.
     None,
-    /// Line tables, a compile unit, and a subprogram per function.
-    Lines,
-    /// Line tables, functions, parameters, and locals.
+    /// The source map of a browser: the file, the line, and the column of every instruction,
+    /// and the text of every file, carried by the module itself.
+    #[default]
+    SourceMap,
+    /// DWARF line tables, a compile unit, and a subprogram per function.
+    DwarfLines,
+    /// DWARF line tables, functions, parameters, and locals.
     ///
-    /// The DIEs of parameters and locals are a later milestone ([ADR-0023][adr-0023]); until
-    /// they are emitted, this level carries what [`DebugLevel::Lines`] carries.
+    /// The DIEs of parameters and locals are a later milestone ([ADR-0025][adr-0025]); until
+    /// they are emitted, this option carries what [`DebugInfo::DwarfLines`] carries.
     ///
-    /// [adr-0023]: ../../docs/adr/0023-debug-information.md
-    Full,
+    /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
+    DwarfFull,
 }
 
 /// One function a module imports: what a linker resolves ([ADR-0021][adr-0021]).
@@ -307,7 +313,7 @@ pub struct WasmModule {
 ///
 /// `lirs` are the lowered bodies of the module's functions, in declaration order, as the
 /// driver pulled them ([ADR-0022][adr-0022]); `sources` are the files the bodies were read
-/// from, which the debug tables point at ([ADR-0023][adr-0023]).
+/// from, which the debug information points at ([ADR-0025][adr-0025]).
 ///
 /// # Panics
 ///
@@ -315,11 +321,11 @@ pub struct WasmModule {
 /// mistake of the caller and not of the program.
 ///
 /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-/// [adr-0023]: ../../docs/adr/0023-debug-information.md
+/// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 pub fn compile_module(
     module: &ModuleMir,
     lirs: &[Arc<LirBody>],
-    debug: DebugLevel,
+    debug: DebugInfo,
     sources: &Sources,
 ) -> (WasmModule, Vec<CodegenDiag>) {
     assert_eq!(
@@ -355,7 +361,7 @@ pub fn compile_module(
 /// Assembles the WASM module of `module` from the artifacts of its functions.
 ///
 /// `functions` are the artifacts of every function the module declares, in declaration order;
-/// the `debug` level says how much debug information the module carries.
+/// `debug` is the format of debug information the module carries ([`DebugInfo`]).
 ///
 /// # Panics
 ///
@@ -365,7 +371,7 @@ pub fn compile_module(
 pub fn assemble_module(
     module: &ModuleMir,
     functions: &[FuncArtifact],
-    debug: DebugLevel,
+    debug: DebugInfo,
     sources: &Sources,
 ) -> (WasmModule, Vec<CodegenDiag>) {
     assert_eq!(
@@ -374,11 +380,12 @@ pub fn assemble_module(
         "the assembler is handed one artifact per function of the module",
     );
 
-    // The `name` section is a part of the module and is written at every level; the DWARF
-    // custom sections are written where the level asks for them, after the code section is
-    // laid out, because their addresses are offsets inside it ([ADR-0023]).
+    // The `name` section is a part of the module at every option; the debug information is
+    // one format and not two ([ADR-0025]): the source map of a browser, the tables of DWARF,
+    // or nothing, written after the code section is laid out, because the addresses of a
+    // format are offsets inside it.
     //
-    // [adr-0023]: ../../docs/adr/0023-debug-information.md
+    // [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 
     // Every function of the module has the WASM type its signature's shape gives it: an
     // immediate is a `(ref i31)` and every other type is a word, an `eqref`. One type per
@@ -469,12 +476,12 @@ pub fn assemble_module(
     wasm.section(&function_section);
     wasm.section(&exports);
 
-    // A column of the source map is a byte offset in the module ([ADR-0024][adr-0024]), so the
+    // A column of the source map is a byte offset in the module ([ADR-0025][adr-0025]), so the
     // offset of the contents of the code section --- after the `id` of the section and its
     // size --- is measured where the module stands when the code section is written. The layout
     // says how long the contents are, and the size is the length of them as an unsigned LEB128.
     //
-    // [adr-0024]: ../../docs/adr/0024-browser-debug-information.md
+    // [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     let code_payload =
         (wasm.as_slice().len() + 1 + dwarf::leb_len(layout.payload()) as usize) as u32;
 
@@ -533,21 +540,29 @@ pub fn assemble_module(
 
     wasm.section(&names);
 
-    if debug != DebugLevel::None {
-        let mut tables = dwarf::sections(module, functions, sources, &layout);
-
-        // The map a browser reads without an extension: it points at the same lines the DWARF
-        // line program does, and carries the text of the files itself ([ADR-0024]).
-        if let Some(map) = sourcemap::section(functions, sources, &layout, code_payload) {
-            tables.push(map);
-        }
-
-        for (name, data) in tables {
-            wasm.section(&wasm_encoder::CustomSection {
-                name: name.into(),
-                data: data.into(),
-            });
-        }
+    match debug {
+        DebugInfo::None => {},
+        DebugInfo::SourceMap => {
+            // The map carries the text of every file itself, so a browser needs no host to
+            // serve it; the DWARF of a module would be preferred to it by an engine, and the
+            // extension that reads DWARF has no sources to show ([`DebugInfo`]).
+            if let Some((name, data)) =
+                sourcemap::section(functions, sources, &layout, code_payload)
+            {
+                wasm.section(&wasm_encoder::CustomSection {
+                    name: name.into(),
+                    data: data.into(),
+                });
+            }
+        },
+        DebugInfo::DwarfLines | DebugInfo::DwarfFull => {
+            for (name, data) in dwarf::sections(module, functions, sources, &layout) {
+                wasm.section(&wasm_encoder::CustomSection {
+                    name: name.into(),
+                    data: data.into(),
+                });
+            }
+        },
     }
 
     (

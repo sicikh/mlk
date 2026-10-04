@@ -568,10 +568,13 @@ export interface Wat {
     diagnostics: Diagnostic[];
 }
 
-/** How much debug information a module carries ([ADR-0023](../../../docs/adr/0023-debug-information.md)). */
-export type DebugLevel = "none" | "lines" | "full";
+/**
+ * What debug information a module carries:
+ * nothing, the source map of a browser, or the tables of DWARF ([ADR-0025](../../../docs/adr/0025-debug-information-formats.md)).
+ */
+export type DebugInfo = "none" | "source-map" | "dwarf-lines" | "dwarf-full";
 
-/** How hard the pipeline optimizes a program ([ADR-0023](../../../docs/adr/0023-debug-information.md)). */
+/** How hard the pipeline optimizes a program ([ADR-0025](../../../docs/adr/0025-debug-information-formats.md)). */
 export type OptLevel = "none" | "full";
 
 /** One function a module of a program imports. */
@@ -714,17 +717,17 @@ export interface Driver {
     wat(path: string): Promise<Wat | null>;
 
     /**
-     * Configures the pipeline for every pull that follows: how much debug information the
-     * modules carry, and how hard the passes optimize ([ADR-0023]).
+     * Configures the pipeline for every pull that follows: what debug information the modules
+     * carry, and how hard the passes optimize ([ADR-0025]).
      *
      * Returns whether the options changed: pushing the same ones changes nothing, and only a
      * change makes the driver build the modules again. The options are a property of the
      * driver rather than of one buffer: a host sets them once, and the WAT and the program
      * that follow read what they say.
      *
-     * [adr-0023]: ../../../docs/adr/0023-debug-information.md
+     * [adr-0025]: ../../../docs/adr/0025-debug-information-formats.md
      */
-    setOptions(debug: DebugLevel, opt: OptLevel): Promise<boolean>;
+    setOptions(debug: DebugInfo, opt: OptLevel): Promise<boolean>;
 
     /**
      * Runs the program the buffers make, and hands back what it printed.
@@ -767,7 +770,7 @@ export interface StdFile {
  */
 export type DriverRequest =
     | { kind: "setText"; path: string; text: string | null }
-    | { kind: "setOptions"; id: number; debug: DebugLevel; opt: OptLevel }
+    | { kind: "setOptions"; id: number; debug: DebugInfo; opt: OptLevel }
     | { kind: "useStd"; id: number }
     | { kind: "cst"; id: number; path: string }
     | { kind: "ast"; id: number; path: string }

@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
 
     import AstView from "$lib/components/AstView.svelte";
+    import ConfigView from "$lib/components/ConfigView.svelte";
     import Console, { type Line } from "$lib/components/Console.svelte";
     import Diagnostics from "$lib/components/Diagnostics.svelte";
     import Editor from "$lib/components/Editor.svelte";
@@ -112,7 +113,8 @@ pub fun main() : Unit =
         | "lir"
         | "wat"
         | "tc"
-        | "stats";
+        | "stats"
+        | "config";
 
     /**
      * Which panel a narrow screen shows, where there is room for one at a time.
@@ -677,33 +679,6 @@ pub fun main() : Unit =
     <header class="top">
         <span class="brand">MLK</span>
         <span class="grow"></span>
-        <label
-            class="tool field"
-            title="What debug information a module carries"
-        >
-            <select
-                data-debug
-                value={debug}
-                onchange={(it) =>
-                    configure(it.currentTarget.value as DebugInfo, opt)}
-            >
-                <option value="none">Debug: none</option>
-                <option value="source-map">Debug: source map</option>
-                <option value="dwarf-lines">Debug: DWARF lines</option>
-                <option value="dwarf-full">Debug: DWARF full</option>
-            </select>
-        </label>
-        <label class="tool field" title="How hard the passes optimize">
-            <select
-                data-opt
-                value={opt}
-                onchange={(it) =>
-                    configure(debug, it.currentTarget.value as OptLevel)}
-            >
-                <option value="none">Opt: none</option>
-                <option value="full">Opt: full</option>
-            </select>
-        </label>
         <span class="tool-name">{name(active)}</span>
         <button class="tool" data-run onclick={run}>Run</button>
         <button class="tool primary" onclick={compile}>Compile</button>
@@ -867,11 +842,23 @@ pub fun main() : Unit =
                 class:active={tab === "stats"}
                 onclick={() => show("stats")}>Stats</button
             >
+            <button
+                data-tab="config"
+                class:active={tab === "config"}
+                onclick={() => show("config")}>Config</button
+            >
         </nav>
 
         <div class="view">
             {#if tab === "diagnostics"}
                 <Diagnostics {diagnostics} text={find(active)?.text ?? ""} />
+            {:else if tab === "config"}
+                <ConfigView
+                    {debug}
+                    {opt}
+                    onDebug={(next) => configure(next, opt)}
+                    onOpt={(next) => configure(debug, next)}
+                />
             {:else if !reading}
                 <p class="empty">Waiting for a parse.</p>
             {:else if tab === "cst"}
@@ -1107,31 +1094,6 @@ pub fun main() : Unit =
 
     .tool.primary:hover {
         background: #33507f;
-    }
-
-    .field {
-        display: flex;
-        align-items: center;
-        padding: 0;
-    }
-
-    .field select {
-        padding: 0.2rem 0.5rem;
-        border: 0;
-        background: transparent;
-        color: var(--muted);
-        font: inherit;
-        font-size: 12px;
-        cursor: pointer;
-    }
-
-    .field select:hover {
-        color: var(--text);
-    }
-
-    .field select:focus {
-        outline: none;
-        color: var(--text);
     }
 
     /*

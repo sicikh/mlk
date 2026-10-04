@@ -423,6 +423,19 @@ const STEPS = {
 		scroller.scrollTop = scroller.scrollHeight;
 		return true`,
 
+    // The configuration of the compiler is a tab of the inspector rather than tools of the
+    // header: it grows with the pipeline --- the passes, the target of the back end --- and a
+    // person reads it where a person sets it.
+    showConfig: `show('config'); return true`,
+
+    config: `const debug = document.querySelector('[data-debug]');
+		const opt = document.querySelector('[data-opt]');
+		return JSON.stringify({
+			debug: debug?.value ?? '',
+			opt: opt?.value ?? '',
+			options: debug ? [...debug.options].map((it) => it.value).join(' ') : ''
+		})`,
+
     // The debug option decides what a module carries: the source map of a browser, the tables
     // of DWARF, or nothing. The tables are not in the text of the module --- they are binary
     // --- so what the editor shows of them is the list the head of the tab reads.
@@ -817,6 +830,8 @@ const WAITS = {
     debugNone: `const head = inspector().querySelector('[data-wat-sections]');
 		return head !== null && !head.textContent.includes('sourceMappingURL') &&
 			!head.textContent.includes('.debug')`,
+    config: `return document.querySelector('[data-debug]') !== null &&
+		document.querySelector('[data-opt]') !== null`,
     ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
 		return document.querySelector('[data-console=program].active') !== null &&
 			lines.some((it) => text(it).trim() === '5')`,
@@ -1107,18 +1122,30 @@ async function main() {
     await sleep(200);
     const watEnd = JSON.parse(await ask(STEPS.wat));
 
-    // The debug option is an option of the driver: the source map of a browser, the tables of
-    // DWARF, and nothing are alternatives, and a module carries one of them. What each carries
-    // is read off the head of the tab, which is where a person reads it.
+    // The configuration of the compiler is a tab of its own: the source map of a browser, the
+    // tables of DWARF, and nothing are alternatives, and a module carries one of them. A change
+    // is made in the config tab and read off the WAT of the module, which is where the head of
+    // the tab lists what the option added.
+    await ask(STEPS.showConfig);
+    await until(WAITS.config, "the configuration of the compiler");
+    const config = JSON.parse(await ask(STEPS.config));
+
     await ask(STEPS.debugDwarf);
+    await ask(STEPS.showWat);
     await until(WAITS.debugTables, "the debug tables of the module");
     const dwarfWat = JSON.parse(await ask(STEPS.watSections));
 
+    await ask(STEPS.showConfig);
+    await until(WAITS.config, "the configuration of the compiler");
     await ask(STEPS.debugNone);
+    await ask(STEPS.showWat);
     await until(WAITS.debugNone, "the module without debug information");
     const bareWat = JSON.parse(await ask(STEPS.watSections));
 
+    await ask(STEPS.showConfig);
+    await until(WAITS.config, "the configuration of the compiler");
     await ask(STEPS.debugMap);
+    await ask(STEPS.showWat);
     await until(WAITS.debugMap, "the source map of the module");
     const mapWat = JSON.parse(await ask(STEPS.watSections));
 
@@ -1312,6 +1339,7 @@ async function main() {
             dwarfWat,
             bareWat,
             mapWat,
+            config,
             ran,
             program,
             width,
@@ -1692,6 +1720,16 @@ function report(page, problems, warnings, asked) {
             page.watEnd.text.includes("app::main"),
         ],
         [
+            // The configuration of the compiler is a tab of the inspector rather than tools of
+            // the header: it grows with the pipeline, and the options of a run are read where
+            // a person sets them.
+            "the compiler is configured in a tab of its own",
+            page.config.debug === "source-map" &&
+                page.config.opt === "none" &&
+                page.config.options ===
+                    "none source-map dwarf-lines dwarf-full",
+        ],
+        [
             // The debug option is what a module carries: the source map of a browser, the
             // tables of DWARF, or nothing but the name section. A module carries one of them,
             // so an engine has no DWARF to prefer to the map (ADR-0025).
@@ -1807,7 +1845,7 @@ function report(page, problems, warnings, asked) {
         [
             "picking Inspect shows the inspector",
             page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 10 &&
+                page.phoneInspector.tabs === 11 &&
                 !page.phoneInspector.overflows,
         ],
         [

@@ -21,7 +21,7 @@ const PROJECT: &str = "app";
 #[test]
 fn a_build_written_as_files_runs() {
     let directory = write("files");
-    let printed = mlkc_cli::run::run(&directory).expect("the build to run");
+    let printed = mlkc_cli::run::run(&directory, false).expect("the build to run");
 
     assert_eq!(printed, ["42"]);
 }
@@ -39,7 +39,7 @@ fn a_build_read_from_an_archive_runs() {
 
     fs::write(&path, archive.finish()).expect("the archive to be written");
 
-    let printed = mlkc_cli::run::run(&path).expect("the build to run");
+    let printed = mlkc_cli::run::run(&path, false).expect("the build to run");
 
     assert_eq!(printed, ["42"]);
 }

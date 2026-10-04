@@ -22,7 +22,7 @@ use std::{
 use anyhow::{Context as _, bail};
 use mlkc_driver::Manifest;
 use wasmtime::{
-    AnyRef, Caller, Config, Engine, ExternType, I31, Instance, Linker, Module, Store, Val,
+    AnyRef, Caller, Config, Engine, ExternType, I31, Instance, Linker, Module, OptLevel, Store, Val,
 };
 
 use crate::archive::Archive;
@@ -86,7 +86,15 @@ impl Build {
 /// the ZIP archive the editor hands the same files over in: the files are read from wherever
 /// they are, and nothing is unpacked (a build is not written out to run). A build that
 /// declares no entry point is not one to run, and says so.
-pub fn run(path: &Path) -> anyhow::Result<Vec<String>> {
+///
+/// `debug` is whether a native debugger follows the run ([ADR-0025]): the engine then
+/// translates the DWARF of a module into debug information for the code it compiles --- the
+/// GDB/LLDB JIT interface --- and does not optimize, so that a breakpoint stands where a line
+/// is. A module that carries no DWARF is one a debugger has nothing to say about, however the
+/// engine is configured.
+///
+/// [adr-0025]: ../docs/adr/0025-debug-information-formats.md
+pub fn run(path: &Path, debug: bool) -> anyhow::Result<Vec<String>> {
     let build = Build::read(path)?;
     let manifest: Manifest = serde_json::from_slice(&build.file(Manifest::FILE)?)
         .with_context(|| format!("`{}` is not a manifest of a build", Manifest::FILE))?;
@@ -94,6 +102,11 @@ pub fn run(path: &Path) -> anyhow::Result<Vec<String>> {
     let mut config = Config::new();
 
     config.wasm_gc(true);
+
+    if debug {
+        config.debug_info(true);
+        config.cranelift_opt_level(OptLevel::None);
+    }
 
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, Output::default());

@@ -21,6 +21,10 @@ enum Command {
     /// Runs a build: the modules and the manifest of a project.
     #[bpaf(command)]
     Run {
+        /// Debug the run in a native debugger: the engine keeps DWARF, and does not optimize.
+        #[bpaf(short('g'), long("debug"))]
+        debug: bool,
+
         /// The build: the directory it is written in, or the archive it came in.
         #[bpaf(positional("BUILD"))]
         build: PathBuf,
@@ -36,8 +40,8 @@ fn main() -> ExitCode {
                 Err(error) => fail(error),
             }
         },
-        Command::Run { build } => {
-            match mlkc_cli::run::run(&build) {
+        Command::Run { build, debug } => {
+            match mlkc_cli::run::run(&build, debug) {
                 Ok(printed) => {
                     for line in printed {
                         println!("{line}");

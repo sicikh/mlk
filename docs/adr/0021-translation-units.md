@@ -287,6 +287,9 @@ each module's debug info references its own code section and its own source file
 A debugger that loads a `LinkPlan` knows which instance a frame belongs to
 from the manifest, which is why the manifest carries module identities
 and not only bytes.
+`mlkc run --debug` is the host such a debugger attaches to:
+it asks the engine to keep the DWARF of the modules and not to optimize,
+and leaves the run to `lldb` or `gdb` ([ADR-0025][0025-debug-information-formats.md]).
 
 ### Positive Consequences
 
@@ -357,6 +360,8 @@ and shared memories and tables.
 - Resolved types: [0017-resolved-types.md]
 - Values as words: [0018-values-as-words.md]
 - WASM codegen: [0020-wasm-backend.md]
+- Debug information formats, and the host a native debugger attaches to:
+  [0025-debug-information-formats.md]
 - Standard library: [0015-standard-library.md]
 - Stable identity of entities, which makes a name canonical: [0010-stable-entity-identity.md]
 - Recursive types, rolling up, and type equivalence:
@@ -375,3 +380,4 @@ and shared memories and tables.
 [0017-resolved-types.md]: 0017-resolved-types.md
 [0018-values-as-words.md]: 0018-values-as-words.md
 [0020-wasm-backend.md]: 0020-wasm-backend.md
+[0025-debug-information-formats.md]: 0025-debug-information-formats.md

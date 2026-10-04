@@ -20,7 +20,7 @@ mlkc-line-index.workspace = true
 mlkc-span.workspace = true
 mlkc-vfs.workspace = true
 serde_json.workspace = true
-wasmtime.workspace = true
+wasmtime = { workspace = true, features = ["debug-builtins"] }
 
 [dev-dependencies]
 mlkc-hir-def.workspace = true

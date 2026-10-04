@@ -124,11 +124,31 @@ and nothing has to be stripped on the way.
 
 ### What each consumer reads
 
-| Consumer                                    | `None`                  | `SourceMap`                                          | `DwarfLines` / `DwarfFull`           |
-| ------------------------------------------- | ----------------------- | ---------------------------------------------------- | ------------------------------------ |
-| Browser DevTools                            | names in stack traces   | source stepping, breakpoints, the sources themselves | nothing (the extension needs a host) |
-| `wasmtime` + `gdb`/`lldb`                   | names, line-less frames | names, line-less frames                              | symbolication, stepping, locals      |
-| `wasm-tools addr2line`, crash symbolication | function names          | function names                                       | file, line, column of an instruction |
+| Consumer                                    | `None`                  | `SourceMap`                                          | `DwarfLines` / `DwarfFull`            |
+| ------------------------------------------- | ----------------------- | ---------------------------------------------------- | ------------------------------------- |
+| Browser DevTools                            | names in stack traces   | source stepping, breakpoints, the sources themselves | nothing (the extension needs a host)  |
+| `wasmtime` + `gdb`/`lldb`                   | names, line-less frames | names, line-less frames                              | symbolication, stepping; locals later |
+| `wasm-tools addr2line`, crash symbolication | function names          | function names                                       | file, line, column of an instruction  |
+
+### Debugging a build on a native debugger
+
+A module that carries DWARF is not yet a module a debugger sees:
+`wasmtime` translates the DWARF of a module into the debug information of its JIT code
+only when its host asks for it with `Config::debug_info(true)`,
+and a run a breakpoint is set in is not optimized (`OptLevel::None`),
+because a line of optimized code has no one instruction to stand at.
+`mlkc run --debug` is such a host ([ADR-0021][0021-translation-units.md]):
+it runs a build with both,
+and `lldb` or `gdb` attached to the process resolves a breakpoint in `main.mlk`
+to the JIT code of the module.
+The paths of the language are virtual --- `/main.mlk` is not a path on a disk ---
+so a debugger is told where the files are read from:
+`settings set target.source-map / DIR` in `lldb`,
+`set substitute-path / DIR` in `gdb`.
+What a debugger shows is what the option carries:
+today a breakpoint, a source listing, and a stack trace of functions work,
+and a value cannot be read until a pass emits locations,
+which is what `DwarfFull` is for a debugger to ask for when it can.
 
 A shadow representation of values, so that a browser could show them,
 is neither built nor planned here:

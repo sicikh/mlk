@@ -189,6 +189,42 @@ fn the_line_program_names_the_source_of_a_body() {
     }
 }
 
+/// The prologue of a body ends where the body begins: the leading rows of the line the body
+/// starts with are marked, and no other row is. A debugger that is not told so takes those
+/// rows for a prologue and slides a breakpoint on that line past them.
+#[test]
+fn the_leading_rows_of_a_body_end_its_prologue() {
+    let compiled = harness::project_with(SOURCE, DebugInfo::DwarfLines);
+    let rows = rows(&compiled.wasm.bytes);
+    let subprograms = subprograms(&compiled.wasm.bytes);
+
+    for subprogram in &subprograms {
+        let end = subprogram.low_pc + subprogram.high_pc;
+        let within: Vec<&Row> = rows
+            .iter()
+            .filter(|row| row.address >= subprogram.low_pc && row.address < end)
+            .collect();
+
+        assert!(
+            within.first().is_some_and(|row| row.prologue_end),
+            "`{}` to end its prologue where it begins: {within:?}",
+            subprogram.name,
+        );
+
+        // The marked rows are the leading rows of the first line and nothing after them.
+        let mut passed = false;
+
+        for row in &within {
+            assert!(
+                !(row.prologue_end && passed),
+                "`{}` to end its prologue once: {within:?}",
+                subprogram.name,
+            );
+            passed |= !row.prologue_end;
+        }
+    }
+}
+
 /// The map is carried by the option of a browser, and it carries the source itself.
 #[test]
 fn the_source_map_is_what_a_browser_reads() {
@@ -308,6 +344,8 @@ struct Row {
     line: u32,
     /// The column of the line, counting from one.
     column: u32,
+    /// Whether the row is where the prologue of the body ends.
+    prologue_end: bool,
 }
 
 /// The rows of the line program of an emitted module, in the order they were written.
@@ -348,6 +386,7 @@ fn rows(bytes: &[u8]) -> Vec<Row> {
                     gimli::ColumnType::LeftEdge => 0,
                     gimli::ColumnType::Column(column) => column.get() as u32,
                 },
+                prologue_end: row.prologue_end(),
             });
         }
     }

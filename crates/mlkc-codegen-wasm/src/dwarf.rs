@@ -262,6 +262,15 @@ fn line_program(functions: &[FuncArtifact], sources: &Sources, layout: &Layout) 
 
         program.begin_sequence(Some(Address::Constant(u64::from(at.content))));
 
+        // The prologue of a body ends where the body begins: a function of the language has no
+        // setup of its own. A debugger that is not told so --- `lldb` --- takes the leading rows
+        // of the line the body begins with for a prologue, and slides a breakpoint on that line
+        // past them; the end of the prologue is marked on every leading row of that line,
+        // because which of them a debugger reads first is not the compiler's to say: a native
+        // instruction is not generated for every row.
+        let mut first_line = 0_u64;
+        let mut leading = true;
+
         for origin in &artifact.origins {
             if origin.span.is_dummy() {
                 continue;
@@ -271,14 +280,25 @@ fn line_program(functions: &[FuncArtifact], sources: &Sources, layout: &Layout) 
                 .get(origin.span.file)
                 .expect("the driver hands the lines of every file a body names");
             let position = source.lines.line_col(origin.span.start());
+            // DWARF counts lines and columns from one; the index counts them from zero.
+            let line = u64::from(position.line) + 1;
+
+            if leading {
+                if first_line == 0 {
+                    first_line = line;
+                } else if line != first_line {
+                    leading = false;
+                }
+            }
+
             let row = program.row();
 
             // A row is an offset from the body, which begins where the sequence does.
             row.address_offset = u64::from(origin.offset);
             row.file = files[&origin.span.file];
-            // DWARF counts lines and columns from one; the index counts them from zero.
-            row.line = u64::from(position.line) + 1;
+            row.line = line;
             row.column = u64::from(position.col) + 1;
+            row.prologue_end = leading;
 
             program.generate_row();
         }

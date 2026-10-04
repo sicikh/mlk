@@ -80,6 +80,19 @@ impl Build {
     }
 }
 
+/// Whether a module carries DWARF: whether the compiler wrote its tables into it ([ADR-0025]).
+///
+/// The tables are custom sections, and the name of a section stands in the bytes of a module as
+/// it is written, so a host tells whether a debugger has anything to read without the module
+/// being taken apart.
+///
+/// [adr-0025]: ../docs/adr/0025-debug-information-formats.md
+fn carries_dwarf(bytes: &[u8]) -> bool {
+    [b".debug_info".as_slice(), b".debug_line"]
+        .iter()
+        .any(|table| bytes.windows(table.len()).any(|window| window == *table))
+}
+
 /// Runs the build at `path`, and hands back what the program printed.
 ///
 /// A build is a directory of modules and a manifest, and `path` is either that directory or
@@ -91,7 +104,8 @@ impl Build {
 /// translates the DWARF of a module into debug information for the code it compiles --- the
 /// GDB/LLDB JIT interface --- and does not optimize, so that a breakpoint stands where a line
 /// is. A module that carries no DWARF is one a debugger has nothing to say about, however the
-/// engine is configured.
+/// engine is configured; a build of such modules under `debug` says so, because a run that
+/// silently offers no breakpoint is a run a person cannot tell from one that broke nothing.
 ///
 /// [adr-0025]: ../docs/adr/0025-debug-information-formats.md
 pub fn run(path: &Path, debug: bool) -> anyhow::Result<Vec<String>> {
@@ -112,11 +126,23 @@ pub fn run(path: &Path, debug: bool) -> anyhow::Result<Vec<String>> {
     let mut store = Store::new(&engine, Output::default());
     let mut linker: Linker<Output> = Linker::new(&engine);
     let mut compiled = BTreeMap::new();
+    let mut dwarf = false;
 
     for held in &manifest.modules {
         let bytes = build.file(&held.file)?;
 
+        if debug && !dwarf {
+            dwarf = carries_dwarf(&bytes);
+        }
+
         compiled.insert(held.name.clone(), Module::new(&engine, bytes)?);
+    }
+
+    if debug && !dwarf {
+        eprintln!(
+            "warning: no module of this build carries DWARF, so a debugger has no lines to stand \
+             on: build the project with `DWARF lines` or `DWARF full`"
+        );
     }
 
     // What the build imports and no module provides is an extern of the language, and a host

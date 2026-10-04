@@ -107,6 +107,9 @@ and a module carries exactly what it names:
 - **`DwarfLines`.** The `name` section, a compile unit per module, a subprogram per
   function with `DW_AT_name` and `DW_AT_low_pc`/`DW_AT_high_pc`, and a line program
   mapping code-section offsets to file, line, and column.
+  The leading rows of the line a body begins with mark the end of its prologue,
+  because a body of the language has no setup of its own:
+  `lldb` reads such rows as a prologue and slides a breakpoint on that line past them.
   This is the debug information of `wasmtime` with `gdb`/`lldb`, of `wasm-tools
 addr2line`, and of a crash report.
 - **`DwarfFull`.** `DwarfLines`, plus the DIEs of parameters and locals with
@@ -141,6 +144,9 @@ because a line of optimized code has no one instruction to stand at.
 it runs a build with both,
 and `lldb` or `gdb` attached to the process resolves a breakpoint in `main.mlk`
 to the JIT code of the module.
+A build whose modules carry no DWARF is one the host warns about rather than runs silently:
+there is nothing for a debugger to read,
+and the warning names the options to build with.
 The paths of the language are virtual --- `/main.mlk` is not a path on a disk ---
 so a debugger is told where the files are read from:
 `settings set target.source-map / DIR` in `lldb`,

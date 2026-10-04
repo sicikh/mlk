@@ -1,6 +1,6 @@
 # Emit debug information, and let a host configure it
 
-- Status: accepted
+- Status: superseded by [ADR-0025](0025-debug-information-formats.md)
 - Date: 2026-10-03
 
 ## Context and Problem Statement

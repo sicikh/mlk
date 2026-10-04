@@ -1,6 +1,6 @@
 # Carry a source map, so a browser reads a module's debug information
 
-- Status: accepted
+- Status: superseded by [ADR-0025](0025-debug-information-formats.md)
 - Date: 2026-10-04
 
 ## Context and Problem Statement

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
 
     import AstView from "$lib/components/AstView.svelte";
     import ConfigView from "$lib/components/ConfigView.svelte";
@@ -242,6 +242,42 @@ pub fun main() : Unit =
     const errors = $derived(
         diagnostics.filter((it) => it.level === "error").length,
     );
+    const warnings = $derived(
+        diagnostics.filter((it) => it.level === "warning").length,
+    );
+    const notes = $derived(
+        diagnostics.filter((it) => it.level === "note" || it.level === "help")
+            .length,
+    );
+
+    /**
+     * How bad the buffer is at worst, which is what the dot of the status line says.
+     *
+     * A diagnostic that is not one of the levels a person reads is still something the
+     * compiler reported, so it counts as a note rather than disappearing.
+     */
+    const health = $derived(
+        errors > 0
+            ? "error"
+            : warnings > 0
+              ? "warning"
+              : diagnostics.length > 0
+                ? "note"
+                : "ok",
+    );
+
+    /** What the status line counts, in the order a person reads it. */
+    const report = $derived.by(() => {
+        const count = (n: number, one: string) =>
+            `${n} ${n === 1 ? one : one + "s"}`;
+        const parts: string[] = [];
+
+        if (errors > 0) parts.push(count(errors, "error"));
+        if (warnings > 0) parts.push(count(warnings, "warning"));
+        if (notes > 0) parts.push(count(notes, "note"));
+
+        return parts.length > 0 ? parts.join(" · ") : "no diagnostics";
+    });
 
     /**
      * How many nodes of the buffer were checked to the type of a mistake.
@@ -575,6 +611,38 @@ pub fun main() : Unit =
     }
 
     /**
+     * The row of the stages, and whether it has more to show on either side.
+     *
+     * The row is one line that scrolls, and a fade at an end of it says that something is out
+     * of sight on that side; the fades are drawn only on a side that hides something.
+     */
+    let stages = $state<HTMLElement | undefined>(undefined);
+    let stagesStart = $state(false);
+    let stagesEnd = $state(false);
+
+    /** Reads how much of the row of stages is out of sight. */
+    function measureStages() {
+        if (!stages) return;
+
+        stagesStart = stages.scrollLeft > 1;
+        stagesEnd =
+            stages.scrollLeft + stages.clientWidth < stages.scrollWidth - 1;
+    }
+
+    $effect(() => {
+        if (!stages) return;
+
+        // The row changes with the panel a splitter sizes and with the pipeline itself, so
+        // what is out of sight is measured whenever the row does.
+        const observer = new ResizeObserver(measureStages);
+
+        observer.observe(stages);
+        measureStages();
+
+        return () => observer.disconnect();
+    });
+
+    /**
      * A tab of the inspector in front.
      *
      * A tab shows one value, and a value is read when it is shown: picking a tab is what asks
@@ -584,6 +652,15 @@ pub fun main() : Unit =
      */
     function show(next: Tab) {
         tab = next;
+
+        // The stages are one line that scrolls: what was picked is brought into view, so a
+        // pick of a stage that stands past the edge is seen where a person is looking.
+        void tick().then(() => {
+            document
+                .querySelector(`[data-tab="${next}"]`)
+                ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+            measureStages();
+        });
 
         if (next !== "stats") check();
     }
@@ -779,75 +856,125 @@ pub fun main() : Unit =
     />
 
     <aside class="inspector" data-panel="inspector">
-        <nav class="tabs">
+        <!--
+            What the compiler reported and what it is asked for: these two are read at a
+            glance whatever stage is shown, so they stand in a line of their own that does not
+            scroll with the stages.
+        -->
+        <nav
+            class="head"
+            aria-label="What the compiler reported and how it is configured"
+        >
             <button
+                class="status"
+                class:clear={diagnostics.length === 0}
                 data-tab="diagnostics"
                 class:active={tab === "diagnostics"}
+                title="What the parser, the checks, and the back end reported"
                 onclick={() => show("diagnostics")}
             >
-                Diagnostics
-                {#if diagnostics.length > 0}
-                    <span class="badge" class:error={errors > 0}
-                        >{diagnostics.length}</span
-                    >
-                {/if}
+                <span
+                    class="dot"
+                    class:error={health === "error"}
+                    class:warning={health === "warning"}
+                    class:note={health === "note"}
+                    class:ok={health === "ok"}
+                ></span>
+                {report}
             </button>
             <button
-                data-tab="cst"
-                class:active={tab === "cst"}
-                onclick={() => show("cst")}>CST</button
-            >
-            <button
-                data-tab="ast"
-                class:active={tab === "ast"}
-                onclick={() => show("ast")}>AST</button
-            >
-            <button
-                data-tab="hir"
-                class:active={tab === "hir"}
-                onclick={() => show("hir")}>HIR</button
-            >
-            <button
-                data-tab="tc"
-                class:active={tab === "tc"}
-                onclick={() => show("tc")}
-            >
-                TC
-                {#if untyped > 0}
-                    <span class="badge error">{untyped}</span>
-                {/if}
-            </button>
-            <button
-                data-tab="mir"
-                class:active={tab === "mir"}
-                onclick={() => show("mir")}>MIR/CFG</button
-            >
-            <button
-                data-tab="mir-ssa"
-                class:active={tab === "mir-ssa"}
-                onclick={() => show("mir-ssa")}>MIR/SSA</button
-            >
-            <button
-                data-tab="lir"
-                class:active={tab === "lir"}
-                onclick={() => show("lir")}>LIR</button
-            >
-            <button
-                data-tab="wat"
-                class:active={tab === "wat"}
-                onclick={() => show("wat")}>WAT</button
-            >
-            <button
-                data-tab="stats"
-                class:active={tab === "stats"}
-                onclick={() => show("stats")}>Stats</button
-            >
-            <button
+                class="config"
                 data-tab="config"
                 class:active={tab === "config"}
-                onclick={() => show("config")}>Config</button
+                aria-label="Config"
+                title="What the compiler is asked for"
+                onclick={() => show("config")}
             >
+                <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <path
+                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
+                    />
+                </svg>
+            </button>
         </nav>
+
+        <!--
+            The stages of the pipeline: one line, in the order the compiler runs them. The row
+            scrolls rather than wraps, so the panel does not grow as more stages appear, and a
+            fade at an end of it says that something is out of sight on that side.
+        -->
+        <div class="stages">
+            <nav
+                bind:this={stages}
+                onscroll={measureStages}
+                aria-label="The stages of the pipeline"
+            >
+                <button
+                    data-tab="cst"
+                    class:active={tab === "cst"}
+                    onclick={() => show("cst")}>CST</button
+                >
+                <button
+                    data-tab="ast"
+                    class:active={tab === "ast"}
+                    onclick={() => show("ast")}>AST</button
+                >
+                <button
+                    data-tab="hir"
+                    class:active={tab === "hir"}
+                    onclick={() => show("hir")}>HIR</button
+                >
+                <button
+                    data-tab="tc"
+                    class:active={tab === "tc"}
+                    onclick={() => show("tc")}
+                >
+                    TC
+                    {#if untyped > 0}
+                        <span class="badge error">{untyped}</span>
+                    {/if}
+                </button>
+                <button
+                    data-tab="mir"
+                    class:active={tab === "mir"}
+                    onclick={() => show("mir")}>MIR/CFG</button
+                >
+                <button
+                    data-tab="mir-ssa"
+                    class:active={tab === "mir-ssa"}
+                    onclick={() => show("mir-ssa")}>MIR/SSA</button
+                >
+                <button
+                    data-tab="lir"
+                    class:active={tab === "lir"}
+                    onclick={() => show("lir")}>LIR</button
+                >
+                <button
+                    data-tab="wat"
+                    class:active={tab === "wat"}
+                    onclick={() => show("wat")}>WAT</button
+                >
+                <button
+                    data-tab="stats"
+                    class:active={tab === "stats"}
+                    onclick={() => show("stats")}>Stats</button
+                >
+            </nav>
+
+            {#if stagesStart}
+                <span class="fade start" aria-hidden="true"></span>
+            {/if}
+            {#if stagesEnd}
+                <span class="fade end" aria-hidden="true"></span>
+            {/if}
+        </div>
 
         <div class="view">
             {#if tab === "diagnostics"}
@@ -1129,15 +1256,105 @@ pub fun main() : Unit =
         color: var(--text);
     }
 
-    .tabs {
+    /*
+     * The head of the inspector: what the compiler reported and how it is configured. It does
+     * not scroll with the stages --- a person reads it at a glance whatever stage is shown.
+     */
+    .head {
         display: flex;
-        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
         padding: 0 0.25rem;
         border-bottom: 1px solid var(--border);
     }
 
-    .tabs button {
+    .head button {
         display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        padding: 0.4rem 0.55rem;
+        border-bottom: 2px solid transparent;
+        color: var(--muted);
+        font-size: 12px;
+    }
+
+    .head button.status {
+        color: var(--text);
+    }
+
+    /* A buffer that reports nothing is the usual state, and it is said quietly. */
+    .head button.status.clear {
+        color: var(--muted);
+    }
+
+    .dot {
+        flex: none;
+        width: 0.45rem;
+        height: 0.45rem;
+        background: var(--muted);
+        border-radius: 50%;
+    }
+
+    .dot.error {
+        background: var(--error);
+    }
+
+    .dot.warning {
+        background: var(--warning);
+    }
+
+    .dot.note {
+        background: var(--accent);
+    }
+
+    .dot.ok {
+        background: var(--ok);
+    }
+
+    /*
+     * The stages of the pipeline: one line, in the order the compiler runs them. The row
+     * scrolls rather than wraps, so the panel does not grow as more stages appear.
+     */
+    .stages {
+        position: relative;
+        flex: none;
+        min-width: 0;
+    }
+
+    .stages nav {
+        display: flex;
+        overflow-x: auto;
+        padding: 0 0.25rem;
+        border-bottom: 1px solid var(--border);
+        scrollbar-width: thin;
+    }
+
+    /*
+     * A fade at an end of the row says that something is out of sight on that side. It is
+     * painted over the buttons rather than stands beside them, so it takes no room of its own.
+     */
+    .fade {
+        position: absolute;
+        top: 0;
+        bottom: 1px;
+        width: 1.25rem;
+        pointer-events: none;
+    }
+
+    .fade.start {
+        left: 0;
+        background: linear-gradient(to right, var(--surface), transparent);
+    }
+
+    .fade.end {
+        right: 0;
+        background: linear-gradient(to left, var(--surface), transparent);
+    }
+
+    .stages button {
+        display: flex;
+        flex: none;
         gap: 0.35rem;
         align-items: center;
         padding: 0.4rem 0.55rem;
@@ -1148,13 +1365,20 @@ pub fun main() : Unit =
         text-transform: uppercase;
     }
 
-    .tabs button:hover {
+    .head button:hover,
+    .stages button:hover {
         color: var(--text);
     }
 
-    .tabs button.active {
+    .head button.active,
+    .stages button.active {
         border-bottom-color: var(--accent);
         color: var(--text);
+    }
+
+    /* The gear of the configuration: a mark rather than a word, so it is a square to land in. */
+    .head button.config {
+        padding: 0.4rem 0.7rem;
     }
 
     .badge {
@@ -1230,7 +1454,8 @@ pub fun main() : Unit =
         }
 
         /* A finger picks a tab the way a pointer does, but it needs more room to land in. */
-        .tabs button {
+        .head button,
+        .stages button {
             padding: 0.55rem 0.7rem;
         }
 

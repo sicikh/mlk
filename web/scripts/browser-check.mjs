@@ -461,6 +461,24 @@ const STEPS = {
 			head: text(head)
 		})`,
 
+    // The status line of the diagnostics, which is in front whatever stage is shown: what the
+    // compiler reported, and the dot that says how bad it is at worst.
+    status: `const status = document.querySelector('[data-tab=diagnostics]');
+		return JSON.stringify({
+			shown: status !== null && status.getBoundingClientRect().width > 0,
+			text: text(status).trim(),
+			active: status?.classList.contains('active') ?? false
+		})`,
+
+    // The fades at the ends of the row of stages: the row is one line that scrolls, and a
+    // fade is drawn only on a side that hides something.
+    fades: `const row = document.querySelector('[aria-label="The stages of the pipeline"]');
+		return JSON.stringify({
+			overflows: row ? row.scrollWidth > row.clientWidth : false,
+			start: document.querySelector('.fade.start') !== null,
+			end: document.querySelector('.fade.end') !== null
+		})`,
+
     // The program: every buffer is compiled and linked, the modules are instantiated, and the
     // entry point is called. `fib(5)` prints 5, which is what the program console holds.
     run: `document.querySelector('[data-run]').click(); return true`,
@@ -1122,6 +1140,11 @@ async function main() {
     await sleep(200);
     const watEnd = JSON.parse(await ask(STEPS.wat));
 
+    // The status line of the inspector is in front whatever stage is shown: a buffer that
+    // reports nothing says so while the WAT is in front, and picking the line opens the list.
+    const glance = JSON.parse(await ask(STEPS.status));
+    const fades = JSON.parse(await ask(STEPS.fades));
+
     // The configuration of the compiler is a tab of its own: the source map of a browser, the
     // tables of DWARF, and nothing are alternatives, and a module carries one of them. A change
     // is made in the config tab and read off the WAT of the module, which is where the head of
@@ -1196,6 +1219,7 @@ async function main() {
     await ask(STEPS.showDiagnostics);
     await until(WAITS.broken, "the diagnostics of the broken buffer");
     const broken = JSON.parse(await ask(STEPS.seen));
+    const brokenGlance = JSON.parse(await ask(STEPS.status));
 
     const marks = JSON.parse(await ask(STEPS.painted));
 
@@ -1336,6 +1360,9 @@ async function main() {
             watFolded,
             watAgain,
             watEnd,
+            glance,
+            fades,
+            brokenGlance,
             dwarfWat,
             bareWat,
             mapWat,
@@ -1720,6 +1747,24 @@ function report(page, problems, warnings, asked) {
             page.watEnd.text.includes("app::main"),
         ],
         [
+            // Diagnostics and Config are in front whatever stage is shown: a buffer that
+            // reports nothing says so while the WAT is in front, and the line is not the view
+            // that is in front.
+            "the diagnostics are read at a glance",
+            page.glance.shown &&
+                page.glance.text === "no diagnostics" &&
+                !page.glance.active,
+        ],
+        [
+            // A fade stands at an end of the row of stages only when something is out of
+            // sight on that side: the row is one line that scrolls, and the fade is how a
+            // person knows that it does.
+            "a fade says when a stage is out of sight",
+            page.fades.overflows
+                ? page.fades.start || page.fades.end
+                : !page.fades.start && !page.fades.end,
+        ],
+        [
             // The configuration of the compiler is a tab of the inspector rather than tools of
             // the header: it grows with the pipeline, and the options of a run are read where
             // a person sets them.
@@ -1802,6 +1847,13 @@ function report(page, problems, warnings, asked) {
         [
             "a broken buffer reports a diagnostic",
             (page.broken?.length ?? 0) > 0,
+        ],
+        [
+            // The status line counts what the list holds, and it is picked: the line is the
+            // diagnostics view, and the count says how bad the buffer is.
+            "the status line counts the diagnostics",
+            page.brokenGlance.text.includes("error") &&
+                page.brokenGlance.active,
         ],
         [
             "the diagnostic is an error",

@@ -97,7 +97,9 @@ pub mod project_graph;
 pub mod type_ref;
 
 pub use crate::{
-    body::{BinaryOp, Body, BodyBuilder, Expr, ExprId, IfArm, Literal, Pat, PatId, UnaryOp},
+    body::{
+        BinaryOp, Body, BodyBuilder, Expr, ExprId, IfArm, LambdaParam, Literal, Pat, PatId, UnaryOp,
+    },
     def_map::{LocalEntry, LocalScope, LocalTarget, ModuleScope, Namespace, PerNs, ProjectDefMap},
     id::{
         BodyEntityLoc, BodyLoc, ClassLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind,

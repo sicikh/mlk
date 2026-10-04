@@ -1,0 +1,45 @@
+// A lambda: a function written where a value belongs. `fn` opens it, the parameter list holds
+// the patterns the body binds, and the body is what stands after the `->`. The body extends as
+// far as it can: what is written after it is written after the value the lambda is, so a lambda
+// ends where the expression it is written in ends.
+
+fun sampled(value: Int): Int =
+    fn(x) -> x + value
+
+// The parameter list may be empty, may ignore a value, and may bind several names.
+fun none(): Int =
+    fn() -> 42
+
+fun ignored(): Int =
+    fn(_) -> 1
+
+fun paired(left: Int, right: Int): Int =
+    fn(left, right) -> left + right
+
+// A parameter may write the type it takes, as the parameter of a function declaration may, and
+// the ones that write no type take what inference gives them.
+fun annotated(value: Int): Int =
+    fn(x: Int, y) -> x + y + value
+
+// What a body may be is what any expression may be: a `let`, an `if`, and a pipeline are
+// written inside one the way they are written anywhere else.
+fun bound(value: Int): Int =
+    fn(x) ->
+        let y = x + value in
+        y
+
+fun chosen(flag: Bool): Int =
+    fn(x) ->
+        if flag then x else 0
+
+fun piped(value: Int): Int =
+    fn(x) -> x |> consume(_, value)
+
+// A lambda is a value: it stands where any other one stands, and a parenthesized one may be
+// applied at once, which is what the parentheses around a lambda are for.
+fun applied(value: Int): Int =
+    (fn(x, y) -> x + y)(value, 1)
+
+// A lambda inside a lambda, and a name the inner body reads from the outer parameters.
+fun nested(value: Int): Int =
+    fn(x) -> fn(y) -> x + y + value

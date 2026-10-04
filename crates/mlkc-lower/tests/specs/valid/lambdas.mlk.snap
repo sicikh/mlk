@@ -1,0 +1,308 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// A lambda is lowered into the HIR as itself: the parameters it binds, with the types they are
+// written with, the body it computes, and the bindings of the enclosing body its body reads
+// --- what the lambda captures.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Bool
+
+#[extern]
+fun consume(left: Int, right: Int): Int
+
+// A lambda that reads a parameter of the function it is written in captures that parameter.
+fun captured(value: Int): Int =
+    fn(x) -> x + value
+
+// A parameter may write the type it takes, and the type is resolved the way the type of
+// a signature is: against the names of the module.
+fun annotated(): Int =
+    fn(x: Int, y: Bool) -> if y then x else 0
+
+// A name of the module is not a variable the lambda carries: what a lambda captures is what
+// it cannot reach without an environment.
+fun called(value: Int): Int =
+    fn(x) -> consume(x, value)
+
+// A name the lambda binds itself is not captured: a parameter of the lambda and a `let`
+// inside it shadow the names of the enclosing body.
+fun shadowed(value: Int): Int =
+    fn(value) ->
+        let x = value in
+        x + value
+
+// A lambda inside a lambda: the inner one captures the parameters of the outer one and the
+// names of the enclosing body, while the outer one captures only what its own body cannot
+// make itself.
+fun nested(value: Int): Int =
+    fn(x) -> fn(y) -> x + y + value
+
+// A lambda that reads nothing of the enclosing body captures nothing.
+fun free(): Int =
+    fn(x, y) -> x
+
+// A binding of a `let` of the enclosing body is captured by the lambda written after it.
+fun let_bound(value: Int): Int =
+    let other = value + 1 in
+    fn(x) -> x + other
+
+// The body of a lambda reads the bindings of the pipeline it is written in: the `_` of the
+// step is a path to the binding the pipeline made, and a name outside the step is captured.
+fun piped(value: Int): Int =
+    fn(x) -> x |> consume(_, value)
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::lambdas
+
+ITEM TREE
+  type Int  @2.0
+    attributes: #[builtin]
+    visibility: private
+  type Bool  @2.1
+    attributes: #[builtin]
+    visibility: private
+  fun consume  @2.2
+    attributes: #[extern]
+    visibility: private
+    param: Int -> type Int
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun captured  @2.3
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun annotated  @2.4
+    visibility: private
+    ret: Int -> type Int
+  fun called  @2.5
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun shadowed  @2.6
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun nested  @2.7
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun free  @2.8
+    visibility: private
+    ret: Int -> type Int
+  fun let_bound  @2.9
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  fun piped  @2.10
+    visibility: private
+    param: Int -> type Int
+    ret: Int -> type Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun captured in module #0
+
+root expr#3
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  lambda (pat#1) -> expr#2 captures (pat#0)
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  value -> binding pat#0
+```
+
+```
+BODY fun annotated in module #0
+
+root expr#4
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  literal 0
+  expr#3  if expr#0 then expr#1 else expr#2
+  expr#4  lambda (pat#0: Int -> type Int, pat#1: Bool -> type Bool) -> expr#3 captures ()
+pats
+  pat#0  bind x
+  pat#1  bind y
+paths
+  path#0  y -> binding pat#1
+  path#1  x -> binding pat#0
+```
+
+```
+BODY fun called in module #0
+
+root expr#4
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  call expr#0 (expr#1, expr#2)
+  expr#4  lambda (pat#1) -> expr#3 captures (pat#0)
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  consume -> fun consume
+  path#1  x -> binding pat#1
+  path#2  value -> binding pat#0
+```
+
+```
+BODY fun shadowed in module #0
+
+root expr#5
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#0
+  expr#3  binary expr#1 + expr#2
+  expr#4  let pat#2 = expr#0 in expr#3
+  expr#5  lambda (pat#1) -> expr#4 captures ()
+pats
+  pat#0  bind value
+  pat#1  bind value
+  pat#2  bind x
+paths
+  path#0  value -> binding pat#1
+  path#1  x -> binding pat#2
+```
+
+```
+BODY fun nested in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#2
+  expr#4  binary expr#2 + expr#3
+  expr#5  lambda (pat#2) -> expr#4 captures (pat#1, pat#0)
+  expr#6  lambda (pat#1) -> expr#5 captures (pat#0)
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind y
+paths
+  path#0  x -> binding pat#1
+  path#1  y -> binding pat#2
+  path#2  value -> binding pat#0
+```
+
+```
+BODY fun free in module #0
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  lambda (pat#0, pat#1) -> expr#0 captures ()
+pats
+  pat#0  bind x
+  pat#1  bind y
+paths
+  path#0  x -> binding pat#0
+```
+
+```
+BODY fun let_bound in module #0
+
+root expr#7
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  binary expr#3 + expr#4
+  expr#6  lambda (pat#2) -> expr#5 captures (pat#1)
+  expr#7  let pat#1 = expr#2 in expr#6
+pats
+  pat#0  bind value
+  pat#1  bind other
+  pat#2  bind x
+paths
+  path#0  value -> binding pat#0
+  path#1  x -> binding pat#2
+  path#2  other -> binding pat#1
+```
+
+```
+BODY fun piped in module #0
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  path path#2
+  expr#3  path path#3
+  expr#4  call expr#1 (expr#2, expr#3)
+  expr#5  let pat#2 = expr#0 in expr#4
+  expr#6  lambda (pat#1) -> expr#5 captures (pat#0)
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind <mlkc@pipeline-0>
+paths
+  path#0  x -> binding pat#1
+  path#1  consume -> fun consume
+  path#2  <mlkc@pipeline-0> -> binding pat#2
+  path#3  value -> binding pat#0
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

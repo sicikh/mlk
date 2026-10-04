@@ -269,7 +269,7 @@ pub fn body(owner: &BodyEntityLoc, body: &Body) -> String {
 
     dump.section("exprs", |dump| {
         for (id, expr) in body.exprs().iter() {
-            dump.line(format!("{}  {}", expr_ref(id), expr_text(expr)));
+            dump.line(format!("{}  {}", expr_ref(id), expr_text(expr, module)));
         }
     });
 
@@ -589,6 +589,15 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
             children.push(expr_node(body, module, *expr));
             children.push(expr_node(body, module, *inner));
         },
+        Expr::Lambda {
+            params,
+            body: inner,
+            captures,
+        } => {
+            children.extend(params.iter().map(|param| pat_node(body, param.pat)));
+            children.push(expr_node(body, module, *inner));
+            children.extend(captures.iter().map(|pat| pat_node(body, *pat)));
+        },
         Expr::If {
             cond,
             then_,
@@ -610,7 +619,7 @@ fn expr_node(body: &Body, module: ModuleId, id: ExprId) -> Node {
     }
 
     let mut node = Node::marked(
-        format!("{}  {}", expr_ref(id), expr_text(&body[id])),
+        format!("{}  {}", expr_ref(id), expr_text(&body[id], module)),
         NodeKind::Expr,
         Target::Expr(id),
     );
@@ -923,7 +932,7 @@ fn item_text(loc: &EntityLoc, module: ModuleId) -> String {
 }
 
 /// The shape of one expression, as the ids it is made of.
-fn expr_text(expr: &Expr) -> String {
+fn expr_text(expr: &Expr, module: ModuleId) -> String {
     match expr {
         Expr::Missing => "missing".to_owned(),
         Expr::Path(id) => format!("path {}", path_ref(*id)),
@@ -950,6 +959,29 @@ fn expr_text(expr: &Expr) -> String {
                 pat_ref(*pat),
                 expr_ref(*expr),
                 expr_ref(*body),
+            )
+        },
+        Expr::Lambda {
+            params,
+            body,
+            captures,
+        } => {
+            let params: Vec<String> = params
+                .iter()
+                .map(|param| {
+                    match &param.ty {
+                        Some(ty) => format!("{}: {}", pat_ref(param.pat), type_ref(ty, module)),
+                        None => pat_ref(param.pat),
+                    }
+                })
+                .collect();
+            let captures: Vec<String> = captures.iter().map(|id| pat_ref(*id)).collect();
+
+            format!(
+                "lambda ({}) -> {} captures ({})",
+                params.join(", "),
+                expr_ref(*body),
+                captures.join(", "),
             )
         },
         Expr::If {

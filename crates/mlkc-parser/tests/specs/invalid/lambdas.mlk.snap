@@ -1,0 +1,583 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// What is wrong with a lambda as syntax: a parameter that is not a pattern, a parameter whose
+// type is not written, the arrow that is not written, a body that is not there, and a parameter
+// list that is never closed.
+
+fun broken_parameter(): Int =
+    fn(1) -> 2
+
+fun broken_annotated_parameter(): Int =
+    fn(1: Int) -> 2
+
+fun missing_parameter_type(): Int =
+    fn(x: ) -> x
+
+fun missing_arrow(): Int =
+    fn(x) 1
+
+fun missing_body(): Int =
+    fn(x) ->
+
+fun unclosed_parameters(): Int =
+    fn(x -> 1
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: missing (optional),
+    items: ModuleItemList [
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@0..227 "fun" [Comments("// What is wrong with ..."), Newline("\n"), Comments("// type is not writte ..."), Newline("\n"), Comments("// list that is never ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@227..243 "broken_parameter" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@243..244 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@244..245 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@245..247 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@247..251 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@251..252 "=" [] [],
+                expr: LambdaExpr {
+                    fn_token: FN_KW@252..259 "fn" [Newline("\n"), Whitespace("    ")] [],
+                    l_paren_token: L_PAREN@259..260 "(" [] [],
+                    parameters: LambdaParameterList [
+                        Parameter {
+                            pat: BogusPat {
+                                items: [
+                                    INT_LITERAL@260..261 "1" [] [],
+                                ],
+                            },
+                            type_annotation: missing (optional),
+                        },
+                    ],
+                    r_paren_token: R_PAREN@261..263 ")" [] [Whitespace(" ")],
+                    arrow_token: ARROW@263..266 "->" [] [Whitespace(" ")],
+                    body: IntLiteral {
+                        value_token: INT_LITERAL@266..267 "2" [] [],
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@267..273 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@273..299 "broken_annotated_parameter" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@299..300 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@300..301 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@301..303 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@303..307 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@307..308 "=" [] [],
+                expr: LambdaExpr {
+                    fn_token: FN_KW@308..315 "fn" [Newline("\n"), Whitespace("    ")] [],
+                    l_paren_token: L_PAREN@315..316 "(" [] [],
+                    parameters: LambdaParameterList [
+                        Parameter {
+                            pat: BogusPat {
+                                items: [
+                                    INT_LITERAL@316..317 "1" [] [],
+                                    COLON@317..319 ":" [] [Whitespace(" ")],
+                                    IDENT@319..322 "Int" [] [],
+                                ],
+                            },
+                            type_annotation: missing (optional),
+                        },
+                    ],
+                    r_paren_token: R_PAREN@322..324 ")" [] [Whitespace(" ")],
+                    arrow_token: ARROW@324..327 "->" [] [Whitespace(" ")],
+                    body: IntLiteral {
+                        value_token: INT_LITERAL@327..328 "2" [] [],
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@328..334 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@334..356 "missing_parameter_type" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@356..357 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@357..358 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@358..360 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@360..364 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@364..365 "=" [] [],
+                expr: LambdaExpr {
+                    fn_token: FN_KW@365..372 "fn" [Newline("\n"), Whitespace("    ")] [],
+                    l_paren_token: L_PAREN@372..373 "(" [] [],
+                    parameters: LambdaParameterList [
+                        Parameter {
+                            pat: IdentPat {
+                                name: Name {
+                                    value_token: IDENT@373..374 "x" [] [],
+                                },
+                            },
+                            type_annotation: TypeAnnotation {
+                                colon_token: COLON@374..376 ":" [] [Whitespace(" ")],
+                                ty: missing (required),
+                            },
+                        },
+                    ],
+                    r_paren_token: R_PAREN@376..378 ")" [] [Whitespace(" ")],
+                    arrow_token: ARROW@378..381 "->" [] [Whitespace(" ")],
+                    body: PathExpr {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@381..382 "x" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@382..388 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@388..401 "missing_arrow" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@401..402 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@402..403 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@403..405 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@405..409 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@409..410 "=" [] [],
+                expr: LambdaExpr {
+                    fn_token: FN_KW@410..417 "fn" [Newline("\n"), Whitespace("    ")] [],
+                    l_paren_token: L_PAREN@417..418 "(" [] [],
+                    parameters: LambdaParameterList [
+                        Parameter {
+                            pat: IdentPat {
+                                name: Name {
+                                    value_token: IDENT@418..419 "x" [] [],
+                                },
+                            },
+                            type_annotation: missing (optional),
+                        },
+                    ],
+                    r_paren_token: R_PAREN@419..421 ")" [] [Whitespace(" ")],
+                    arrow_token: missing (required),
+                    body: IntLiteral {
+                        value_token: INT_LITERAL@421..422 "1" [] [],
+                    },
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@422..428 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@428..440 "missing_body" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@440..441 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@441..442 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@442..444 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@444..448 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@448..449 "=" [] [],
+                expr: LambdaExpr {
+                    fn_token: FN_KW@449..456 "fn" [Newline("\n"), Whitespace("    ")] [],
+                    l_paren_token: L_PAREN@456..457 "(" [] [],
+                    parameters: LambdaParameterList [
+                        Parameter {
+                            pat: IdentPat {
+                                name: Name {
+                                    value_token: IDENT@457..458 "x" [] [],
+                                },
+                            },
+                            type_annotation: missing (optional),
+                        },
+                    ],
+                    r_paren_token: R_PAREN@458..460 ")" [] [Whitespace(" ")],
+                    arrow_token: ARROW@460..462 "->" [] [],
+                    body: missing (required),
+                },
+            },
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@462..468 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@468..487 "unclosed_parameters" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@487..488 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@488..489 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@489..491 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@491..495 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@495..496 "=" [] [],
+                expr: LambdaExpr {
+                    fn_token: FN_KW@496..503 "fn" [Newline("\n"), Whitespace("    ")] [],
+                    l_paren_token: L_PAREN@503..504 "(" [] [],
+                    parameters: LambdaParameterList [
+                        Parameter {
+                            pat: IdentPat {
+                                name: Name {
+                                    value_token: IDENT@504..506 "x" [] [Whitespace(" ")],
+                                },
+                            },
+                            type_annotation: missing (optional),
+                        },
+                    ],
+                    r_paren_token: missing (required),
+                    arrow_token: ARROW@506..509 "->" [] [Whitespace(" ")],
+                    body: IntLiteral {
+                        value_token: INT_LITERAL@509..510 "1" [] [],
+                    },
+                },
+            },
+        },
+    ],
+    eof_token: EOF@510..511 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..511
+  0: (empty)
+  1: (empty)
+  2: MODULE_ITEM_LIST@0..510
+    0: FUN_DECL@0..267
+      0: ATTRIBUTE_LIST@0..0
+      1: (empty)
+      2: FUN_KW@0..227 "fun" [Comments("// What is wrong with ..."), Newline("\n"), Comments("// type is not writte ..."), Newline("\n"), Comments("// list that is never ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@227..243
+        0: IDENT@227..243 "broken_parameter" [] []
+      4: PARAMETERS@243..245
+        0: L_PAREN@243..244 "(" [] []
+        1: PARAMETER_LIST@244..244
+        2: R_PAREN@244..245 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@245..251
+        0: COLON@245..247 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@247..251
+          0: PATH@247..251
+            0: (empty)
+            1: PATH_SEGMENT@247..251
+              0: NAME@247..251
+                0: IDENT@247..251 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@251..267
+        0: EQ@251..252 "=" [] []
+        1: LAMBDA_EXPR@252..267
+          0: FN_KW@252..259 "fn" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@259..260 "(" [] []
+          2: LAMBDA_PARAMETER_LIST@260..261
+            0: PARAMETER@260..261
+              0: BOGUS_PAT@260..261
+                0: INT_LITERAL@260..261 "1" [] []
+              1: (empty)
+          3: R_PAREN@261..263 ")" [] [Whitespace(" ")]
+          4: ARROW@263..266 "->" [] [Whitespace(" ")]
+          5: INT_LITERAL@266..267
+            0: INT_LITERAL@266..267 "2" [] []
+    1: FUN_DECL@267..328
+      0: ATTRIBUTE_LIST@267..267
+      1: (empty)
+      2: FUN_KW@267..273 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@273..299
+        0: IDENT@273..299 "broken_annotated_parameter" [] []
+      4: PARAMETERS@299..301
+        0: L_PAREN@299..300 "(" [] []
+        1: PARAMETER_LIST@300..300
+        2: R_PAREN@300..301 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@301..307
+        0: COLON@301..303 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@303..307
+          0: PATH@303..307
+            0: (empty)
+            1: PATH_SEGMENT@303..307
+              0: NAME@303..307
+                0: IDENT@303..307 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@307..328
+        0: EQ@307..308 "=" [] []
+        1: LAMBDA_EXPR@308..328
+          0: FN_KW@308..315 "fn" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@315..316 "(" [] []
+          2: LAMBDA_PARAMETER_LIST@316..322
+            0: PARAMETER@316..322
+              0: BOGUS_PAT@316..322
+                0: INT_LITERAL@316..317 "1" [] []
+                1: COLON@317..319 ":" [] [Whitespace(" ")]
+                2: IDENT@319..322 "Int" [] []
+              1: (empty)
+          3: R_PAREN@322..324 ")" [] [Whitespace(" ")]
+          4: ARROW@324..327 "->" [] [Whitespace(" ")]
+          5: INT_LITERAL@327..328
+            0: INT_LITERAL@327..328 "2" [] []
+    2: FUN_DECL@328..382
+      0: ATTRIBUTE_LIST@328..328
+      1: (empty)
+      2: FUN_KW@328..334 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@334..356
+        0: IDENT@334..356 "missing_parameter_type" [] []
+      4: PARAMETERS@356..358
+        0: L_PAREN@356..357 "(" [] []
+        1: PARAMETER_LIST@357..357
+        2: R_PAREN@357..358 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@358..364
+        0: COLON@358..360 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@360..364
+          0: PATH@360..364
+            0: (empty)
+            1: PATH_SEGMENT@360..364
+              0: NAME@360..364
+                0: IDENT@360..364 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@364..382
+        0: EQ@364..365 "=" [] []
+        1: LAMBDA_EXPR@365..382
+          0: FN_KW@365..372 "fn" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@372..373 "(" [] []
+          2: LAMBDA_PARAMETER_LIST@373..376
+            0: PARAMETER@373..376
+              0: IDENT_PAT@373..374
+                0: NAME@373..374
+                  0: IDENT@373..374 "x" [] []
+              1: TYPE_ANNOTATION@374..376
+                0: COLON@374..376 ":" [] [Whitespace(" ")]
+                1: (empty)
+          3: R_PAREN@376..378 ")" [] [Whitespace(" ")]
+          4: ARROW@378..381 "->" [] [Whitespace(" ")]
+          5: PATH_EXPR@381..382
+            0: PATH@381..382
+              0: (empty)
+              1: PATH_SEGMENT@381..382
+                0: NAME@381..382
+                  0: IDENT@381..382 "x" [] []
+                1: (empty)
+    3: FUN_DECL@382..422
+      0: ATTRIBUTE_LIST@382..382
+      1: (empty)
+      2: FUN_KW@382..388 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@388..401
+        0: IDENT@388..401 "missing_arrow" [] []
+      4: PARAMETERS@401..403
+        0: L_PAREN@401..402 "(" [] []
+        1: PARAMETER_LIST@402..402
+        2: R_PAREN@402..403 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@403..409
+        0: COLON@403..405 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@405..409
+          0: PATH@405..409
+            0: (empty)
+            1: PATH_SEGMENT@405..409
+              0: NAME@405..409
+                0: IDENT@405..409 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@409..422
+        0: EQ@409..410 "=" [] []
+        1: LAMBDA_EXPR@410..422
+          0: FN_KW@410..417 "fn" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@417..418 "(" [] []
+          2: LAMBDA_PARAMETER_LIST@418..419
+            0: PARAMETER@418..419
+              0: IDENT_PAT@418..419
+                0: NAME@418..419
+                  0: IDENT@418..419 "x" [] []
+              1: (empty)
+          3: R_PAREN@419..421 ")" [] [Whitespace(" ")]
+          4: (empty)
+          5: INT_LITERAL@421..422
+            0: INT_LITERAL@421..422 "1" [] []
+    4: FUN_DECL@422..462
+      0: ATTRIBUTE_LIST@422..422
+      1: (empty)
+      2: FUN_KW@422..428 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@428..440
+        0: IDENT@428..440 "missing_body" [] []
+      4: PARAMETERS@440..442
+        0: L_PAREN@440..441 "(" [] []
+        1: PARAMETER_LIST@441..441
+        2: R_PAREN@441..442 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@442..448
+        0: COLON@442..444 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@444..448
+          0: PATH@444..448
+            0: (empty)
+            1: PATH_SEGMENT@444..448
+              0: NAME@444..448
+                0: IDENT@444..448 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@448..462
+        0: EQ@448..449 "=" [] []
+        1: LAMBDA_EXPR@449..462
+          0: FN_KW@449..456 "fn" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@456..457 "(" [] []
+          2: LAMBDA_PARAMETER_LIST@457..458
+            0: PARAMETER@457..458
+              0: IDENT_PAT@457..458
+                0: NAME@457..458
+                  0: IDENT@457..458 "x" [] []
+              1: (empty)
+          3: R_PAREN@458..460 ")" [] [Whitespace(" ")]
+          4: ARROW@460..462 "->" [] []
+          5: (empty)
+    5: FUN_DECL@462..510
+      0: ATTRIBUTE_LIST@462..462
+      1: (empty)
+      2: FUN_KW@462..468 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@468..487
+        0: IDENT@468..487 "unclosed_parameters" [] []
+      4: PARAMETERS@487..489
+        0: L_PAREN@487..488 "(" [] []
+        1: PARAMETER_LIST@488..488
+        2: R_PAREN@488..489 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@489..495
+        0: COLON@489..491 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@491..495
+          0: PATH@491..495
+            0: (empty)
+            1: PATH_SEGMENT@491..495
+              0: NAME@491..495
+                0: IDENT@491..495 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@495..510
+        0: EQ@495..496 "=" [] []
+        1: LAMBDA_EXPR@496..510
+          0: FN_KW@496..503 "fn" [Newline("\n"), Whitespace("    ")] []
+          1: L_PAREN@503..504 "(" [] []
+          2: LAMBDA_PARAMETER_LIST@504..506
+            0: PARAMETER@504..506
+              0: IDENT_PAT@504..506
+                0: NAME@504..506
+                  0: IDENT@504..506 "x" [] [Whitespace(" ")]
+              1: (empty)
+          3: (empty)
+          4: ARROW@506..509 "->" [] [Whitespace(" ")]
+          5: INT_LITERAL@509..510
+            0: INT_LITERAL@509..510 "1" [] []
+  3: EOF@510..511 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+260..261: Expected a pattern but instead found '1'.
+    Detail Some(260..261): Expected a pattern here.
+316..322: Expected a pattern but instead found '1: Int'.
+    Detail Some(316..322): Expected a pattern here.
+376..377: Expected a type but instead found ')'.
+    Detail Some(376..377): Expected a type here.
+421..422: expected `->` but instead found `1`
+    Hint None: Remove 1
+464..467: Expected an expression but instead found 'fun'.
+    Detail Some(464..467): Expected an expression here.
+506..508: expected `,` but instead found `->`
+    Hint None: Remove ->

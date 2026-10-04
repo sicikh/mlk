@@ -332,7 +332,7 @@ fn parse_parameter(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses the type a parameter takes.
-fn parse_type_annotation(p: &mut MlkParser) -> ParsedSyntax {
+pub(crate) fn parse_type_annotation(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T![:]) {
         return ParsedSyntax::Absent;
     }

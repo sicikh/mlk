@@ -74,6 +74,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::IntLiteral::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::LAMBDA_EXPR => {
+                        let $pattern = unsafe { $crate::LambdaExpr::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::LET_EXPR => {
                         let $pattern = unsafe { $crate::LetExpr::new_unchecked(node) };
                         $body
@@ -204,6 +208,10 @@ macro_rules! map_syntax_node {
                     },
                     $crate::SyntaxKind::IF_ARM_LIST => {
                         let $pattern = unsafe { $crate::IfArmList::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::LAMBDA_PARAMETER_LIST => {
+                        let $pattern = unsafe { $crate::LambdaParameterList::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::MODULE_ITEM_LIST => {

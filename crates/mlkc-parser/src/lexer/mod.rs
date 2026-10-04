@@ -76,6 +76,8 @@ enum Tok {
     ElseKw,
     #[token("false")]
     FalseKw,
+    #[token("fn")]
+    FnKw,
     #[token("fun")]
     FunKw,
     #[token("if")]
@@ -190,6 +192,7 @@ impl Tok {
             Self::ElifKw => ELIF_KW,
             Self::ElseKw => ELSE_KW,
             Self::FalseKw => FALSE_KW,
+            Self::FnKw => FN_KW,
             Self::FunKw => FUN_KW,
             Self::IfKw => IF_KW,
             Self::InKw => IN_KW,

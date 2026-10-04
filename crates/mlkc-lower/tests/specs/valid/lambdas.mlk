@@ -1,0 +1,53 @@
+// A lambda is lowered into the HIR as itself: the parameters it binds, with the types they are
+// written with, the body it computes, and the bindings of the enclosing body its body reads
+// --- what the lambda captures.
+
+#[builtin]
+type Int
+
+#[builtin]
+type Bool
+
+#[extern]
+fun consume(left: Int, right: Int): Int
+
+// A lambda that reads a parameter of the function it is written in captures that parameter.
+fun captured(value: Int): Int =
+    fn(x) -> x + value
+
+// A parameter may write the type it takes, and the type is resolved the way the type of
+// a signature is: against the names of the module.
+fun annotated(): Int =
+    fn(x: Int, y: Bool) -> if y then x else 0
+
+// A name of the module is not a variable the lambda carries: what a lambda captures is what
+// it cannot reach without an environment.
+fun called(value: Int): Int =
+    fn(x) -> consume(x, value)
+
+// A name the lambda binds itself is not captured: a parameter of the lambda and a `let`
+// inside it shadow the names of the enclosing body.
+fun shadowed(value: Int): Int =
+    fn(value) ->
+        let x = value in
+        x + value
+
+// A lambda inside a lambda: the inner one captures the parameters of the outer one and the
+// names of the enclosing body, while the outer one captures only what its own body cannot
+// make itself.
+fun nested(value: Int): Int =
+    fn(x) -> fn(y) -> x + y + value
+
+// A lambda that reads nothing of the enclosing body captures nothing.
+fun free(): Int =
+    fn(x, y) -> x
+
+// A binding of a `let` of the enclosing body is captured by the lambda written after it.
+fun let_bound(value: Int): Int =
+    let other = value + 1 in
+    fn(x) -> x + other
+
+// The body of a lambda reads the bindings of the pipeline it is written in: the `_` of the
+// step is a path to the binding the pipeline made, and a name outside the step is captured.
+fun piped(value: Int): Int =
+    fn(x) -> x |> consume(_, value)

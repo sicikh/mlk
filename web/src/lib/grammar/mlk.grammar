@@ -126,7 +126,15 @@ FieldExpr { PostfixExpr !call "@" Name }
 // `-1 + 2` is `(-1) + 2`, and `-f(x)` is the negation of the call.
 UnaryExpr { !call ("-" | "+") Expr }
 
-PrimaryExpr { IfExpr | LetExpr | Placeholder | Literal | PathExpr | ParenExpr }
+// A lambda: a function written where a value belongs. `fn` opens it, the parameter list holds
+// the patterns the body binds and the types they are written with, and the body is what stands
+// after the `->`; the body extends as far as it can, so what stands after it is written after
+// the value the lambda is.
+LambdaExpr { kw<"fn"> LambdaParameters "->" Expr }
+
+LambdaParameters { "(" (Parameter ("," Parameter)*)? ")" }
+
+PrimaryExpr { IfExpr | LetExpr | LambdaExpr | Placeholder | Literal | PathExpr | ParenExpr }
 
 // A place for the value a pipeline passes: `x |> f(_)`. A place is a leaf of the expression
 // grammar, and the parser of the compiler reads one only among the arguments of the call on

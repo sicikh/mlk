@@ -10,14 +10,14 @@ use std::{fmt, ops::Index};
 
 use mlkc_intern::Interned;
 use mlkc_la_arena::{Arena, ArenaMap, Idx};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     def_map::LocalScope,
     id::{LocalConstId, LocalFunctionId},
     item_data::Signature,
     name::Name,
-    path::{PathData, PathId},
+    path::{PathAnchor, PathData, PathId},
     type_ref::TypeRef,
 };
 
@@ -84,6 +84,20 @@ pub enum Expr {
         /// The expression the binding is visible in.
         body: ExprId,
     },
+    /// A function written where a value belongs: `fn(a, b) -> expr`.
+    ///
+    /// What the lambda is is its parameters, its body, and the bindings of the enclosing body
+    /// its body reads: a lambda is a value that carries the environment it cannot make itself,
+    /// which is what [`BodyBuilder::captures`] works out.
+    Lambda {
+        /// The parameters, in the order they are declared.
+        params: Vec<LambdaParam>,
+        /// The expression that is the body.
+        body: ExprId,
+        /// The bindings of the enclosing body the body reads, in the order they are first
+        /// written, each once.
+        captures: Vec<PatId>,
+    },
     /// A choice between expressions: a condition, the expression it selects, the `elif` arms
     /// written after it, and the expression selected when no condition holds.
     If {
@@ -107,6 +121,19 @@ pub struct IfArm {
     pub cond: ExprId,
     /// The expression selected when the condition holds.
     pub body: ExprId,
+}
+
+/// One parameter of an [`Expr::Lambda`]: the pattern it binds, and the type it takes.
+///
+/// A lambda has no signature to write a type in, and a parameter may take one next to the
+/// pattern it binds. The type is what the module wrote, resolved the way a type of a body is:
+/// its names are looked for in the type namespace of the module ([`BodyBuilder::finish`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LambdaParam {
+    /// The pattern the parameter binds.
+    pub pat: PatId,
+    /// The type the parameter takes, where the module wrote one.
+    pub ty: Option<TypeRef>,
 }
 
 /// A binary operator, as the language spells it.
@@ -414,6 +441,113 @@ impl BodyBuilder {
         self.root = Some(root);
     }
 
+    /// The bindings of the enclosing body a lambda captures: the free variables of its body.
+    ///
+    /// A path of the body that names a binding is free when the binding is one the lambda does
+    /// not make: neither a parameter of it nor a `let` inside it. What is captured is the
+    /// binding, and not the name: a `let` inside the lambda that shadows a name of the
+    /// enclosing body changes which binding the paths after it read, and the analysis reads the
+    /// paths the body holds, not the names they were written with.
+    ///
+    /// A name of the module is not a variable of the body: a lambda reaches the declarations of
+    /// the module wherever it runs, so what it captures is only what it cannot reach without
+    /// an environment.
+    ///
+    /// A lambda written inside the body is a value of it, and what is free in it is not free in
+    /// the lambda being analyzed: its captures are read as the names it needs of the body it is
+    /// written in, and a binding the analyzed lambda makes does not reach the list.
+    ///
+    /// The list is in the order the body first writes each binding, and a binding written twice
+    /// is one entry: what the list is read for is the environment to build, and building it
+    /// once is what building it means.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `body` or a node it reaches is not an expression of this builder: the
+    /// analysis walks a body its lowering built, where every field holds a node of the body.
+    pub fn captures(&self, body: ExprId, params: &[PatId]) -> Vec<PatId> {
+        let mut bound: FxHashSet<PatId> = params.iter().copied().collect();
+        let mut captures = Vec::new();
+
+        self.free_variables(body, &mut bound, &mut captures);
+
+        captures
+    }
+
+    /// Collects the bindings of `expr` that `bound` does not hold, and the bindings nested
+    /// lambdas capture that it does not hold either.
+    ///
+    /// `bound` grows as the walk meets the bindings of the expression: a `let` binds what is
+    /// after it, and not what it is bound to, which is the order the lowering resolved the
+    /// paths of the body in.
+    fn free_variables(
+        &self,
+        expr: ExprId,
+        bound: &mut FxHashSet<PatId>,
+        captures: &mut Vec<PatId>,
+    ) {
+        match &self.exprs[expr] {
+            Expr::Missing | Expr::Literal(_) => {},
+            Expr::Path(path) => {
+                if let PathAnchor::Binding(pat) = self.paths[*path].anchor
+                    && !bound.contains(&pat)
+                    && !captures.contains(&pat)
+                {
+                    captures.push(pat);
+                }
+            },
+            Expr::Call { callee, args } => {
+                self.free_variables(*callee, bound, captures);
+
+                for arg in args {
+                    self.free_variables(*arg, bound, captures);
+                }
+            },
+            Expr::Field { receiver, .. } => self.free_variables(*receiver, bound, captures),
+            Expr::Binary { lhs, rhs, .. } => {
+                self.free_variables(*lhs, bound, captures);
+                self.free_variables(*rhs, bound, captures);
+            },
+            Expr::Unary { operand, .. } => self.free_variables(*operand, bound, captures),
+            Expr::Let { pat, expr, body } => {
+                self.free_variables(*expr, bound, captures);
+                bound.insert(*pat);
+                self.free_variables(*body, bound, captures);
+            },
+            Expr::If {
+                cond,
+                then_,
+                arms,
+                otherwise,
+            } => {
+                self.free_variables(*cond, bound, captures);
+                self.free_variables(*then_, bound, captures);
+
+                for arm in arms {
+                    self.free_variables(arm.cond, bound, captures);
+                    self.free_variables(arm.body, bound, captures);
+                }
+
+                if let Some(otherwise) = otherwise {
+                    self.free_variables(*otherwise, bound, captures);
+                }
+            },
+            // A lambda is a value the body holds: what its own body reads of this one is
+            // what it captures, which is already the free variables of it, and walking the
+            // body of it again would read the parameters of the inner lambda as free names
+            // of the outer one.
+            Expr::Lambda {
+                captures: inner, ..
+            } => {
+                for pat in inner {
+                    if !bound.contains(pat) && !captures.contains(pat) {
+                        captures.push(*pat);
+                    }
+                }
+            },
+        }
+    }
+
     /// Finishes the body, resolving the anchors the types it writes left unresolved.
     ///
     /// Which names the paths of a body are rooted at is what the lowering of the body decides
@@ -436,6 +570,19 @@ impl BodyBuilder {
             for segment in &mut path.segments {
                 for arg in &mut segment.args {
                     arg.resolve(scope);
+                }
+            }
+        }
+
+        // A parameter of a lambda is where a type is written inside a body, and a type is read
+        // where a type belongs: the names of it are looked for in the type namespace of the
+        // module, which is what `scope` is.
+        for expr in self.exprs.values_mut() {
+            if let Expr::Lambda { params, .. } = expr {
+                for param in params {
+                    if let Some(ty) = &mut param.ty {
+                        ty.resolve(scope);
+                    }
                 }
             }
         }
@@ -555,5 +702,79 @@ mod tests {
         // The expressions of a local entity live in the arena of the enclosing body.
         assert_eq!(body.exprs().len(), 1);
         assert_eq!(body.root(), root);
+    }
+
+    /// Binds `name` to a pattern of the body, and returns both.
+    fn binding(builder: &mut BodyBuilder, name: &str) -> (PatId, ExprId) {
+        let pat = builder.alloc_pat(Pat::Bind(Name::new(name)));
+        let path = builder.intern_path(PathData::ident(Name::new(name), PathAnchor::Binding(pat)));
+
+        (pat, builder.alloc_expr(Expr::Path(path)))
+    }
+
+    #[test]
+    fn a_lambda_captures_the_bindings_of_the_enclosing_body_it_reads() {
+        // `fun f(x: Int): Int = fn(y) -> x + y + x`: the body reads the outer `x` twice and
+        // its own `y`, so what it captures is `x`, written once.
+        let mut builder = BodyBuilder::new();
+        let (x, x_expr) = binding(&mut builder, "x");
+        let (y, y_expr) = binding(&mut builder, "y");
+        let first = builder.alloc_expr(Expr::Binary {
+            lhs: x_expr,
+            op: BinaryOp::Add,
+            rhs: y_expr,
+        });
+        let sum = builder.alloc_expr(Expr::Binary {
+            lhs: first,
+            op: BinaryOp::Add,
+            rhs: x_expr,
+        });
+
+        assert_eq!(builder.captures(sum, &[y]), [x]);
+    }
+
+    #[test]
+    fn a_binding_the_lambda_makes_is_not_captured() {
+        // `fn(y) -> x + (let x = 1 in x)`: the `let` shadows the outer `x`, and only the `x`
+        // written before it is captured.
+        let mut builder = BodyBuilder::new();
+        let (outer, outer_expr) = binding(&mut builder, "x");
+        let (inner, inner_expr) = binding(&mut builder, "x");
+        let one = builder.alloc_expr(Expr::Literal(Literal::Int(1)));
+        let bound = builder.alloc_expr(Expr::Let {
+            pat: inner,
+            expr: one,
+            body: inner_expr,
+        });
+        let sum = builder.alloc_expr(Expr::Binary {
+            lhs: outer_expr,
+            op: BinaryOp::Add,
+            rhs: bound,
+        });
+
+        assert_eq!(builder.captures(sum, &[]), [outer]);
+    }
+
+    #[test]
+    fn a_nested_lambda_is_a_value_and_not_a_body_of_the_outer_one() {
+        // `fn(x) -> fn(y) -> x + z`: the inner lambda captures the `x` of the outer one and
+        // the `z` of the enclosing body; the outer one captures only `z`.
+        let mut builder = BodyBuilder::new();
+        let (x, x_expr) = binding(&mut builder, "x");
+        let (y, _) = binding(&mut builder, "y");
+        let (z, z_expr) = binding(&mut builder, "z");
+        let sum = builder.alloc_expr(Expr::Binary {
+            lhs: x_expr,
+            op: BinaryOp::Add,
+            rhs: z_expr,
+        });
+        let inner = builder.alloc_expr(Expr::Lambda {
+            params: vec![LambdaParam { pat: y, ty: None }],
+            body: sum,
+            captures: builder.captures(sum, &[y]),
+        });
+
+        assert_eq!(builder.captures(sum, &[y]), [x, z]);
+        assert_eq!(builder.captures(inner, &[x]), [z]);
     }
 }

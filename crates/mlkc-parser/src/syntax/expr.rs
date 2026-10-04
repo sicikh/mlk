@@ -32,11 +32,13 @@ use crate::{
     parser::MlkParser,
     syntax::{
         auxiliary::parse_name,
+        module::parse_type_annotation,
         parse_error::{
-            expected_call_after_a_pipe, expected_expr, expected_name, expected_path,
-            expected_path_after_the_dot, expected_place, place_outside_a_step,
+            expected_call_after_a_pipe, expected_expr, expected_name, expected_parameter,
+            expected_path, expected_path_after_the_dot, expected_pattern, expected_place,
+            place_outside_a_step,
         },
-        pat::parse_pat_or_recover,
+        pat::{parse_pat, parse_pat_or_recover},
         ty::parse_path,
     },
 };
@@ -437,6 +439,7 @@ fn parse_primary_expr(p: &mut MlkParser) -> ParsedSyntax {
         IDENT | PROJECT_KW => parse_path_expr(p),
         IF_KW => parse_if_expr(p),
         LET_KW => parse_let_expr(p),
+        FN_KW => parse_lambda_expr(p),
         L_PAREN => parse_paren_expr(p),
         UNDERSCORE => parse_placeholder_expr(p),
         _ => ParsedSyntax::Absent,
@@ -646,6 +649,110 @@ fn parse_let_expr(p: &mut MlkParser) -> ParsedSyntax {
     parse_expr(p).or_add_diagnostic(p, expected_expr);
 
     Present(m.complete(p, LET_EXPR))
+}
+
+/// The tokens a broken parameter of a lambda is recovered at: what follows a pattern in the
+/// parameter list, which is the comma that separates the parameters, the `)` that ends the
+/// list, and the `->` that opens the body. The arrow belongs to the rule that reads it, so it
+/// ends the pattern rather than being read into it.
+const LAMBDA_PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![->], T![,], T![')']];
+
+/// Parses a lambda: a function written where a value belongs, `fn(a, b) -> expr`.
+///
+/// The parameters are the parameters of a function declaration: patterns, and the types they
+/// take where the module writes them. The body is parsed with [`parse_expr`]: it extends as
+/// far as it can, so what is written after the body is written after the value the lambda is,
+/// and a lambda inside another expression ends where that expression ends.
+// test mlk a_lambda_is_a_function_written_where_a_value_belongs
+// fun added(value: Int): Int =
+//     fn(x) -> x + value
+//
+// test mlk a_lambda_body_is_an_expression
+// fun bound(value: Int): Int =
+//     fn(x) -> let y = x + value in y
+//
+// test mlk a_lambda_may_take_parameters_and_be_applied_at_once
+// fun applied(value: Int): Int =
+//     (fn(x, y) -> x + y)(value, 1)
+//
+// test mlk a_lambda_parameter_may_write_the_type_it_takes
+// fun annotated(value: Int): Int =
+//     fn(x: Int, y: Int) -> x + y + value
+fn parse_lambda_expr(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(FN_KW) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(FN_KW);
+    p.expect(T!['(']);
+    LambdaParameterListParse.parse_list(p);
+    p.expect(T![')']);
+    p.expect(T![->]);
+    parse_expr(p).or_add_diagnostic(p, expected_expr);
+
+    Present(m.complete(p, LAMBDA_EXPR))
+}
+
+/// The parameters of a lambda: the parameters between the parentheses.
+///
+/// A parameter is the parameter of a function declaration: a pattern, and the type it takes
+/// where the module writes one. The list may be empty: a lambda that takes no arguments is
+/// written `fn()`, not `fn`.
+struct LambdaParameterListParse;
+
+impl ParseSeparatedList for LambdaParameterListParse {
+    type Kind = SyntaxKind;
+    type Parser<'source> = MlkParser<'source>;
+
+    const LIST_KIND: SyntaxKind = LAMBDA_PARAMETER_LIST;
+
+    fn parse_element(&mut self, p: &mut MlkParser) -> ParsedSyntax {
+        parse_lambda_parameter(p)
+    }
+
+    fn is_at_list_end(&self, p: &mut MlkParser) -> bool {
+        p.at(T![')'])
+    }
+
+    fn recover(&mut self, p: &mut MlkParser, parsed_element: ParsedSyntax) -> RecoveryResult {
+        parsed_element.or_recover_with_token_set(
+            p,
+            &ParseRecoveryTokenSet::new(BOGUS_PARAMETER, LAMBDA_PARAMETER_RECOVERY_SET),
+            expected_parameter,
+        )
+    }
+
+    fn separating_element_kind(&mut self) -> SyntaxKind {
+        T![,]
+    }
+}
+
+/// Parses one parameter of a lambda: a pattern the body binds, and the type it takes if one is
+/// written.
+///
+/// A lambda parameter is a pattern, as the parameter of a function declaration is: a lambda
+/// that ignores an argument writes the wildcard where one that uses it writes a name. What
+/// a broken parameter is recovered at is the `->` of the body as well as the comma and the `)`
+/// of the list, so that the arrow is left for the rule that reads it rather than being read
+/// into the pattern.
+fn parse_lambda_parameter(p: &mut MlkParser) -> ParsedSyntax {
+    let pat = parse_pat(p).or_recover_with_token_set(
+        p,
+        &ParseRecoveryTokenSet::new(BOGUS_PAT, LAMBDA_PARAMETER_RECOVERY_SET),
+        expected_pattern,
+    );
+
+    let Ok(pat) = pat else {
+        return ParsedSyntax::Absent;
+    };
+
+    let m = pat.precede(p);
+
+    parse_type_annotation(p).ok();
+
+    Present(m.complete(p, PARAMETER))
 }
 
 /// The arguments of a call: `f(a, b)`.

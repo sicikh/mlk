@@ -45,6 +45,7 @@ pub enum SyntaxKind {
     ELIF_KW,
     ELSE_KW,
     FALSE_KW,
+    FN_KW,
     FUN_KW,
     IF_KW,
     IN_KW,
@@ -106,6 +107,8 @@ pub enum SyntaxKind {
     IF_ARM_LIST,
     IF_ARM,
     LET_EXPR,
+    LAMBDA_EXPR,
+    LAMBDA_PARAMETER_LIST,
     PAREN_EXPR,
     TYPE,
     PATH_TYPE,
@@ -169,6 +172,7 @@ impl SyntaxKind {
                 | PARAMETER_LIST
                 | ARGUMENT_LIST
                 | IF_ARM_LIST
+                | LAMBDA_PARAMETER_LIST
         )
     }
     pub fn from_keyword(ident: &str) -> Option<Self> {
@@ -177,6 +181,7 @@ impl SyntaxKind {
             "elif" => ELIF_KW,
             "else" => ELSE_KW,
             "false" => FALSE_KW,
+            "fn" => FN_KW,
             "fun" => FUN_KW,
             "if" => IF_KW,
             "in" => IN_KW,
@@ -227,6 +232,7 @@ impl SyntaxKind {
             ELIF_KW => "elif",
             ELSE_KW => "else",
             FALSE_KW => "false",
+            FN_KW => "fn",
             FUN_KW => "fun",
             IF_KW => "if",
             IN_KW => "in",
@@ -246,4 +252,4 @@ impl SyntaxKind {
 }
 #[doc = r" Utility macro for creating a SyntaxKind through simple macro syntax"]
 #[macro_export]
-macro_rules ! T { [.] => { $ crate :: SyntaxKind :: DOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['{'] => { $ crate :: SyntaxKind :: L_CURLY } ; ['}'] => { $ crate :: SyntaxKind :: R_CURLY } ; [#] => { $ crate :: SyntaxKind :: HASH } ; [@] => { $ crate :: SyntaxKind :: AT } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [::] => { $ crate :: SyntaxKind :: COLON_COLON } ; [;] => { $ crate :: SyntaxKind :: SEMICOLON } ; [=] => { $ crate :: SyntaxKind :: EQ } ; [->] => { $ crate :: SyntaxKind :: ARROW } ; ["_"] => { $ crate :: SyntaxKind :: UNDERSCORE } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: STAR } ; [/] => { $ crate :: SyntaxKind :: SLASH } ; [==] => { $ crate :: SyntaxKind :: EQ2 } ; [!=] => { $ crate :: SyntaxKind :: BANG_EQ } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LT_EQ } ; [>=] => { $ crate :: SyntaxKind :: GT_EQ } ; [&&] => { $ crate :: SyntaxKind :: AND2 } ; [||] => { $ crate :: SyntaxKind :: OR2 } ; [|>] => { $ crate :: SyntaxKind :: PIPE } ; [as] => { $ crate :: SyntaxKind :: AS_KW } ; [elif] => { $ crate :: SyntaxKind :: ELIF_KW } ; [else] => { $ crate :: SyntaxKind :: ELSE_KW } ; [false] => { $ crate :: SyntaxKind :: FALSE_KW } ; [fun] => { $ crate :: SyntaxKind :: FUN_KW } ; [if] => { $ crate :: SyntaxKind :: IF_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [let] => { $ crate :: SyntaxKind :: LET_KW } ; [module] => { $ crate :: SyntaxKind :: MODULE_KW } ; [project] => { $ crate :: SyntaxKind :: PROJECT_KW } ; [pub] => { $ crate :: SyntaxKind :: PUB_KW } ; [then] => { $ crate :: SyntaxKind :: THEN_KW } ; [true] => { $ crate :: SyntaxKind :: TRUE_KW } ; [type] => { $ crate :: SyntaxKind :: TYPE_KW } ; [use] => { $ crate :: SyntaxKind :: USE_KW } ; [ident] => { $ crate :: SyntaxKind :: IDENT } ; [EOF] => { $ crate :: SyntaxKind :: EOF } ; [UNICODE_BOM] => { $ crate :: SyntaxKind :: UNICODE_BOM } ; }
+macro_rules ! T { [.] => { $ crate :: SyntaxKind :: DOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['{'] => { $ crate :: SyntaxKind :: L_CURLY } ; ['}'] => { $ crate :: SyntaxKind :: R_CURLY } ; [#] => { $ crate :: SyntaxKind :: HASH } ; [@] => { $ crate :: SyntaxKind :: AT } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [::] => { $ crate :: SyntaxKind :: COLON_COLON } ; [;] => { $ crate :: SyntaxKind :: SEMICOLON } ; [=] => { $ crate :: SyntaxKind :: EQ } ; [->] => { $ crate :: SyntaxKind :: ARROW } ; ["_"] => { $ crate :: SyntaxKind :: UNDERSCORE } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: STAR } ; [/] => { $ crate :: SyntaxKind :: SLASH } ; [==] => { $ crate :: SyntaxKind :: EQ2 } ; [!=] => { $ crate :: SyntaxKind :: BANG_EQ } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LT_EQ } ; [>=] => { $ crate :: SyntaxKind :: GT_EQ } ; [&&] => { $ crate :: SyntaxKind :: AND2 } ; [||] => { $ crate :: SyntaxKind :: OR2 } ; [|>] => { $ crate :: SyntaxKind :: PIPE } ; [as] => { $ crate :: SyntaxKind :: AS_KW } ; [elif] => { $ crate :: SyntaxKind :: ELIF_KW } ; [else] => { $ crate :: SyntaxKind :: ELSE_KW } ; [false] => { $ crate :: SyntaxKind :: FALSE_KW } ; [fn] => { $ crate :: SyntaxKind :: FN_KW } ; [fun] => { $ crate :: SyntaxKind :: FUN_KW } ; [if] => { $ crate :: SyntaxKind :: IF_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [let] => { $ crate :: SyntaxKind :: LET_KW } ; [module] => { $ crate :: SyntaxKind :: MODULE_KW } ; [project] => { $ crate :: SyntaxKind :: PROJECT_KW } ; [pub] => { $ crate :: SyntaxKind :: PUB_KW } ; [then] => { $ crate :: SyntaxKind :: THEN_KW } ; [true] => { $ crate :: SyntaxKind :: TRUE_KW } ; [type] => { $ crate :: SyntaxKind :: TYPE_KW } ; [use] => { $ crate :: SyntaxKind :: USE_KW } ; [ident] => { $ crate :: SyntaxKind :: IDENT } ; [EOF] => { $ crate :: SyntaxKind :: EOF } ; [UNICODE_BOM] => { $ crate :: SyntaxKind :: UNICODE_BOM } ; }

@@ -1,0 +1,21 @@
+// What is wrong with a lambda as syntax: a parameter that is not a pattern, a parameter whose
+// type is not written, the arrow that is not written, a body that is not there, and a parameter
+// list that is never closed.
+
+fun broken_parameter(): Int =
+    fn(1) -> 2
+
+fun broken_annotated_parameter(): Int =
+    fn(1: Int) -> 2
+
+fun missing_parameter_type(): Int =
+    fn(x: ) -> x
+
+fun missing_arrow(): Int =
+    fn(x) 1
+
+fun missing_body(): Int =
+    fn(x) ->
+
+fun unclosed_parameters(): Int =
+    fn(x -> 1

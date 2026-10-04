@@ -197,6 +197,23 @@ pub fn int_literal(value_token: SyntaxToken) -> IntLiteral {
         SyntaxElement::Token(value_token),
     )]))
 }
+pub fn lambda_expr(
+    fn_token: SyntaxToken,
+    l_paren_token: SyntaxToken,
+    parameters: LambdaParameterList,
+    r_paren_token: SyntaxToken,
+    arrow_token: SyntaxToken,
+    body: Expr,
+) -> LambdaExpr {
+    LambdaExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::LAMBDA_EXPR, [
+        Some(SyntaxElement::Token(fn_token)),
+        Some(SyntaxElement::Token(l_paren_token)),
+        Some(SyntaxElement::Node(parameters.into_syntax())),
+        Some(SyntaxElement::Token(r_paren_token)),
+        Some(SyntaxElement::Token(arrow_token)),
+        Some(SyntaxElement::Node(body.into_syntax())),
+    ]))
+}
 pub fn let_expr(
     let_token: SyntaxToken,
     pat: Pat,
@@ -549,6 +566,27 @@ where
         items
             .into_iter()
             .map(|item| Some(item.into_syntax().into())),
+    ))
+}
+pub fn lambda_parameter_list<I, S>(items: I, separators: S) -> LambdaParameterList
+where
+    I: IntoIterator<Item = AnyParameter>,
+    I::IntoIter: ExactSizeIterator,
+    S: IntoIterator<Item = SyntaxToken>,
+    S::IntoIter: ExactSizeIterator,
+{
+    let mut items = items.into_iter();
+    let mut separators = separators.into_iter();
+    let length = items.len() + separators.len();
+    LambdaParameterList::unwrap_cast(SyntaxNode::new_detached(
+        SyntaxKind::LAMBDA_PARAMETER_LIST,
+        (0..length).map(|index| {
+            if index % 2 == 0 {
+                Some(items.next()?.into_syntax().into())
+            } else {
+                Some(separators.next()?.into())
+            }
+        }),
     ))
 }
 pub fn module_item_list<I>(items: I) -> ModuleItemList

@@ -688,6 +688,69 @@ pub struct IntLiteralFields {
     pub value_token: SyntaxResult<SyntaxToken>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct LambdaExpr {
+    pub(crate) syntax: SyntaxNode,
+}
+impl LambdaExpr {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> LambdaExprFields {
+        LambdaExprFields {
+            fn_token: self.fn_token(),
+            l_paren_token: self.l_paren_token(),
+            parameters: self.parameters(),
+            r_paren_token: self.r_paren_token(),
+            arrow_token: self.arrow_token(),
+            body: self.body(),
+        }
+    }
+    pub fn fn_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn l_paren_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+    pub fn parameters(&self) -> LambdaParameterList {
+        support::list(&self.syntax, 2usize)
+    }
+    pub fn r_paren_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 3usize)
+    }
+    pub fn arrow_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 4usize)
+    }
+    pub fn body(&self) -> SyntaxResult<Expr> {
+        support::required_node(&self.syntax, 5usize)
+    }
+}
+impl Serialize for LambdaExpr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "LambdaExpr")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct LambdaExprFields {
+    pub fn_token: SyntaxResult<SyntaxToken>,
+    pub l_paren_token: SyntaxResult<SyntaxToken>,
+    pub parameters: LambdaParameterList,
+    pub r_paren_token: SyntaxResult<SyntaxToken>,
+    pub arrow_token: SyntaxResult<SyntaxToken>,
+    pub body: SyntaxResult<Expr>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct LetExpr {
     pub(crate) syntax: SyntaxNode,
 }
@@ -1812,6 +1875,7 @@ pub enum Expr {
     CallExpr(CallExpr),
     FieldExpr(FieldExpr),
     IfExpr(IfExpr),
+    LambdaExpr(LambdaExpr),
     LetExpr(LetExpr),
     Literal(Literal),
     ParenExpr(ParenExpr),
@@ -1832,6 +1896,7 @@ impl Serialize for Expr {
             Self::CallExpr(it) => it.serialize(serializer),
             Self::FieldExpr(it) => it.serialize(serializer),
             Self::IfExpr(it) => it.serialize(serializer),
+            Self::LambdaExpr(it) => it.serialize(serializer),
             Self::LetExpr(it) => it.serialize(serializer),
             Self::Literal(it) => it.serialize(serializer),
             Self::ParenExpr(it) => it.serialize(serializer),
@@ -1871,6 +1936,12 @@ impl Expr {
     pub fn as_if_expr(&self) -> Option<&IfExpr> {
         match &self {
             Self::IfExpr(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_lambda_expr(&self) -> Option<&LambdaExpr> {
+        match &self {
+            Self::LambdaExpr(item) => Some(item),
             _ => None,
         }
     }
@@ -2833,6 +2904,67 @@ impl From<IntLiteral> for SyntaxNode {
 }
 impl From<IntLiteral> for SyntaxElement {
     fn from(n: IntLiteral) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for LambdaExpr {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(LAMBDA_EXPR as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == LAMBDA_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for LambdaExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("LambdaExpr")
+                .field("fn_token", &support::DebugSyntaxResult(self.fn_token()))
+                .field(
+                    "l_paren_token",
+                    &support::DebugSyntaxResult(self.l_paren_token()),
+                )
+                .field("parameters", &self.parameters())
+                .field(
+                    "r_paren_token",
+                    &support::DebugSyntaxResult(self.r_paren_token()),
+                )
+                .field(
+                    "arrow_token",
+                    &support::DebugSyntaxResult(self.arrow_token()),
+                )
+                .field("body", &support::DebugSyntaxResult(self.body()))
+                .finish()
+        } else {
+            f.debug_struct("LambdaExpr").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<LambdaExpr> for SyntaxNode {
+    fn from(n: LambdaExpr) -> Self {
+        n.syntax
+    }
+}
+impl From<LambdaExpr> for SyntaxElement {
+    fn from(n: LambdaExpr) -> Self {
         n.syntax.into()
     }
 }
@@ -4151,6 +4283,11 @@ impl From<IfExpr> for Expr {
         Self::IfExpr(node)
     }
 }
+impl From<LambdaExpr> for Expr {
+    fn from(node: LambdaExpr) -> Self {
+        Self::LambdaExpr(node)
+    }
+}
 impl From<LetExpr> for Expr {
     fn from(node: LetExpr) -> Self {
         Self::LetExpr(node)
@@ -4193,6 +4330,7 @@ impl AstNode for Expr {
         .union(CallExpr::KIND_SET)
         .union(FieldExpr::KIND_SET)
         .union(IfExpr::KIND_SET)
+        .union(LambdaExpr::KIND_SET)
         .union(LetExpr::KIND_SET)
         .union(Literal::KIND_SET)
         .union(ParenExpr::KIND_SET)
@@ -4203,8 +4341,10 @@ impl AstNode for Expr {
         .union(UnaryExpr::KIND_SET);
     fn can_cast(kind: SyntaxKind) -> bool {
         match kind {
-            BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | IF_EXPR | LET_EXPR | PAREN_EXPR
-            | PATH_EXPR | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL | UNARY_EXPR => true,
+            BIN_EXPR | BOGUS_EXPR | CALL_EXPR | FIELD_EXPR | IF_EXPR | LAMBDA_EXPR | LET_EXPR
+            | PAREN_EXPR | PATH_EXPR | PIPE_EXPR | PLACEHOLDER_EXPR | UFCS_CALL | UNARY_EXPR => {
+                true
+            },
             k if Literal::can_cast(k) => true,
             _ => false,
         }
@@ -4216,6 +4356,7 @@ impl AstNode for Expr {
             CALL_EXPR => Self::CallExpr(CallExpr { syntax }),
             FIELD_EXPR => Self::FieldExpr(FieldExpr { syntax }),
             IF_EXPR => Self::IfExpr(IfExpr { syntax }),
+            LAMBDA_EXPR => Self::LambdaExpr(LambdaExpr { syntax }),
             LET_EXPR => Self::LetExpr(LetExpr { syntax }),
             PAREN_EXPR => Self::ParenExpr(ParenExpr { syntax }),
             PATH_EXPR => Self::PathExpr(PathExpr { syntax }),
@@ -4239,6 +4380,7 @@ impl AstNode for Expr {
             Self::CallExpr(it) => it.syntax(),
             Self::FieldExpr(it) => it.syntax(),
             Self::IfExpr(it) => it.syntax(),
+            Self::LambdaExpr(it) => it.syntax(),
             Self::LetExpr(it) => it.syntax(),
             Self::ParenExpr(it) => it.syntax(),
             Self::PathExpr(it) => it.syntax(),
@@ -4256,6 +4398,7 @@ impl AstNode for Expr {
             Self::CallExpr(it) => it.into_syntax(),
             Self::FieldExpr(it) => it.into_syntax(),
             Self::IfExpr(it) => it.into_syntax(),
+            Self::LambdaExpr(it) => it.into_syntax(),
             Self::LetExpr(it) => it.into_syntax(),
             Self::ParenExpr(it) => it.into_syntax(),
             Self::PathExpr(it) => it.into_syntax(),
@@ -4275,6 +4418,7 @@ impl std::fmt::Debug for Expr {
             Self::CallExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::FieldExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::IfExpr(it) => std::fmt::Debug::fmt(it, f),
+            Self::LambdaExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::LetExpr(it) => std::fmt::Debug::fmt(it, f),
             Self::Literal(it) => std::fmt::Debug::fmt(it, f),
             Self::ParenExpr(it) => std::fmt::Debug::fmt(it, f),
@@ -4294,6 +4438,7 @@ impl From<Expr> for SyntaxNode {
             Expr::CallExpr(it) => it.into_syntax(),
             Expr::FieldExpr(it) => it.into_syntax(),
             Expr::IfExpr(it) => it.into_syntax(),
+            Expr::LambdaExpr(it) => it.into_syntax(),
             Expr::LetExpr(it) => it.into_syntax(),
             Expr::Literal(it) => it.into_syntax(),
             Expr::ParenExpr(it) => it.into_syntax(),
@@ -4766,6 +4911,11 @@ impl std::fmt::Display for InferType {
     }
 }
 impl std::fmt::Display for IntLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for LambdaExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }
@@ -5531,6 +5681,87 @@ impl IntoIterator for &IfArmList {
 impl IntoIterator for IfArmList {
     type Item = IfArm;
     type IntoIter = AstNodeListIterator<Language, IfArm>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct LambdaParameterList {
+    syntax_list: SyntaxList,
+}
+impl LambdaParameterList {
+    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
+    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[inline]
+    pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self {
+            syntax_list: syntax.into_list(),
+        }
+    }
+}
+impl AstNode for LambdaParameterList {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(LAMBDA_PARAMETER_LIST as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == LAMBDA_PARAMETER_LIST
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self {
+                syntax_list: syntax.into_list(),
+            })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        self.syntax_list.node()
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax_list.into_node()
+    }
+}
+impl Serialize for LambdaParameterList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "LambdaParameterList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
+    }
+}
+impl AstSeparatedList for LambdaParameterList {
+    type Language = Language;
+    type Node = AnyParameter;
+    fn syntax_list(&self) -> &SyntaxList {
+        &self.syntax_list
+    }
+    fn into_syntax_list(self) -> SyntaxList {
+        self.syntax_list
+    }
+}
+impl Debug for LambdaParameterList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("LambdaParameterList ")?;
+        f.debug_list().entries(self.elements()).finish()
+    }
+}
+impl IntoIterator for LambdaParameterList {
+    type Item = SyntaxResult<AnyParameter>;
+    type IntoIter = AstSeparatedListNodesIterator<Language, AnyParameter>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+impl IntoIterator for &LambdaParameterList {
+    type Item = SyntaxResult<AnyParameter>;
+    type IntoIter = AstSeparatedListNodesIterator<Language, AnyParameter>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }

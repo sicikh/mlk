@@ -6,17 +6,17 @@
 //! against the names of the module.
 
 use mlkc_hir_def::{
-    BinaryOp, BodyBuilder, Expr, ExprId, IfArm, ItemTree, Literal, Name, Namespace, Pat, PatId,
-    PathAnchor, PathData, UnaryOp,
+    BinaryOp, BodyBuilder, Expr, ExprId, IfArm, ItemTree, LambdaParam, Literal, Name, Namespace,
+    Pat, PatId, PathAnchor, PathData, UnaryOp,
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
 use mlkc_span::Span;
 use mlkc_syntax::{
-    BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, IfArm as IfArmSyntax,
-    IfExpr as IfExprSyntax, LetExpr, Literal as LiteralSyntax, Pat as PatSyntax,
-    Path as PathSyntax, PathExpr, PipeExpr, PlaceholderExpr, SyntaxKind, SyntaxToken, TextRange,
-    TextSize, UfcsCall, UnaryExpr, inner_string_text,
+    AnyParameter, BinExpr, CallExpr, Expr as ExprSyntax, FieldExpr, FunDecl, IfArm as IfArmSyntax,
+    IfExpr as IfExprSyntax, LambdaExpr as LambdaExprSyntax, LetExpr, Literal as LiteralSyntax,
+    Pat as PatSyntax, Path as PathSyntax, PathExpr, PipeExpr, PlaceholderExpr, SyntaxKind,
+    SyntaxToken, TextRange, TextSize, UfcsCall, UnaryExpr, inner_string_text,
 };
 use mlkc_vfs::FileId;
 
@@ -24,6 +24,7 @@ use crate::{
     LoweredBody, LoweringDiag, LoweringError, decl, pat, path,
     source_map::BodySourceMap,
     syntax::{name, span},
+    ty,
 };
 
 /// Lowers the body of `decl`, a function of the module `tree` describes, or nothing if the
@@ -136,6 +137,7 @@ impl BodyLowering<'_> {
             ExprSyntax::PlaceholderExpr(place) => self.placeholder(place),
             ExprSyntax::IfExpr(if_expr) => self.if_expr(if_expr),
             ExprSyntax::LetExpr(let_expr) => self.let_expr(let_expr),
+            ExprSyntax::LambdaExpr(lambda) => self.lambda_expr(lambda),
             // A parenthesized expression is the expression it holds: how the source is
             // grouped is the parser's business, and what it hands over is a tree already.
             ExprSyntax::ParenExpr(paren) => self.optional(paren.expr().ok()),
@@ -509,6 +511,59 @@ impl BodyLowering<'_> {
         self.bindings.truncate(mark);
 
         self.builder.alloc_expr(Expr::Let { pat, expr, body })
+    }
+
+    /// Lowers a lambda: the parameters it binds, the body it computes, and the bindings of the
+    /// enclosing body its body reads --- what the lambda captures.
+    ///
+    /// A parameter is the parameter of a function declaration: a pattern, and the type it takes
+    /// where one is written. The parameters are the names the body binds: they are pushed for
+    /// the body the way the pattern of a `let` is pushed for the expression after it, and taken
+    /// back after it, so that a name of the enclosing body stays what it is outside the lambda.
+    /// What the body reads of the enclosing body is what the lambda carries as its environment,
+    /// which is what [`BodyBuilder::captures`] works out ([ADR-0018]).
+    ///
+    /// [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+    fn lambda_expr(&mut self, lambda: &LambdaExprSyntax) -> ExprId {
+        let file = self.file();
+        let mut params = Vec::new();
+        let mut bound = Vec::new();
+
+        for parameter in lambda.parameters().syntax().children() {
+            // A parameter the parser could not read at all is one of them, and `None` stands
+            // for it, as it does among the parameters of a function declaration: the arity is
+            // what the module wrote, and the pattern of the broken one is not there.
+            let parameter = match AnyParameter::cast(parameter) {
+                Some(AnyParameter::Parameter(parameter)) => Some(parameter),
+                Some(AnyParameter::BogusParameter(_)) | None => None,
+            };
+
+            let (pat, names) = self.pattern(parameter.as_ref().and_then(|it| it.pat().ok()));
+            let ty = parameter.as_ref().and_then(|parameter| {
+                parameter.type_annotation().map(|annotation| {
+                    ty::type_ref(annotation.ty().ok(), file, &mut self.diagnostics)
+                })
+            });
+
+            params.push(LambdaParam { pat, ty });
+            bound.extend(names.into_iter().map(|name| (name, pat)));
+        }
+
+        let mark = self.bindings.len();
+        self.bindings.extend(bound);
+
+        let body = self.optional(lambda.body().ok());
+
+        self.bindings.truncate(mark);
+
+        let pats: Vec<PatId> = params.iter().map(|param| param.pat).collect();
+        let captures = self.builder.captures(body, &pats);
+
+        self.builder.alloc_expr(Expr::Lambda {
+            params,
+            body,
+            captures,
+        })
     }
 
     /// Lowers a pattern, and reads the names it binds.

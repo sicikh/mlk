@@ -261,6 +261,16 @@ impl Checker<'_> {
                 arms,
                 otherwise,
             } => self.if_expr(cond, then_, &arms, otherwise),
+            // A lambda is a value of a function, and the language has no value of a function
+            // yet: what one is is fixed where closures are represented ([ADR-0018]), and the
+            // translation of a lambda is the work of that stage ([ADR-0019]).
+            //
+            // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+            // [ADR-0019]: ../../docs/adr/0019-mir.md
+            Expr::Lambda { .. } => {
+                self.report(TypeError::Lambda, expr);
+                InferTy::Error
+            },
         };
 
         self.record_expr(expr, ty.clone());
@@ -1122,6 +1132,29 @@ mod tests {
                     if *expected == Ty::class(class(&tree, "Int"))
                         && *found == Ty::class(class(&tree, "String"))
             ),
+            "{diagnostics:?}",
+        );
+    }
+
+    #[test]
+    fn a_lambda_is_reported_because_the_language_has_no_value_of_a_function() {
+        let (id, ..) = ids();
+        let source = format!("{CLASSES}\nfun apply(value: Int): Int = fn(x) -> x + value\n");
+        let (tree, bodies) = module(id, &source);
+        let resolution = resolution(&tree, &[]);
+        let deps = deps(id, &tree, builtins(&tree));
+        let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let deps = deps.with_types(id, Arc::new(types));
+
+        let (owner, body) = &bodies[0];
+        let (_, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
+
+        // A lambda is lowered with the bindings its body captures, and what turns one into
+        // a value is the representation of a closure, which the check does not have yet.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            matches!(diagnostics[0].error(), TypeError::Lambda),
             "{diagnostics:?}",
         );
     }

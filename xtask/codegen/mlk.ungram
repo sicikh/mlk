@@ -194,6 +194,7 @@ Expr =
     | PlaceholderExpr
     | IfExpr
     | LetExpr
+    | LambdaExpr
     | ParenExpr
     | BogusExpr
 
@@ -281,6 +282,22 @@ LetExpr =
     expr: Expr
     'in'
     body: Expr
+
+// A lambda: a function written where a value belongs: `fn(a, b) -> expr`.
+//
+// The parameters are the parameters of a function declaration: patterns, and the types they
+// take where the module writes them. They bind the body the way the parameters of a function
+// declaration bind the body of it. The body is an expression, and it extends as far as it can:
+// what is written after the body is written after the value the lambda is.
+LambdaExpr =
+    'fn'
+    '('
+    parameters: LambdaParameterList
+    ')'
+    '->'
+    body: Expr
+
+LambdaParameterList = (AnyParameter (',' AnyParameter)*)
 
 // A choice between expressions: a condition, the expression it selects, the `elif` arms
 // written after it, and the expression selected when no condition holds.

@@ -238,6 +238,11 @@ impl Lowerer<'_> {
             Expr::If { .. } => {
                 ice!("the lowering met an `if` outside the rule that reads an `if`")
             },
+            // A lambda is a value of a function, and the check reports one: the lowering is
+            // total over the bodies the check accepted, and this is one the check did not.
+            Expr::Lambda { .. } => {
+                ice!("the lowering met a lambda, and the check accepts no lambda")
+            },
         }
     }
 

@@ -92,6 +92,10 @@ spec_tests! {
     // expression of the body.
     if_expr: "valid/if.mlk",
 
+    // A lambda: the patterns it binds, the body it computes, and the bindings of the enclosing
+    // body the body reads --- what the lambda captures.
+    lambdas: "valid/lambdas.mlk",
+
     // Equals the shape of a literal: an integer, a string, and a subtraction that is an
     // operator rather than a sign; a string holds what its escapes decode to.
     literals: "valid/literals.mlk",

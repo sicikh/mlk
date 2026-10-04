@@ -472,6 +472,60 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.into_node(INT_LITERAL, children)
             },
+            LAMBDA_EXPR => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<6usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![fn]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T!['(']
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && LambdaParameterList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![')']
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T ! [->]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Expr::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        LAMBDA_EXPR.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(LAMBDA_EXPR, children)
+            },
             LET_EXPR => {
                 let mut elements = (&children).into_iter();
                 let mut slots: RawNodeSlots<6usize> = RawNodeSlots::default();
@@ -1170,6 +1224,15 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             ATTRIBUTE_LIST => Self::make_node_list_syntax(kind, children, Attribute::can_cast),
             IF_ARM_LIST => Self::make_node_list_syntax(kind, children, IfArm::can_cast),
+            LAMBDA_PARAMETER_LIST => {
+                Self::make_separated_list_syntax(
+                    kind,
+                    children,
+                    AnyParameter::can_cast,
+                    T ! [,],
+                    false,
+                )
+            },
             MODULE_ITEM_LIST => Self::make_node_list_syntax(kind, children, ModuleItem::can_cast),
             PARAMETER_LIST => {
                 Self::make_separated_list_syntax(

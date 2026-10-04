@@ -190,7 +190,7 @@ fn underscore_is_not_an_identifier() {
 #[test]
 fn keywords() {
     let keywords = [
-        "as", "elif", "else", "false", "fun", "if", "in", "let", "module", "project", "pub",
+        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "module", "project", "pub",
         "then", "true", "type", "use",
     ];
 
@@ -218,6 +218,15 @@ fn keywords_are_not_identifiers() {
         IDENT:5,
         WHITESPACE:1,
         IDENT:7
+    }
+
+    // `fn` is a keyword of the language, and `fnord` is still a name: the longest match is
+    // what the lexer reads, and a keyword only wins where it is the whole word.
+    assert_lex! {
+        "fnord fn-x",
+        IDENT:5,
+        WHITESPACE:1,
+        IDENT:4
     }
 
     assert_lex! {

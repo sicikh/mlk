@@ -255,6 +255,23 @@ impl<'a> Interpreter<'a> {
 
                 self.callee(callee, &args, stmt.span)?
             },
+            // A closure is code plus the words it captured, and `Capture` reads one of them
+            // ([ADR-0026][adr-0026]); the value model of the interpreter is its own, and the
+            // lowering of both waits for a decision that is not MIR's.
+            //
+            // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+            Rvalue::Closure { .. } => {
+                return Err(Trap::Unsupported {
+                    what: "a closure",
+                    span: stmt.span,
+                });
+            },
+            Rvalue::Capture { .. } => {
+                return Err(Trap::Unsupported {
+                    what: "a capture",
+                    span: stmt.span,
+                });
+            },
         };
 
         match place {

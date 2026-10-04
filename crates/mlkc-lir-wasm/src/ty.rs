@@ -34,14 +34,18 @@ impl Ty {
 
     /// Whether a value of this type is one of `other` as well.
     ///
-    /// The subtyping the target has today: an immediate is an `eq` reference, so a value that is
-    /// known to be an `i31` passes where a word is read and needs no instruction to cross.
+    /// The subtyping the target has today: an immediate is an `eq` reference, and so is a
+    /// concrete GC type, so a value that is known to be either passes where a word is read and
+    /// needs no instruction to cross.
     pub fn is_subtype_of(self, other: Self) -> bool {
         if self == other {
             return true;
         }
 
-        matches!((self, other), (Self::Ref(RefTy::I31), Self::Ref(RefTy::Eq)),)
+        matches!(
+            (self, other),
+            (Self::Ref(RefTy::I31 | RefTy::Type(_)), Self::Ref(RefTy::Eq)),
+        )
     }
 }
 
@@ -51,6 +55,7 @@ impl fmt::Display for Ty {
             Self::I32 => f.write_str("i32"),
             Self::Ref(RefTy::I31) => f.write_str("(ref i31)"),
             Self::Ref(RefTy::Eq) => f.write_str("eqref"),
+            Self::Ref(RefTy::Type(index)) => write!(f, "(ref #{index})"),
         }
     }
 }
@@ -62,6 +67,12 @@ pub enum RefTy {
     I31,
     /// `eqref`: any `eq` reference, `null` included.
     Eq,
+    /// A concrete GC type of the module: a struct or an array, by its type index.
+    ///
+    /// The index is the one the module's type section gives it ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    Type(u32),
 }
 
 #[cfg(test)]
@@ -78,9 +89,20 @@ mod tests {
     }
 
     #[test]
+    fn a_concrete_type_is_a_word() {
+        let closure = Ty::Ref(RefTy::Type(7));
+
+        assert!(closure.is_subtype_of(Ty::EQREF));
+        assert!(closure.is_subtype_of(closure));
+        assert!(!Ty::EQREF.is_subtype_of(closure));
+        assert!(!closure.is_subtype_of(Ty::I31));
+    }
+
+    #[test]
     fn a_type_reads_as_the_target_writes_it() {
         assert_eq!(Ty::I32.to_string(), "i32");
         assert_eq!(Ty::I31.to_string(), "(ref i31)");
         assert_eq!(Ty::Ref(RefTy::Eq).to_string(), "eqref");
+        assert_eq!(Ty::Ref(RefTy::Type(3)).to_string(), "(ref #3)");
     }
 }

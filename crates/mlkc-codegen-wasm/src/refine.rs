@@ -11,26 +11,28 @@
 //! ```text
 //! Word              -- any word; no knowledge at all
 //! Int | Bool | Unit -- known to be an immediate
+//! Closure(P -> R)   -- known to be a closure of this signature
 //! Never             -- unreachable; the refinement of a value with no definition
 //! ```
 //!
 //! `Int ⊔ Bool` is `Word`, because a WASM local is one type on every path; `Never ⊔ x` is `x`,
-//! because an edge that never runs does not constrain what the join holds. `String` and the
+//! because an edge that never runs does not constrain what the join holds; two closures of one
+//! signature join to that closure, and two of different signatures to a word. `String` and the
 //! structures join in as their constructs are lowered: until a module can name their GC types,
-//! everything that is not an immediate is a word.
+//! everything that is not an immediate and not a closure is a word.
 //!
 //! [adr-0018]: ../../docs/adr/0018-values-as-words.md
 
 use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_mir::{
-    BlockTarget, Body, Callee, Const, Operand, PrimOp, Rvalue, StmtKind, Terminator, ValueId,
+    BlockTarget, Callee, CodeRef, Const, Operand, PrimOp, Rvalue, StmtKind, Terminator, ValueId,
 };
 use wasm_encoder::{AbstractHeapType, RefType, ValType};
 
-use crate::module::ModuleLayout;
+use crate::module::{FnShape, ModuleLayout};
 
 /// What the backend knows a word to be.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refinement {
     /// No definition reaches the value, or its block is not reachable; nothing is known.
     Never,
@@ -40,18 +42,24 @@ pub enum Refinement {
     Bool,
     /// The unit value: an `i31ref` of `0`.
     Unit,
+    /// A closure: a reference to a closure of this signature ([ADR-0026][adr-0026]).
+    ///
+    /// The shape is the ABI shape: what every parameter and the result cross as.
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    Closure(FnShape),
     /// A word, and nothing more than that: an `eqref`.
     Word,
 }
 
 impl Refinement {
     /// Whether the refinement is of an immediate: a value represented by an `i31ref`.
-    pub fn is_immediate(self) -> bool {
+    pub fn is_immediate(&self) -> bool {
         matches!(self, Self::Int | Self::Bool | Self::Unit)
     }
 
     /// The representation this refinement crosses the ABI of a module as.
-    pub fn abi(self) -> AbiType {
+    pub fn abi(&self) -> AbiType {
         if self.is_immediate() {
             AbiType::Immediate
         } else {
@@ -63,12 +71,16 @@ impl Refinement {
     ///
     /// Two immediate kinds of different meaning have no kind in common but a word, because a
     /// WASM local has one type on every path; so the join of `Int` and `Bool` is `Word`.
+    /// Two closures of one signature join to it, and two of different signatures to a word.
     /// A value nothing defines constrains no join, so `Never` joined with anything is it.
-    pub fn join(self, other: Self) -> Self {
+    pub fn join(&self, other: &Self) -> Self {
         match (self, other) {
-            (Self::Never, other) => other,
-            (this, Self::Never) => this,
-            (this, other) if this == other => this,
+            (Self::Never, other) => other.clone(),
+            (this, Self::Never) => this.clone(),
+            (Self::Closure(this), Self::Closure(other)) if this == other => {
+                Self::Closure(this.clone())
+            },
+            (this, other) if this == other => this.clone(),
             _ => Self::Word,
         }
     }
@@ -104,7 +116,8 @@ impl AbiType {
 ///
 /// A class that is one of the classes of the language ([`Builtins`]) refines to its
 /// representation; every other type is a word until the constructs that give it a shape are
-/// lowered.
+/// lowered. A function type is a word too: a closure is a reference, and what signature its
+/// code has is the refinement of the expression that made it ([`closure_shape_of_ty`]).
 pub fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
     let Ty::Class { class, args } = ty else {
         return Refinement::Word;
@@ -123,6 +136,21 @@ pub fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
     } else {
         Refinement::Word
     }
+}
+
+/// The ABI shape of a function type, if the type is one.
+pub fn closure_shape_of_ty(ty: &Ty, builtins: &Builtins) -> Option<FnShape> {
+    let Ty::Fn { params, ret } = ty else {
+        return None;
+    };
+
+    Some(FnShape {
+        params: params
+            .iter()
+            .map(|param| of_ty(param, builtins).abi())
+            .collect(),
+        ret: of_ty(ret, builtins).abi(),
+    })
 }
 
 /// The refinement of a constant.
@@ -169,23 +197,23 @@ pub(crate) struct Refinements {
 }
 
 impl Refinements {
-    /// Computes the refinement of every value of `body`.
+    /// Computes the refinement of every value of `code`.
     ///
     /// A value a statement defines refines to what its right-hand side computes, which is
     /// tightened as the operands it reads are; a block parameter refines to the join of the
     /// arguments its edges pass, and an entry parameter starts at what its signature says,
     /// since no edge defines it.
-    pub(crate) fn of(body: &Body, builtins: &Builtins, layout: &ModuleLayout) -> Self {
-        let mut values = vec![Refinement::Never; body.values.len()];
+    pub(crate) fn of(code: CodeRef<'_>, builtins: &Builtins, layout: &ModuleLayout) -> Self {
+        let mut values = vec![Refinement::Never; code.values.len()];
 
-        for param in &body.params {
-            values[param.index()] = of_ty(&body.values[*param].ty, builtins);
+        for param in code.params {
+            values[param.index()] = of_ty(&code.values[*param].ty, builtins);
         }
 
         loop {
             let mut changed = false;
 
-            for (_, block) in body.blocks.iter() {
+            for (_, block) in code.blocks.iter() {
                 for stmt in &block.stmts {
                     let StmtKind::Assign {
                         place: mlkc_mir::Place::Value(value),
@@ -195,7 +223,8 @@ impl Refinements {
                         continue;
                     };
 
-                    let refined = rvalue_refinement(rvalue, &values, layout);
+                    let place_ty = &code.values[*value].ty;
+                    let refined = rvalue_refinement(rvalue, &values, layout, place_ty);
 
                     if values[value.index()] != refined {
                         values[value.index()] = refined;
@@ -204,11 +233,11 @@ impl Refinements {
                 }
 
                 for (target, _) in edges(&block.term) {
-                    let destination = &body.blocks[target.block];
+                    let destination = &code.blocks[target.block];
 
                     for (param, argument) in destination.params.iter().zip(&target.args) {
                         let argument = operand_refinement(argument, &values);
-                        let joined = values[param.index()].join(argument);
+                        let joined = values[param.index()].join(&argument);
 
                         if values[param.index()] != joined {
                             values[param.index()] = joined;
@@ -225,14 +254,14 @@ impl Refinements {
     }
 
     /// The refinement of a value.
-    pub(crate) fn get(&self, value: ValueId) -> Refinement {
-        self.values[value.index()]
+    pub(crate) fn get(&self, value: ValueId) -> &Refinement {
+        &self.values[value.index()]
     }
 
     /// The refinement of an operand.
     pub(crate) fn operand(&self, operand: &Operand) -> Refinement {
         match operand {
-            Operand::Value(value) => self.get(*value),
+            Operand::Value(value) => self.get(*value).clone(),
             Operand::Local(_) => Refinement::Word,
             Operand::Const(constant) => of_const(constant),
         }
@@ -240,7 +269,19 @@ impl Refinements {
 }
 
 /// The refinement a right-hand side computes.
-fn rvalue_refinement(rvalue: &Rvalue, values: &[Refinement], layout: &ModuleLayout) -> Refinement {
+///
+/// What the new constructs produce is what the checker recorded for the expression the
+/// statement defines: a closure of a function type has that type's shape, a capture has the
+/// type of the binding it captured, and a call through a closure gives back what its checked
+/// type says ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+fn rvalue_refinement(
+    rvalue: &Rvalue,
+    values: &[Refinement],
+    layout: &ModuleLayout,
+    place_ty: &Ty,
+) -> Refinement {
     match rvalue {
         Rvalue::Use(operand) => operand_refinement(operand, values),
         Rvalue::Const(constant) => of_const(constant),
@@ -255,16 +296,21 @@ fn rvalue_refinement(rvalue: &Rvalue, values: &[Refinement], layout: &ModuleLayo
                         of_ty(&sig.ret, layout.builtins())
                     })
                 },
-                Callee::Local(_) | Callee::Indirect(_) => Refinement::Word,
+                Callee::Local(_) | Callee::Indirect(_) => of_ty(place_ty, layout.builtins()),
             }
         },
+        Rvalue::Closure { .. } => {
+            closure_shape_of_ty(place_ty, layout.builtins())
+                .map_or(Refinement::Word, Refinement::Closure)
+        },
+        Rvalue::Capture { .. } => of_ty(place_ty, layout.builtins()),
     }
 }
 
 /// The refinement of an operand.
 fn operand_refinement(operand: &Operand, values: &[Refinement]) -> Refinement {
     match operand {
-        Operand::Value(value) => values[value.index()],
+        Operand::Value(value) => values[value.index()].clone(),
         Operand::Local(_) => Refinement::Word,
         Operand::Const(constant) => of_const(constant),
     }
@@ -298,15 +344,18 @@ mod tests {
 
     #[test]
     fn a_join_widens_to_the_kind_two_refinements_share() {
-        assert_eq!(Refinement::Int.join(Refinement::Int), Refinement::Int);
-        assert_eq!(Refinement::Int.join(Refinement::Bool), Refinement::Word);
-        assert_eq!(Refinement::Bool.join(Refinement::Word), Refinement::Word);
+        assert_eq!(Refinement::Int.join(&Refinement::Int), Refinement::Int);
+        assert_eq!(Refinement::Int.join(&Refinement::Bool), Refinement::Word);
+        assert_eq!(Refinement::Bool.join(&Refinement::Word), Refinement::Word);
     }
 
     #[test]
     fn never_is_the_join_identity() {
-        assert_eq!(Refinement::Never.join(Refinement::Int), Refinement::Int);
-        assert_eq!(Refinement::Bool.join(Refinement::Never), Refinement::Bool);
-        assert_eq!(Refinement::Never.join(Refinement::Never), Refinement::Never);
+        assert_eq!(Refinement::Never.join(&Refinement::Int), Refinement::Int);
+        assert_eq!(Refinement::Bool.join(&Refinement::Never), Refinement::Bool);
+        assert_eq!(
+            Refinement::Never.join(&Refinement::Never),
+            Refinement::Never
+        );
     }
 }

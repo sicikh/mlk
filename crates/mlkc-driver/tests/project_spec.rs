@@ -28,6 +28,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use mlkc_codegen_wasm::{FunctionKey, LoweredFunction};
 use mlkc_diagnostics::Diagnostic;
 use mlkc_driver::{Diagnostics, Driver};
 use mlkc_fixture::Module;
@@ -186,26 +187,7 @@ pub(crate) fn run(fixture: &str) {
 
                 match driver.lir(body.owner()) {
                     Some(lir) => {
-                        snapshot.push_str("```\n");
-                        snapshot.push_str(&mlkc_lir_wasm::dump::body(&lir));
-                        snapshot.push_str("```\n\n");
-
-                        // The structure is what the structuring pass makes of the control
-                        // flow: the frames of the target around the blocks, or the dispatch
-                        // form where the body has none.
-                        snapshot.push_str("Structure:\n\n");
-
-                        match &lir.structure {
-                            Some(structure) => {
-                                snapshot.push_str("```\n");
-                                snapshot.push_str(&mlkc_lir_wasm::dump::structure(structure));
-                                snapshot.push_str("```\n\n");
-                            },
-                            None => {
-                                snapshot
-                                    .push_str("Dispatched: the control flow is not structured.\n\n")
-                            },
-                        }
+                        write_lir(&mut snapshot, &lir);
                     },
                     None => {
                         snapshot.push_str("Not lowered: the module of the body is not whole.\n\n");
@@ -258,6 +240,34 @@ fn modules_of(fixture: &str) -> Vec<Module> {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
 
     mlkc_fixture::modules(&source)
+}
+
+/// Writes the LIR of one function and of the lambdas it wrote.
+fn write_lir(snapshot: &mut String, function: &LoweredFunction) {
+    if let FunctionKey::Lambda { lambda, .. } = &function.key {
+        let _ = writeln!(snapshot, "Lambda #{}:", lambda.index());
+    }
+
+    snapshot.push_str("```\n");
+    snapshot.push_str(&mlkc_lir_wasm::dump::body(&function.body));
+    snapshot.push_str("```\n\n");
+
+    // The structure is what the structuring pass makes of the control flow: the frames of the
+    // target around the blocks, or the dispatch form where the body has none.
+    snapshot.push_str("Structure:\n\n");
+
+    match &function.body.structure {
+        Some(structure) => {
+            snapshot.push_str("```\n");
+            snapshot.push_str(&mlkc_lir_wasm::dump::structure(structure));
+            snapshot.push_str("```\n\n");
+        },
+        None => snapshot.push_str("Dispatched: the control flow is not structured.\n\n"),
+    }
+
+    for child in &function.lambdas {
+        write_lir(snapshot, child);
+    }
 }
 
 /// The driver a fixture is compiled by: the standard library, the project that depends on it,

@@ -71,8 +71,9 @@ pub use crate::{
     emit::{CodegenDiag, FuncArtifact, FunctionCtx, Origin, ValueDebug, emit_function},
     lower::lower_function,
     module::{
-        DebugInfo, ExportDecl, FnShape, FnSignature, ImportDecl, ModuleFunction, ModuleImport,
-        ModuleLayout, ModuleMir, WasmModule, assemble_module, compile_module, layout,
+        ClosureTypes, DebugInfo, EmittedFunction, ExportDecl, FnShape, FnSignature, FunctionKey,
+        ImportDecl, LambdaPlan, LoweredFunction, ModuleFunction, ModuleImport, ModuleLayout,
+        ModuleMir, WasmModule, assemble_module, compile_module, layout,
     },
     refine::{AbiType, Refinement},
 };

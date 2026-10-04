@@ -9,7 +9,7 @@
 //! exists, and an analysis may look at it --- but it is not in the reverse postorder, and the
 //! promises of a form are vacuous for it: there is no path for them to be about.
 
-use crate::{BlockTarget, Body, Terminator};
+use crate::{BlockTarget, CodeRef, Terminator};
 
 /// The edges of a body, and the order a walk visits its blocks in.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,25 +23,25 @@ pub struct Cfg {
 }
 
 impl Cfg {
-    /// The graph of `body`.
-    pub fn of(body: &Body) -> Self {
-        let mut succs = vec![Vec::new(); body.blocks.len()];
-        let mut preds = vec![Vec::new(); body.blocks.len()];
+    /// The graph of `code`.
+    pub fn of(code: CodeRef<'_>) -> Self {
+        let mut succs = vec![Vec::new(); code.blocks.len()];
+        let mut preds = vec![Vec::new(); code.blocks.len()];
 
-        for (id, block) in body.blocks.iter() {
+        for (id, block) in code.blocks.iter() {
             let from = id.index();
 
             for target in targets(&block.term) {
                 let to = target.block.index();
 
-                if to < body.blocks.len() {
+                if to < code.blocks.len() {
                     succs[from].push(to);
                     preds[to].push(from);
                 }
             }
         }
 
-        let rpo = reverse_postorder(body.entry.index(), &succs);
+        let rpo = reverse_postorder(code.entry.index(), &succs);
 
         Self { succs, preds, rpo }
     }
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn the_edges_of_a_body_are_read_both_ways() {
         let (body, entry, third, unreachable) = body_of_four_blocks();
-        let cfg = Cfg::of(&body);
+        let cfg = Cfg::of(body.code());
         let entry = entry.index();
         let third = third.index();
         let unreachable = unreachable.index();

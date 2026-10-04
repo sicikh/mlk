@@ -122,3 +122,82 @@ pub fun different(left: Int, right: Int): Bool =
     assert_eq!(call(&mut store, &instance, "different", &[1, 2]), 1);
     assert_eq!(call(&mut store, &instance, "different", &[2, 2]), 0);
 }
+
+#[test]
+fn a_lambda_captures_and_is_called() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         let base = 40 in\n    \
+         let add = fn(x: Int) -> x + base in\n    \
+         add(2)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn a_lambda_that_captures_nothing_is_called() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         let double = fn(x: Int) -> x + x in\n    \
+         double(21)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn a_generalized_lambda_is_called_at_two_types() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         let id = fn(x) -> x in\n    \
+         let _ = id(true) in\n    \
+         id(42)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn a_lambda_inside_a_lambda_captures_both_frames() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         let base = 40 in\n    \
+         let add = fn(x: Int) -> fn(y: Int) -> x + y + base in\n    \
+         add(1)(1)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}
+
+#[test]
+fn a_closure_that_two_branches_produce_joins() {
+    let compiled = harness::module(
+        "pub fun main(): Int =\n    \
+         let base = 40 in\n    \
+         let add = if true then fn(x: Int) -> x + base else fn(x: Int) -> x + base in\n    \
+         add(2)\n",
+    );
+
+    compiled.validate();
+
+    let (mut store, instance) = instantiate(&compiled);
+
+    assert_eq!(call(&mut store, &instance, "main", &[]), 42);
+}

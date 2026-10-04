@@ -17,7 +17,8 @@ use std::{
 };
 
 use mlkc_codegen_wasm::{
-    CodegenDiag, DebugInfo, FnSignature, ModuleMir, Sources, WasmModule, compile_module,
+    CodegenDiag, DebugInfo, FnSignature, LoweredFunction, ModuleMir, Sources, WasmModule,
+    compile_module,
 };
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Label, Level};
 use mlkc_hir_def::{
@@ -25,7 +26,6 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{Builtins, Ty};
 use mlkc_line_index::LineIndex;
-use mlkc_lir_wasm::Body as LirBody;
 use mlkc_span::Span;
 use mlkc_vfs::FileId;
 
@@ -136,10 +136,10 @@ struct LinkInputs {
     /// The module of every module of the program, by module.
     modules: BTreeMap<ModuleId, Arc<ModuleMir>>,
     /// The lowered bodies of every module, by module, in the order the module declares its
-    /// functions ([ADR-0022]).
+    /// functions ([ADR-0022][adr-0022]).
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-    lirs: BTreeMap<ModuleId, Vec<Arc<LirBody>>>,
+    lirs: BTreeMap<ModuleId, Vec<Arc<LoweredFunction>>>,
     /// The functions of the root project declared `#[entry]`, in the order of their modules.
     entries: Vec<EntryCandidate>,
     /// The classes of the language, which say what the unit is.
@@ -184,7 +184,7 @@ impl Driver {
         // [ADR-0021]: ../../docs/adr/0021-translation-units.md
         let projects = self.project_closure(project);
         let mut modules: BTreeMap<ModuleId, Arc<ModuleMir>> = BTreeMap::new();
-        let mut lirs: BTreeMap<ModuleId, Vec<Arc<LirBody>>> = BTreeMap::new();
+        let mut lirs: BTreeMap<ModuleId, Vec<Arc<LoweredFunction>>> = BTreeMap::new();
 
         for it in &projects {
             let index = self.module_index(it)?;

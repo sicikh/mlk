@@ -93,8 +93,8 @@ pub struct Inst {
 /// What an instruction computes: one instruction of the target, over the values it reads.
 ///
 /// An operator is named the way WASM names it, and an instruction the backend cannot write yet
-/// carries what a report names it by: a string constant, a call to a function declared inside a
-/// body, an indirect call.
+/// carries what a report names it by: a string constant, and a call to a function declared
+/// inside a body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
     /// `i32.const`: a number.
@@ -147,12 +147,42 @@ pub enum Op {
         /// The arguments, in the order they are passed.
         args: Vec<ValueId>,
     },
-    /// A call of a function held in a value.
-    CallIndirect {
+    /// `call_ref $sig`: the call of the function a value holds.
+    ///
+    /// The arguments are the whole argument list of the target, the environment of a closure
+    /// first ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    CallRef {
+        /// The type of the function, by its index in the module's type section.
+        signature: u32,
         /// The value the function is in.
         callee: ValueId,
         /// The arguments, in the order they are passed.
         args: Vec<ValueId>,
+    },
+    /// `ref.func`: a function of the module, as a reference.
+    RefFunc {
+        /// The index of the function.
+        function: FuncIndex,
+    },
+    /// `ref.null`: the null of a reference type.
+    RefNull(RefTy),
+    /// `struct.new $t`, over the fields it reads.
+    StructNew {
+        /// The type of the structure, by its index in the module's type section.
+        ty: u32,
+        /// The fields, in the order they are stored.
+        fields: Vec<ValueId>,
+    },
+    /// `struct.get $t $i`.
+    StructGet {
+        /// The type of the structure, by its index in the module's type section.
+        ty: u32,
+        /// Which field.
+        field: u32,
+        /// The structure.
+        value: ValueId,
     },
     /// A string constant.
     String(Interned<str>),
@@ -182,7 +212,11 @@ impl Op {
             Self::RefEq(..) => "ref.eq",
             Self::Call { .. } => "call",
             Self::CallLocal { .. } => "call-local",
-            Self::CallIndirect { .. } => "call-indirect",
+            Self::CallRef { .. } => "call-ref",
+            Self::RefFunc { .. } => "ref.func",
+            Self::RefNull(_) => "ref.null",
+            Self::StructNew { .. } => "struct.new",
+            Self::StructGet { .. } => "struct.get",
             Self::String(_) => "str",
         }
     }
@@ -190,11 +224,14 @@ impl Op {
     /// The operands of the instruction, in the order it reads them.
     pub fn operands(&self) -> Vec<ValueId> {
         match self {
-            Self::I32Const(_) | Self::String(_) => Vec::new(),
+            Self::I32Const(_) | Self::String(_) | Self::RefFunc { .. } | Self::RefNull(_) => {
+                Vec::new()
+            },
             Self::I32Eqz(operand)
             | Self::RefI31(operand)
             | Self::I31GetS(operand)
-            | Self::RefCast(_, operand) => vec![*operand],
+            | Self::RefCast(_, operand)
+            | Self::StructGet { value: operand, .. } => vec![*operand],
             Self::I32Eq(lhs, rhs)
             | Self::I32Ne(lhs, rhs)
             | Self::I32LtS(lhs, rhs)
@@ -209,11 +246,15 @@ impl Op {
             | Self::I32Or(lhs, rhs)
             | Self::RefEq(lhs, rhs) => vec![*lhs, *rhs],
             Self::Call { args, .. } | Self::CallLocal { args, .. } => args.clone(),
-            Self::CallIndirect { callee, args } => {
-                let mut operands = Vec::with_capacity(args.len() + 1);
+            Self::StructNew { fields, .. } => fields.clone(),
+            Self::CallRef {
+                signature: _,
+                callee,
+                args,
+            } => {
+                let mut operands = args.clone();
 
                 operands.push(*callee);
-                operands.extend(args);
 
                 operands
             },
@@ -223,11 +264,12 @@ impl Op {
     /// Rewrites every operand with `map`.
     pub fn map_operands(&mut self, mut map: impl FnMut(ValueId) -> ValueId) {
         match self {
-            Self::I32Const(_) | Self::String(_) => {},
+            Self::I32Const(_) | Self::String(_) | Self::RefFunc { .. } | Self::RefNull(_) => {},
             Self::I32Eqz(operand)
             | Self::RefI31(operand)
             | Self::I31GetS(operand)
-            | Self::RefCast(_, operand) => *operand = map(*operand),
+            | Self::RefCast(_, operand)
+            | Self::StructGet { value: operand, .. } => *operand = map(*operand),
             Self::I32Eq(lhs, rhs)
             | Self::I32Ne(lhs, rhs)
             | Self::I32LtS(lhs, rhs)
@@ -244,17 +286,23 @@ impl Op {
                 *lhs = map(*lhs);
                 *rhs = map(*rhs);
             },
-            Self::Call { args, .. } | Self::CallLocal { args, .. } => {
+            Self::Call { args, .. }
+            | Self::CallLocal { args, .. }
+            | Self::StructNew { fields: args, .. } => {
                 for arg in args {
                     *arg = map(*arg);
                 }
             },
-            Self::CallIndirect { callee, args } => {
-                *callee = map(*callee);
-
+            Self::CallRef {
+                signature: _,
+                callee,
+                args,
+            } => {
                 for arg in args {
                     *arg = map(*arg);
                 }
+
+                *callee = map(*callee);
             },
         }
     }

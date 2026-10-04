@@ -149,9 +149,10 @@ pub(crate) fn is_observed(op: &Op) -> bool {
         op,
         Op::I32DivS(..)
             | Op::RefCast(..)
+            | Op::StructGet { .. }
             | Op::Call { .. }
             | Op::CallLocal { .. }
-            | Op::CallIndirect { .. }
+            | Op::CallRef { .. }
             | Op::String(_),
     )
 }

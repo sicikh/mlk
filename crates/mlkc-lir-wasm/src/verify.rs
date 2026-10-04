@@ -580,7 +580,7 @@ impl Body {
                 // A cast is to a reference that is not null --- the value it produces is read
                 // as one --- and what it casts must be one of that type already or a reference
                 // of a type it is one of.
-                if *ty != RefTy::I31 {
+                if *ty == RefTy::Eq {
                     return Err(Invalid::OperandType {
                         operand: *operand,
                         expected: Ty::I31,
@@ -591,7 +591,25 @@ impl Body {
                 let expected = Ty::Ref(*ty);
                 let found = self.values[*operand].ty;
 
-                if !found.is_ref() || !expected.is_subtype_of(found) {
+                if !found.is_ref() {
+                    return Err(Invalid::OperandType {
+                        operand: *operand,
+                        expected,
+                        found,
+                    });
+                }
+
+                // A cast to a concrete type narrows a word: whether the type is under the one
+                // the value already has is the module's hierarchy, which the engine checks.
+                let ordered = match (expected, found) {
+                    (Ty::Ref(RefTy::Type(_)), _) => true,
+                    (Ty::Ref(wanted), Ty::Ref(have)) => {
+                        Ty::Ref(wanted).is_subtype_of(Ty::Ref(have))
+                    },
+                    _ => false,
+                };
+
+                if !ordered {
                     return Err(Invalid::OperandType {
                         operand: *operand,
                         expected,
@@ -607,7 +625,43 @@ impl Body {
 
                 Ty::I32
             },
-            Call { .. } | CallLocal { .. } | CallIndirect { .. } => {
+            RefFunc { .. } => {
+                // The code of a function is a reference to the type the module declares for
+                // it, which the body's context knows and the verifier does not.
+                if !self.values[inst.value].ty.is_ref() {
+                    return Err(Invalid::ResultType {
+                        value: inst.value,
+                        expected: Ty::EQREF,
+                        found: self.values[inst.value].ty,
+                    });
+                }
+
+                return Ok(());
+            },
+            RefNull(ty) => Ty::Ref(*ty),
+            StructNew { ty, fields } => {
+                for field in fields {
+                    self.expect_ref(*field)?;
+                }
+
+                Ty::Ref(RefTy::Type(*ty))
+            },
+            StructGet { value, .. } => {
+                // The field's type is the module's; what is checked here is that both sides
+                // are references.
+                self.expect_ref(*value)?;
+
+                if !self.values[inst.value].ty.is_ref() {
+                    return Err(Invalid::ResultType {
+                        value: inst.value,
+                        expected: Ty::EQREF,
+                        found: self.values[inst.value].ty,
+                    });
+                }
+
+                return Ok(());
+            },
+            Call { .. } | CallLocal { .. } | CallRef { .. } => {
                 // The declared type of the result is what the context of the function says;
                 // the instruction checks nothing but that it is a reference.
                 if !self.values[inst.value].ty.is_ref() {

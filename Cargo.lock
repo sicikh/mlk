@@ -1035,6 +1035,7 @@ dependencies = [
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-interp",
+ "mlkc-la-arena",
  "mlkc-line-index",
  "mlkc-lir-wasm",
  "mlkc-mir",

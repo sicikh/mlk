@@ -20,7 +20,7 @@
 
 use std::fmt;
 
-use mlkc_hir_def::Name;
+use mlkc_hir_def::{BodyEntityLoc, Name};
 use mlkc_lir_wasm::{BlockId, Body, Node, Op, RefTy, Terminator, Ty, ValueId};
 use mlkc_span::Span;
 use wasm_encoder::{
@@ -28,7 +28,7 @@ use wasm_encoder::{
 };
 
 use crate::{
-    module::{FnSignature, ModuleLayout},
+    module::{FnSignature, LambdaPlan, ModuleLayout},
     select,
 };
 
@@ -37,14 +37,42 @@ use crate::{
 /// [adr-0009]: ../../docs/adr/0009-pass-contract.md
 #[derive(Debug)]
 pub struct FunctionCtx<'a> {
+    /// The entity whose body wrote the code; a lambda of it is lifted under the same owner.
+    pub owner: &'a BodyEntityLoc,
     /// The name the function is called by, for the debug tables.
     pub name: &'a str,
-    /// What the function takes and gives back.
+    /// What the function takes and gives back, without the environment.
     pub signature: &'a FnSignature,
     /// The name every parameter was declared under, in order.
     pub param_names: &'a [Option<Name>],
     /// How the functions of the module are numbered, and what they are.
     pub layout: &'a ModuleLayout,
+    /// The lambda whose body this is, and the types of it; `None` for the body of an entity.
+    pub lambda: Option<&'a LambdaPlan>,
+}
+
+impl FunctionCtx<'_> {
+    /// What the body is entered with: the environment first for a lambda, then the declared
+    /// parameters, in the ABI ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    pub(crate) fn param_types(&self) -> Vec<Ty> {
+        let mut types = Vec::new();
+
+        if let Some(lambda) = self.lambda {
+            types.push(Ty::Ref(RefTy::Type(lambda.types.closure)));
+        }
+
+        types.extend(
+            self.signature
+                .shape(self.layout.builtins())
+                .params
+                .iter()
+                .map(|abi| select::ty_of(*abi)),
+        );
+
+        types
+    }
 }
 
 /// One compiled function: its body bytes, and where its instructions came from.
@@ -158,13 +186,7 @@ pub fn emit_function(lir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
             .iter()
             .map(|value| lir.values[*value].ty)
             .collect::<Vec<_>>(),
-        ctx.signature
-            .shape(ctx.layout.builtins())
-            .params
-            .iter()
-            .copied()
-            .map(select::ty_of)
-            .collect::<Vec<_>>(),
+        ctx.param_types(),
         "a body to have the parameters its signature declares",
     );
 
@@ -176,6 +198,11 @@ pub fn emit_function(lir: &Body, ctx: &FunctionCtx<'_>) -> (FuncArtifact, Vec<Co
 }
 
 /// The WASM type of a type of the LIR.
+///
+/// A concrete reference type is declared nullable: a local of the type may stand for a value
+/// that is not one of the target's defaultable types, and the encoder writes a null into it
+/// before the validator requires it to be initialized. A read of such a local is followed by
+/// `ref.as_non_null`, so what an instruction reads is never null.
 fn val_type(ty: Ty) -> ValType {
     match ty {
         Ty::I32 => ValType::I32,
@@ -183,6 +210,12 @@ fn val_type(ty: Ty) -> ValType {
             ValType::Ref(RefType::new_abstract(AbstractHeapType::I31, false, false))
         },
         Ty::Ref(RefTy::Eq) => ValType::Ref(RefType::EQREF),
+        Ty::Ref(RefTy::Type(index)) => {
+            ValType::Ref(RefType {
+                nullable: true,
+                heap_type: HeapType::Concrete(index),
+            })
+        },
     }
 }
 
@@ -376,14 +409,26 @@ impl<'a> Emitter<'a> {
     }
 
     /// Emits a default for a local whose type has none, and nothing for every other local.
+    ///
+    /// A concrete reference type has no default, so the local is initialized with the null of
+    /// it; a read of the local is followed by `ref.as_non_null`, which never traps because SSA
+    /// defines every value before its use.
     fn default_of(&mut self, local: u32, ty: Ty) {
-        if ty != Ty::I31 {
-            return;
+        match ty {
+            Ty::I31 => {
+                self.insn(Span::dummy(), Instruction::I32Const(0));
+                self.insn(Span::dummy(), Instruction::RefI31);
+                self.insn(Span::dummy(), Instruction::LocalSet(local));
+            },
+            Ty::Ref(RefTy::Type(index)) => {
+                self.insn(
+                    Span::dummy(),
+                    Instruction::RefNull(HeapType::Concrete(index)),
+                );
+                self.insn(Span::dummy(), Instruction::LocalSet(local));
+            },
+            Ty::I32 | Ty::Ref(RefTy::Eq) => {},
         }
-
-        self.insn(Span::dummy(), Instruction::I32Const(0));
-        self.insn(Span::dummy(), Instruction::RefI31);
-        self.insn(Span::dummy(), Instruction::LocalSet(local));
     }
 
     /// Emits every block of the body as a case of a dispatch loop.
@@ -502,7 +547,34 @@ impl<'a> Emitter<'a> {
             Op::CallLocal { .. } => {
                 self.unsupported("a call to a function declared inside a body", span);
             },
-            Op::CallIndirect { .. } => self.unsupported("an indirect call", span),
+            Op::CallRef {
+                signature,
+                callee,
+                args,
+            } => {
+                for argument in args {
+                    self.value(*argument, span);
+                }
+
+                self.value(*callee, span);
+                self.insn(span, Instruction::CallRef(*signature));
+            },
+            Op::RefFunc { function } => self.insn(span, Instruction::RefFunc(*function)),
+            Op::RefNull(ty) => self.insn(span, Instruction::RefNull(heap_type(*ty))),
+            Op::StructNew { ty, fields } => {
+                for field in fields {
+                    self.value(*field, span);
+                }
+
+                self.insn(span, Instruction::StructNew(*ty));
+            },
+            Op::StructGet { ty, field, value } => {
+                self.value(*value, span);
+                self.insn(span, Instruction::StructGet {
+                    struct_type_index: *ty,
+                    field_index: *field,
+                });
+            },
             Op::String(_) => self.unsupported("a string constant", span),
         }
     }
@@ -620,6 +692,12 @@ impl<'a> Emitter<'a> {
         };
 
         self.insn(span, Instruction::LocalGet(local));
+
+        // A local of a concrete reference type is declared nullable, and what reads it wants
+        // a value of the type: the read is narrowed where it stands.
+        if matches!(self.lir.values[value].ty, Ty::Ref(RefTy::Type(_))) {
+            self.insn(span, Instruction::RefAsNonNull);
+        }
     }
 
     /// Emits the instruction that defines a value the allocation pass left out.
@@ -709,6 +787,7 @@ impl<'a> Emitter<'a> {
 fn heap_type(ty: RefTy) -> HeapType {
     match ty {
         RefTy::I31 => HeapType::I31,
+        RefTy::Type(index) => HeapType::Concrete(index),
         // A cast to a nullable reference is not a value of the LIR: the verifier rejects it,
         // and this is the encoder not being asked to write one.
         RefTy::Eq => unreachable!("a cast to a nullable reference"),

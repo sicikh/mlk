@@ -37,8 +37,9 @@ pub(crate) mod test_support;
 
 pub use crate::{
     body::{
-        Block, BlockId, BlockTarget, Body, BodyBuilder, Callee, Const, LocalData, LocalId, Operand,
-        Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator, ValueData, ValueId,
+        Block, BlockId, BlockTarget, Body, BodyBuilder, Callee, CaptureData, Code, CodeRef, Const,
+        LambdaData, LambdaId, LocalData, LocalId, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind,
+        Terminator, ValueData, ValueId,
     },
     verify::{Form, Invalid},
 };

@@ -20,7 +20,7 @@ use mlkc_span::FileId;
 
 use crate::{
     dwarf::{Layout, SourceFile, Sources},
-    emit::FuncArtifact,
+    module::EmittedFunction,
 };
 
 /// The name of the custom section a browser reads the map from.
@@ -32,7 +32,7 @@ const SECTION: &str = "sourceMappingURL";
 /// what the addresses of the layout are relative to; `None` when the bodies carry no origin,
 /// since a map of nothing points nowhere.
 pub(crate) fn section(
-    functions: &[FuncArtifact],
+    functions: &[EmittedFunction],
     sources: &Sources,
     layout: &Layout,
     code_payload: u32,
@@ -45,7 +45,7 @@ pub(crate) fn section(
     for (index, artifact) in functions.iter().enumerate() {
         let at = layout.functions[index];
 
-        for origin in &artifact.origins {
+        for origin in &artifact.artifact.origins {
             if origin.span.is_dummy() {
                 continue;
             }

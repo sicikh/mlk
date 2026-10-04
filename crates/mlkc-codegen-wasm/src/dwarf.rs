@@ -31,7 +31,7 @@ use gimli::{
 use mlkc_line_index::LineIndex;
 use mlkc_span::FileId;
 
-use crate::{emit::FuncArtifact, module::ModuleMir};
+use crate::module::{EmittedFunction, ModuleMir};
 
 /// What the debug information reads of the files a body was read from
 /// ([ADR-0025][adr-0025]).
@@ -103,14 +103,14 @@ impl Sources {
 /// carry no origin at all, has no line to point at.
 pub(crate) fn sections(
     module: &ModuleMir,
-    functions: &[FuncArtifact],
+    functions: &[EmittedFunction],
     sources: &Sources,
     layout: &Layout,
 ) -> Vec<(&'static str, Vec<u8>)> {
     if functions.is_empty()
         || !functions
             .iter()
-            .any(|function| !function.origins.is_empty())
+            .any(|function| !function.artifact.origins.is_empty())
     {
         return Vec::new();
     }
@@ -127,8 +127,8 @@ pub(crate) fn sections(
     unit.unit.get_mut(root).set(DW_AT_comp_dir, string("/"));
     unit.unit.get_mut(root).set(DW_AT_producer, string("mlkc"));
 
-    for (index, function) in module.functions.iter().enumerate() {
-        let at = layout.functions[index];
+    for (at, function) in functions.iter().enumerate() {
+        let at = layout.functions[at];
         let subprogram = unit.unit.add(root, DW_TAG_subprogram);
 
         unit.unit
@@ -190,13 +190,13 @@ impl Layout {
     ///
     /// The offsets are from the first byte of the contents of the code section, the count of the
     /// bodies; each function begins at its own body content, after its length prefix.
-    pub(crate) fn of(functions: &[FuncArtifact]) -> Self {
+    pub(crate) fn of(functions: &[EmittedFunction]) -> Self {
         let count = functions.len() as u32;
         let mut at = leb_len(count);
         let mut functions_at = Vec::with_capacity(functions.len());
 
         for function in functions {
-            let body = function.body.len() as u32;
+            let body = function.artifact.body.len() as u32;
             let prefix = leb_len(body);
 
             functions_at.push(At {
@@ -224,7 +224,7 @@ impl Layout {
 }
 
 /// The line program of a module: one sequence per function, one row per origin.
-fn line_program(functions: &[FuncArtifact], sources: &Sources, layout: &Layout) -> LineProgram {
+fn line_program(functions: &[EmittedFunction], sources: &Sources, layout: &Layout) -> LineProgram {
     let mut program = LineProgram::new(
         encoding(),
         LineEncoding::default(),
@@ -239,7 +239,7 @@ fn line_program(functions: &[FuncArtifact], sources: &Sources, layout: &Layout) 
     let directory = program.default_directory();
 
     for artifact in functions {
-        for origin in &artifact.origins {
+        for origin in &artifact.artifact.origins {
             if origin.span.is_dummy() || files.contains_key(&origin.span.file) {
                 continue;
             }
@@ -271,7 +271,7 @@ fn line_program(functions: &[FuncArtifact], sources: &Sources, layout: &Layout) 
         let mut first_line = 0_u64;
         let mut leading = true;
 
-        for origin in &artifact.origins {
+        for origin in &artifact.artifact.origins {
             if origin.span.is_dummy() {
                 continue;
             }

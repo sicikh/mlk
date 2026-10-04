@@ -18,12 +18,12 @@
 
 use mlkc_la_arena::Arena;
 use mlkc_mir::{
-    Block, BlockId, BlockTarget, Body, Callee, LocalId, Operand, Place, Rvalue, Stmt, StmtKind,
-    Terminator, ValueData, ValueId, cfg::Cfg,
+    Block, BlockId, BlockTarget, Body, Callee, Code, CodeRef, LambdaData, LocalId, Operand, Place,
+    Rvalue, Stmt, StmtKind, Terminator, ValueData, ValueId, cfg::Cfg,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
-/// Builds the SSA form of a body that is in the CFG form.
+/// Builds the SSA form of a body that is in the CFG form, and of every lambda it wrote.
 ///
 /// # Panics
 ///
@@ -35,13 +35,46 @@ pub fn construct_ssa(body: &Body) -> Body {
         "the SSA construction walks a body in the CFG form",
     );
 
-    Ssa::new(body).run()
+    let mut lambdas = Arena::default();
+
+    for (id, lambda) in body.lambdas.iter() {
+        let _ = id;
+        lambdas.alloc(construct_ssa_lambda(lambda));
+    }
+
+    let code = Ssa::new(body.code()).run();
+
+    Body {
+        owner: body.owner.clone(),
+        local: body.local,
+        params: code.params,
+        entry: code.entry,
+        blocks: code.blocks,
+        values: code.values,
+        locals: code.locals,
+        lambdas,
+    }
+}
+
+/// Builds the SSA form of one lambda of a body.
+fn construct_ssa_lambda(lambda: &LambdaData) -> LambdaData {
+    let code = Ssa::new(lambda.code()).run();
+
+    LambdaData {
+        ty: lambda.ty.clone(),
+        captures: lambda.captures.clone(),
+        params: code.params,
+        entry: code.entry,
+        blocks: code.blocks,
+        values: code.values,
+        locals: code.locals,
+    }
 }
 
 /// The construction of the SSA form of one body.
 struct Ssa<'a> {
-    /// The body the construction reads.
-    source: &'a Body,
+    /// The code the construction reads.
+    source: CodeRef<'a>,
     /// The shape of the body's graph.
     cfg: Cfg,
     /// The id of every block, by position.
@@ -82,7 +115,7 @@ struct Ssa<'a> {
 
 impl<'a> Ssa<'a> {
     /// The construction over `source`.
-    fn new(source: &'a Body) -> Self {
+    fn new(source: CodeRef<'a>) -> Self {
         let ids: Vec<BlockId> = source.blocks.iter().map(|(id, _)| id).collect();
         let count = ids.len();
         let cfg = Cfg::of(source);
@@ -128,7 +161,7 @@ impl<'a> Ssa<'a> {
     }
 
     /// Walks the graph and builds the form.
-    fn run(mut self) -> Body {
+    fn run(mut self) -> Code {
         for block in 0..self.order.len() {
             let block = self.order[block];
             self.block(block);
@@ -263,6 +296,16 @@ impl<'a> Ssa<'a> {
                     args: args.iter().map(|arg| self.operand(arg, at)).collect(),
                 }
             },
+            Rvalue::Closure { lambda, captures } => {
+                Rvalue::Closure {
+                    lambda: *lambda,
+                    captures: captures
+                        .iter()
+                        .map(|capture| self.operand(capture, at))
+                        .collect(),
+                }
+            },
+            Rvalue::Capture { index } => Rvalue::Capture { index: *index },
             Rvalue::Prim { op, args } => {
                 Rvalue::Prim {
                     op: *op,
@@ -513,7 +556,7 @@ impl<'a> Ssa<'a> {
     }
 
     /// Builds the body: the parameters of every block, the compacted values, and no slots.
-    fn finish(mut self) -> Body {
+    fn finish(mut self) -> Code {
         // A value that carried one value is not a definition of anything: the arena is rebuilt
         // without it, so that every value of the SSA form has a definition.
         let mut remap: Vec<Option<ValueId>> = vec![None; self.values.len()];
@@ -559,9 +602,7 @@ impl<'a> Ssa<'a> {
             "the walk adds no block and drops none, so a block keeps its id",
         );
 
-        Body {
-            owner: self.source.owner.clone(),
-            local: self.source.local,
+        Code {
             params: self.source.params.iter().copied().map(map).collect(),
             entry: self.source.entry,
             blocks,
@@ -622,6 +663,16 @@ fn remap_rvalue(rvalue: Rvalue, map: &impl Fn(ValueId) -> ValueId) -> Rvalue {
                     .collect(),
             }
         },
+        Rvalue::Closure { lambda, captures } => {
+            Rvalue::Closure {
+                lambda,
+                captures: captures
+                    .into_iter()
+                    .map(|capture| remap_operand(capture, map))
+                    .collect(),
+            }
+        },
+        Rvalue::Capture { index } => Rvalue::Capture { index },
         Rvalue::Prim { op, args } => {
             Rvalue::Prim {
                 op,

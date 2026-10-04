@@ -1641,9 +1641,9 @@ fn the_lir_of_a_body_is_reached_by_a_pass() {
     //
     // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
     assert!(Arc::ptr_eq(&lir, &again), "the slot was built twice");
-    assert_eq!(lir.validate(), Ok(()));
-    assert_eq!(lir.validate_locals(), Ok(()));
-    assert_eq!(lir.params.len(), ssa.params.len());
+    assert_eq!(lir.body.validate(), Ok(()));
+    assert_eq!(lir.body.validate_locals(), Ok(()));
+    assert_eq!(lir.body.params.len(), ssa.params.len());
     assert!(driver.ice().is_none(), "the driver bugged while lowering");
 }
 

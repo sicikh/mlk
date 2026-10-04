@@ -1,0 +1,16 @@
+// What a lambda compiles to: the shape group `{$fn, $closure}` of its signature, the
+// environment type of what it captured, the closure the body creates, and the `call_ref` the
+// call goes through. One lambda captures and the other does not, and both have one signature.
+// A lambda that calls a function the module imports makes the import, even though the call is
+// written in the lifted code and not in the body.
+
+//- /main.mlk
+pub fun main(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> x + base in
+    let double = fn(x: Int) -> x + x in
+    add(2) + double(0)
+
+pub fun announce(): Unit =
+    let announce = fn(value: Int) -> print-int(value) in
+    announce(1)

@@ -1,0 +1,100 @@
+---
+source: crates/mlkc-codegen-wasm/tests/wasm_specs.rs
+expression: snapshot
+---
+```wat
+(module $app::main
+  (type (;0;) (func (param (ref i31)) (result (ref i31))))
+  (type (;1;) (func (result (ref i31))))
+  (rec
+    (type (;2;) (func (param (ref 3) (ref i31)) (result (ref i31))))
+    (type (;3;) (sub (struct (field (ref 2)))))
+  )
+  (type (;4;) (sub final 3 (struct (field (ref 2)) (field (ref i31)))))
+  (import "std::runtime" "print-int" (func $print-int (;0;) (type 0)))
+  (export "main" (func $main))
+  (export "announce" (func $announce))
+  (elem (;0;) declare func $main::<mlkc@lambda-0> $main::<mlkc@lambda-1> $announce::<mlkc@lambda-0>)
+  (func $main (;1;) (type 1) (result (ref i31))
+    (local (ref null 4) (ref null 3) (ref i31) (ref i31) (ref i31))
+    ref.func $main::<mlkc@lambda-0>
+    i32.const 40
+    ref.i31
+    struct.new 4
+    local.set 0
+    ref.func $main::<mlkc@lambda-1>
+    struct.new 3
+    local.set 1
+    i32.const 2
+    ref.i31
+    local.set 2
+    local.get 0
+    ref.as_non_null
+    local.get 2
+    local.get 0
+    ref.as_non_null
+    struct.get 3 0
+    call_ref 2
+    local.set 3
+    i32.const 0
+    ref.i31
+    local.set 4
+    local.get 3
+    i31.get_s
+    local.get 1
+    ref.as_non_null
+    local.get 4
+    local.get 1
+    ref.as_non_null
+    struct.get 3 0
+    call_ref 2
+    i31.get_s
+    i32.add
+    ref.i31
+    return
+  )
+  (func $main::<mlkc@lambda-0> (;2;) (type 2) (param (ref 3) (ref i31)) (result (ref i31))
+    local.get 1
+    i31.get_s
+    local.get 0
+    ref.as_non_null
+    ref.cast (ref 4)
+    struct.get 4 1
+    i31.get_s
+    i32.add
+    ref.i31
+    return
+  )
+  (func $main::<mlkc@lambda-1> (;3;) (type 2) (param (ref 3) (ref i31)) (result (ref i31))
+    local.get 1
+    i31.get_s
+    local.get 1
+    i31.get_s
+    i32.add
+    ref.i31
+    return
+  )
+  (func $announce (;4;) (type 1) (result (ref i31))
+    (local (ref null 3) (ref i31))
+    ref.func $announce::<mlkc@lambda-0>
+    struct.new 3
+    local.set 0
+    i32.const 1
+    ref.i31
+    local.set 1
+    local.get 0
+    ref.as_non_null
+    local.get 1
+    local.get 0
+    ref.as_non_null
+    struct.get 3 0
+    call_ref 2
+    return
+  )
+  (func $announce::<mlkc@lambda-0> (;5;) (type 2) (param (ref 3) (ref i31)) (result (ref i31))
+    local.get 1
+    call $print-int
+    return
+  )
+)
+```

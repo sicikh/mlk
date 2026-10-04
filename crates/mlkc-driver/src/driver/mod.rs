@@ -24,7 +24,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use mlkc_codegen_wasm::ModuleMir;
+use mlkc_codegen_wasm::{LoweredFunction, ModuleMir};
 use mlkc_diagnostics::{Diagnostic, Ice};
 use mlkc_hir_def::{
     BodyEntityLoc, Interface, ItemLocLike, ModuleId, ModuleIndex, ProjectDefMap, ProjectGraph,
@@ -32,7 +32,6 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
-use mlkc_lir_wasm::Body as LirBody;
 use mlkc_mir::Body as MirBody;
 use mlkc_resolve::{Closure, Resolution};
 use mlkc_rowan::NodeCache;
@@ -354,7 +353,7 @@ struct LirSlot {
     /// The module the pass read.
     module: Arc<ModuleMir>,
     /// The value, retained so that the driver can hand it out and compare it later.
-    value: Arc<LirBody>,
+    value: Arc<LoweredFunction>,
 }
 
 /// The module of one module, and what building it read ([ADR-0021]).

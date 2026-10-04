@@ -468,7 +468,7 @@ pub enum FunctionKey {
     pub struct LoweredFunction {
         /// The LIR of the function.
         pub body: Body,
-        /// The LIR of the lambdas written in it, in the order of the body's arena.
+        /// The LIR of the lambdas written in it, in the order the body creates them.
         pub lambdas: Vec<LoweredFunction>,
     }
     ```

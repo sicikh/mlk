@@ -9,9 +9,8 @@
 
 use std::sync::Arc;
 
-use mlkc_codegen_wasm::{FunctionCtx, layout, lower_function};
+use mlkc_codegen_wasm::{FunctionCtx, LoweredFunction, layout, lower_function};
 use mlkc_hir_def::BodyEntityLoc;
-use mlkc_lir_wasm::Body as LirBody;
 
 use super::{Driver, LirSlot, Pass, Unit};
 
@@ -23,7 +22,7 @@ impl Driver {
     /// of [`Driver::ice`].
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-    pub fn lir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<LirBody>> {
+    pub fn lir(&mut self, owner: &BodyEntityLoc) -> Option<Arc<LoweredFunction>> {
         let module = self.mir_module(owner.module())?;
         let function = module
             .functions
@@ -52,10 +51,12 @@ impl Driver {
 
         let layout = layout(&module);
         let ctx = FunctionCtx {
+            owner,
             name: &function.name,
             signature: &function.signature,
             param_names: &function.param_names,
             layout: &layout,
+            lambda: None,
         };
 
         let started = self.ticking();

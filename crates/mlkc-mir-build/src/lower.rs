@@ -21,25 +21,27 @@
 //! walk is total over such a body: what it cannot lower is a mistake the check should have
 //! reported, so it is an internal compiler exception and not a diagnostic ([adr-0019]).
 //!
-//! One construct is the exception: a lambda is a value of a function, and what one is in
-//! a machine is the environment it carries and the call it makes. The check accepts a lambda,
-//! and the lowering of one into MIR is deferred ([ADR-0018]), so a body that holds one is
-//! a body this walk cannot lower yet: it stops at the lambda rather than manufacturing
-//! a body for a construct the back end does not have.
+//! A lambda is lowered by lifting its code into the body's lambda arena and writing a closure
+//! in its place ([ADR-0026]): what the closure captures are the slots of the bindings the
+//! free-variable analysis found, and inside the lifted code a read of one of them is
+//! `Rvalue::Capture`, which the first statements of the entry block bind to slots of the
+//! lambda's own.
 //!
-//! [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+//! [ADR-0026]: ../../docs/adr/0026-closure-representation.md
 
 use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, ClassLoc, EntityLoc, Expr, ExprId, FunctionLoc, ItemTree,
-    Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathData, UnaryOp,
+    LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor, PathData,
+    UnaryOp,
 };
 use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, Ty};
-use mlkc_la_arena::ArenaMap;
+use mlkc_la_arena::{Arena, ArenaMap};
 use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
-    Block, BlockId, BlockTarget, Body as MirBody, BodyBuilder, Callee, Const, LocalData, LocalId,
-    Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator, ValueData,
+    Block, BlockId, BlockTarget, Body as MirBody, BodyBuilder, Callee, CaptureData, Const,
+    LambdaData, LocalData, LocalId, Operand, Place, PrimOp, Rvalue, Stmt, StmtKind, Terminator,
+    ValueData,
 };
 use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
@@ -76,7 +78,8 @@ pub fn lower_body(
     );
 
     let module = owner.module();
-    let walk = Walk::of(deps.graph(), deps.closure());
+    let mut walk = Walk::of(deps.graph(), deps.closure());
+    let mut lambdas = Arena::new();
     let mut builder = BodyBuilder::new(owner.clone());
     let entry = open_block(&mut builder);
 
@@ -87,8 +90,9 @@ pub fn lower_body(
         checked,
         deps,
         resolution,
-        walk,
+        walk: &mut walk,
         builder,
+        lambdas: &mut lambdas,
         slots: ArenaMap::default(),
         pat_slots: ArenaMap::default(),
         current: entry,
@@ -113,7 +117,7 @@ fn open_block(builder: &mut BodyBuilder) -> BlockId {
 }
 
 /// The lowering of one body.
-struct Lowerer<'a> {
+struct Lowerer<'a, 'g> {
     /// The module the body is of.
     module: ModuleId,
     /// The HIR body.
@@ -128,9 +132,14 @@ struct Lowerer<'a> {
     /// What the resolution of the module left: what each import resolved to.
     resolution: &'a Resolution,
     /// The walk over the closure the check was handed: what resolves the path of a call.
-    walk: Walk<'a>,
+    walk: &'a mut Walk<'g>,
     /// The MIR body under construction.
     builder: BodyBuilder,
+    /// The lambdas written in the body, flat: the code a lambda lifts is one of these, and a
+    /// lambda written inside a lambda is another ([ADR-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    lambdas: &'a mut Arena<LambdaData>,
     /// The slot of every expression, once it is lowered.
     slots: ArenaMap<ExprId, LocalId>,
     /// The slot of every pattern, once it is bound.
@@ -142,7 +151,7 @@ struct Lowerer<'a> {
     stmts: Vec<Stmt>,
 }
 
-impl Lowerer<'_> {
+impl Lowerer<'_, '_> {
     /// Lowers the body and finishes it.
     fn run(mut self, entry: BlockId) -> MirBody {
         for pat in self.body.params() {
@@ -156,7 +165,75 @@ impl Lowerer<'_> {
             span,
         });
 
-        self.builder.finish(entry)
+        let mut body = self.builder.finish(entry);
+        body.lambdas = std::mem::take(self.lambdas);
+
+        body
+    }
+
+    /// Lowers the code of one lambda and finishes it.
+    ///
+    /// The first statements of the entry block bind what the lambda captured: one slot per
+    /// capture, assigned from `Rvalue::Capture`, which is what a read of the captured binding
+    /// lowers to. Then the parameters are bound and the body is lowered, as in a body.
+    fn run_lambda(
+        mut self,
+        entry: BlockId,
+        root: ExprId,
+        params: &[LambdaParam],
+        capture_pats: &[PatId],
+        ty: Ty,
+    ) -> LambdaData {
+        let mut captures = Vec::with_capacity(capture_pats.len());
+
+        for (index, pat) in capture_pats.iter().enumerate() {
+            let span = self.span_pat(*pat);
+            let ty = self.checked.pat_type(*pat).cloned().unwrap_or(Ty::Error);
+            let name = match &self.body[*pat] {
+                Pat::Bind(name) => Some(name.clone()),
+                Pat::Wildcard | Pat::Missing => {
+                    ice!(
+                        "the lowering met a lambda that captures a pattern that binds no name, \
+                         and the free-variable analysis collected it"
+                    )
+                },
+            };
+            let slot = self.slot(span, name.clone(), ty.clone());
+
+            self.assign(
+                Place::Local(slot),
+                Rvalue::Capture {
+                    index: index as u32,
+                },
+                span,
+            );
+
+            self.pat_slots.insert(*pat, slot);
+            captures.push(CaptureData { name, ty, span });
+        }
+
+        for param in params {
+            self.parameter(param.pat);
+        }
+
+        let value = self.expr(root);
+        let span = self.span_expr(root);
+        self.seal(Terminator::Return {
+            value: Operand::Local(value),
+            span,
+        });
+
+        let code = self.builder.code(entry);
+
+        LambdaData {
+            ty,
+            captures,
+            params: code.params,
+            entry: code.entry,
+            blocks: code.blocks,
+            values: code.values,
+            locals: code.locals,
+        }
     }
 
     /// Lowers one expression into a slot of its own, and answers that slot.
@@ -179,12 +256,84 @@ impl Lowerer<'_> {
             return slot;
         }
 
+        // A lambda lifts its code into the body's lambda arena and writes a closure in its
+        // place: the closure is the value of the expression.
+        if let Expr::Lambda { .. } = &node {
+            let rvalue = self.lambda(expr, &node);
+
+            self.assign(Place::Local(slot), rvalue, span);
+            self.slots.insert(expr, slot);
+
+            return slot;
+        }
+
         let rvalue = self.rvalue(&node);
 
         self.assign(Place::Local(slot), rvalue, span);
         self.slots.insert(expr, slot);
 
         slot
+    }
+
+    /// Lowers a lambda: its code, lifted into the body's lambda arena, and the closure value.
+    ///
+    /// The captures the HIR found are the operands of the closure, read in this frame; the code
+    /// is lowered into a body of its own, whose reads of the captured bindings are
+    /// `Rvalue::Capture` ([ADR-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    fn lambda(&mut self, expr: ExprId, node: &Expr) -> Rvalue {
+        let Expr::Lambda {
+            params,
+            body,
+            captures,
+        } = node
+        else {
+            ice!("the lowering met an expression that is not a lambda in the rule of a lambda")
+        };
+
+        let ty = self.checked.expr_type(expr).cloned().unwrap_or(Ty::Error);
+
+        // The operands the closure is made of: where the captured bindings hold in this frame.
+        let mut operands = Vec::with_capacity(captures.len());
+
+        for pat in captures {
+            match self.pat_slots.get(*pat) {
+                Some(slot) => operands.push(Operand::Local(*slot)),
+                None => {
+                    ice!(
+                        "the lowering met a lambda that captures a binding no pattern of the \
+                         enclosing body binds"
+                    )
+                },
+            }
+        }
+
+        let mut builder = BodyBuilder::default();
+        let entry = open_block(&mut builder);
+        let lowerer = Lowerer {
+            module: self.module,
+            body: self.body,
+            source_map: self.source_map,
+            checked: self.checked,
+            deps: self.deps,
+            resolution: self.resolution,
+            walk: &mut *self.walk,
+            builder,
+            lambdas: &mut *self.lambdas,
+            slots: ArenaMap::default(),
+            pat_slots: ArenaMap::default(),
+            current: entry,
+            stmts: Vec::new(),
+        };
+
+        let data = lowerer.run_lambda(entry, *body, params, captures, ty);
+        let lambda = self.lambdas.alloc(data);
+
+        Rvalue::Closure {
+            lambda,
+            captures: operands,
+        }
     }
 
     /// Lowers one node of the HIR.
@@ -246,14 +395,10 @@ impl Lowerer<'_> {
             Expr::If { .. } => {
                 ice!("the lowering met an `if` outside the rule that reads an `if`")
             },
-            // A lambda is a value of a function, and what one is in a machine is the environment
-            // it carries and the code it calls: the check accepts a lambda, and the construction
-            // of MIR for one is deferred ([ADR-0018]). The walk says so rather than manufacturing
-            // a body for a construct the back end does not have.
-            //
-            // [ADR-0018]: ../../docs/adr/0018-values-as-words.md
+            // A lambda is lowered by the rule that reads one, which `Lowerer::expr` calls before
+            // this; a lambda met here is a gap of that rule.
             Expr::Lambda { .. } => {
-                ice!("the construction of MIR met a lambda, and the lowering of one is deferred")
+                ice!("the lowering met a lambda outside the rule that reads one")
             },
         }
     }
@@ -708,6 +853,7 @@ mod tests {
         Prelude, ProjectGraph,
     };
     use mlkc_lower::{LoweredBody, lower_body as lower_hir, lower_module};
+    use mlkc_mir::{CodeRef, LambdaId};
     use mlkc_parser::parse;
     use mlkc_resolve::{Closure, Resolution};
     use mlkc_syntax::ModuleRoot;
@@ -810,6 +956,128 @@ mod tests {
         let ssa = construct_ssa(&mir);
 
         (mir, ssa)
+    }
+
+    #[test]
+    fn a_lambda_lifts_its_code_and_captures_what_it_reads() {
+        let source = format!(
+            "{CLASSES}fun main(): Int = \
+             let base = 40 in \
+             let add = fn(x: Int) -> x + base in \
+             add(2)\n"
+        );
+        let (mir, ssa) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+        assert_eq!(mir.lambdas.len(), 1);
+
+        // What the lambda captured is what its body reads of the enclosing body, and the read
+        // inside the lifted code is a `Capture`, bound to a slot of the lambda's own.
+        let (lambda, data) = mir.lambdas.iter().next().expect("a lambda");
+
+        assert_eq!(data.ty.to_string(), "(Int) -> Int");
+        assert_eq!(data.captures.len(), 1);
+        assert_eq!(data.captures[0].name, Some(Name::new("base")));
+        assert_eq!(
+            data.blocks
+                .iter()
+                .flat_map(|(_, block)| block.stmts.iter())
+                .filter(|stmt| {
+                    matches!(stmt.kind, StmtKind::Assign {
+                        rvalue: Rvalue::Capture { .. },
+                        ..
+                    })
+                })
+                .count(),
+            1,
+        );
+
+        // The enclosing body creates the closure over the slot the captured binding holds.
+        let created = mir
+            .blocks
+            .iter()
+            .flat_map(|(_, block)| block.stmts.iter())
+            .find_map(|stmt| {
+                match &stmt.kind {
+                    StmtKind::Assign {
+                        rvalue:
+                            Rvalue::Closure {
+                                lambda: created,
+                                captures,
+                            },
+                        ..
+                    } => Some((*created, captures.len())),
+                    _ => None,
+                }
+            })
+            .expect("the body to create a closure");
+
+        assert_eq!(created, (lambda, 1));
+
+        // The SSA form of the lambda is built with the body's, and its captures are values of
+        // its own frame, so it holds no slot.
+        assert_eq!(ssa.validate_ssa(), Ok(()));
+        assert_eq!(ssa.lambdas.len(), 1);
+
+        let (_, data) = ssa.lambdas.iter().next().expect("a lambda");
+
+        assert!(
+            data.locals.is_empty(),
+            "the SSA form of a lambda has no slots"
+        );
+    }
+
+    #[test]
+    fn a_nested_lambda_lives_in_the_arena_of_the_body_that_wrote_it() {
+        let source = format!(
+            "{CLASSES}fun main(): Int = \
+             let base = 40 in \
+             let add = fn(x: Int) -> fn(y: Int) -> x + y + base in \
+             add(1)(1)\n"
+        );
+        let (mir, _) = lower(&source);
+
+        assert_eq!(mir.validate_cfg(), Ok(()));
+
+        // Both lambdas are entries of the body's flat arena: the outer one captures the `let`,
+        // and the inner one captures the outer lambda's parameter and its capture.
+        assert_eq!(mir.lambdas.len(), 2);
+
+        let (outer, data) = mir
+            .lambdas
+            .iter()
+            .find(|(_, data)| data.captures.len() == 1)
+            .expect("the outer lambda");
+        let (inner, inner_data) = mir
+            .lambdas
+            .iter()
+            .find(|(_, data)| data.captures.len() == 2)
+            .expect("the inner lambda");
+
+        assert_eq!(data.captures[0].name, Some(Name::new("base")));
+        assert_eq!(inner_data.captures[0].name, Some(Name::new("x")));
+        assert_eq!(inner_data.captures[1].name, Some(Name::new("base")));
+
+        // The body creates the outer lambda, and the outer lambda's code creates the inner one.
+        let created = |code: CodeRef<'_>| -> Vec<LambdaId> {
+            code.blocks
+                .iter()
+                .flat_map(|(_, block)| block.stmts.iter())
+                .filter_map(|stmt| {
+                    match &stmt.kind {
+                        StmtKind::Assign {
+                            rvalue: Rvalue::Closure { lambda, .. },
+                            ..
+                        } => Some(*lambda),
+                        _ => None,
+                    }
+                })
+                .collect()
+        };
+
+        assert_eq!(created(mir.code()), [outer]);
+        assert_eq!(created(mir.lambdas[outer].code()), [inner]);
+        assert_eq!(created(mir.lambdas[inner].code()), []);
     }
 
     #[test]

@@ -68,6 +68,10 @@ project_specs! {
     // A choice between expressions: the block that branches, the block of every arm, and the
     // block the arms meet in, in both forms of the MIR.
     branching: "branching",
+
+    // What a lambda lowers to: the code lifted into the body's flat arena with its captures, the
+    // closure the body creates over the slots they hold, and the `Capture` reads inside the code.
+    lambdas: "lambdas",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

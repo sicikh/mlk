@@ -1,0 +1,22 @@
+// What the middle of the pipeline makes of a lambda: the code lifted into the flat arena of
+// the body that wrote it, the captures the free-variable analysis found, the closure the body
+// creates over the slots they hold, and the `Capture` reads inside the lifted code. A lambda
+// written inside a lambda is an entry of the same arena. A lambda bound by a `let` is
+// generalized, and a use of it is checked at the type it is used at, while its code is
+// monomorphic over words.
+
+//- /main.mlk
+fun capturing(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> x + base in
+    add(2)
+
+fun nested(): Int =
+    let base = 40 in
+    let add = fn(x: Int) -> fn(y: Int) -> x + y + base in
+    add(1)(1)
+
+fun generalized(): Int =
+    let id = fn(x) -> x in
+    let _ = id(true) in
+    id(42)

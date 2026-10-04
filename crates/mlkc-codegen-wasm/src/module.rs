@@ -17,15 +17,18 @@
 //! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
 //! [adr-0021]: ../../docs/adr/0021-translation-units.md
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
-use mlkc_hir_def::{BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, Name};
+use mlkc_hir_def::{BodyEntityLoc, BodyLoc, EntityLoc, FunctionLoc, ItemLocLike, Name};
 use mlkc_hir_ty::{Builtins, Ty};
+use mlkc_la_arena::Arena;
 use mlkc_lir_wasm::Body as LirBody;
-use mlkc_mir::Body as MirBody;
+use mlkc_mir::{Body as MirBody, CodeRef, LambdaData, LambdaId, Rvalue, StmtKind};
 use wasm_encoder::{
-    CodeSection, EntityType, ExportKind, ExportSection, FunctionSection, ImportSection,
-    IndirectNameMap, NameMap, NameSection, TypeSection,
+    CodeSection, CompositeInnerType, CompositeType, ElementSection, Elements, EntityType,
+    ExportKind, ExportSection, FieldType, FuncType, FunctionSection, HeapType, ImportSection,
+    IndirectNameMap, NameMap, NameSection, RefType, StorageType, StructType, SubType, TypeSection,
+    ValType,
 };
 
 use crate::{
@@ -82,6 +85,92 @@ pub struct FnShape {
     pub params: Vec<AbiType>,
     /// What the result crosses as.
     pub ret: AbiType,
+}
+
+/// The `$fn` and `$closure` types of one shape ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClosureTypes {
+    /// The type of the code: `$fn(shape)`, which takes the closure first.
+    pub fn_type: u32,
+    /// The type of the closure: `$closure(shape)`, a struct whose one field is the code.
+    pub closure: u32,
+}
+
+/// What the layout knows about one lambda ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LambdaPlan {
+    /// The index of the lifted function in the function index space.
+    pub index: u32,
+    /// What the lambda takes and gives back, without the environment.
+    pub signature: FnSignature,
+    /// The shapes of its captures, in the order they are stored.
+    pub captures: Vec<AbiType>,
+    /// The `$fn` and `$closure` types of its shape.
+    pub types: ClosureTypes,
+    /// The type of its environment, where it captured something.
+    pub env: Option<u32>,
+}
+
+impl LambdaPlan {
+    /// Whether the lambda captured something, and so has an environment of its own.
+    pub fn captures(&self) -> bool {
+        !self.captures.is_empty()
+    }
+}
+
+/// What a function of the index space is ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FunctionKey {
+    /// A function an entity declares.
+    Entity(EntityLoc<FunctionLoc>),
+    /// A lambda written in a body.
+    Lambda {
+        /// The entity whose body wrote it; the lambda is an entry of that body's arena.
+        owner: BodyEntityLoc,
+        /// The lambda, by its place in the arena.
+        lambda: LambdaId,
+    },
+}
+
+/// The LIR of one function and of the lambdas it wrote ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoweredFunction {
+    /// What the function is.
+    pub key: FunctionKey,
+    /// The LIR of the function.
+    pub body: LirBody,
+    /// The LIR of the lambdas written in it, in the order the body creates them.
+    pub lambdas: Vec<LoweredFunction>,
+}
+
+/// One function the back end emitted: the artifact and what names it ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmittedFunction {
+    /// What the function is.
+    pub key: FunctionKey,
+    /// The name of the function, for the `name` section, an export, and a stack trace.
+    pub name: String,
+    /// Whether the module exports it; a lambda is never exported.
+    pub exported: bool,
+    /// How many parameters the function's declared signature takes.
+    pub arity: u32,
+    /// The name every parameter was declared under, in order.
+    pub param_names: Vec<Option<Name>>,
+    /// The WASM type of the function: a plain function type for an entity, the `$fn` of its
+    /// shape for a lambda.
+    pub type_index: u32,
+    /// The artifact of its body.
+    pub artifact: FuncArtifact,
 }
 
 /// A function the module needs and does not declare.
@@ -141,20 +230,36 @@ pub struct ModuleMir {
     pub functions: Vec<ModuleFunction>,
 }
 
-/// How the functions of a module are numbered in the WASM module it becomes.
+/// How the functions of a module are numbered in the WASM module it becomes ([ADR-0026]).
 ///
 /// The layout is computed from the module alone, so the emitter and the assembler both derive
-/// the same indices, and a function body can embed the index of the function it calls. The
-/// index space is the one of WASM: the imports first, in the order the module lists them, and
-/// the functions the module declares after them, in declaration order.
+/// the same indices, and a function body can embed the index of the function it calls and the
+/// index of the lambda a closure wraps. The index space is the one of WASM: the imports first,
+/// in the order the module lists them, and then the functions the module declares in
+/// declaration order, each immediately followed by its lambdas, depth first.
+///
+/// The layout also plans the type section: the plain function types, the shape groups
+/// `{$fn, $closure}` of every function shape a closure is made of, and the environment type of
+/// every capture shape a lambda creates.
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone)]
 pub struct ModuleLayout {
     builtins: Builtins,
-    /// One signature per function of the index space.
+    /// One declared signature per function of the index space, in index order.
     signatures: Vec<FnSignature>,
     /// How many of the signatures are imports; the rest are the module's own functions.
     imports: usize,
     by_entity: BTreeMap<EntityLoc<FunctionLoc>, u32>,
+    by_lambda: BTreeMap<(BodyEntityLoc, LambdaId), LambdaPlan>,
+    /// The plain function types of the type section, in index order.
+    plain: Vec<FnShape>,
+    /// The shape groups of the type section, in index order; the group of `shapes[i]` is at
+    /// `shape_base() + 2 * i`.
+    shapes: Vec<FnShape>,
+    /// The environment groups of the type section, in index order; the group of `envs[i]` is at
+    /// `env_base() + i`.
+    envs: Vec<(FnShape, Vec<AbiType>)>,
 }
 
 impl ModuleLayout {
@@ -175,6 +280,81 @@ impl ModuleLayout {
         self.signatures.get(*index as usize)
     }
 
+    /// What the layout knows about a lambda a body wrote.
+    pub fn lambda(&self, owner: &BodyEntityLoc, lambda: LambdaId) -> Option<&LambdaPlan> {
+        self.by_lambda.get(&(owner.clone(), lambda))
+    }
+
+    /// The type of a plain function shape, the one the imports and the entity bodies use.
+    pub fn plain_type(&self, shape: &FnShape) -> Option<u32> {
+        self.plain
+            .iter()
+            .position(|it| it == shape)
+            .map(|at| at as u32)
+    }
+
+    /// The `$fn` and `$closure` types of a function shape, where a closure of it exists.
+    pub fn closure_types(&self, shape: &FnShape) -> Option<ClosureTypes> {
+        let at = self.shapes.iter().position(|it| it == shape)?;
+
+        Some(ClosureTypes {
+            fn_type: self.shape_base() + 2 * at as u32,
+            closure: self.shape_base() + 2 * at as u32 + 1,
+        })
+    }
+
+    /// The type of the environment of a capture shape, where one exists.
+    pub fn env_type(&self, shape: &FnShape, captures: &[AbiType]) -> Option<u32> {
+        let at = self
+            .envs
+            .iter()
+            .position(|(it, fields)| it == shape && fields.as_slice() == captures)?;
+
+        Some(self.env_base() + at as u32)
+    }
+
+    /// Whether the concrete type `ty` upcasts to the closure type `closure` without a cast:
+    /// the closure type itself, or an environment of it.
+    pub fn upcasts(&self, ty: u32, closure: u32) -> bool {
+        if ty == closure {
+            return true;
+        }
+
+        let Some(at) = ty.checked_sub(self.env_base()) else {
+            return false;
+        };
+
+        self.envs
+            .get(at as usize)
+            .and_then(|(shape, _)| self.closure_types(shape))
+            .is_some_and(|types| types.closure == closure)
+    }
+
+    /// The plain function types, in index order.
+    pub fn plain_shapes(&self) -> &[FnShape] {
+        &self.plain
+    }
+
+    /// The shapes whose groups the type section declares, in index order.
+    pub fn shape_groups(&self) -> &[FnShape] {
+        &self.shapes
+    }
+
+    /// The environments whose groups the type section declares, in index order.
+    pub fn env_groups(&self) -> &[(FnShape, Vec<AbiType>)] {
+        &self.envs
+    }
+
+    /// The index the shape groups begin at.
+    pub fn shape_base(&self) -> u32 {
+        self.plain.len() as u32
+    }
+
+    /// The index the environment groups begin at.
+    pub fn env_base(&self) -> u32 {
+        self.shape_base() + 2 * self.shapes.len() as u32
+    }
+
     /// How many functions of the index space are imports.
     pub fn imported(&self) -> usize {
         self.imports
@@ -191,15 +371,27 @@ impl ModuleLayout {
     }
 }
 
-/// Numbers the functions of a module: the imports first, then the functions it declares.
+/// Numbers the functions of a module, and plans the types their closures use.
+///
+/// The functions are the imports, then the entity functions in declaration order, each followed
+/// by its lambdas, depth first ([ADR-0026]). The types are planned in the order the module
+/// meets them: the plain function types, the shape groups of the closure family, and the
+/// environments; the shapes and the environments are deduplicated, so two lambdas that capture
+/// the same things share one type.
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 pub fn layout(module: &ModuleMir) -> ModuleLayout {
+    let builtins = module.builtins.clone();
+    let mut planner = Types::default();
     let mut signatures = Vec::with_capacity(module.imports.len() + module.functions.len());
     let mut by_entity = BTreeMap::new();
+    let mut pending = Vec::new();
 
     for import in &module.imports {
         let index = signatures.len() as u32;
 
         signatures.push(import.signature.clone());
+        planner.plain(&import.signature.shape(&builtins));
         by_entity.insert(import.entity.clone(), index);
     }
 
@@ -207,6 +399,7 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
         let index = signatures.len() as u32;
 
         signatures.push(function.signature.clone());
+        planner.plain(&function.signature.shape(&builtins));
 
         // A body is a function's when the entity that owns it is one; a constant's body has no
         // function to be called as.
@@ -219,14 +412,223 @@ pub fn layout(module: &ModuleMir) -> ModuleLayout {
                 index,
             );
         }
+
+        for lambda in lambda_order(function.body.code(), &function.body.lambdas) {
+            let data = &function.body.lambdas[lambda];
+            let signature = signature_of_lambda(&data.ty);
+            let shape = signature.shape(&builtins);
+            let captures: Vec<AbiType> = data
+                .captures
+                .iter()
+                .map(|capture| refine::of_ty(&capture.ty, &builtins).abi())
+                .collect();
+            let at = planner.shape(&shape);
+            let env = (!captures.is_empty()).then(|| planner.env(&shape, &captures));
+            let index = signatures.len() as u32;
+
+            signatures.push(signature.clone());
+            pending.push(((function.owner.clone(), lambda), PendingLambda {
+                index,
+                signature,
+                captures,
+                at,
+                env,
+            }));
+        }
+
+        // A call through a closure needs the shape's types whether or not a lambda of this
+        // module made the closure.
+        planner.calls(function.body.code(), &builtins);
+
+        for (_, lambda) in function.body.lambdas.iter() {
+            planner.calls(lambda.code(), &builtins);
+        }
+    }
+
+    let plain = planner.plain;
+    let shapes = planner.shapes;
+    let envs = planner.envs;
+    let shape_base = plain.len() as u32;
+    let env_base = shape_base + 2 * shapes.len() as u32;
+    let mut by_lambda = BTreeMap::new();
+
+    for (key, lambda) in pending {
+        let types = ClosureTypes {
+            fn_type: shape_base + 2 * lambda.at as u32,
+            closure: shape_base + 2 * lambda.at as u32 + 1,
+        };
+
+        by_lambda.insert(key, LambdaPlan {
+            index: lambda.index,
+            signature: lambda.signature,
+            captures: lambda.captures,
+            types,
+            env: lambda.env.map(|env| env_base + env as u32),
+        });
     }
 
     ModuleLayout {
-        builtins: module.builtins.clone(),
+        builtins,
         signatures,
         imports: module.imports.len(),
         by_entity,
+        by_lambda,
+        plain,
+        shapes,
+        envs,
     }
+}
+
+/// A lambda the layout has to number, before the type indices are known.
+struct PendingLambda {
+    index: u32,
+    signature: FnSignature,
+    captures: Vec<AbiType>,
+    at: usize,
+    env: Option<usize>,
+}
+
+/// The types the module's closures use, interned in the order the module meets them.
+#[derive(Default)]
+struct Types {
+    plain: Vec<FnShape>,
+    shapes: Vec<FnShape>,
+    envs: Vec<(FnShape, Vec<AbiType>)>,
+}
+
+impl Types {
+    /// The plain function type of a shape.
+    fn plain(&mut self, shape: &FnShape) {
+        if !self.plain.contains(shape) {
+            self.plain.push(shape.clone());
+        }
+    }
+
+    /// The shape group of a shape, by its place among the groups.
+    fn shape(&mut self, shape: &FnShape) -> usize {
+        match self.shapes.iter().position(|it| it == shape) {
+            Some(at) => at,
+            None => {
+                self.shapes.push(shape.clone());
+
+                self.shapes.len() - 1
+            },
+        }
+    }
+
+    /// The environment group of a capture shape, by its place among the groups.
+    fn env(&mut self, shape: &FnShape, captures: &[AbiType]) -> usize {
+        match self
+            .envs
+            .iter()
+            .position(|(it, fields)| it == shape && fields.as_slice() == captures)
+        {
+            Some(at) => at,
+            None => {
+                self.envs.push((shape.clone(), captures.to_vec()));
+
+                self.envs.len() - 1
+            },
+        }
+    }
+
+    /// The shapes of the calls through a closure in one piece of code.
+    fn calls(&mut self, code: CodeRef<'_>, builtins: &Builtins) {
+        for (_, block) in code.blocks.iter() {
+            for stmt in &block.stmts {
+                let StmtKind::Assign { rvalue, .. } = &stmt.kind;
+                let Rvalue::Call {
+                    callee: mlkc_mir::Callee::Indirect(operand),
+                    ..
+                } = rvalue
+                else {
+                    continue;
+                };
+                let Some(shape) = operand_shape(operand, code, builtins) else {
+                    continue;
+                };
+
+                self.shape(&shape);
+            }
+        }
+    }
+}
+
+/// The declared signature of a lambda: the function type the checker gave it.
+///
+/// # Panics
+///
+/// Panics when the type is not a function type, which is a gap of the check: a lambda the
+/// check accepted is a function.
+fn signature_of_lambda(ty: &Ty) -> FnSignature {
+    let Ty::Fn { params, ret } = ty else {
+        panic!("the lowering met a lambda the checker did not give a function type: {ty}");
+    };
+
+    FnSignature {
+        params: params.clone(),
+        ret: ret.as_ref().clone(),
+    }
+}
+
+/// The ABI shape of the checked type of the operand a closure is called through.
+fn operand_shape(
+    operand: &mlkc_mir::Operand,
+    code: CodeRef<'_>,
+    builtins: &Builtins,
+) -> Option<FnShape> {
+    let mlkc_mir::Operand::Value(value) = operand else {
+        return None;
+    };
+
+    refine::closure_shape_of_ty(&code.values[*value].ty, builtins)
+}
+
+/// The lambdas a body wrote, depth first, in the order its code creates them.
+///
+/// A lambda is created by exactly one `Rvalue::Closure`, in the code that wrote the expression;
+/// the walk reads every block, because a lambda created in a block no path reaches is still a
+/// lambda of the body, and the order is the order the blocks and the statements list.
+pub(crate) fn lambda_order(code: CodeRef<'_>, lambdas: &Arena<LambdaData>) -> Vec<LambdaId> {
+    fn walk(code: CodeRef<'_>, lambdas: &Arena<LambdaData>, order: &mut Vec<LambdaId>) {
+        for child in lambda_children(code) {
+            if order.contains(&child) {
+                continue;
+            }
+
+            order.push(child);
+            walk(lambdas[child].code(), lambdas, order);
+        }
+    }
+
+    let mut order = Vec::new();
+
+    walk(code, lambdas, &mut order);
+
+    order
+}
+
+/// The lambdas a piece of code creates itself, in the order it creates them.
+pub(crate) fn lambda_children(code: CodeRef<'_>) -> Vec<LambdaId> {
+    let mut children = Vec::new();
+
+    for (_, block) in code.blocks.iter() {
+        for stmt in &block.stmts {
+            let StmtKind::Assign {
+                rvalue: Rvalue::Closure { lambda, .. },
+                ..
+            } = &stmt.kind
+            else {
+                continue;
+            };
+
+            if !children.contains(lambda) {
+                children.push(*lambda);
+            }
+        }
+    }
+
+    children
 }
 
 /// What debug information `assemble_module` is asked for ([ADR-0025][adr-0025]).
@@ -307,9 +709,10 @@ pub struct WasmModule {
 
 /// Compiles every function of a module, and assembles the module they become.
 ///
-/// This is the whole of the back end for one module: [`emit_function`] per function, in the
-/// order the module declares them, and [`assemble_module`] over the artifacts. It is what the
-/// driver's link stage and a host that shows one module both read.
+/// This is the whole of the back end for one module: one function per entity body and one per
+/// lambda the bodies wrote, in the order the layout numbers them, and [`assemble_module`] over
+/// the artifacts. It is what the driver's link stage and a host that shows one module both
+/// read.
 ///
 /// `lirs` are the lowered bodies of the module's functions, in declaration order, as the
 /// driver pulled them ([ADR-0022][adr-0022]); `sources` are the files the bodies were read
@@ -324,44 +727,152 @@ pub struct WasmModule {
 /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
 pub fn compile_module(
     module: &ModuleMir,
-    lirs: &[Arc<LirBody>],
+    lirs: &[Arc<LoweredFunction>],
     debug: DebugInfo,
     sources: &Sources,
 ) -> (WasmModule, Vec<CodegenDiag>) {
     assert_eq!(
         lirs.len(),
         module.functions.len(),
-        "the back end is handed one body per function of the module",
+        "the back end is handed one LIR per function of the module",
     );
 
     let layout = layout(module);
-    let mut artifacts = Vec::new();
+    let builtins = layout.builtins().clone();
+    let by_entity: BTreeMap<EntityLoc<FunctionLoc>, &ModuleFunction> = module
+        .functions
+        .iter()
+        .filter_map(|function| {
+            match &function.owner.item {
+                BodyLoc::Function(loc) => {
+                    Some((
+                        EntityLoc {
+                            module: function.owner.module,
+                            item: loc.clone(),
+                        },
+                        function,
+                    ))
+                },
+                BodyLoc::Const(_) => None,
+            }
+        })
+        .collect();
+    let mut functions = Vec::with_capacity(layout.len().saturating_sub(layout.imported()));
     let mut diagnostics = Vec::new();
 
-    for (function, lir) in module.functions.iter().zip(lirs) {
-        let ctx = FunctionCtx {
-            name: &function.name,
-            signature: &function.signature,
-            param_names: &function.param_names,
-            layout: &layout,
-        };
-        let (artifact, reports) = emit_function(lir, &ctx);
-
-        artifacts.push(artifact);
-        diagnostics.extend(reports);
+    for lir in lirs {
+        emit_tree(
+            lir,
+            &by_entity,
+            &layout,
+            &builtins,
+            &mut functions,
+            &mut diagnostics,
+        );
     }
 
-    let (wasm, reports) = assemble_module(module, &artifacts, debug, sources);
+    let (wasm, reports) = assemble_module(module, &functions, debug, sources);
 
     diagnostics.extend(reports);
 
     (wasm, diagnostics)
 }
 
+/// Emits one function of a lowered tree and then the lambdas it wrote.
+fn emit_tree(
+    function: &LoweredFunction,
+    by_entity: &BTreeMap<EntityLoc<FunctionLoc>, &ModuleFunction>,
+    layout: &ModuleLayout,
+    builtins: &Builtins,
+    functions: &mut Vec<EmittedFunction>,
+    diagnostics: &mut Vec<CodegenDiag>,
+) {
+    let (owner, name, signature, param_names, exported, lambda) = match &function.key {
+        FunctionKey::Entity(entity) => {
+            let declared = by_entity
+                .get(entity)
+                .expect("every entity of the module to be emitted");
+
+            (
+                declared.owner.clone(),
+                declared.name.clone(),
+                declared.signature.clone(),
+                declared.param_names.clone(),
+                declared.exported,
+                None,
+            )
+        },
+        FunctionKey::Lambda {
+            owner: writer,
+            lambda,
+        } => {
+            let plan = layout
+                .lambda(writer, *lambda)
+                .expect("every lambda of a body to be numbered");
+
+            (
+                writer.clone(),
+                lambda_name(writer, *lambda),
+                plan.signature.clone(),
+                Vec::new(),
+                false,
+                Some(plan),
+            )
+        },
+    };
+    let type_index = match lambda {
+        Some(plan) => plan.types.fn_type,
+        None => {
+            layout
+                .plain_type(&signature.shape(builtins))
+                .expect("every entity signature to have a plain function type")
+        },
+    };
+    let arity = signature.params.len() as u32;
+    let ctx = FunctionCtx {
+        owner: &owner,
+        name: &name,
+        signature: &signature,
+        param_names: &param_names,
+        layout,
+        lambda,
+    };
+    let (artifact, reports) = emit_function(&function.body, &ctx);
+
+    diagnostics.extend(reports);
+    functions.push(EmittedFunction {
+        key: function.key.clone(),
+        name,
+        exported,
+        arity,
+        param_names,
+        type_index,
+        artifact,
+    });
+
+    for child in &function.lambdas {
+        emit_tree(child, by_entity, layout, builtins, functions, diagnostics);
+    }
+}
+
+/// The name of a lifted function: its owner and its place in the body, because a lambda has no
+/// name of its own and a stack trace still needs one ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+pub(crate) fn lambda_name(owner: &BodyEntityLoc, lambda: LambdaId) -> String {
+    let owner = owner
+        .item
+        .name()
+        .map_or_else(|| format!("{:?}", owner.item), ToString::to_string);
+
+    format!("{owner}::<mlkc@lambda-{}>", lambda.index())
+}
+
 /// Assembles the WASM module of `module` from the artifacts of its functions.
 ///
-/// `functions` are the artifacts of every function the module declares, in declaration order;
-/// `debug` is the format of debug information the module carries ([`DebugInfo`]).
+/// `functions` are the artifacts of every function the module declares --- the entity bodies
+/// and the lambdas they wrote --- in the order the layout numbers them; `debug` is the format
+/// of debug information the module carries ([`DebugInfo`]).
 ///
 /// # Panics
 ///
@@ -370,62 +881,130 @@ pub fn compile_module(
 /// lowered and nothing else.
 pub fn assemble_module(
     module: &ModuleMir,
-    functions: &[FuncArtifact],
+    functions: &[EmittedFunction],
     debug: DebugInfo,
     sources: &Sources,
 ) -> (WasmModule, Vec<CodegenDiag>) {
+    let layout = layout(module);
+
     assert_eq!(
         functions.len(),
-        module.functions.len(),
+        layout.len() - layout.imported(),
         "the assembler is handed one artifact per function of the module",
     );
 
-    // The `name` section is a part of the module at every option; the debug information is
-    // one format and not two ([ADR-0025]): the source map of a browser, the tables of DWARF,
-    // or nothing, written after the code section is laid out, because the addresses of a
-    // format are offsets inside it.
+    // Every function of the module has the WASM type its shape gives it: an immediate is a
+    // `(ref i31)` and every other type is a word, an `eqref`. One type per shape is all the
+    // section needs, and the shapes are interned in the order the module meets them, so an
+    // assignment of indices follows from the module alone ([ADR-0021][adr-0021]).
     //
-    // [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
-
-    // Every function of the module has the WASM type its signature's shape gives it: an
-    // immediate is a `(ref i31)` and every other type is a word, an `eqref`. One type per
-    // shape is all the section needs, and the shapes are interned in the order the module
-    // meets them, so an assignment of indices follows from the module alone.
-    let builtins = &module.builtins;
-    let mut shapes: Vec<FnShape> = Vec::new();
-    let mut import_types = Vec::with_capacity(module.imports.len());
-
-    for import in &module.imports {
-        import_types.push(intern_shape(&mut shapes, import.signature.shape(builtins)));
-    }
-
-    let mut function_types = Vec::with_capacity(module.functions.len());
-
-    for function in &module.functions {
-        function_types.push(intern_shape(
-            &mut shapes,
-            function.signature.shape(builtins),
-        ));
-    }
-
+    // The closures of the module add two kinds of types ([ADR-0026][adr-0026]): the shape group
+    // of every function shape a closure is made of --- `(rec (type $fn ...) (type $closure
+    // (sub (struct (field (ref $fn))))))` --- and the environment of every capture shape a
+    // lambda creates, a final subtype of its shape's closure whose fields are the code and the
+    // captures. A shape's group and an environment's group each hold exactly their own types:
+    // the grouping is part of a type's identity, and an environment inside the shape's group
+    // would make the shape differ between two modules that captured differently.
+    //
+    // [adr-0021]: ../../docs/adr/0021-translation-units.md
+    // [adr-0026]: ../../docs/adr/0026-closure-representation.md
     let mut types = TypeSection::new();
 
-    for shape in &shapes {
-        let ret = shape.ret.val_type();
-
+    for shape in layout.plain_shapes() {
         types
             .ty()
-            .function(shape.params.iter().map(|it| it.val_type()), [ret]);
+            .function(shape.params.iter().map(|abi| abi.val_type()), [shape
+                .ret
+                .val_type()]);
+    }
+
+    for (at, shape) in layout.shape_groups().iter().enumerate() {
+        let fn_type = layout.shape_base() + 2 * at as u32;
+
+        // `$fn` takes the closure, and `$closure` holds the code ([ADR-0026]): the two
+        // references are the group's two types, each to the other.
+        //
+        // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+        let closure_ref = reference(fn_type + 1);
+        let function = SubType {
+            is_final: true,
+            supertype_idx: None,
+            composite_type: CompositeType {
+                inner: CompositeInnerType::Func(FuncType::new(
+                    std::iter::once(closure_ref)
+                        .chain(shape.params.iter().map(|abi| abi.val_type())),
+                    [shape.ret.val_type()],
+                )),
+                shared: false,
+                descriptor: None,
+                describes: None,
+            },
+        };
+        let closure = SubType {
+            is_final: false,
+            supertype_idx: None,
+            composite_type: CompositeType {
+                inner: CompositeInnerType::Struct(StructType {
+                    fields: vec![FieldType {
+                        element_type: StorageType::Val(reference(fn_type)),
+                        mutable: false,
+                    }]
+                    .into(),
+                }),
+                shared: false,
+                descriptor: None,
+                describes: None,
+            },
+        };
+
+        types.ty().rec(vec![function, closure]);
+    }
+
+    for (shape, captures) in layout.env_groups() {
+        let closure_types = layout
+            .closure_types(shape)
+            .expect("every environment shape to have a closure");
+        let mut fields = Vec::with_capacity(1 + captures.len());
+
+        fields.push(FieldType {
+            element_type: StorageType::Val(reference(closure_types.fn_type)),
+            mutable: false,
+        });
+
+        for capture in captures {
+            fields.push(FieldType {
+                element_type: StorageType::Val(capture.val_type()),
+                mutable: false,
+            });
+        }
+
+        types.ty().subtype(&SubType {
+            is_final: true,
+            supertype_idx: Some(closure_types.closure),
+            composite_type: CompositeType {
+                inner: CompositeInnerType::Struct(StructType {
+                    fields: fields.into(),
+                }),
+                shared: false,
+                descriptor: None,
+                describes: None,
+            },
+        });
     }
 
     let mut import_section = ImportSection::new();
     let mut import_table = Vec::with_capacity(module.imports.len());
 
-    for (index, import) in module.imports.iter().enumerate() {
+    for import in &module.imports {
+        let shape = import.signature.shape(&module.builtins);
+        let type_index = layout
+            .plain_type(&shape)
+            .expect("an import's shape to be in the type plan");
+
         import_section.import(
             &import.module,
             &import.name,
-            EntityType::Function(import_types[index]),
+            EntityType::Function(type_index),
         );
         import_table.push(ImportDecl {
             module: import.module.clone(),
@@ -440,14 +1019,14 @@ pub fn assemble_module(
     let offset = module.imports.len() as u32;
     let mut function_section = FunctionSection::new();
 
-    for type_index in &function_types {
-        function_section.function(*type_index);
+    for function in functions {
+        function_section.function(function.type_index);
     }
 
     let mut exports = ExportSection::new();
     let mut export_table = Vec::new();
 
-    for (index, function) in module.functions.iter().enumerate() {
+    for (index, function) in functions.iter().enumerate() {
         if function.exported {
             let index = offset + index as u32;
 
@@ -455,26 +1034,42 @@ pub fn assemble_module(
             export_table.push(ExportDecl {
                 module: module.name.clone(),
                 name: function.name.clone(),
-                arity: function.signature.params.len() as u32,
+                arity: function.arity,
             });
         }
     }
 
+    // A function a `ref.func` names must be declared, and a lifted lambda is only ever named
+    // that way: the module declares every one of them in a declarative element segment.
+    let declared: Vec<u32> = functions
+        .iter()
+        .enumerate()
+        .filter(|(_, function)| matches!(function.key, FunctionKey::Lambda { .. }))
+        .map(|(index, _)| offset + index as u32)
+        .collect();
+
     let mut code = CodeSection::new();
 
-    for artifact in functions {
+    for function in functions {
         // `CodeSection::raw` writes the size prefix of the entry itself; the artifact holds the
         // body without it, because the layout is what the debug tables measure.
-        code.raw(&artifact.body);
+        code.raw(&function.artifact.body);
     }
 
-    let layout = dwarf::Layout::of(functions);
+    let code_layout = dwarf::Layout::of(functions);
     let mut wasm = wasm_encoder::Module::new();
 
     wasm.section(&types);
     wasm.section(&import_section);
     wasm.section(&function_section);
     wasm.section(&exports);
+
+    if !declared.is_empty() {
+        let mut elements = ElementSection::new();
+
+        elements.declared(Elements::Functions(Cow::Borrowed(&declared)));
+        wasm.section(&elements);
+    }
 
     // A column of the source map is a byte offset in the module ([ADR-0025][adr-0025]), so the
     // offset of the contents of the code section --- after the `id` of the section and its
@@ -483,11 +1078,12 @@ pub fn assemble_module(
     //
     // [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
     let code_payload =
-        (wasm.as_slice().len() + 1 + dwarf::leb_len(layout.payload()) as usize) as u32;
+        (wasm.as_slice().len() + 1 + dwarf::leb_len(code_layout.payload()) as usize) as u32;
 
     wasm.section(&code);
 
     let mut names = NameSection::new();
+
     names.module(&module.name);
 
     let mut function_names = NameMap::new();
@@ -496,7 +1092,7 @@ pub fn assemble_module(
         function_names.append(index as u32, &import.name);
     }
 
-    for (index, function) in module.functions.iter().enumerate() {
+    for (index, function) in functions.iter().enumerate() {
         function_names.append(offset + index as u32, &function.name);
     }
 
@@ -504,7 +1100,7 @@ pub fn assemble_module(
 
     let mut local_names = IndirectNameMap::new();
 
-    for (index, function) in module.functions.iter().enumerate() {
+    for (index, function) in functions.iter().enumerate() {
         let mut names = NameMap::new();
 
         // The ABI parameters are locals of every function, and so are the locals the values
@@ -516,21 +1112,18 @@ pub fn assemble_module(
             }
         }
 
-        if let Some(artifact) = functions.get(index) {
-            for value in &artifact.debug {
-                let Some(name) = &value.name else {
-                    continue;
-                };
+        for value in &function.artifact.debug {
+            let Some(name) = &value.name else {
+                continue;
+            };
 
-                // A value that is a parameter lives in the local of that parameter, and the
-                // loop above named it from the function; the artifact's name for it is the
-                // same one.
-                if value.local < function.param_names.len() as u32 {
-                    continue;
-                }
-
-                names.append(value.local, name.as_str());
+            // A value that is a parameter lives in the local of that parameter, and the loop
+            // above named it from the function; the artifact's name for it is the same one.
+            if value.local < function.param_names.len() as u32 {
+                continue;
             }
+
+            names.append(value.local, name.as_str());
         }
 
         local_names.append(offset + index as u32, &names);
@@ -547,7 +1140,7 @@ pub fn assemble_module(
             // serve it; the DWARF of a module would be preferred to it by an engine, and the
             // extension that reads DWARF has no sources to show ([`DebugInfo`]).
             if let Some((name, data)) =
-                sourcemap::section(functions, sources, &layout, code_payload)
+                sourcemap::section(functions, sources, &code_layout, code_payload)
             {
                 wasm.section(&wasm_encoder::CustomSection {
                     name: name.into(),
@@ -556,7 +1149,7 @@ pub fn assemble_module(
             }
         },
         DebugInfo::DwarfLines | DebugInfo::DwarfFull => {
-            for (name, data) in dwarf::sections(module, functions, sources, &layout) {
+            for (name, data) in dwarf::sections(module, functions, sources, &code_layout) {
                 wasm.section(&wasm_encoder::CustomSection {
                     name: name.into(),
                     data: data.into(),
@@ -575,17 +1168,10 @@ pub fn assemble_module(
     )
 }
 
-/// The index a shape has in the type section, interning it when it is not there yet.
-///
-/// The shapes are in the order the module meets them, which is a function of the module alone,
-/// so two assemblies of one module number the types the same way.
-fn intern_shape(shapes: &mut Vec<FnShape>, shape: FnShape) -> u32 {
-    match shapes.iter().position(|it| *it == shape) {
-        Some(index) => index as u32,
-        None => {
-            shapes.push(shape);
-
-            (shapes.len() - 1) as u32
-        },
-    }
+/// A non-nullable reference to a concrete type of the module.
+fn reference(ty: u32) -> ValType {
+    ValType::Ref(RefType {
+        nullable: false,
+        heap_type: HeapType::Concrete(ty),
+    })
 }

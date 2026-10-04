@@ -49,6 +49,10 @@ wasm_specs! {
     // What a recursive function compiles to: the call whose index the layout assigned, and the
     // dispatch loop that runs again with the arguments the edge passed.
     recursion: "recursion",
+
+    // What a lambda compiles to: the recursion groups of its shape, the environment type of what
+    // it captured, the closure one `struct.new` builds, and the `call_ref` it is called through.
+    lambdas: "lambdas",
 }
 
 /// Runs the fixture `fixture`, and checks it against its snapshot.

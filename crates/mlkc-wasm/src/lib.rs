@@ -1347,7 +1347,7 @@ struct MirBody {
 impl MirBody {
     /// Reads one body of the MIR the way a host reads it.
     fn of(body: &mlkc_mir::Body, owner: String, range: Option<[u32; 2]>) -> Self {
-        let graph = Cfg::of(body);
+        let graph = Cfg::of(body.code());
         let module = body.owner.module().0;
         let mut blocks = Vec::with_capacity(body.blocks.len());
 
@@ -1364,7 +1364,7 @@ impl MirBody {
                 .iter()
                 .map(|stmt| {
                     MirLine {
-                        text: mir_dump::stmt_text(body, stmt),
+                        text: mir_dump::stmt_text(body.code(), stmt),
                         kind: stmt_kind(stmt),
                         range: span_range(stmt.span, module),
                     }
@@ -1521,6 +1521,8 @@ fn stmt_kind(stmt: &Stmt) -> &'static str {
         Rvalue::Use(_) => "use",
         Rvalue::Const(_) => "const",
         Rvalue::Call { .. } => "call",
+        Rvalue::Closure { .. } => "closure",
+        Rvalue::Capture { .. } => "capture",
         Rvalue::Prim { .. } => "prim",
     }
 }
@@ -1566,7 +1568,7 @@ impl Lir {
             let place = ItemLoc::from(owner.item.clone());
 
             bodies.push(LirBody::of(
-                &lir,
+                &lir.body,
                 entity_name(&place),
                 lowered.item_range(&place).map(covered),
                 owner.module().0,

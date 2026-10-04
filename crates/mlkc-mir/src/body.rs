@@ -22,10 +22,17 @@ pub type ValueId = Idx<ValueData>;
 /// The id of a slot inside one body.
 pub type LocalId = Idx<LocalData>;
 
+/// The id of a lambda in the arena of one body.
+pub type LambdaId = Idx<LambdaData>;
+
 /// The MIR of one body.
 ///
 /// The body of an entity that owns one is addressed by the entity's name; a function declared
-/// inside a body has [`Body::local`] set, and its owner is the entity that declares it.
+/// inside a body has [`Body::local`] set, and its owner is the entity that declares it. The
+/// lambdas written in the body --- and in its lambdas, all of them --- are [ADR-0026]'s
+/// [`Body::lambdas`].
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Body {
     /// The entity whose body this is.
@@ -45,6 +52,126 @@ pub struct Body {
     pub values: Arena<ValueData>,
     /// The slots of the CFG form; empty once the SSA pass has run.
     pub locals: Arena<LocalData>,
+    /// The lambdas written in the body, its own lambdas' lambdas among them, in the order the
+    /// lowering made them ([ADR-0026][adr-0026]).
+    ///
+    /// The arena is flat: a lambda of a lambda is an entry of the same arena, and which
+    /// lambda wrote it is read off the [`Rvalue::Closure`] that creates it.
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    pub lambdas: Arena<LambdaData>,
+}
+
+/// The code of one lambda: a control-flow graph over words, as a body is.
+///
+/// A lambda is a value whose code the back end lifts into a function of its own
+/// ([ADR-0026][adr-0026]): the type the checker gave it says how the code crosses the ABI, the
+/// captures say what its environment holds, and the rest is a body of its own --- with its own
+/// blocks, values, and slots, because an SSA form and a local space are per function.
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LambdaData {
+    /// The type the checker gave the lambda: what a closure of it takes and gives back.
+    pub ty: Ty,
+    /// The bindings the lambda captured, in the free-variable order of the HIR.
+    pub captures: Vec<CaptureData>,
+    /// The parameters, in the order they are declared.
+    pub params: Vec<ValueId>,
+    /// The block the lambda enters.
+    pub entry: BlockId,
+    /// The blocks.
+    pub blocks: Arena<Block>,
+    /// The values: the parameters of the lambda, and the definitions of the statements.
+    pub values: Arena<ValueData>,
+    /// The slots of the CFG form; empty once the SSA pass has run.
+    pub locals: Arena<LocalData>,
+}
+
+/// One binding a lambda captured.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureData {
+    /// The name the binding was written under, if it was.
+    pub name: Option<Name>,
+    /// The type the checker gave the binding.
+    pub ty: Ty,
+    /// Where the binding is written, for the debug tables.
+    pub span: Span,
+}
+
+/// What a pass reads of a piece of code: the code of a [`Body`] or of a [`LambdaData`].
+///
+/// A pass that works on code and not on the identity a body carries --- the SSA construction,
+/// the verifier, the dumps, the selection of the back end --- reads this, and one function
+/// serves the body of an entity and the body of a lambda alike ([ADR-0026][adr-0026]).
+///
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+#[derive(Debug, Clone, Copy)]
+pub struct CodeRef<'a> {
+    /// The values the code is entered with, in the order they are declared.
+    pub params: &'a [ValueId],
+    /// The block the code enters.
+    pub entry: BlockId,
+    /// The blocks.
+    pub blocks: &'a Arena<Block>,
+    /// The values.
+    pub values: &'a Arena<ValueData>,
+    /// The slots of the CFG form.
+    pub locals: &'a Arena<LocalData>,
+}
+
+/// The code a pass built, before it is given the identity of what it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Code {
+    /// The values the code is entered with, in the order they are declared.
+    pub params: Vec<ValueId>,
+    /// The block the code enters.
+    pub entry: BlockId,
+    /// The blocks.
+    pub blocks: Arena<Block>,
+    /// The values.
+    pub values: Arena<ValueData>,
+    /// The slots of the CFG form.
+    pub locals: Arena<LocalData>,
+}
+
+impl Code {
+    /// What a pass reads of the code.
+    pub fn as_ref(&self) -> CodeRef<'_> {
+        CodeRef {
+            params: &self.params,
+            entry: self.entry,
+            blocks: &self.blocks,
+            values: &self.values,
+            locals: &self.locals,
+        }
+    }
+}
+
+impl Body {
+    /// What a pass reads of the body's code, whatever the body owns.
+    pub fn code(&self) -> CodeRef<'_> {
+        CodeRef {
+            params: &self.params,
+            entry: self.entry,
+            blocks: &self.blocks,
+            values: &self.values,
+            locals: &self.locals,
+        }
+    }
+}
+
+impl LambdaData {
+    /// What a pass reads of the lambda's code, whatever the lambda owns.
+    pub fn code(&self) -> CodeRef<'_> {
+        CodeRef {
+            params: &self.params,
+            entry: self.entry,
+            blocks: &self.blocks,
+            values: &self.values,
+            locals: &self.locals,
+        }
+    }
 }
 
 /// One block: its parameters, its statements, and the terminator it ends in.
@@ -143,6 +270,21 @@ pub enum Rvalue {
         callee: Callee,
         /// The arguments, in the order they are passed; each is a word.
         args: Vec<Operand>,
+    },
+    /// A closure: the lambda that is its code, and the words it captures
+    /// ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    Closure {
+        /// The code.
+        lambda: LambdaId,
+        /// The captured words, one per capture of the lambda, in the same order.
+        captures: Vec<Operand>,
+    },
+    /// The value of one binding the enclosing lambda captured; only in a lambda body.
+    Capture {
+        /// Which capture, by its place in the lambda's `captures` list.
+        index: u32,
     },
     /// A word-level primitive; the operator says which.
     Prim {
@@ -357,21 +499,41 @@ impl BodyBuilder {
         &mut self.blocks[id]
     }
 
+    /// Finishes the code, entered at `entry`.
+    ///
+    /// The code of a lambda is built the way the code of a body is; only the identity around it
+    /// tells the two apart ([`Body`], [`LambdaData`]).
+    pub fn code(self, entry: BlockId) -> Code {
+        Code {
+            params: self.params,
+            entry,
+            blocks: self.blocks,
+            values: self.values,
+            locals: self.locals,
+        }
+    }
+
     /// Finishes the body, entered at `entry`.
+    ///
+    /// The lambdas of the body are not the builder's: the lowering owns them and puts them in
+    /// when the walk is over.
     ///
     /// # Panics
     ///
     /// Panics if the builder was made without an owner, which [`BodyBuilder::new`] does not
     /// let a caller do.
     pub fn finish(self, entry: BlockId) -> Body {
+        let owner = self.owner.expect("a body has an owner");
+
         Body {
-            owner: self.owner.expect("a body has an owner"),
+            owner,
             local: self.local,
             params: self.params,
             entry,
             blocks: self.blocks,
             values: self.values,
             locals: self.locals,
+            lambdas: Arena::default(),
         }
     }
 }

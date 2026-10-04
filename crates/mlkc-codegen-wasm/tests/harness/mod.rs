@@ -21,8 +21,7 @@ use std::{
 };
 
 use mlkc_codegen_wasm::{
-    CodegenDiag, DebugInfo, FnShape, FunctionCtx, ModuleMir, Sources, WasmModule, assemble_module,
-    emit_function, layout,
+    CodegenDiag, DebugInfo, FnShape, ModuleMir, Sources, WasmModule, compile_module,
 };
 use mlkc_driver::{Driver, LinkPlan};
 use mlkc_hir_def::{BodyLoc, EntityLoc, FunctionLoc, ModuleId, Name, ProjectData, ProjectId};
@@ -80,10 +79,15 @@ impl Compiled {
     pub fn validate(&self) {
         use wasmparser::{Validator, WasmFeatures};
 
+        // A `ref.func` names a function the module declared, and a declaration is a declarative
+        // element segment ([ADR-0026][adr-0026]).
+        //
+        // [adr-0026]: ../../../docs/adr/0026-closure-representation.md
         let features = WasmFeatures::GC
             | WasmFeatures::GC_TYPES
             | WasmFeatures::FUNCTION_REFERENCES
-            | WasmFeatures::REFERENCE_TYPES;
+            | WasmFeatures::REFERENCE_TYPES
+            | WasmFeatures::BULK_MEMORY;
 
         if let Err(error) = Validator::new_with_features(features).validate_all(&self.wasm.bytes) {
             panic!(
@@ -296,31 +300,17 @@ fn compile(
     module: &ModuleMir,
     debug: DebugInfo,
 ) -> (WasmModule, Vec<CodegenDiag>) {
-    let layout = layout(module);
-    let mut artifacts = Vec::new();
-    let mut diagnostics = Vec::new();
+    let mut lirs = Vec::with_capacity(module.functions.len());
 
     for function in &module.functions {
         let lir = driver
             .lir(&function.owner)
             .expect("a function of the module to be lowered");
-        let ctx = FunctionCtx {
-            name: &function.name,
-            signature: &function.signature,
-            param_names: &function.param_names,
-            layout: &layout,
-        };
-        let (artifact, reports) = emit_function(&lir, &ctx);
 
-        artifacts.push(artifact);
-        diagnostics.extend(reports);
+        lirs.push(lir);
     }
 
-    let (wasm, reports) = assemble_module(module, &artifacts, debug, &sources(driver, module));
-
-    diagnostics.extend(reports);
-
-    (wasm, diagnostics)
+    compile_module(module, &lirs, debug, &sources(driver, module))
 }
 
 /// What the debug tables of a module read: the path, the text, and the lines of every file its

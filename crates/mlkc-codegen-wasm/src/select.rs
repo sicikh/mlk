@@ -15,19 +15,20 @@
 //! [adr-0020]: ../../docs/adr/0020-wasm-backend.md
 //! [adr-0022]: ../../docs/adr/0022-wasm-lir.md
 
+use mlkc_hir_ty::Ty as CheckedTy;
 use mlkc_lir_wasm::{
     Block, BlockId, BlockTarget as LirTarget, BodyBuilder, Inst, Op, RefTy, Terminator, Ty,
     ValueData, ValueId,
 };
 use mlkc_mir::{
-    BlockId as MirBlockId, BlockTarget, Body as MirBody, Callee, Const, Operand, Place, PrimOp,
+    BlockId as MirBlockId, BlockTarget, Callee, CodeRef, Const, LambdaId, Operand, Place, PrimOp,
     Rvalue, Stmt, StmtKind, Terminator as MirTerminator, ValueId as MirValueId,
 };
 use mlkc_span::Span;
 
 use crate::{
     emit::FunctionCtx,
-    refine::{AbiType, Refinements},
+    refine::{self, AbiType, Refinements},
 };
 
 /// The representation a value of this kind has in the target.
@@ -43,20 +44,18 @@ pub(crate) fn ty_of(abi: AbiType) -> Ty {
 /// # Panics
 ///
 /// Panics when `mir` is not a well-formed SSA body, which is the contract every stage before
-/// selection promises ([ADR-0019][adr-0019]): a body that breaks it is a compiler bug.
+/// selection promises ([ADR-0019][adr-0019]): a body that is not one is a compiler bug. The
+/// lambdas of the body were checked with it ([ADR-0026][adr-0026]).
 ///
 /// [adr-0019]: ../../docs/adr/0019-mir.md
-pub(crate) fn run(mir: &MirBody, ctx: &FunctionCtx<'_>) -> mlkc_lir_wasm::Body {
-    if let Err(invalid) = mir.validate_ssa() {
-        panic!("the input of selection is an SSA body, and this one is not: {invalid}");
-    }
-
-    Selector::new(mir, ctx).select()
+/// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+pub(crate) fn run(code: CodeRef<'_>, ctx: &FunctionCtx<'_>) -> mlkc_lir_wasm::Body {
+    Selector::new(code, ctx).select()
 }
 
-/// The one selection of one body.
+/// The one selection of one piece of code.
 struct Selector<'a> {
-    mir: &'a MirBody,
+    code: CodeRef<'a>,
     ctx: &'a FunctionCtx<'a>,
     /// What every value of the body is known to be.
     refinements: Refinements,
@@ -72,19 +71,23 @@ struct Selector<'a> {
     current: BlockId,
     /// The instructions of the block being filled.
     insts: Vec<Inst>,
+    /// The closure parameter of a lambda body, before it is cast to its environment.
+    env_param: Option<ValueId>,
+    /// The environment of a lambda body: its closure, as the environment type of the lambda.
+    env: Option<ValueId>,
 }
 
 impl<'a> Selector<'a> {
-    fn new(mir: &'a MirBody, ctx: &'a FunctionCtx<'a>) -> Self {
+    fn new(code: CodeRef<'a>, ctx: &'a FunctionCtx<'a>) -> Self {
         let builtins = ctx.layout.builtins();
-        let refinements = Refinements::of(mir, builtins, ctx.layout);
+        let refinements = Refinements::of(code, builtins, ctx.layout);
         let shape = ctx.signature.shape(builtins);
 
         // A parameter is the local the ABI already declares for it, so the type selection gives
         // it and the type its signature declares have to be the same one: a disagreement is a
         // gap of the check, and not something selection repairs with a cast.
         debug_assert_eq!(
-            mir.params
+            code.params
                 .iter()
                 .map(|value| refinements.get(*value).abi())
                 .collect::<Vec<_>>(),
@@ -93,12 +96,23 @@ impl<'a> Selector<'a> {
         );
 
         let mut builder = BodyBuilder::new(ty_of(shape.ret));
-        let mut values: Vec<Option<ValueId>> = vec![None; mir.values.len()];
 
-        for param in &mir.params {
+        // A lifted lambda is entered with its closure, the environment first: the parameter is
+        // the value the `Capture`s read through ([ADR-0026][adr-0026]).
+        //
+        // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+        let env_param = ctx.lambda.map(|lambda| {
+            builder.param(ValueData {
+                span: Span::dummy(),
+                ty: Ty::Ref(RefTy::Type(lambda.types.closure)),
+            })
+        });
+        let mut values: Vec<Option<ValueId>> = vec![None; code.values.len()];
+
+        for param in code.params {
             let ty = ty_of(refinements.get(*param).abi());
             let value = builder.param(ValueData {
-                span: mir.values[*param].span,
+                span: code.values[*param].span,
                 ty,
             });
 
@@ -107,16 +121,16 @@ impl<'a> Selector<'a> {
 
         // A block no path from the entry reaches is emitted as nothing: the code in it can
         // never run, and a value it defines is not a definition of the body.
-        let order = mlkc_mir::cfg::Cfg::of(mir).reverse_postorder().to_vec();
-        let mut reachable = vec![false; mir.blocks.len()];
+        let order = mlkc_mir::cfg::Cfg::of(code).reverse_postorder().to_vec();
+        let mut reachable = vec![false; code.blocks.len()];
 
         for at in &order {
             reachable[*at] = true;
         }
 
-        let mut blocks: Vec<Option<BlockId>> = vec![None; mir.blocks.len()];
+        let mut blocks: Vec<Option<BlockId>> = vec![None; code.blocks.len()];
 
-        for (at, block) in mir.blocks.iter() {
+        for (at, block) in code.blocks.iter() {
             let params = if reachable[at.index()] {
                 block
                     .params
@@ -124,7 +138,7 @@ impl<'a> Selector<'a> {
                     .map(|param| {
                         let ty = ty_of(refinements.get(*param).abi());
                         let value = builder.value(ValueData {
-                            span: mir.values[*param].span,
+                            span: code.values[*param].span,
                             ty,
                         });
 
@@ -146,10 +160,10 @@ impl<'a> Selector<'a> {
             }));
         }
 
-        let entry = blocks[mir.entry.index()].expect("the entry to be a block of the body");
+        let entry = blocks[code.entry.index()].expect("the entry to be a block of the body");
 
         Self {
-            mir,
+            code,
             ctx,
             refinements,
             ret: shape.ret,
@@ -158,14 +172,16 @@ impl<'a> Selector<'a> {
             builder,
             current: entry,
             insts: Vec::new(),
+            env_param,
+            env: None,
         }
     }
 
     /// Selects every block a path from the entry reaches, in reverse postorder, and finishes
     /// the body.
     fn select(mut self) -> mlkc_lir_wasm::Body {
-        let ids: Vec<MirBlockId> = self.mir.blocks.iter().map(|(id, _)| id).collect();
-        let order = mlkc_mir::cfg::Cfg::of(self.mir)
+        let ids: Vec<MirBlockId> = self.code.blocks.iter().map(|(id, _)| id).collect();
+        let order = mlkc_mir::cfg::Cfg::of(self.code)
             .reverse_postorder()
             .to_vec();
 
@@ -173,7 +189,22 @@ impl<'a> Selector<'a> {
             self.current = self.blocks[at].expect("every block to be allocated");
             self.insts = Vec::new();
 
-            let block = &self.mir.blocks[ids[at]];
+            // The environment of a lambda is read once, where the body begins: every capture is
+            // a field of it ([ADR-0026][adr-0026]).
+            //
+            // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+            if at == self.code.entry.index()
+                && let (Some(param), Some(lambda)) = (self.env_param, self.ctx.lambda)
+                && let Some(env_type) = lambda.env
+            {
+                self.env = Some(self.inst(
+                    Op::RefCast(RefTy::Type(env_type), param),
+                    Ty::Ref(RefTy::Type(env_type)),
+                    Span::dummy(),
+                ));
+            }
+
+            let block = &self.code.blocks[ids[at]];
 
             for stmt in &block.stmts {
                 self.stmt(stmt);
@@ -187,7 +218,7 @@ impl<'a> Selector<'a> {
             built.term = term;
         }
 
-        let entry = self.blocks[self.mir.entry.index()].expect("the entry to be a block");
+        let entry = self.blocks[self.code.entry.index()].expect("the entry to be a block");
 
         self.builder.finish(entry)
     }
@@ -198,6 +229,7 @@ impl<'a> Selector<'a> {
         let Place::Value(place) = place else {
             panic!("the input of selection is an SSA body, and this one writes a slot");
         };
+        let abi = self.refinements.get(*place).abi();
 
         // A copy of a value is not an instruction of the target: what the copy defines is what
         // it read.
@@ -207,15 +239,103 @@ impl<'a> Selector<'a> {
             Rvalue::Const(constant) => self.constant(constant, stmt.span),
             Rvalue::Prim { op, args } => self.prim(*op, args, stmt.span),
             Rvalue::Call { callee, args } => self.call(callee, args, stmt.span),
+            Rvalue::Closure { lambda, captures } => self.closure(*lambda, captures, stmt.span),
+            Rvalue::Capture { index } => self.capture(*index, abi, stmt.span),
         };
+        let selected = self.coerce(selected, abi, stmt.span);
 
-        debug_assert_eq!(
-            self.builder.value_data(selected).ty,
-            ty_of(self.refinements.get(*place).abi()),
+        debug_assert!(
+            self.builder
+                .value_data(selected)
+                .ty
+                .is_subtype_of(ty_of(abi)),
             "what a statement defines to be the kind the refinements gave it",
         );
 
         self.values[place.index()] = Some(selected);
+    }
+
+    /// The value a statement computes, as the kind the refinement says the place is.
+    ///
+    /// A call through a generalized closure gives back a word while the checker recorded an
+    /// immediate, and a closure is a concrete reference where the refinement is only a word:
+    /// the value is narrowed or widened where it is defined, once ([ADR-0020][adr-0020]).
+    ///
+    /// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+    fn coerce(&mut self, value: ValueId, abi: AbiType, span: Span) -> ValueId {
+        match abi {
+            // Anything a value is crosses as a word: an immediate and a concrete reference are
+            // both `eq` references, and need no instruction.
+            AbiType::Word => value,
+            AbiType::Immediate => self.immediate(value, span),
+        }
+    }
+
+    /// Selects a closure: the code, and the words it captures ([ADR-0026][adr-0026]).
+    ///
+    /// [adr-0026]: ../../docs/adr/0026-closure-representation.md
+    fn closure(&mut self, lambda: LambdaId, captures: &'a [Operand], span: Span) -> ValueId {
+        let layout = self.ctx.layout;
+        let plan = layout
+            .lambda(self.ctx.owner, lambda)
+            .unwrap_or_else(|| panic!("a closure of a lambda the module did not number"));
+        let code = self.inst(
+            Op::RefFunc {
+                function: plan.index,
+            },
+            Ty::Ref(RefTy::Type(plan.types.fn_type)),
+            span,
+        );
+        let mut fields = Vec::with_capacity(1 + captures.len());
+
+        fields.push(code);
+
+        for (capture, abi) in captures.iter().zip(&plan.captures) {
+            fields.push(self.operand_into(capture, *abi, span));
+        }
+
+        match plan.env {
+            Some(env) => {
+                self.inst(
+                    Op::StructNew { ty: env, fields },
+                    Ty::Ref(RefTy::Type(env)),
+                    span,
+                )
+            },
+            None => {
+                self.inst(
+                    Op::StructNew {
+                        ty: plan.types.closure,
+                        fields,
+                    },
+                    Ty::Ref(RefTy::Type(plan.types.closure)),
+                    span,
+                )
+            },
+        }
+    }
+
+    /// Selects a capture: one field of the environment the lambda was entered with.
+    fn capture(&mut self, index: u32, abi: AbiType, span: Span) -> ValueId {
+        let Some(lambda) = self.ctx.lambda else {
+            panic!("a capture outside a lambda body");
+        };
+        let Some(env_type) = lambda.env else {
+            panic!("a capture of a lambda that captured nothing");
+        };
+        let env = self
+            .env
+            .expect("the environment of a capturing lambda to be read");
+
+        self.inst(
+            Op::StructGet {
+                ty: env_type,
+                field: index + 1,
+                value: env,
+            },
+            ty_of(abi),
+            span,
+        )
     }
 
     /// The LIR value a MIR value was selected to.
@@ -440,21 +560,91 @@ impl<'a> Selector<'a> {
                 )
             },
             Callee::Indirect(callee) => {
-                let callee = self.operand_word(callee, span);
-                let mut arguments = Vec::with_capacity(args.len());
+                // The shape of the call is the shape of the callee's checked type: a closure a
+                // `let` generalized is called as the word shape its code was compiled over, and
+                // the result is narrowed at the use ([ADR-0026][adr-0026]).
+                //
+                // [adr-0026]: ../../docs/adr/0026-closure-representation.md
+                let shape = refine::closure_shape_of_ty(
+                    self.operand_ty(callee),
+                    self.ctx.layout.builtins(),
+                )
+                .unwrap_or_else(|| {
+                    panic!("a call through a value whose checked type is not a function type")
+                });
+                let types = self
+                    .ctx
+                    .layout
+                    .closure_types(&shape)
+                    .unwrap_or_else(|| panic!("the shape of a call to be in the type plan"));
 
-                for argument in args {
-                    arguments.push(self.operand_value(argument, span));
+                assert_eq!(
+                    args.len(),
+                    shape.params.len(),
+                    "a call to pass one argument per parameter of its callee",
+                );
+
+                let closure = self.closure_value(callee, types.closure, span);
+                let mut arguments = Vec::with_capacity(args.len() + 1);
+
+                // The environment of the lifted function is the closure itself.
+                arguments.push(closure);
+
+                for (argument, abi) in args.iter().zip(&shape.params) {
+                    arguments.push(self.operand_into(argument, *abi, span));
                 }
 
+                let code = self.inst(
+                    Op::StructGet {
+                        ty: types.closure,
+                        field: 0,
+                        value: closure,
+                    },
+                    Ty::Ref(RefTy::Type(types.fn_type)),
+                    span,
+                );
+
                 self.inst(
-                    Op::CallIndirect {
-                        callee,
+                    Op::CallRef {
+                        signature: types.fn_type,
+                        callee: code,
                         args: arguments,
                     },
-                    Ty::EQREF,
+                    ty_of(shape.ret),
                     span,
                 )
+            },
+        }
+    }
+
+    /// Selects a closure as the value its code is read from.
+    ///
+    /// A value that is already a reference of the type --- the closure type or an environment
+    /// of it --- is read as it is; anything else, a word and nothing more, is cast, exactly as
+    /// a structure is cast where a field is read.
+    fn closure_value(&mut self, operand: &Operand, closure: u32, span: Span) -> ValueId {
+        let value = self.operand_word(operand, span);
+
+        if let Ty::Ref(RefTy::Type(index)) = self.builder.value_data(value).ty
+            && self.ctx.layout.upcasts(index, closure)
+        {
+            return value;
+        }
+
+        self.inst(
+            Op::RefCast(RefTy::Type(closure), value),
+            Ty::Ref(RefTy::Type(closure)),
+            span,
+        )
+    }
+
+    /// The checked type of the value an operand reads.
+    fn operand_ty(&self, operand: &Operand) -> &CheckedTy {
+        match operand {
+            Operand::Value(value) => &self.code.values[*value].ty,
+            Operand::Const(_) => panic!("a callee that is a constant"),
+            Operand::Local(_) => {
+                panic!("the input of selection is an SSA body, and this one reads a slot")
             },
         }
     }
@@ -526,7 +716,7 @@ impl<'a> Selector<'a> {
 
     /// Selects an edge: its arguments as the parameters of its target want them.
     fn edge(&mut self, target: &'a BlockTarget, span: Span) -> LirTarget {
-        let destination = &self.mir.blocks[target.block];
+        let destination = &self.code.blocks[target.block];
 
         debug_assert_eq!(
             destination.params.len(),

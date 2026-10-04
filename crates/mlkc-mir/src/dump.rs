@@ -11,33 +11,53 @@ use std::fmt::Write as _;
 use mlkc_hir_def::ItemLocLike;
 
 use crate::{
-    BlockId, BlockTarget, Body, Callee, Const, LocalId, Operand, Place, Rvalue, Stmt, StmtKind,
-    Terminator, ValueId,
+    BlockId, BlockTarget, Body, Callee, CaptureData, CodeRef, Const, LocalId, Operand, Place,
+    Rvalue, Stmt, StmtKind, Terminator, ValueId,
 };
 
-/// Reads a body as a person reads it.
+/// Reads a body as a person reads it: the code of the body, and the code of every lambda it
+/// wrote.
 pub fn body(body: &Body) -> String {
     let mut out = String::new();
-
-    let _ = write!(out, "fun {}", owner_text(body));
+    let mut header = format!("fun {}", owner_text(body));
 
     if let Some(local) = body.local {
-        let _ = write!(out, " ({local:?})");
+        let _ = write!(header, " ({local:?})");
     }
 
-    let _ = writeln!(out, " (entry {})", block_label(body.entry));
+    code_text(&mut out, body.code(), &header);
 
-    if !body.params.is_empty() {
+    for (id, lambda) in body.lambdas.iter() {
+        let captures = labels(lambda.captures.iter().map(capture_text));
+        let header = format!(
+            "lambda #{}: {} captures ({captures})",
+            id.index(),
+            lambda.ty
+        );
+
+        let _ = writeln!(out);
+
+        code_text(&mut out, lambda.code(), &header);
+    }
+
+    out
+}
+
+/// Reads one piece of code --- a body's or a lambda's --- under its header line.
+fn code_text(out: &mut String, code: CodeRef<'_>, header: &str) {
+    let _ = writeln!(out, "{header} (entry {})", block_label(code.entry));
+
+    if !code.params.is_empty() {
         let params = labels(
-            body.params
+            code.params
                 .iter()
-                .map(|value| format!("{}: {}", value_label(*value), body.values[*value].ty)),
+                .map(|value| format!("{}: {}", value_label(*value), code.values[*value].ty)),
         );
 
         let _ = writeln!(out, "  params: {params}");
     }
 
-    for (id, block) in body.blocks.iter() {
+    for (id, block) in code.blocks.iter() {
         let _ = write!(out, "  {}", block_label(id));
 
         if !block.params.is_empty() {
@@ -51,13 +71,11 @@ pub fn body(body: &Body) -> String {
         let _ = writeln!(out, ":");
 
         for stmt in &block.stmts {
-            let _ = writeln!(out, "    {}", stmt_text(body, stmt));
+            let _ = writeln!(out, "    {}", stmt_text(code, stmt));
         }
 
         let _ = writeln!(out, "    {}", terminator_text(&block.term));
     }
-
-    out
 }
 
 /// The name of the owner of a body.
@@ -68,12 +86,20 @@ fn owner_text(body: &Body) -> String {
         .map_or_else(|| format!("{:?}", body.owner.item), ToString::to_string)
 }
 
+/// One capture of a lambda, as it is read.
+fn capture_text(capture: &CaptureData) -> String {
+    match &capture.name {
+        Some(name) => format!("{name}: {}", capture.ty),
+        None => capture.ty.to_string(),
+    }
+}
+
 /// What an assignment writes.
-fn place_text(body: &Body, place: &Place) -> String {
+fn place_text(code: CodeRef<'_>, place: &Place) -> String {
     match place {
         // A slot is named where it is written: a read of it is a read of the slot.
         Place::Local(local) => {
-            match &body.locals[*local].name {
+            match &code.locals[*local].name {
                 Some(name) => format!("{}({name})", local_label(*local)),
                 None => local_label(*local),
             }
@@ -92,10 +118,10 @@ fn operand_text(operand: &Operand) -> String {
 }
 
 /// What a statement writes and computes, as a line.
-pub fn stmt_text(body: &Body, stmt: &Stmt) -> String {
+pub fn stmt_text(code: CodeRef<'_>, stmt: &Stmt) -> String {
     let StmtKind::Assign { place, rvalue } = &stmt.kind;
 
-    format!("{} = {}", place_text(body, place), rvalue_text(rvalue))
+    format!("{} = {}", place_text(code, place), rvalue_text(rvalue))
 }
 
 /// What a statement computes.
@@ -106,6 +132,14 @@ fn rvalue_text(rvalue: &Rvalue) -> String {
         Rvalue::Call { callee, args } => {
             format!("call {}({})", callee_text(callee), arguments_text(args),)
         },
+        Rvalue::Closure { lambda, captures } => {
+            format!(
+                "closure lambda#{} ({})",
+                lambda.index(),
+                arguments_text(captures)
+            )
+        },
+        Rvalue::Capture { index } => format!("capture #{index}"),
         Rvalue::Prim { op, args } => {
             format!("prim {}({})", op.as_str(), arguments_text(args))
         },

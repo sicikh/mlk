@@ -15,7 +15,8 @@
 use std::{collections::VecDeque, fmt};
 
 use crate::{
-    BlockId, Body, LocalId, Operand, Place, Rvalue, StmtKind, Terminator, ValueId,
+    BlockId, Body, CaptureData, CodeRef, LambdaId, LocalId, Operand, Place, Rvalue, StmtKind,
+    Terminator, ValueId,
     cfg::{Cfg, targets},
 };
 
@@ -103,6 +104,22 @@ pub enum Invalid {
         /// The block.
         block: BlockId,
     },
+    /// A lambda of the body does not hold the invariant of the form.
+    Lambda {
+        /// The lambda.
+        lambda: LambdaId,
+        /// What is wrong with it.
+        invalid: Box<Invalid>,
+    },
+    /// A capture is read outside a lambda body.
+    CaptureOutsideLambda,
+    /// A capture index is not one of the lambda's captures.
+    CaptureOutOfRange {
+        /// The index that is read.
+        index: u32,
+        /// How many captures the lambda has.
+        captures: usize,
+    },
 }
 
 impl fmt::Display for Invalid {
@@ -189,6 +206,22 @@ impl fmt::Display for Invalid {
                     block_text(*block),
                 )
             },
+            Self::Lambda { lambda, invalid } => {
+                write!(
+                    f,
+                    "lambda #{} is not well-formed: {invalid}",
+                    lambda.index()
+                )
+            },
+            Self::CaptureOutsideLambda => {
+                f.write_str("a capture is read, and the body it is read in is not a lambda")
+            },
+            Self::CaptureOutOfRange { index, captures } => {
+                write!(
+                    f,
+                    "capture {index} is read, and the lambda captured {captures}",
+                )
+            },
         }
     }
 }
@@ -204,9 +237,32 @@ impl Body {
         self.validate(Form::Ssa)
     }
 
-    /// Checks that the body holds the invariant of `form`.
+    /// Checks that the body and every lambda it wrote hold the invariant of `form`.
     pub fn validate(&self, form: Form) -> Result<(), Invalid> {
-        self.check_ids()?;
+        self.code().validate(form, None)?;
+
+        for (lambda, data) in self.lambdas.iter() {
+            data.code()
+                .validate(form, Some(&data.captures))
+                .map_err(|invalid| {
+                    Invalid::Lambda {
+                        lambda,
+                        invalid: Box::new(invalid),
+                    }
+                })?;
+        }
+
+        Ok(())
+    }
+}
+
+impl CodeRef<'_> {
+    /// Checks that the code holds the invariant of `form`.
+    ///
+    /// `captures` is what the code's lambda captured, for the code of a lambda; `None` for the
+    /// body of an entity, where a capture is nothing.
+    fn validate(&self, form: Form, captures: Option<&[CaptureData]>) -> Result<(), Invalid> {
+        self.check_ids(captures)?;
         self.check_edges()?;
 
         match form {
@@ -216,12 +272,12 @@ impl Body {
     }
 
     /// Checks that every id an instruction writes down is an id of the body.
-    fn check_ids(&self) -> Result<(), Invalid> {
+    fn check_ids(&self, captures: Option<&[CaptureData]>) -> Result<(), Invalid> {
         if self.entry.index() >= self.blocks.len() {
             return Err(Invalid::MissingEntry { entry: self.entry });
         }
 
-        for value in &self.params {
+        for value in self.params {
             self.check_value(*value)?;
         }
 
@@ -238,7 +294,7 @@ impl Body {
                     Place::Value(value) => self.check_value(*value)?,
                 }
 
-                self.check_rvalue(rvalue)?;
+                self.check_rvalue(rvalue, captures)?;
             }
 
             self.check_terminator(&block.term)?;
@@ -278,7 +334,7 @@ impl Body {
         let mut defined = vec![false; self.values.len()];
         let mut parameter = vec![false; self.values.len()];
 
-        for value in &self.params {
+        for value in self.params {
             parameter[value.index()] = true;
         }
 
@@ -337,7 +393,7 @@ impl Body {
     /// promise to be about.
     fn check_definite_assignment(&self) -> Result<(), Invalid> {
         let blocks: Vec<BlockId> = self.blocks.iter().map(|(id, _)| id).collect();
-        let cfg = Cfg::of(self);
+        let cfg = Cfg::of(*self);
         let entry = self.entry.index();
 
         let mut assigned: Vec<Option<Vec<bool>>> = vec![None; self.blocks.len()];
@@ -420,7 +476,7 @@ impl Body {
         let entry = self.entry.index();
         let mut defs: Vec<Option<Def>> = vec![None; self.values.len()];
 
-        for value in &self.params {
+        for value in self.params {
             let at = value.index();
 
             if defs[at].is_some() {
@@ -470,7 +526,7 @@ impl Body {
 
         // Every use is dominated by its definition. A use in a block no path from the entry
         // reaches is not checked: there is no path to it for the promise to be about.
-        let cfg = Cfg::of(self);
+        let cfg = Cfg::of(*self);
         let rpo = cfg.reverse_postorder();
         let mut number = vec![usize::MAX; self.blocks.len()];
 
@@ -572,12 +628,29 @@ impl Body {
     }
 
     /// Checks the ids of an rvalue.
-    fn check_rvalue(&self, rvalue: &Rvalue) -> Result<(), Invalid> {
+    fn check_rvalue(
+        &self,
+        rvalue: &Rvalue,
+        captures: Option<&[CaptureData]>,
+    ) -> Result<(), Invalid> {
         for operand in rvalue_operands(rvalue) {
             match operand {
                 Operand::Value(value) => self.check_value(*value)?,
                 Operand::Local(local) => self.check_local(*local)?,
                 Operand::Const(_) => {},
+            }
+        }
+
+        if let Rvalue::Capture { index } = rvalue {
+            let Some(captures) = captures else {
+                return Err(Invalid::CaptureOutsideLambda);
+            };
+
+            if *index as usize >= captures.len() {
+                return Err(Invalid::CaptureOutOfRange {
+                    index: *index,
+                    captures: captures.len(),
+                });
             }
         }
 
@@ -658,6 +731,8 @@ fn rvalue_operands(rvalue: &Rvalue) -> Vec<&Operand> {
 
             operands
         },
+        Rvalue::Closure { captures, .. } => captures.iter().collect(),
+        Rvalue::Capture { .. } => Vec::new(),
         Rvalue::Prim { args, .. } => args.iter().collect(),
     }
 }

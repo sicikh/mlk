@@ -197,12 +197,24 @@ pub fn op_text(op: &Op) -> String {
         CallLocal { function, args } => {
             format!("call-local {function:?}({})", value_labels(args))
         },
-        CallIndirect { callee, args } => {
+        CallRef {
+            signature,
+            callee,
+            args,
+        } => {
             format!(
-                "call-indirect {}({})",
+                "call-ref #{signature} {}({})",
                 value_label(*callee),
-                value_labels(args)
+                value_labels(args),
             )
+        },
+        RefFunc { function } => format!("ref.func ${function}"),
+        RefNull(ty) => format!("ref.null {}", ref_text(*ty)),
+        StructNew { ty, fields } => {
+            format!("struct.new #{ty}({})", value_labels(fields))
+        },
+        StructGet { ty, field, value } => {
+            format!("struct.get #{ty}.{field} {}", value_label(*value))
         },
         String(value) => format!("str {value:?}"),
     }

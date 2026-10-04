@@ -726,6 +726,15 @@ export interface Driver {
      */
     useStd(): Promise<StdFile[]>;
 
+    /**
+     * The canonical name of the project of the editor: what a build and the sources of it are
+     * named by ([ADR-0021](../../../docs/adr/0021-translation-units.md)).
+     *
+     * A browser holds one project, and this is its name: the editor writes the files of a build
+     * under it, and names the archive of the sources after it.
+     */
+    project(): Promise<string>;
+
     /** The concrete syntax tree of the buffer: lossless, tokens and trivia included. */
     cst(path: string): Promise<SyntaxNode>;
 
@@ -824,6 +833,7 @@ export type DriverRequest =
     | { kind: "setText"; path: string; text: string | null }
     | { kind: "setOptions"; id: number; debug: DebugInfo; opt: OptLevel }
     | { kind: "useStd"; id: number }
+    | { kind: "project"; id: number }
     | { kind: "cst"; id: number; path: string }
     | { kind: "ast"; id: number; path: string }
     | { kind: "hir"; id: number; path: string }
@@ -981,6 +991,7 @@ export async function loadDriver(): Promise<Driver> {
     return {
         push: (path, text) => post({ kind: "setText", path, text }),
         useStd: () => ask<StdFile[]>((id) => ({ kind: "useStd", id })),
+        project: () => ask<string>((id) => ({ kind: "project", id })),
         cst: (path) => ask<SyntaxNode>((id) => ({ kind: "cst", id, path })),
         ast: (path) => ask<unknown | null>((id) => ({ kind: "ast", id, path })),
         hir: (path) => ask<Hir | null>((id) => ({ kind: "hir", id, path })),

@@ -127,6 +127,17 @@ impl WasmDriver {
         to_js(&self.register_library())
     }
 
+    /// The canonical name of the project the editor writes in: what a host names the files of a
+    /// build by, and the archive of the sources beside them ([ADR-0021]).
+    ///
+    /// A browser holds one project, which is why nothing a host pushes names one: this is that
+    /// name, and the editor names a build and the sources of it after it.
+    ///
+    /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    pub fn project(&self) -> String {
+        PROJECT.to_owned()
+    }
+
     /// Configures the pipeline: what debug information a module carries, and how hard the
     /// passes optimize ([ADR-0025]).
     ///
@@ -2153,6 +2164,11 @@ mod tests {
                 serde_json::to_string(&diagnostics).unwrap_or_default(),
             );
         }
+    }
+
+    #[test]
+    fn the_project_crosses_the_boundary_as_its_name() {
+        assert_eq!(WasmDriver::new().project(), "app");
     }
 
     #[test]

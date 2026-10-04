@@ -553,6 +553,20 @@ const STEPS = {
     // the paths are read off the directory at its end (see `entries`).
     packed: `return window.__zip ?? ''`,
 
+    // The sources beside the build: every buffer of the project and of the library, under the
+    // paths the debug information names them by. The same stub as the build reads the file,
+    // and the archive of the build is already in hand, so this one replaces it.
+    sources: `window.__zip = '';
+		document.querySelector('[data-sources]').click();
+		return true`,
+
+    sourcesRead: `return JSON.stringify({
+			files: window.__build ?? [],
+			saved: window.__saved ?? [],
+			lines: [...document.querySelectorAll('[data-panel=console] .line')]
+				.map((it) => text(it).trim())
+		})`,
+
     // A project with a mistake in it has no build a person can ask for: the tool is read rather
     // than pressed, and what it says is the reason.
     compileGuard: `const button = document.querySelector('[data-compile]');
@@ -928,6 +942,7 @@ const WAITS = {
     built: `return [...document.querySelectorAll('[data-panel=console] .line')]
 			.some((it) => text(it).includes('the build is'))`,
     packed: `return (window.__zip ?? '').length > 0`,
+    sources: `return (window.__zip ?? '').length > 0`,
     broken: `return diagnostics().length > 0`,
     bogus: `return inspector().textContent.includes('Bogus')`,
     long: `return inspector().textContent.includes('x79')`,
@@ -1279,6 +1294,20 @@ async function main() {
 
     built.manifest = JSON.parse(contents(packed, described).toString("utf8"));
 
+    // The sources a debugger reads beside a build: an archive whose entries are the paths of
+    // the debug information without their root, so one mapping rule points a debugger at the
+    // directory they are unpacked into. The name of the archive is the name of the build's.
+    await ask(STEPS.sources);
+    await until(WAITS.sources, "the archive of the sources");
+    const sources = JSON.parse(await ask(STEPS.sourcesRead));
+    const sourceZip = Buffer.from(await ask(STEPS.packed), "base64");
+
+    sources.entries = entries(sourceZip);
+    sources.main = contents(
+        sourceZip,
+        sources.entries.find((it) => it.name === "main.mlk"),
+    ).toString("utf8");
+
     // A body with a choice in it: the CFG form reads the block that branches and the blocks the
     // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
     // they meet in. The buffer is typed into the one that is in front.
@@ -1472,6 +1501,7 @@ async function main() {
             config,
             ran,
             built,
+            sources,
             compileGuard,
             header,
             program,
@@ -1942,12 +1972,12 @@ function report(page, problems, warnings, asked) {
             "the header holds the tools of the project, and not the name of the buffer",
             page.header.brand === "MLK" &&
                 !page.header.name &&
-                page.header.tools.length === 3 &&
+                page.header.tools.length === 4 &&
                 page.header.tools.map((it) => it.label).join(" ") ===
-                    "Check Compile Run" &&
+                    "Check Compile Sources Run" &&
                 page.header.tools.every((it) => it.mark && it.aria !== "") &&
-                page.header.tools[2].primary &&
-                page.header.tools.slice(0, 2).every((it) => !it.primary),
+                page.header.tools[3].primary &&
+                page.header.tools.slice(0, 3).every((it) => !it.primary),
         ],
         [
             // The chords are written where a pointer reads them without pressing either tool:
@@ -1956,7 +1986,7 @@ function report(page, problems, warnings, asked) {
             // what is read instead.
             "the tools say which keys ask for them",
             page.header.tools[0].title.includes("Ctrl+Shift+Enter") &&
-                page.header.tools[2].title.includes("Ctrl+Enter"),
+                page.header.tools[3].title.includes("Ctrl+Enter"),
         ],
         [
             // A build is one archive rather than a file per module: a download cannot make a
@@ -2000,6 +2030,26 @@ function report(page, problems, warnings, asked) {
                             it.module === "std::runtime" &&
                             it.name === "print-int",
                     ),
+        ],
+        [
+            // The sources are handed over as an archive of their own, and its name says which
+            // build it belongs to. An entry stands where the debug information of a module reads
+            // its path, so unpacking the archive and mapping `/` to the directory finds every
+            // source, the library included.
+            "the sources are handed over as one archive, under the paths of the debug information",
+            page.sources.files.length === 2 &&
+                page.sources.files[1].name === "app.sources.zip" &&
+                page.sources.files[1].blob &&
+                page.sources.saved.length === 2 &&
+                page.sources.entries
+                    .map((it) => it.name)
+                    .sort()
+                    .join(" ") ===
+                    "main.mlk std/core.mlk std/prelude.mlk std/runtime.mlk" &&
+                page.sources.main.includes("fun fib") &&
+                page.sources.lines.some((it) =>
+                    it.includes("the sources are 4 files in app.sources.zip"),
+                ),
         ],
         [
             "the console has a program tab",

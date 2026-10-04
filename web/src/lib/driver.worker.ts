@@ -101,6 +101,8 @@ function answer(
             return driver.setOptions(request.debug, request.opt);
         case "useStd":
             return driver.useStd();
+        case "project":
+            return driver.project();
         case "cst":
             return driver.cst(request.path);
         case "ast":

@@ -228,6 +228,10 @@ pub struct LinkPlan {
   The bytes are the bytes a run instantiates;
   the archive is what keeps every module in the folder its name names,
   which a download of loose files cannot carry.
+  The sources travel beside the build as an archive of their own,
+  under the paths of the debug information without their root (`main.mlk`, `std/core.mlk`),
+  which a debugger is pointed at by one mapping rule
+  ([ADR-0025][0025-debug-information-formats.md]).
 
 Nothing merges modules, and no engine extension is required.
 

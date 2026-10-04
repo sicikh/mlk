@@ -687,6 +687,65 @@ pub fun main() : Unit =
     }
 
     /**
+     * Hands the sources of the project to a person as an archive ([ADR-0025]).
+     *
+     * A debugger that reads DWARF reads a path where a source stands, and the paths of the
+     * language are virtual: `/main.mlk` is not a file on a disk. The entries of the archive are
+     * those paths without their root --- `main.mlk`, `std/core.mlk` --- so unpacking it into a
+     * directory and mapping `/` to that directory is the whole of the setup, and the same rule
+     * in every debugger.
+     *
+     * What goes in is every buffer the editor holds, the library included: it is what the
+     * modules of the build were compiled from, and stepping into a function of it should find
+     * the source it was written in.
+     *
+     * [adr-0025]: ../../../docs/adr/0025-debug-information-formats.md
+     */
+    async function sources() {
+        if (!driver) return;
+
+        try {
+            const project = await driver.project();
+            const encoder = new TextEncoder();
+            const files: ArchivedFile[] = [];
+            const seen = new Set<string>();
+
+            for (const it of buffers) {
+                const path = it.path.replace(/^\/+/, "");
+
+                if (path === "" || seen.has(path)) continue;
+
+                seen.add(path);
+                files.push({ path, bytes: encoder.encode(it.text) });
+            }
+
+            files.sort((left, right) =>
+                left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+            );
+
+            const named = `${pathOf(project)}.sources.zip`;
+
+            save(named, archive(files));
+
+            say(
+                "note",
+                `the sources are ${files.length} file${files.length === 1 ? "" : "s"} in ${named}: ${files
+                    .map((it) => it.path)
+                    .join(", ")}`,
+            );
+            say(
+                "note",
+                "unpack them and point a debugger at the directory: lldb `settings set target.source-map / DIR`, gdb `set substitute-path / DIR`",
+            );
+
+            consoleTab = "compiler";
+            view = "console";
+        } catch (error) {
+            say("error", `the driver refused the sources: ${String(error)}`);
+        }
+    }
+
+    /**
      * A canonical name as a path: `app::main` is `app/main`, and `app` is `app`.
      *
      * A canonical name is the project and the path of the module inside it, and a name a file
@@ -970,6 +1029,36 @@ pub fun main() : Unit =
                 <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             <span class="label">Compile</span>
+        </button>
+        <button
+            class="tool"
+            data-sources
+            aria-label="Download the sources of the project"
+            title="Download the sources as an archive, to point a debugger at them"
+            disabled={!driver}
+            onclick={sources}
+        >
+            <svg
+                class="mark"
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+            >
+                <path
+                    d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"
+                />
+                <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                <path d="m10 13-2 2 2 2" />
+                <path d="m14 17 2-2-2-2" />
+            </svg>
+            <span class="label">Sources</span>
         </button>
         <button
             class="tool primary"

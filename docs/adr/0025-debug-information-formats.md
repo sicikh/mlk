@@ -145,6 +145,10 @@ The paths of the language are virtual --- `/main.mlk` is not a path on a disk --
 so a debugger is told where the files are read from:
 `settings set target.source-map / DIR` in `lldb`,
 `set substitute-path / DIR` in `gdb`.
+The editor hands the sources over as an archive of their own ([ADR-0021][0021-translation-units.md]):
+an entry per file, under the path the debug information names it by
+(`main.mlk`, `std/core.mlk`),
+so unpacking it into a directory and mapping `/` to that directory is the whole of the setup.
 What a debugger shows is what the option carries:
 today a breakpoint, a source listing, and a stack trace of functions work,
 and a value cannot be read until a pass emits locations,

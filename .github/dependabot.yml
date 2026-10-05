@@ -19,6 +19,11 @@ updates:
       groups:
           cargo:
               patterns: ["*"]
+      ignore:
+          # `mlkc-intern` uses `hashbrown::raw::RawTable` as DashMap's shard type,
+          # so its hashbrown must be the release `dashmap` was built with; the two
+          # move in one change, and a lone hashbrown bump never compiles.
+          - dependency-name: "hashbrown"
 
     # The packages of the pnpm workspace, `web` and `packages/*` included.
     - package-ecosystem: npm
@@ -28,6 +33,11 @@ updates:
       groups:
           npm:
               patterns: ["*"]
+      ignore:
+          # `svelte-check` cannot read TypeScript 7 (the native compiler) yet;
+          # allow the 6.x line until Svelte's tooling catches up.
+          - dependency-name: "typescript"
+            versions: ["^7.0.0"]
 
     # The inputs of `flake.lock`: nixpkgs, rust-overlay, and crane. A bump of nixpkgs
     # moves wasm-bindgen-cli too, which the flake asserts against `Cargo.lock`.

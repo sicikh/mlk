@@ -26,3 +26,5 @@ rustc-ice-*.txt
 
 .DS_Store
 Thumbs.db
+
+.direnv/

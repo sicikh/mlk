@@ -1,8 +1,11 @@
 # What has to hold before anything is built or published.
 #
-# The steps are the recipes of the justfile — `just ready` is this file, run on a laptop —
-# and the tools are the ones `just install-tools` brings, so a version that changes there
-# changes here. What is published is built once more, at the path Pages serves it from.
+# Every job runs its commands inside the Nix dev shell of `flake.nix`, so the
+# Rust toolchain, the formatter's nightly rustfmt, node, pnpm, the wasm tools,
+# and the browser are the ones the flake pins, and a version changes in one
+# place. The steps are the recipes of the justfile — `just ready` is this file,
+# run on a laptop. What is published is built once more, at the path Pages
+# serves it from.
 name: CI
 
 on:
@@ -22,6 +25,9 @@ concurrency:
 
 env:
     CARGO_TERM_COLOR: always
+    # Corepack downloads the pnpm `package.json` pins the first time it runs it;
+    # in CI it must not stop to ask whether it should.
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
 
 jobs:
     rust:
@@ -29,50 +35,50 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@1.99.0
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            # The `nix` job saves the store — the shell, the toolchains, and the
+            # compiler package — under a key that follows the files a derivation is
+            # made of. Every other job only restores it.
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
-                  components: clippy
-            - uses: Swatinem/rust-cache@v2
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            # `Swatinem/rust-cache` keys its cache on `rustc -vV` and reads the
+            # workspace with `cargo metadata`, both outside the dev shell; the
+            # shell's `bin` goes on the path for it. `tail` drops the shell's banner.
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
               with:
                   shared-key: ci
-            - uses: taiki-e/install-action@v2
-              with:
-                  tool: just
-            - run: just lint
-            - run: just test
-            - run: just test-doc
+            - run: nix develop -c just lint
+            - run: nix develop -c just test
+            - run: nix develop -c just test-doc
 
     generated:
         name: generated files
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@1.99.0
-            # `just format` formats Rust with the nightly rustfmt, because the style the
-            # repository is written in needs it. The dev shell pins the same nightly by date;
-            # CI takes the current one, and this job is what notices when it changes.
-            - uses: dtolnay/rust-toolchain@nightly
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
-                  components: rustfmt
-            - uses: Swatinem/rust-cache@v2
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
               with:
                   shared-key: ci
-            - uses: pnpm/action-setup@v4
-            - uses: actions/setup-node@v4
-              with:
-                  # The version a laptop uses is in `.nvmrc`, so the runner reads it there too.
-                  node-version-file: .nvmrc
-                  cache: pnpm
-            - uses: taiki-e/install-action@v2
-              with:
-                  tool: just
-            - run: pnpm install
+            - run: nix develop -c pnpm install --frozen-lockfile
             # The grammar of the compiler and the grammar of the editor are both written into
             # files that are committed: this writes them again, and the diff below says whether
-            # what is committed is what the generators make of them.
-            - run: just gen-all
+            # what is committed is what the generators make of them. The formatter that runs
+            # after the generators is the nightly rustfmt the flake pins, so this job and a
+            # laptop format alike.
+            - run: nix develop -c just gen-all
             - name: nothing that is generated is out of date
               run: |
                   git diff --exit-code
@@ -88,38 +94,26 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@1.99.0
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
-                  targets: wasm32-unknown-unknown
-            - uses: Swatinem/rust-cache@v2
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
               with:
                   shared-key: ci
-            - uses: pnpm/action-setup@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version-file: .nvmrc
-                  cache: pnpm
-            - uses: taiki-e/install-action@v2
-              with:
-                  tool: just,cargo-binstall
-            - run: just install-tools
-            # Obscura is the browser the check drives the page in. The release is pinned by the
-            # digest published with it; the flake builds the same release for the dev shell.
-            - name: obscura
-              run: |
-                  curl -fsSLo /tmp/obscura.tar.gz https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.4/obscura-x86_64-linux.tar.gz
-                  echo "757e7b597ba5cdd53af9fc701e0a9b80f0a8d788f545d4f82ec9ad32db77f000  /tmp/obscura.tar.gz" | sha256sum -c -
-                  mkdir -p "$HOME/.local/bin"
-                  tar xzf /tmp/obscura.tar.gz -C "$HOME/.local/bin"
-                  echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-                  "$HOME/.local/bin/obscura" --version
+            - run: nix develop -c pnpm install --frozen-lockfile
             # The site is built on every pull request and not only where it is published: the
             # wasm package is not committed, and the build is where a bundling mistake shows.
-            - run: just build-web
-            - run: just check-web
+            # The browser the check drives is the obscura the flake builds, pinned by the
+            # digests of the release it was published with.
+            - run: nix develop -c just build-web
+            - run: nix develop -c just check-web
             - name: the editor in a browser
-              run: just check-browser
+              run: nix develop -c just check-browser
 
     nix:
         name: nix
@@ -132,13 +126,13 @@ jobs:
             contents: read
             actions: write
         steps:
-            - uses: actions/checkout@v4
-            - uses: cachix/install-nix-action@v31.11.1
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
             # The store is cached through the GitHub Actions cache: the toolchains, the
             # dev shell, the vendored crates, and the compiled dependencies of the
             # compiler. The key follows the files a derivation is made of, so a source
             # change restores the dependencies and only re-compiles the crates.
-            - uses: nix-community/cache-nix-action@v7
+            - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
                   primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
                   restore-prefixes-first-match: nix-${{ runner.os }}-
@@ -168,33 +162,29 @@ jobs:
             pages: write
             id-token: write
         steps:
-            - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@1.99.0
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
-                  targets: wasm32-unknown-unknown
-            - uses: Swatinem/rust-cache@v2
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
               with:
                   shared-key: ci
-            - uses: pnpm/action-setup@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version-file: .nvmrc
-                  cache: pnpm
-            - uses: taiki-e/install-action@v2
-              with:
-                  tool: just,cargo-binstall
-            - run: just install-tools
-            - uses: actions/configure-pages@v5
+            - run: nix develop -c pnpm install --frozen-lockfile
+            - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
               id: pages
             # Pages serves the site under the name of the repository and says which path that is;
             # the build is told it, so that the editor looks for its assets there and not at the
             # root of the domain.
             - name: the site, at the path pages serves it from
-              run: BASE_PATH="${{ steps.pages.outputs.base_path }}" pnpm --filter @mlk/web build
+              run: BASE_PATH="${{ steps.pages.outputs.base_path }}" nix develop -c pnpm --filter @mlk/web build
             # Pages hands everything to Jekyll, which keeps to itself anything whose name starts
             # with an underscore — which is every asset of a SvelteKit site.
             - run: touch web/build/.nojekyll
-            - uses: actions/upload-pages-artifact@v3
+            - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
               with:
                   path: web/build
 
@@ -211,4 +201,4 @@ jobs:
             url: ${{ steps.deployment.outputs.page_url }}
         steps:
             - id: deployment
-              uses: actions/deploy-pages@v4
+              uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

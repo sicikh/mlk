@@ -1,0 +1,12 @@
+# The workflow pins every action by the SHA it runs, and this is what moves the
+# pins when the actions release: Dependabot rewrites the SHA and the `# vX`
+# comment that names the release beside it. One pull request for all of them.
+version: 2
+updates:
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          actions:
+              patterns: ["*"]

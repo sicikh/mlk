@@ -149,6 +149,16 @@ pub fn generate_syntax_factory(ast: &AstSrc, language_kind: LanguageKind) -> Res
 
     let output = quote! {
         #![allow(unused_mut)]
+        // The wildcard lints do not run in test builds, where the lib is compiled again,
+        // so the expectation holds only where they do run.
+        #[cfg_attr(
+            not(test),
+            expect(
+                clippy::enum_glob_use,
+                clippy::wildcard_imports,
+                reason = "the factory names the nodes and the kinds of the grammar it builds"
+            )
+        )]
         use #syntax_crate::{*, #syntax_kind, #syntax_kind::*, T};
         use mlkc_rowan::{AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory as SyntaxFactoryTrait, SyntaxKind as SyntaxKindTrait};
 

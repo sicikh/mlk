@@ -208,6 +208,9 @@ impl AbsPath {
     /// Panics if `path` is not absolute.
     pub fn assert(path: &Utf8Path) -> &AbsPath {
         assert!(path.is_absolute(), "{path} is not absolute");
+        // SAFETY: `AbsPath` is a `#[repr(transparent)]` wrapper around `Utf8Path`,
+        // so the two types share a layout and the cast preserves the reference;
+        // the assertion above establishes the absolute-path invariant.
         unsafe { &*(path as *const Utf8Path as *const AbsPath) }
     }
 
@@ -374,6 +377,9 @@ impl AsRef<Path> for RelPath {
 impl RelPath {
     /// Creates a new `RelPath` from `path`, without checking if it is relative.
     pub fn new_unchecked(path: &Utf8Path) -> &RelPath {
+        // SAFETY: `RelPath` is a `#[repr(transparent)]` wrapper around `Utf8Path`,
+        // so the two types share a layout and the cast preserves the reference;
+        // whether the path is relative is an invariant this function does not check.
         unsafe { &*(path as *const Utf8Path as *const RelPath) }
     }
 

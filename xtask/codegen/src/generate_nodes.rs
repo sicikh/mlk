@@ -972,6 +972,19 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
     let ast = quote! {
         #![allow(dead_code)]
         #![allow(unused)]
+        #![expect(
+            clippy::undocumented_unsafe_blocks,
+            reason = "every expansion of `map_syntax_node!` casts a node under a match on its kind"
+        )]
+        // The wildcard lints do not run in test builds, where the lib is compiled again,
+        // so the expectation holds only where they do run.
+        #[cfg_attr(
+            not(test),
+            expect(
+                clippy::enum_glob_use,
+                reason = "the accessors of a generated node name the kinds of the grammar it was made for"
+            )
+        )]
         use crate::{
             macros::map_syntax_node,
             #language as Language, #syntax_element as SyntaxElement, #syntax_element_children as SyntaxElementChildren,

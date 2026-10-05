@@ -17,6 +17,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use indexmap::IndexMap;
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
     ItemTree, LambdaParam, Literal, LocalDefId, LocalFunctionId, ModuleId, Name, Namespace, Pat,
@@ -24,7 +25,7 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{Builtins, CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
 use mlkc_resolve::{Closure, Resolution};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
     diagnostic::{TypeDiag, TypeError, TypePlace},
@@ -124,9 +125,9 @@ pub fn check_body(
         resolver: PathResolver::new(module, resolution, deps),
         deps,
         bindings: FxHashMap::default(),
-        local_types: FxHashMap::default(),
-        expr_types: FxHashMap::default(),
-        pat_types: FxHashMap::default(),
+        local_types: IndexMap::default(),
+        expr_types: IndexMap::default(),
+        pat_types: IndexMap::default(),
         diagnostics: Vec::new(),
     };
     checker.run();
@@ -179,11 +180,11 @@ struct Checker<'a> {
     /// What the patterns of the body are bound to, generalized where a `let` generalized them.
     bindings: FxHashMap<PatId, Scheme>,
     /// The type of every function declared inside the body, in the order they are checked.
-    local_types: FxHashMap<LocalDefId, InferTy>,
+    local_types: IndexMap<LocalDefId, InferTy, FxBuildHasher>,
     /// The type of every expression checked so far.
-    expr_types: FxHashMap<ExprId, InferTy>,
+    expr_types: IndexMap<ExprId, InferTy, FxBuildHasher>,
     /// The type of every pattern checked so far.
-    pat_types: FxHashMap<PatId, InferTy>,
+    pat_types: IndexMap<PatId, InferTy, FxBuildHasher>,
     /// What the check found, in the order of the body.
     diagnostics: Vec<TypeDiag>,
 }

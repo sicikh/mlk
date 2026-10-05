@@ -38,7 +38,13 @@ struct TaggedArcPtr {
     packed: NonNull<*const str>,
 }
 
+// SAFETY: A `TaggedArcPtr` holds either a `&'static &'static str` or the raw pointer of an
+// `Arc<Box<str>>` it keeps alive;
+// both are `Send`, so moving the pointer between threads moves only those values.
 unsafe impl Send for TaggedArcPtr {}
+// SAFETY: Sharing a `TaggedArcPtr` between threads exposes reads of the pointed-to string
+// and atomic reference-count operations on the `Arc`,
+// never mutation through a shared reference.
 unsafe impl Sync for TaggedArcPtr {}
 
 impl TaggedArcPtr {
@@ -46,12 +52,11 @@ impl TaggedArcPtr {
 
     const fn non_arc(r: &'static &'static str) -> Self {
         assert!(align_of::<&'static &'static str>().trailing_zeros() as usize > Self::BOOL_BITS);
-        // SAFETY: The pointer is non-null as it is derived from a reference
-        // Ideally we would call out to `pack_arc` but for a `false` tag, unfortunately the
-        // packing stuff requires reading out the pointer to an integer which is not supported
-        // in const contexts, so here we make use of the fact that for the non-arc version the
-        // tag is false (0) and thus does not need touching the actual pointer value.ext)
-
+        // Calling `pack_arc` would need to read the pointer out as an integer,
+        // which is not supported in const contexts;
+        // the non-arc variant carries the `false` tag (0),
+        // so the pointer value itself needs no packing.
+        // SAFETY: The pointer is non-null as it is derived from a reference.
         let packed =
             unsafe { NonNull::new_unchecked((r as *const &str).cast::<*const str>().cast_mut()) };
         Self { packed }
@@ -61,7 +66,7 @@ impl TaggedArcPtr {
         assert!(align_of::<&'static &'static str>().trailing_zeros() as usize > Self::BOOL_BITS);
         Self {
             packed: Self::pack_arc(
-                // Safety: `Arc::into_raw` always returns a non null pointer
+                // SAFETY: `Arc::into_raw` always returns a non-null pointer.
                 unsafe { NonNull::new_unchecked(Arc::into_raw(arc).cast_mut().cast()) },
             ),
         }
@@ -77,8 +82,9 @@ impl TaggedArcPtr {
         // Unpack the tag from the alignment niche
         let tag = self.packed.as_ptr().addr() & Self::BOOL_BITS;
         if tag != 0 {
-            // Safety: We checked that the tag is non-zero -> true, so we are pointing to the data offset of an `Arc`
             Some(ManuallyDrop::new(unsafe {
+                // SAFETY: We checked that the tag is non-zero (true),
+                // so the pointer addresses the allocation of an `Arc<Box<str>>`.
                 Arc::from_raw(self.pointer().as_ptr().cast::<Box<str>>())
             }))
         } else {
@@ -91,8 +97,8 @@ impl TaggedArcPtr {
         let packed_tag = true as usize;
 
         unsafe {
-            // Safety: The pointer is derived from a non-null and bit-oring it with true (1) will
-            // not make it null.
+            // SAFETY: The pointer is non-null,
+            // and bit-oring it with the `true` tag (1) cannot make it null.
             NonNull::new_unchecked(ptr.as_ptr().map_addr(|addr| addr | packed_tag))
         }
     }
@@ -149,8 +155,9 @@ impl Symbol {
             |(x, _)| Self::hash(storage, x.as_str()),
         ) {
             Ok(bucket) => bucket,
-            // SAFETY: The slot came from `find_or_find_insert_slot()`, and the table wasn't modified since then.
             Err(insert_slot) => unsafe {
+                // SAFETY: The slot came from `find_or_find_insert_slot()`,
+                // and the table was not modified since then.
                 shard.insert_in_slot(
                     hash,
                     insert_slot,

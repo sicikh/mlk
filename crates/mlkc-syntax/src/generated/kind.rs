@@ -127,6 +127,13 @@ pub enum SyntaxKind {
     #[doc(hidden)]
     __LAST,
 }
+#[cfg_attr(
+    not(test),
+    expect(
+        clippy::enum_glob_use,
+        reason = "the implementation names the variants of the kind it is written for"
+    )
+)]
 use self::SyntaxKind::*;
 impl SyntaxKind {
     pub const fn is_punct(self) -> bool {

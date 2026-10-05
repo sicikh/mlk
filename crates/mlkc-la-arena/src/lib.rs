@@ -73,6 +73,8 @@ impl RawIdx {
     /// Converts [`RawIdx`] into [`Arena`]'s internal index.
     #[inline]
     const fn to_index(self) -> u32 {
+        // SAFETY: `RawIdx` wraps a `NonZeroU32`, so its value is at least one,
+        // and `unchecked_sub(1)` cannot underflow.
         unsafe { self.0.get().unchecked_sub(1) }
     }
 
@@ -84,6 +86,8 @@ impl RawIdx {
     #[inline]
     const fn from_index(index: u32) -> Self {
         assert!(index != u32::MAX);
+        // SAFETY: The assertion above keeps `index` below `u32::MAX`,
+        // which is what `from_index_unchecked` requires of its caller.
         unsafe { Self::from_index_unchecked(index) }
     }
 
@@ -94,6 +98,8 @@ impl RawIdx {
     /// Caller must ensure that the provided index is less than [`u32::MAX`].
     #[inline]
     const unsafe fn from_index_unchecked(index: u32) -> Self {
+        // SAFETY: The caller guarantees `index < u32::MAX`,
+        // so `index + 1` does not overflow and cannot be zero.
         RawIdx(unsafe { NonZeroU32::new_unchecked(index.unchecked_add(1)) })
     }
 }
@@ -230,12 +236,18 @@ impl<T> IdxRange<T> {
     /// Returns the start of the index range.
     #[inline]
     pub fn start(&self) -> Idx<T> {
+        // SAFETY: An `IdxRange` is built only from `Idx` values,
+        // or from a successor its inclusive constructor asserts to stay below `u32::MAX`,
+        // so the start bound is below `u32::MAX`.
         Idx::from_raw(unsafe { RawIdx::new_unchecked(self.range.start) })
     }
 
     /// Returns the end of the index range.
     #[inline]
     pub fn end(&self) -> Idx<T> {
+        // SAFETY: An `IdxRange` is built only from `Idx` values,
+        // or from a successor its inclusive constructor asserts to stay below `u32::MAX`,
+        // so the end bound is below `u32::MAX`.
         Idx::from_raw(unsafe { RawIdx::new_unchecked(self.range.end) })
     }
 
@@ -289,6 +301,8 @@ impl<T> Iterator for IdxRangeIter<T> {
     fn next(&mut self) -> Option<Self::Item> {
         self.range
             .next()
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|index| Idx::from_raw(unsafe { RawIdx::new_unchecked(index) }))
     }
 
@@ -306,6 +320,8 @@ impl<T> Iterator for IdxRangeIter<T> {
     fn last(self) -> Option<Idx<T>> {
         self.range
             .last()
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|index| Idx::from_raw(unsafe { RawIdx::new_unchecked(index) }))
     }
 
@@ -313,6 +329,8 @@ impl<T> Iterator for IdxRangeIter<T> {
     fn nth(&mut self, n: usize) -> Option<Idx<T>> {
         self.range
             .nth(n)
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|index| Idx::from_raw(unsafe { RawIdx::new_unchecked(index) }))
     }
 
@@ -324,6 +342,8 @@ impl<T> Iterator for IdxRangeIter<T> {
     {
         self.range
             .max()
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|index| Idx::from_raw(unsafe { RawIdx::new_unchecked(index) }))
     }
 
@@ -335,6 +355,8 @@ impl<T> Iterator for IdxRangeIter<T> {
     {
         self.range
             .min()
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|index| Idx::from_raw(unsafe { RawIdx::new_unchecked(index) }))
     }
 
@@ -353,6 +375,8 @@ impl<T> DoubleEndedIterator for IdxRangeIter<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.range
             .next_back()
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|raw| Idx::from_raw(unsafe { RawIdx::new_unchecked(raw) }))
     }
 
@@ -360,6 +384,8 @@ impl<T> DoubleEndedIterator for IdxRangeIter<T> {
     fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
         self.range
             .nth_back(n)
+            // SAFETY: The iterator only yields indices from its range,
+            // and that range comes from an `IdxRange`, whose bounds are below `u32::MAX`.
             .map(|raw| Idx::from_raw(unsafe { RawIdx::new_unchecked(raw) }))
     }
 }
@@ -416,6 +442,8 @@ impl<T> From<RangeInclusive<Idx<T>>> for IdxRange<T> {
         Self {
             range: Range::from(
                 range.start.into_raw().0..unsafe {
+                    // SAFETY: The assertion above keeps `last` below `u32::MAX - 1`,
+                    // so `last + 1` does not overflow and cannot be zero.
                     NonZeroU32::new_unchecked(last.unchecked_add(1))
                 },
             ),

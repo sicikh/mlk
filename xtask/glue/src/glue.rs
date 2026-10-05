@@ -198,12 +198,18 @@ impl Env {
     }
     fn pushenv(&mut self, var: OsString, value: OsString) {
         self.pushenv_stack.push((var.clone(), env::var_os(&var)));
+        // SAFETY: The xtask binaries are single-threaded and start no threads,
+        // so no other thread can read or write the environment concurrently with this call.
         unsafe { env::set_var(var, value) }
     }
     fn popenv(&mut self) {
         let (var, value) = self.pushenv_stack.pop().unwrap();
         match value {
+            // SAFETY: The xtask binaries are single-threaded and start no threads,
+            // so no other thread can read or write the environment concurrently with this call.
             None => unsafe { env::remove_var(var) },
+            // SAFETY: The xtask binaries are single-threaded and start no threads,
+            // so no other thread can read or write the environment concurrently with this call.
             Some(value) => unsafe { env::set_var(var, value) },
         }
     }

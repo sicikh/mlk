@@ -1340,7 +1340,7 @@ mod tests {
                 SyntaxKindSet::from_raw(RawSyntaxKind(RawLanguageKind::ROOT as u16));
 
             fn can_cast(_: <Self::Language as Language>::Kind) -> bool {
-                todo!()
+                unreachable!("the raw root of this test only navigates, and never casts")
             }
 
             fn cast(syntax: SyntaxNode<Self::Language>) -> Option<Self>
@@ -1355,7 +1355,7 @@ mod tests {
             }
 
             fn into_syntax(self) -> SyntaxNode<Self::Language> {
-                todo!()
+                unreachable!("the raw root of this test only navigates, and never unwraps")
             }
         }
     }

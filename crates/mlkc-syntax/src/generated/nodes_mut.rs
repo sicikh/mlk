@@ -4,6 +4,13 @@ use std::iter::once;
 
 use mlkc_rowan::AstNode;
 
+#[cfg_attr(
+    not(test),
+    expect(
+        clippy::wildcard_imports,
+        reason = "the mutators of a generated node name every node type the grammar declares"
+    )
+)]
 use crate::{SyntaxToken, generated::nodes::*};
 impl Attribute {
     pub fn with_hash_token(self, element: SyntaxToken) -> Self {

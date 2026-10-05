@@ -12,7 +12,10 @@ use mlkc_parser_core::{
     prelude::*,
 };
 use mlkc_syntax::{
-    SyntaxKind::{self, *},
+    SyntaxKind::{
+        self, BOGUS_TYPE, INFER_TYPE, PATH, PATH_QUALIFIER, PATH_SEGMENT, PATH_TYPE, PROJECT,
+        TYPE_ARG_LIST, TYPE_ARGS, UNDERSCORE,
+    },
     T,
 };
 

@@ -2,6 +2,10 @@
 
 #![allow(dead_code)]
 #![allow(unused)]
+#![expect(
+    clippy::undocumented_unsafe_blocks,
+    reason = "every expansion of `map_syntax_node!` casts a node under a match on its kind"
+)]
 use std::fmt::{Debug, Formatter};
 
 use mlkc_rowan::{
@@ -13,6 +17,13 @@ use serde::{
     ser::{SerializeMap, SerializeSeq},
 };
 
+#[cfg_attr(
+    not(test),
+    expect(
+        clippy::enum_glob_use,
+        reason = "the accessors of a generated node name the kinds of the grammar it was made for"
+    )
+)]
 use crate::{
     MlkLanguage as Language, SyntaxElement, SyntaxElementChildren,
     SyntaxKind::{self as SyntaxKind, *},

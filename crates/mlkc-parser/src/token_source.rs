@@ -18,7 +18,7 @@ use mlkc_parser_core::{
     },
 };
 use mlkc_rowan::{TextRange, TextSize, TriviaPieceKind};
-use mlkc_syntax::SyntaxKind::{self, *};
+use mlkc_syntax::SyntaxKind::{self, EOF};
 
 use crate::lexer::Lexer;
 
@@ -196,6 +196,7 @@ impl<'src> TokenSourceWithBufferedLexer<Lexer<'src>> for TokenSource<'src> {
 #[cfg(test)]
 mod tests {
     use mlkc_parser_core::token_source::NthToken;
+    use mlkc_syntax::SyntaxKind::{EQ, FUN_KW, IDENT, LET_KW, UNICODE_BOM};
 
     use super::*;
 

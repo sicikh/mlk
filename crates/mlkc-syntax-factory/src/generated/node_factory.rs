@@ -2,6 +2,13 @@
 
 #![allow(clippy::redundant_closure)]
 use mlkc_rowan::AstNode;
+#[cfg_attr(
+    not(test),
+    expect(
+        clippy::wildcard_imports,
+        reason = "the generated factories name every node type and token of the grammar"
+    )
+)]
 use mlkc_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, *};
 pub fn attribute(
     hash_token: SyntaxToken,

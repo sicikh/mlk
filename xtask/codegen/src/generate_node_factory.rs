@@ -206,6 +206,15 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
 
     let output = quote! {
         #![allow(clippy::redundant_closure)]
+        // The wildcard lints do not run in test builds, where the lib is compiled again,
+        // so the expectation holds only where they do run.
+        #[cfg_attr(
+            not(test),
+            expect(
+                clippy::wildcard_imports,
+                reason = "the generated factories name every node type and token of the grammar"
+            )
+        )]
         use #syntax_crate::{*, #syntax_token as SyntaxToken, #syntax_node as SyntaxNode, #syntax_element as SyntaxElement};
         use mlkc_rowan::AstNode;
 

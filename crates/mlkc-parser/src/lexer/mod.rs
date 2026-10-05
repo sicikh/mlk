@@ -27,7 +27,14 @@ use mlkc_parser_core::{
 };
 use mlkc_rowan::SyntaxKind as SyntaxKindTrait;
 use mlkc_syntax::{
-    SyntaxKind::{self, *},
+    SyntaxKind::{
+        self, AND2, ARROW, AS_KW, AT, BANG_EQ, COLON, COLON_COLON, COMMA, COMMENT, DOT, ELIF_KW,
+        ELSE_KW, EOF, EQ, EQ2, ERROR_TOKEN, FALSE_KW, FN_KW, FUN_KW, GT, GT_EQ, HASH, IDENT, IF_KW,
+        IN_KW, INT_LITERAL, L_BRACK, L_CURLY, L_PAREN, LET_KW, LOCAL_KW, LT, LT_EQ, MINUS,
+        MODULE_KW, MULTILINE_COMMENT, NEWLINE, OR2, PIPE, PLUS, PROJECT_KW, PUB_KW, R_BRACK,
+        R_CURLY, R_PAREN, SEMICOLON, SLASH, STAR, STRING_LITERAL, THEN_KW, TOMBSTONE, TRUE_KW,
+        TYPE_KW, UNDERSCORE, UNICODE_BOM, USE_KW, WHITESPACE,
+    },
     TextRange, TextSize,
 };
 

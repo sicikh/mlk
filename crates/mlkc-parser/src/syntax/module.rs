@@ -7,7 +7,12 @@ use mlkc_parser_core::{
     prelude::*,
 };
 use mlkc_syntax::{
-    SyntaxKind::{self, *},
+    SyntaxKind::{
+        self, BOGUS_DECL, BOGUS_PARAMETER, FUN_BODY, FUN_DECL, FUN_KW, FUN_RETURN_TYPE_ANNOTATION,
+        HASH, IDENT, L_BRACK, MODULE_ITEM_LIST, MODULE_KW, MODULE_PREAMBLE, MODULE_ROOT, PARAMETER,
+        PARAMETER_LIST, PARAMETERS, R_BRACK, TYPE_ANNOTATION, TYPE_DECL, TYPE_KW, USE_ALIAS,
+        USE_DECL,
+    },
     T,
 };
 

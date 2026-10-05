@@ -9,6 +9,8 @@ impl<K: SyntaxKind> TokenSet<K> {
     pub const EMPTY: Self = Self([0; 3], PhantomData);
 
     pub fn singleton(kind: K) -> Self {
+        // SAFETY: `from_raw` is `unsafe` only to steer callers to this constructor,
+        // and `kind.to_raw()` is the raw kind value it turns into a mask.
         unsafe { Self::from_raw(kind.to_raw().0) }
     }
 
@@ -61,7 +63,11 @@ const fn mask(kind: u16) -> [u128; 3] {
 macro_rules! token_set {
     ($($t:expr),*) => {{
             use $crate::TokenSet;
-            TokenSet::EMPTY$(.union(unsafe { TokenSet::from_raw($t as u16) }))*
+            TokenSet::EMPTY$(.union(
+                // SAFETY: `from_raw` is `unsafe` only to steer callers to `TokenSet::singleton`,
+                // and `token_set!` is the `const` context it exists for;
+                // `$t as u16` is the kind's raw representation.
+                unsafe { TokenSet::from_raw($t as u16) }))*
         }};
     ($($t:expr),* ,) => { token_set!($($t),*) };
 }
@@ -92,6 +98,8 @@ mod tests {
 
         #[expect(unsafe_code)]
         fn from_raw(raw: RawSyntaxKind) -> Self {
+            // SAFETY: The `SyntaxKind` contract makes `raw` the raw kind of a `TestKind`,
+            // which is one of this fieldless enum's discriminants.
             unsafe { std::mem::transmute::<u16, Self>(raw.0) }
         }
 

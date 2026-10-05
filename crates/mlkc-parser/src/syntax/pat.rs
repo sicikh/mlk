@@ -7,7 +7,7 @@ use mlkc_parser_core::{
     prelude::*,
 };
 use mlkc_syntax::{
-    SyntaxKind::{self, *},
+    SyntaxKind::{self, BOGUS_PAT, IDENT, IDENT_PAT, UNDERSCORE, WILDCARD_PAT},
     T,
 };
 

@@ -27,6 +27,9 @@ pub use crate::{
 impl From<u16> for SyntaxKind {
     fn from(d: u16) -> Self {
         assert!(d <= (__LAST as u16));
+        // SAFETY: `SyntaxKind` is a fieldless `#[repr(u16)]` enum whose discriminants are
+        // `0..=__LAST`, and the assertion above checked that `d` lies in that range,
+        // so `d` is a valid discriminant.
         unsafe { std::mem::transmute::<u16, Self>(d) }
     }
 }

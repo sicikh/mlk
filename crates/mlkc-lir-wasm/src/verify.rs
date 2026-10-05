@@ -540,7 +540,11 @@ impl Body {
     ///
     /// [adr-0022]: ../../docs/adr/0022-wasm-lir.md
     fn check_inst(&self, inst: &crate::Inst) -> Result<(), Invalid> {
-        use Op::*;
+        use Op::{
+            Call, CallRef, I31GetS, I32Add, I32And, I32Const, I32DivS, I32Eq, I32Eqz, I32GeS,
+            I32GtS, I32LeS, I32LtS, I32Mul, I32Ne, I32Or, I32Sub, RefCast, RefEq, RefFunc, RefI31,
+            RefNull, String, StructGet, StructNew,
+        };
 
         let produced = match &inst.op {
             I32Const(_) => Ty::I32,

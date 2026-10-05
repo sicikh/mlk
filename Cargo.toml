@@ -97,7 +97,7 @@ default-features = false
 features = ["anyhow", "cranelift", "gc", "gc-drc", "runtime", "std"]
 
 [workspace.lints.clippy]
-# https://rust-lang.github.io/rust-clippy/rust-1.88.0/index.html
+# https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html
 allow_attributes = "deny"
 assigning_clones = "warn"
 cfg_not_test = "warn"
@@ -109,6 +109,7 @@ doc_link_with_quotes = "warn"
 empty_drop = "warn"
 empty_enum_variants_with_brackets = "warn"
 empty_enums = "warn"
+enum_glob_use = "warn"
 expl_impl_clone_on_copy = "warn"
 explicit_into_iter_loop = "warn"
 filter_map_next = "warn"
@@ -124,6 +125,7 @@ infinite_loop = "warn"
 invalid_upcast_comparisons = "warn"
 iter_filter_is_ok = "warn"
 iter_not_returning_iterator = "warn"
+iter_over_hash_type = "warn"
 large_stack_arrays = "warn"
 large_types_passed_by_value = "warn"
 lossy_float_literal = "warn"
@@ -151,12 +153,16 @@ single_char_pattern = "warn"
 stable_sort_primitive = "warn"
 str_split_at_newline = "warn"
 string_lit_chars_any = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
 unnecessary_box_returns = "warn"
 unnecessary_join = "warn"
 unnested_or_patterns = "warn"
 unreadable_literal = "warn"
 verbose_bit_mask = "warn"
 verbose_file_reads = "warn"
+wildcard_imports = "warn"
 zero_sized_map_values = "warn"
 
 [workspace.lints.rust]

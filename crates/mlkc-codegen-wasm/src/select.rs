@@ -450,7 +450,10 @@ impl<'a> Selector<'a> {
 
     /// Selects a primitive, boxed into the word it computes.
     fn prim(&mut self, op: PrimOp, args: &'a [Operand], span: Span) -> ValueId {
-        use PrimOp::*;
+        use PrimOp::{
+            BoolAnd, BoolEq, BoolNe, BoolNot, BoolOr, IntAdd, IntDiv, IntEq, IntGe, IntGt, IntLe,
+            IntLt, IntMul, IntNe, IntNeg, IntSub, RefEq,
+        };
 
         let number = match op {
             IntAdd => self.binary(args, span, Op::I32Add),

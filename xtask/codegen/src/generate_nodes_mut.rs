@@ -81,6 +81,15 @@ pub fn generate_nodes_mut(ast: &AstSrc, language_kind: LanguageKind) -> Result<S
     let ast = quote! {
         use std::iter::once;
         use mlkc_rowan::AstNode;
+        // The wildcard lints do not run in test builds, where the lib is compiled again,
+        // so the expectation holds only where they do run.
+        #[cfg_attr(
+            not(test),
+            expect(
+                clippy::wildcard_imports,
+                reason = "the mutators of a generated node name every node type the grammar declares"
+            )
+        )]
         use crate::{generated::nodes::*, #syntax_token as SyntaxToken};
 
         #(#node_boilerplate_impls)*

@@ -1,7 +1,7 @@
 //! The leaf nodes that several rules of the grammar need.
 
 use mlkc_parser_core::{parsed_syntax::ParsedSyntax::Present, prelude::*};
-use mlkc_syntax::SyntaxKind::*;
+use mlkc_syntax::SyntaxKind::{IDENT, NAME};
 
 use crate::parser::MlkParser;
 

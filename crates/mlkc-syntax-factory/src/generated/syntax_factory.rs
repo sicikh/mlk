@@ -5,6 +5,14 @@ use mlkc_rowan::{
     AstNode, ParsedChildren, RawNodeSlots, RawSyntaxNode, SyntaxFactory as SyntaxFactoryTrait,
     SyntaxKind as SyntaxKindTrait,
 };
+#[cfg_attr(
+    not(test),
+    expect(
+        clippy::enum_glob_use,
+        clippy::wildcard_imports,
+        reason = "the factory names the nodes and the kinds of the grammar it builds"
+    )
+)]
 use mlkc_syntax::{SyntaxKind, SyntaxKind::*, T, *};
 #[derive(Debug)]
 pub struct SyntaxFactory;

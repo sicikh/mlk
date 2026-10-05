@@ -9,7 +9,13 @@ future_incompatible,
 #![deny(clippy::use_self)]
 #![deny(unsafe_code)]
 #![deny(rustdoc::broken_intra_doc_links)]
-#![expect(clippy::map_unwrap_or, clippy::mem_forget)]
+// The vendored crate keeps the shape it was taken with: its unsafe carries the invariants
+// of the upstream tree, and documenting every block here would fork it further.
+#![expect(
+    clippy::map_unwrap_or,
+    clippy::mem_forget,
+    clippy::undocumented_unsafe_blocks
+)]
 
 #[doc(hidden)]
 pub mod macros;

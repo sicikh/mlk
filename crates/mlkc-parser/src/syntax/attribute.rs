@@ -2,7 +2,7 @@
 
 use mlkc_parser_core::{parsed_syntax::ParsedSyntax::Present, prelude::*};
 use mlkc_syntax::{
-    SyntaxKind::{self, *},
+    SyntaxKind::{self, ATTRIBUTE, ATTRIBUTE_LIST, HASH, IDENT, L_BRACK, PUB_KW, R_BRACK},
     T,
 };
 

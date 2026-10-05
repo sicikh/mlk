@@ -119,6 +119,14 @@ Read the one that matches the task before starting:
   and if `obscura` is missing, say so instead of silently skipping it.
 - Never claim a check passed unless you ran it.
 
+### Lints
+
+- The workspace lint set is in the root `Cargo.toml`; `just lint` denies whatever it warns about.
+- No wildcard imports outside a module named `prelude`;
+  an enum's variants are named rather than glob-imported.
+- Every `unsafe` block and `unsafe impl` carries a `// SAFETY:` comment saying why it is sound;
+  the generated code and the vendored `mlkc-rowan` say where the lint is expected away.
+
 ### The working tree
 
 - Do not commit, push, or create branches unless the user asks.

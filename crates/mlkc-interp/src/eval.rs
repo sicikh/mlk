@@ -352,7 +352,10 @@ impl<'a> Interpreter<'a> {
 
     /// Runs one operator over the words its operands give.
     fn prim(&self, op: PrimOp, args: &[Value], span: Span) -> Result<Value, Trap> {
-        use PrimOp::*;
+        use PrimOp::{
+            BoolAnd, BoolEq, BoolNe, BoolNot, BoolOr, IntAdd, IntDiv, IntEq, IntGe, IntGt, IntLe,
+            IntLt, IntMul, IntNe, IntNeg, IntSub, RefEq,
+        };
 
         match op {
             IntAdd | IntSub | IntMul | IntDiv | IntEq | IntNe | IntLt | IntLe | IntGt | IntGe => {

@@ -170,7 +170,11 @@ fn locals_text(body: &Body) -> String {
 
 /// What an instruction computes.
 pub fn op_text(op: &Op) -> String {
-    use Op::*;
+    use Op::{
+        Call, CallRef, I31GetS, I32Add, I32And, I32Const, I32DivS, I32Eq, I32Eqz, I32GeS, I32GtS,
+        I32LeS, I32LtS, I32Mul, I32Ne, I32Or, I32Sub, RefCast, RefEq, RefFunc, RefI31, RefNull,
+        String, StructGet, StructNew,
+    };
 
     match op {
         I32Const(value) => format!("i32.const {value}"),

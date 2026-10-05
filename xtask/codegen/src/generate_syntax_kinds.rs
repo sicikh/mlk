@@ -159,6 +159,15 @@ pub fn generate_syntax_kinds(grammar: KindsSrc, language_kind: LanguageKind) -> 
             #[doc(hidden)]
             __LAST,
         }
+        // The wildcard lints do not run in test builds, where the lib is compiled again,
+        // so the expectation holds only where they do run.
+        #[cfg_attr(
+            not(test),
+            expect(
+                clippy::enum_glob_use,
+                reason = "the implementation names the variants of the kind it is written for"
+            )
+        )]
         use self::#syntax_kind::*;
 
         impl #syntax_kind {

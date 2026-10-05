@@ -129,6 +129,7 @@ Read the one that matches the task before starting:
   (the version nixpkgs builds, which `Cargo.toml` pins the crate to),
   wasm-tools, wasmtime, cargo-insta, just, Node and pnpm through corepack, and obscura.
   Inside the shell `just install-tools` installs only the pnpm dependencies.
+  The flake also builds the compiler as a package: `nix build .#mlkc` (`nix run .#mlkc`).
 - Without Nix, `just install-tools` installs the rest: cargo-insta,
   wasm-bindgen-cli (its version is derived from `Cargo.lock` and must match the `wasm-bindgen` crate),
   wasm-tools, wasmtime, and the pnpm dependencies.

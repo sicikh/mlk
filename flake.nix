@@ -10,6 +10,10 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # The helper that builds the workspace the way cargo does, with the dependencies
+    # vendored from `Cargo.lock`, so the package builds without the network.
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -17,6 +21,7 @@
       self,
       nixpkgs,
       rust-overlay,
+      crane,
     }:
     let
       systems = [
@@ -37,23 +42,23 @@
       # The browser the editor's check drives. nixpkgs has an older release, so the
       # assets are fetched here, pinned by the digests GitHub publishes for the release.
       obscura = {
-        version = "0.2.3";
+        version = "0.2.4";
         assets = {
           x86_64-linux = {
-            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-x86_64-linux.tar.gz";
-            hash = "sha256-FTTR5t2vPQgOxAketB0KTYzAQqSLYH08QQ/BO0gqnuw=";
+            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.4/obscura-x86_64-linux.tar.gz";
+            hash = "sha256-dX57WXulzdU6+fxwHgqbgPCo14j1RdT4LsmtMtt38AA=";
           };
           aarch64-linux = {
-            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-aarch64-linux.tar.gz";
-            hash = "sha256-Xs+YC8owYCNqeobsftg9lD5lmO6HyqRtIDJdkLx1+Xk=";
+            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.4/obscura-aarch64-linux.tar.gz";
+            hash = "sha256-2bo3GcJEKiJ1Z9dmS1UFs4q2gjbz9TiIhO7i4n9V2yg=";
           };
           x86_64-darwin = {
-            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-x86_64-macos.tar.gz";
-            hash = "sha256-18SBIt68KtmySELfRFYIYNunZeqSiz9ja38FMiUkURY=";
+            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.4/obscura-x86_64-macos.tar.gz";
+            hash = "sha256-kbG14fWB51cr3/0okZWtESzVzzMGkBnokrJRwJm+8BU=";
           };
           aarch64-darwin = {
-            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-aarch64-macos.tar.gz";
-            hash = "sha256-RWU8+tIm8cm0FWA6LtWUd/y9YzXHQjOM4TPAXeC90FY=";
+            url = "https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.4/obscura-aarch64-macos.tar.gz";
+            hash = "sha256-RWIQ/kjncySgZEd/5FBFKlhwmUClDnFniuZjij5Qlew=";
           };
         };
       };
@@ -147,6 +152,46 @@
             ln -s ${rustNightly}/bin/cargo-fmt $out/bin/cargo-fmt
           '';
 
+          # The compiler as a package. `just verify` is the test gate, so the package
+          # does not run the tests; the dependencies are vendored from `Cargo.lock`.
+          # The fileset starts from what cargo needs and adds what the crates embed at
+          # compile time: the standard library, and the files `include_str!` reads.
+          craneLib = (crane.mkLib pkgs).overrideToolchain rust;
+          mlkc = craneLib.buildPackage (
+            let
+              src = lib.fileset.toSource {
+                root = ./.;
+                fileset = lib.fileset.unions [
+                  (craneLib.fileset.commonCargoSources ./.)
+                  ./library
+                  ./crates/mlkc-parser-core/CONTRIBUTING.md
+                  ./crates/mlkc-ungrammar/ungrammar.ungram
+                  ./xtask/codegen/mlk.ungram
+                ];
+              };
+              commonArgs = {
+                inherit src;
+                pname = "mlkc";
+                version = "0.1.0";
+                strictDeps = true;
+                doCheck = false;
+                cargoExtraArgs = "--locked --package mlkc-cli";
+              };
+            in
+            commonArgs
+            // {
+              cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+              meta = {
+                description = "The MLK compiler";
+                license = with lib.licenses; [
+                  asl20
+                  mit
+                ];
+                mainProgram = "mlkc";
+              };
+            }
+          );
+
           obscuraPkg = obscuraFor pkgs;
         in
         assert assertWasmBindgen pkgs;
@@ -155,6 +200,7 @@
             pkgs
             rust
             rustfmtNightly
+            mlkc
             obscuraPkg
             ;
         };
@@ -215,10 +261,22 @@
       );
 
       packages = forAllSystems (system: {
+        default = (envFor system).mlkc;
+        mlkc = (envFor system).mlkc;
         obscura = (envFor system).obscuraPkg;
       });
 
       apps = forAllSystems (system: {
+        default = {
+          type = "app";
+          program = "${self.packages.${system}.mlkc}/bin/mlkc";
+          meta.description = "The MLK compiler";
+        };
+        mlkc = {
+          type = "app";
+          program = "${self.packages.${system}.mlkc}/bin/mlkc";
+          meta.description = "The MLK compiler";
+        };
         obscura = {
           type = "app";
           program = "${self.packages.${system}.obscura}/bin/obscura";

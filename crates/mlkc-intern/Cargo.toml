@@ -9,15 +9,13 @@ publish.workspace = true
 
 [dependencies]
 dashmap = { workspace = true }
-hashbrown = {
-  version = "0.14.*",
-  default-features = false,
-  features = [
-    "inline-more",
-  ]
-}
 rustc-hash = { workspace = true }
 triomphe = { workspace = true }
+
+[dependencies.hashbrown]
+version = "0.14.*"
+default-features = false
+features = ["inline-more"]
 
 [lints]
 workspace = true

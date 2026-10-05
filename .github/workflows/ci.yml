@@ -108,8 +108,8 @@ jobs:
             # digest published with it; the flake builds the same release for the dev shell.
             - name: obscura
               run: |
-                  curl -fsSLo /tmp/obscura.tar.gz https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-x86_64-linux.tar.gz
-                  echo "1534d1e6ddaf3d080ec4091eb41d0a4d8cc042a48b607d3c410fc13b482a9eec  /tmp/obscura.tar.gz" | sha256sum -c -
+                  curl -fsSLo /tmp/obscura.tar.gz https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.4/obscura-x86_64-linux.tar.gz
+                  echo "757e7b597ba5cdd53af9fc701e0a9b80f0a8d788f545d4f82ec9ad32db77f000  /tmp/obscura.tar.gz" | sha256sum -c -
                   mkdir -p "$HOME/.local/bin"
                   tar xzf /tmp/obscura.tar.gz -C "$HOME/.local/bin"
                   echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -121,11 +121,26 @@ jobs:
             - name: the editor in a browser
               run: just check-browser
 
+    nix:
+        name: nix
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        steps:
+            - uses: actions/checkout@v4
+            - uses: cachix/install-nix-action@v31.11.1
+            # The flake pins the toolchains, the browser, and the version of
+            # wasm-bindgen; evaluating it is what keeps those pins honest.
+            - run: nix flake check --no-build
+            - run: nix build .#obscura --no-link
+            # The shell contributors use, with the generated files checked through it.
+            - run: nix develop -c pnpm install --frozen-lockfile
+            - run: nix develop -c just check-generated
+
     pages:
         name: pages
         runs-on: ubuntu-latest
         timeout-minutes: 30
-        needs: [rust, generated, web]
+        needs: [rust, generated, web, nix]
         if: github.ref == 'refs/heads/main'
         permissions:
             contents: read

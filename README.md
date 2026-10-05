@@ -43,6 +43,9 @@ pnpm install  # once; pnpm comes from corepack
 just verify
 ```
 
+With `direnv`, `.envrc` enters the shell on `cd`.
+`nix build .#mlkc` builds the compiler as a package.
+
 Without Nix, install the prerequisites and the tools by hand:
 
 - Rust (`rustup`; the version is pinned in `rust-toolchain.toml`), edition 2024.

@@ -25,7 +25,12 @@
     } from "@codemirror/view";
     import { untrack } from "svelte";
 
-    import { codeOf, mainLabel, rangeOf, severityOf } from "#lib/diagnostics.js";
+    import {
+        codeOf,
+        mainLabel,
+        rangeOf,
+        severityOf,
+    } from "#lib/diagnostics.js";
     import type { Diagnostic } from "#lib/driver.js";
     import { mlkLanguageSupport } from "#lib/highlight.js";
     import { utf16At } from "#lib/offsets.js";
@@ -327,6 +332,8 @@
 
     /** Another parse arrives with every keystroke: the editor is marked up with it. */
     $effect(() => {
+        // Both names are read for their reach: Svelte runs the effect when either changes.
+        // oxlint-disable-next-line no-unused-expressions
         diagnostics;
         show();
     });
@@ -357,6 +364,8 @@
      * which is also where a phone keyboard leaves the most room to read it.
      */
     $effect(() => {
+        // The name is read for its reach: Svelte runs the effect when it changes.
+        // oxlint-disable-next-line no-unused-expressions
         reveals;
 
         if (!view) return;
@@ -403,7 +412,8 @@
 
     /** A closed tab is forgotten: what it held is in the buffer, which is still there. */
     $effect(() => {
-        for (const it of [...states.keys()]) {
+        // Deleting a key while a map is walked is what the iterator is defined for.
+        for (const it of states.keys()) {
             if (!tabs.includes(it)) states.delete(it);
         }
     });

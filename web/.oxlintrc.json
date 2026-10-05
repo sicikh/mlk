@@ -1,0 +1,10 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    // The grammar is written by lezer-generator, and a generated file is not linted.
+    "ignorePatterns": ["src/lib/grammar/mlk.ts"],
+    "rules": {
+        // The rule reads a data key named `then` --- the keyword of the language --- as a
+        // thenable, which is what the vocabulary of a compiler looks like.
+        "unicorn/no-thenable": "off"
+    }
+}

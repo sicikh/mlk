@@ -15,7 +15,7 @@ This skill says which recipe a change needs, and how to read the result.
    cannot run.
 2. Iterate with the narrowest check:
     - `just test-crate mlkc-lower` — one crate of the compiler;
-    - `just check-web` — the editor's types and templates;
+    - `just check-web` — the editor's lint, types, and templates;
     - `just test-crate mlkc-codegen-wasm` — the WASM back end.
 3. Before finishing, run `just verify`.
 
@@ -46,14 +46,14 @@ Never claim a check passed unless it ran.
 
 ## What a change needs
 
-| Change                         | Focused check                                        |
-| ------------------------------ | ---------------------------------------------------- |
-| A pass's logic                 | `just test-crate CRATE` and its snapshot tests       |
-| A diagnostic or a dump         | that suite's snapshot tests, then `just test-review` |
-| Grammar or generated code      | `just check-generated`, then `just gen-all`          |
-| Editor types or templates      | `just check-web`                                     |
-| Editor behavior, wasm boundary | `just verify-web`                                    |
-| Anything, before reporting     | `just verify`                                        |
+| Change                          | Focused check                                        |
+| ------------------------------- | ---------------------------------------------------- |
+| A pass's logic                  | `just test-crate CRATE` and its snapshot tests       |
+| A diagnostic or a dump          | that suite's snapshot tests, then `just test-review` |
+| Grammar or generated code       | `just check-generated`, then `just gen-all`          |
+| Editor types, templates, script | `just check-web`                                     |
+| Editor behavior, wasm boundary  | `just verify-web`                                    |
+| Anything, before reporting      | `just verify`                                        |
 
 ## When a tool is missing
 

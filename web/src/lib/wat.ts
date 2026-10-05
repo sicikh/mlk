@@ -53,7 +53,7 @@ const NUMBER =
     /^[+-]?(0x[0-9a-fA-F](_?[0-9a-fA-F])*|inf|nan(:0x[0-9a-fA-F](_?[0-9a-fA-F])*)?|\d(_?\d)*(\.[\d_]*)?([eE][+-]?\d(_?\d)*)?)/;
 
 /** A word of the format: an instruction (`i32.add`), a type constructor, or a keyword. */
-const WORD = /^[@A-Za-z_][\w.\-]*/;
+const WORD = /^[@A-Za-z_][\w.-]*/;
 
 /** What the tokenizer keeps between the lines: how many block comments are open. */
 interface State {

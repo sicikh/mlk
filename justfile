@@ -101,7 +101,7 @@ build-web:
 dev-web:
     pnpm --filter @mlk/web dev
 
-# Check the types of the editor sources
+# Lint the editor sources and check their types
 check-web:
     pnpm --filter @mlk/web check
 

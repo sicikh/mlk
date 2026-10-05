@@ -50,7 +50,7 @@ Read the one that matches the task before starting:
 | `just test-review`                    | Run the snapshot tests and review the pending changes interactively.                       |
 | `just check-generated`                | Verify that generated files are up to date, without writing them. Works on a dirty tree.   |
 | `just verify`                         | `check-generated` + `lint` + `test` + `test-doc` + `check-web`. Run this before finishing. |
-| `just check-web`                      | Type-check the editor (svelte-check).                                                      |
+| `just check-web`                      | Lint and type-check the editor (oxlint, svelte-check).                                     |
 | `just verify-web`                     | `verify` plus the editor in a real browser. Needs `obscura` on the path.                   |
 | `just gen-all`                        | Regenerate every generated file; commit the result.                                        |
 | `just format`                         | `cargo fmt` (nightly rustfmt) and `tombi format`.                                          |

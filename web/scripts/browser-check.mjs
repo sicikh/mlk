@@ -8,7 +8,7 @@
  * This drives the built site in a headless browser over CDP and reads the page afterwards,
  * so what it asserts is what a person would see.
  *
- *     node scripts/browser-check.mjs [--base URL] [--cdp URL] [--keep]
+ *     node scripts/browser-check.mjs [--base URL] [--cdp URL] [--keep] [--list] [--only TEXT]
  *
  * The check serves `web/build`, so the site has to be built first — `pnpm check:browser`
  * does that. `vite preview` takes a free port, and `obscura serve` is started when no
@@ -17,6 +17,14 @@
  * drives by default is the built site, which hands the driver's worker over as one script
  * every host runs; a dev server hands it over as a module, and obscura runs a worker as a
  * classic script whatever its type says, so a dev server is one this browser cannot drive.
+ *
+ * `--list` prints what the check asks and exits, and `--only TEXT` asks only the checks
+ * whose wording contains TEXT; the flag may be given more than once. A check that fails does
+ * not stop the rest: every check is read, the failures say what was expected against what the
+ * run saw, and the last lines are the tally.
+ *
+ * What is asked of the page is the table `RUN`, and what is asked of what the run read is
+ * the table `CHECKS`; both are written to be read as tables rather than as code.
  */
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -25,13 +33,27 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** @typedef {object} Options
+ * @property {string} [base]
+ * @property {string} [cdp]
+ * @property {boolean} [keep]
+ * @property {boolean} [list]
+ * @property {string[]} [only]
+ *
+ * What was given on the command line: where the site and the browser are, and which of the
+ * checks to ask. Everything else the check needs it arranges for itself. */
+
+/** @type {Options} */
 const options = parseArguments(process.argv.slice(2));
 const cdp = options.cdp ?? "http://127.0.0.1:9222";
 
 /** Where the site is served: the one asked for, or one of our own. */
 let base = options.base ?? "http://127.0.0.1:4173";
 
-/** What the check brought up itself, and therefore has to take down again. */
+/** What the check brought up itself, and therefore has to take down again.
+ *
+ * @type {{name: string, child: import("node:child_process").ChildProcess, said: string[]}[]} */
 const started = [];
 
 /**
@@ -176,7 +198,7 @@ const LIR = `const lines = (kind) => [...inspector().querySelectorAll('[data-lin
 		structureDepths: [...inspector().querySelectorAll('[data-line=structure]')].map((it) => Number(it.dataset.depth))
 	})`;
 
-/** The questions themselves, each answered by one round trip. */
+/** The questions themselves, each answered by one round trip. @type {Record<string, string>} */
 const STEPS = {
     state: `return JSON.stringify({
     		panels: document.querySelectorAll('[data-panel]').length,
@@ -276,12 +298,12 @@ const STEPS = {
     // What the driver did for the look that is in front, as the table of the tab reads it: the
     // rows are per pass and unit, and the time of a row is the time the pass spent running.
     stats: `const value = (cell) => cell.dataset.took !== undefined ? Number(cell.dataset.took) : Number(text(cell));
-\tconst row = (element) => ({ pass: element.dataset.stats, unit: element.dataset.unit, ...Object.fromEntries([...element.querySelectorAll('[data-count]')]
-\t\t.map((cell) => [cell.dataset.count, value(cell)])) });
-\treturn JSON.stringify({
-\t\ttook: Number(inspector().querySelector('[data-cost=took]').dataset.took),
-\t\trows: [...inspector().querySelectorAll('[data-stats]')].map(row)
-\t})`,
+	const row = (element) => ({ pass: element.dataset.stats, unit: element.dataset.unit, ...Object.fromEntries([...element.querySelectorAll('[data-count]')]
+		.map((cell) => [cell.dataset.count, value(cell)])) });
+	return JSON.stringify({
+		took: Number(inspector().querySelector('[data-cost=took]').dataset.took),
+		rows: [...inspector().querySelectorAll('[data-stats]')].map(row)
+	})`,
 
     showTc: `show('tc'); return true`,
 
@@ -375,7 +397,7 @@ const STEPS = {
 		return JSON.stringify({
 			keyword: colour('i32.const'),
 			type: colour('i31'),
-			string: colour('\"std::runtime\"'),
+			string: colour('"std::runtime"'),
 			accent,
 			typeColour: type,
 			ok
@@ -923,60 +945,2038 @@ const STEPS = {
     	})`,
 };
 
+/** @typedef {object} Wait
+ * @property {string} what what a person is told the step waited for
+ * @property {string} test the question the page is asked until it answers yes
+ * @property {number} [timeout] how long to keep asking, in ms
+ *
+ * A wait is the thing a step reads, asked as a question until it answers yes: the page paints
+ * the answer of a pull a message later, and what a step reads is only there once it has. */
+
 /**
  * What a step waits to see before it reads what it is about.
  *
  * A pull of the compiler is a question the page asks the worker, and the inspector paints the
  * answer a message later rather than in the click that asked for it: what a step is about to
- * read is only there once the tab holds it. Each of these is the thing the step reads, asked
- * as a question until it answers yes.
+ * read is only there once the tab holds it.
+ *
+ * @type {Record<string, Wait>}
  */
 const WAITS = {
-    cst: `return inspector().querySelector('[data-kind=MODULE_ROOT]') !== null`,
-    ast: `return inspector().textContent.includes('ModuleRoot')`,
-    hir: `return inspector().textContent.includes('BODY fun main')`,
-    tc: `return inspector().querySelector('[data-tc=entity]') !== null`,
-    mir: `return inspector().querySelector('[data-form=cfg] [data-block]') !== null`,
-    ssa: `return inspector().querySelector('[data-form=ssa] [data-line=term]') !== null`,
-    lir: `return inspector().querySelector('[data-lir] [data-block]') !== null && inspector().querySelector('[data-lir] [data-structure] [data-line=structure]') !== null`,
-    branch: `return inspector().querySelectorAll('[data-form=cfg] [data-block]').length > 1`,
-    branchSsa: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
-    unit: `return inspector().textContent.includes('const unit')`,
-    unitSsa: `return inspector().textContent.includes('call fun log')`,
-    lambda: `return [...inspector().querySelectorAll('[data-form=cfg] [data-line=owner]')].some((it) => text(it).includes('<mlkc@lambda-'))`,
-    lambdaLir: `return [...inspector().querySelectorAll('[data-lir] [data-line=owner]')].some((it) => text(it).includes('<mlkc@lambda-'))`,
-    wat: `const view = inspector().querySelector('[data-wat]');
+    hydrated: {
+        what: "the page to come up",
+        test: `return document.querySelectorAll('[data-panel]').length > 0`,
+        timeout: 30000,
+    },
+    cst: {
+        what: "the cst of the buffer",
+        test: `return inspector().querySelector('[data-kind=MODULE_ROOT]') !== null`,
+    },
+    ast: {
+        what: "the ast of the buffer",
+        test: `return inspector().textContent.includes('ModuleRoot')`,
+    },
+    hir: {
+        what: "the hir of the buffer",
+        test: `return inspector().textContent.includes('BODY fun main')`,
+    },
+    tc: {
+        what: "the types of the buffer",
+        test: `return inspector().querySelector('[data-tc=entity]') !== null`,
+    },
+    mir: {
+        what: "the mir of the buffer",
+        test: `return inspector().querySelector('[data-form=cfg] [data-block]') !== null`,
+    },
+    ssa: {
+        what: "the ssa form of the buffer",
+        test: `return inspector().querySelector('[data-form=ssa] [data-line=term]') !== null`,
+    },
+    lir: {
+        what: "the lir of the buffer",
+        test: `return inspector().querySelector('[data-lir] [data-block]') !== null && inspector().querySelector('[data-lir] [data-structure] [data-line=structure]') !== null`,
+    },
+    branch: {
+        what: "the branches of the mir",
+        test: `return inspector().querySelectorAll('[data-form=cfg] [data-block]').length > 1`,
+    },
+    branchSsa: {
+        what: "the branches of the ssa form",
+        test: `return inspector().querySelector('[data-form=ssa] [data-kind=branch]') !== null`,
+    },
+    unit: {
+        what: "the unit of a choice that selects nothing",
+        test: `return inspector().textContent.includes('const unit')`,
+    },
+    unitSsa: {
+        what: "the unit of the ssa form",
+        test: `return inspector().textContent.includes('call fun log')`,
+    },
+    lambda: {
+        what: "the lambda of the mir",
+        test: `return [...inspector().querySelectorAll('[data-form=cfg] [data-line=owner]')].some((it) => text(it).includes('<mlkc@lambda-'))`,
+    },
+    lambdaLir: {
+        what: "the lambda of the lir",
+        test: `return [...inspector().querySelectorAll('[data-lir] [data-line=owner]')].some((it) => text(it).includes('<mlkc@lambda-'))`,
+    },
+    wat: {
+        what: "the wasm of the buffer",
+        test: `const view = inspector().querySelector('[data-wat]');
 		return view !== null && view.querySelector('.cm-content') !== null`,
-    debugTables: `const head = inspector().querySelector('[data-wat-sections]');
+    },
+    // The buffer was replaced by another module, so waiting for a word of it is waiting for
+    // the editor to have taken what was typed, which is also when it is painted.
+    branchWords: {
+        what: "the words of the choice",
+        test: `return text(document.querySelector('.cm-content')).includes('if flag && true')`,
+    },
+    keywords: {
+        what: "the words of the module",
+        test: `return text(document.querySelector('.cm-content')).includes('as data')`,
+    },
+    // The scroll is applied where the module has somewhere to go: a browser that lays the
+    // view out with nothing to scroll has the whole of it in the DOM already.
+    watEnd: {
+        what: "the end of the module",
+        test: `const scroller = inspector().querySelector('[data-wat] .cm-scroller');
+		return scroller !== null && (scroller.scrollTop > 0 || scroller.scrollHeight <= scroller.clientHeight)`,
+    },
+    debugTables: {
+        what: "the debug tables of the module",
+        test: `const head = inspector().querySelector('[data-wat-sections]');
 		return head !== null && head.textContent.includes('.debug_line')`,
-    debugMap: `const head = inspector().querySelector('[data-wat-sections]');
+    },
+    debugMap: {
+        what: "the source map of the module",
+        test: `const head = inspector().querySelector('[data-wat-sections]');
 		return head !== null && head.textContent.includes('sourceMappingURL')`,
-    debugNone: `const head = inspector().querySelector('[data-wat-sections]');
+    },
+    debugNone: {
+        what: "the module without debug information",
+        test: `const head = inspector().querySelector('[data-wat-sections]');
 		return head !== null && !head.textContent.includes('sourceMappingURL') &&
 			!head.textContent.includes('.debug')`,
-    config: `return document.querySelector('[data-debug]') !== null &&
+    },
+    config: {
+        what: "the configuration of the compiler",
+        test: `return document.querySelector('[data-debug]') !== null &&
 		document.querySelector('[data-opt]') !== null`,
-    ran: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
+    },
+    ran: {
+        what: "the program to run",
+        test: `const lines = [...document.querySelectorAll('[data-panel=console] .line')];
 		return document.querySelector('[data-console=program].active') !== null &&
 			lines.some((it) => text(it).trim() === '5')`,
-    built: `return [...document.querySelectorAll('[data-panel=console] .line')]
+    },
+    built: {
+        what: "the build of the project",
+        test: `return [...document.querySelectorAll('[data-panel=console] .line')]
 			.some((it) => text(it).includes('the build is'))`,
-    packed: `return (window.__zip ?? '').length > 0`,
-    sources: `return (window.__zip ?? '').length > 0`,
-    broken: `return diagnostics().length > 0`,
-    bogus: `return inspector().textContent.includes('Bogus')`,
-    long: `return inspector().textContent.includes('x79')`,
-    edited: `return inspector().textContent.includes('80')`,
-    editedAgain: `return inspector().textContent.includes('90')`,
+    },
+    packed: {
+        what: "the archive of the build",
+        test: `return (window.__zip ?? '').length > 0`,
+    },
+    sources: {
+        what: "the archive of the sources",
+        test: `return (window.__zip ?? '').length > 0`,
+    },
+    broken: {
+        what: "the diagnostics of the broken buffer",
+        test: `return diagnostics().length > 0`,
+    },
+    bogus: {
+        what: "the node the grammar has no room for",
+        test: `return inspector().textContent.includes('Bogus')`,
+    },
+    long: {
+        what: "the tree of the long buffer",
+        test: `return inspector().textContent.includes('x79')`,
+    },
+    edited: {
+        what: "the tree of the edited buffer",
+        test: `return inspector().textContent.includes('80')`,
+    },
+    editedAgain: {
+        what: "the tree of the buffer edited again",
+        test: `return inspector().textContent.includes('90')`,
+    },
+    // The page hands the new size to the layout, which is what puts the switcher in front.
+    phone: {
+        what: "the page at the width of a phone",
+        test: `return innerWidth === 320 && document.querySelector('[data-pane=files]') !== null`,
+    },
 };
+
+/** @typedef {object} RowSettings
+ * @property {boolean} [merge] spread the answer over what the capture already holds
+ * @property {boolean} [raw] keep the answer as the string the page gave
+ * @property {object} [device] device metrics to set before the wait
+ * @property {(value: any, page: Page) => any} [transform] what to keep of the answer
+ *
+ * What a row makes of the answer it read: the answer of a step is the JSON the page made,
+ * and these are the few rows where that is not the whole story. */
+
+/** @typedef {[string | null, string | null, (Wait | null)?, RowSettings?]} Row */
+
+/**
+ * What the run asks of the page, in order.
+ *
+ * A row is [capture, step, wait, settings]. The wait is asked until the page is ready for the
+ * step, the step is asked, and the answer is kept under the capture — as the JSON it is, as
+ * the raw string where `raw` says so, as what `transform` makes of it, or spread over what
+ * the capture already holds where `merge` says so. A row with no capture is asked for its
+ * effect alone, and a row with no step only waits and sets the device metrics.
+ *
+ * @type {Row[]}
+ */
+const RUN = [
+    // The page hydrates after it has loaded, which is also when the kernel is fetched.
+    ["state", STEPS.state, WAITS.hydrated],
+
+    // What the header holds, which is what a person reaches for from anywhere in the page.
+    ["header", STEPS.header],
+
+    [null, STEPS.showCst],
+    ["cst", STEPS.cst, WAITS.cst],
+
+    // The editor paints the buffer in front, before anything is typed into it.
+    ["painted", STEPS.painted],
+
+    // A pointer on a row of the tree marks the code that row stands for.
+    ["hover", STEPS.hoverTree],
+    ["hover", STEPS.hovered, null, { merge: true }],
+
+    [null, STEPS.showDiagnostics],
+    ["clean", STEPS.clean],
+
+    [null, STEPS.showProgram],
+    ["program", STEPS.program],
+    [null, STEPS.showCompiler],
+
+    [null, STEPS.widen],
+    ["width", STEPS.width],
+
+    [null, STEPS.showAst],
+    ["ast", STEPS.ast, WAITS.ast],
+
+    // A node of the typed tree covers the tokens under it, and a pointer on its row marks as much.
+    [null, STEPS.hoverAst],
+    ["astHover", STEPS.astHovered],
+
+    [null, STEPS.showHir],
+    ["hir", STEPS.hir, WAITS.hir],
+
+    // A line of the hir stands for a node of the HIR, and the lowering is what says where that
+    // node was written: a pointer on the line asks the editor to mark it.
+    ["hirHover", STEPS.hoverHir],
+    ["hirHover", STEPS.hirHovered, null, { merge: true }],
+
+    // And a path marks what it names besides itself: the declaration the name comes from.
+    ["pathHover", STEPS.hoverPath],
+    ["pathHover", STEPS.pathHovered, null, { merge: true }],
+
+    // A type of a signature is a place of its declaration: the annotation it was written as.
+    ["typeHover", STEPS.hoverType],
+    ["typeHover", STEPS.typeHovered, null, { merge: true }],
+    ["typeColour", STEPS.typeColour],
+
+    // The types of the buffer: what the checker resolved the surface to, and what it checked
+    // every node of every body to. A row of the tab stands for a node of the HIR, so a pointer
+    // on one marks the code the node was read from.
+    [null, STEPS.showTc],
+    ["tc", STEPS.tc, WAITS.tc],
+    [null, STEPS.hoverTc],
+    ["tcHover", STEPS.tcHovered],
+
+    // The MIR of the buffer: the CFG form the checked body is lowered into, and the SSA form
+    // built from it. A line of a body stands for the expression it was read from, so a pointer
+    // on one asks the editor to mark that code.
+    [null, STEPS.showMir],
+    ["mir", STEPS.mir, WAITS.mir],
+    ["mirHover", STEPS.hoverMir],
+    ["mirHover", STEPS.mirHovered, null, { merge: true }],
+
+    [null, STEPS.showSsa],
+    ["ssa", STEPS.ssa, WAITS.ssa],
+
+    // The LIR of the buffer: what the WASM back end lowers the SSA form into, the target's own
+    // instructions, where the values that need storage live, and the frames the encoder writes
+    // them as.
+    [null, STEPS.showLir],
+    ["lir", STEPS.lir, WAITS.lir],
+
+    // A frame of the structure folds what it holds away, and unfolding brings the lines back.
+    [null, STEPS.foldLir],
+    ["lirFolded", STEPS.lir],
+    [null, STEPS.unfoldLir],
+    ["lirAgain", STEPS.lir],
+
+    // The module the link stage hands a host: the same bytes a run instantiates, read in a view
+    // of its own, where the forms of it fold.
+    [null, STEPS.showWat],
+    ["wat", STEPS.wat, WAITS.wat],
+    ["watPaint", STEPS.watPaint],
+    ["watMarks", STEPS.watMarks],
+
+    [null, STEPS.foldWat],
+    ["watFolded", STEPS.wat],
+    [null, STEPS.unfoldWat],
+    ["watAgain", STEPS.wat],
+
+    // The name section of the module stands at the end of it: reading it is scrolling to it.
+    [null, STEPS.scrollWatEnd],
+    ["watEnd", STEPS.wat, WAITS.watEnd],
+
+    // The status line of the inspector is in front whatever stage is shown: a buffer that
+    // reports nothing says so while the WAT is in front, and picking the line opens the list.
+    ["glance", STEPS.status],
+    ["fades", STEPS.fades],
+
+    // The configuration of the compiler is a tab of its own: the source map of a browser, the
+    // tables of DWARF, and nothing are alternatives, and a module carries one of them. A change
+    // is made in the config tab and read off the WAT of the module, which is where the head of
+    // the tab lists what the option added.
+    [null, STEPS.showConfig],
+    ["config", STEPS.config, WAITS.config],
+
+    [null, STEPS.debugDwarf],
+    [null, STEPS.showWat],
+    ["dwarfWat", STEPS.watSections, WAITS.debugTables],
+
+    [null, STEPS.showConfig],
+    [null, STEPS.debugNone],
+    [null, STEPS.showWat],
+    ["bareWat", STEPS.watSections, WAITS.debugNone],
+
+    [null, STEPS.showConfig],
+    [null, STEPS.debugMap],
+    [null, STEPS.showWat],
+    ["mapWat", STEPS.watSections, WAITS.debugMap],
+
+    // And the program itself: the modules are instantiated in the order the link stage gives
+    // them, and the `#[entry]` is called. A run of a browser is under the map, which is where
+    // the option stands; what `fib(5)` prints is what the program console holds.
+    [null, STEPS.run],
+    ["ran", STEPS.ran, WAITS.ran],
+
+    // The same project, built rather than run: every module of it is compiled and linked, and
+    // each is handed over as a file. A page writes a file by starting the download of a link,
+    // and what this reads is the names and the console, not the file system a page has none of.
+    [null, STEPS.compile],
+    ["zip", STEPS.packed, WAITS.packed, { raw: true }],
+    [
+        "built",
+        STEPS.built,
+        WAITS.built,
+        {
+            // The archive a person gets: what it holds is read off the directory at its end,
+            // because the paths inside are the whole of what an archive adds to a download of
+            // loose files, and the manifest is read out of the archive, because it is what a
+            // host that reads the build from files reads.
+            transform: (value, page) => {
+                const archive = Buffer.from(page.zip, "base64");
+                const paths = entries(archive);
+                const described = paths.find(
+                    (it) => it.name === "manifest.json",
+                );
+
+                if (!described) throw new Error("the build holds no manifest");
+
+                return {
+                    ...value,
+                    entries: paths,
+                    manifest: JSON.parse(
+                        contents(archive, described).toString("utf8"),
+                    ),
+                };
+            },
+        },
+    ],
+
+    // The sources a debugger reads beside a build: an archive whose entries are the paths of
+    // the debug information without their root, so one mapping rule points a debugger at the
+    // directory they are unpacked into. The name of the archive is the name of the build's.
+    [null, STEPS.sources],
+    ["sourceZip", STEPS.packed, WAITS.sources, { raw: true }],
+    [
+        "sources",
+        STEPS.sourcesRead,
+        null,
+        {
+            transform: (value, page) => {
+                const archive = Buffer.from(page.sourceZip, "base64");
+                const paths = entries(archive);
+                const main = paths.find((it) => it.name === "main.mlk");
+
+                if (!main) throw new Error("the sources hold no main.mlk");
+
+                return {
+                    ...value,
+                    entries: paths,
+                    main: contents(archive, main).toString("utf8"),
+                };
+            },
+        },
+    ],
+
+    // A body with a choice in it: the CFG form reads the block that branches and the blocks the
+    // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
+    // they meet in. The buffer is typed into the one that is in front.
+    [null, STEPS.typeBranch],
+    ["branchWords", STEPS.branchWords, WAITS.branchWords],
+
+    [null, STEPS.showMir],
+    ["branch", STEPS.mir, WAITS.branch],
+
+    [null, STEPS.showSsa],
+    ["branchSsa", STEPS.ssa, WAITS.branchSsa],
+
+    // A choice that selects nothing: the block control falls into when no condition holds
+    // writes the unit the choice is, and the SSA form passes it to the join.
+    [null, STEPS.typeUnit],
+
+    [null, STEPS.showMir],
+    ["unit", STEPS.mir, WAITS.unit],
+
+    [null, STEPS.showSsa],
+    ["unitSsa", STEPS.ssa, WAITS.unitSsa],
+
+    // A lambda is a body of the module like any other: the tabs read it flat, named under the
+    // body that wrote it, and a lambda written in a lambda is a body of the same set.
+    [null, STEPS.typeLambda],
+
+    [null, STEPS.showMir],
+    ["lambdaMir", STEPS.mir, WAITS.lambda],
+
+    [null, STEPS.showLir],
+    ["lambdaLir", STEPS.lir, WAITS.lambdaLir],
+
+    [null, STEPS.open],
+    [null, STEPS.typePath],
+    [null, STEPS.submitPath],
+    ["made", STEPS.made],
+
+    // Type into the buffer that was just made, the way a person would.
+    [null, STEPS.type],
+
+    [null, STEPS.showDiagnostics],
+    ["broken", STEPS.seen, WAITS.broken],
+
+    // A project with a mistake in it offers no build, and the tool says why.
+    ["brokenGlance", STEPS.status],
+    ["compileGuard", STEPS.compileGuard],
+
+    ["marks", STEPS.painted],
+
+    // The words the language reads out of names are painted whatever they are written as,
+    // and the buffer in front is asked about the ones a module is written with.
+    [null, STEPS.typeKeywords],
+    ["words", STEPS.keywordColours, WAITS.keywords],
+
+    // A mistake the parser cannot place is a node of the tree, and the ast shows it as one.
+    [null, STEPS.typeStray],
+    [null, STEPS.showAst],
+    ["bogus", STEPS.bogus, WAITS.bogus],
+
+    [null, STEPS.hoverBogus],
+    ["bogusMark", STEPS.bogusMark],
+
+    // A file of the library opens as a tab like any other, and closing the tab is not dropping
+    // the file: the library is read, not locked away.
+    [null, STEPS.openPrelude],
+
+    [null, STEPS.closeTab],
+    ["closed", STEPS.closed],
+
+    [null, STEPS.askDrop],
+    [null, STEPS.confirmDrop],
+    ["dropped", STEPS.dropped],
+
+    // A wide screen draws every panel at once, and its switcher is asked about here: once the
+    // page is narrowed below, the panels take turns being on the screen.
+    ["wide", STEPS.wide],
+
+    // A phone: the page at the width of one, where the panels are picked rather than laid out
+    // side by side. The questions below are the ones a person asks with a thumb: what is on
+    // the screen now, and what a tap puts there.
+    [
+        "phone",
+        STEPS.phone,
+        WAITS.phone,
+        {
+            device: {
+                width: 320,
+                height: 568,
+                deviceScaleFactor: 2,
+                mobile: true,
+                screenWidth: 320,
+                screenHeight: 568,
+            },
+        },
+    ],
+
+    [null, STEPS.pickFiles],
+    ["phoneFiles", STEPS.shownFiles],
+
+    [null, STEPS.pickBuffer],
+    ["phoneBuffer", STEPS.shownBuffer],
+
+    [null, STEPS.pickInspector],
+    ["phoneInspector", STEPS.shownInspector],
+
+    [null, STEPS.pickConsole],
+    ["phoneConsole", STEPS.shownConsole],
+
+    // A row of a tree that holds nothing is a place in the source rather than a thing to fold:
+    // picking one puts the editor in front, where the mark the row makes is read. A buffer is
+    // longer than the screen it is read on, so what a pick asks for is the place itself.
+    [null, STEPS.pickCode],
+    [null, STEPS.typeLong],
+    [null, STEPS.pickInspector],
+    [null, STEPS.showCst],
+    ["phoneToken", STEPS.pickLastToken, WAITS.long],
+    ["phoneToken", STEPS.pickedToken, null, { merge: true }],
+
+    // The standard library is in the files with everything else, and nothing of it is a
+    // person's to write in or to drop.
+    [null, STEPS.pickFiles],
+    ["library", STEPS.library],
+
+    [null, STEPS.openLibrary],
+    ["readLibrary", STEPS.readLibrary],
+    [null, STEPS.writeLibrary],
+    ["writtenLibrary", STEPS.readLibrary],
+
+    // And a buffer cannot be made in the directory of the library: the form says why.
+    [null, STEPS.pickFiles],
+    [null, STEPS.open],
+    [null, STEPS.typeStdPath],
+    [null, STEPS.submitStdPath],
+    ["refusedStdPath", STEPS.refusedStdPath],
+
+    // What a read cost: the buffer in front is filled with a module, and then the body of it
+    // is edited, which is one value read again and nothing else. The look before the edit is
+    // the one the second is read against: it is what the driver holds afterwards.
+    [null, STEPS.pickBuffer],
+    [null, STEPS.typeEdited],
+    [null, null, WAITS.edited],
+    [null, STEPS.typeEditedAgain],
+    [null, null, WAITS.editedAgain],
+    [null, STEPS.showStats],
+    ["stats", STEPS.stats],
+];
+
+/**
+ * What a check wants of a value equality cannot say, said the way a person reads it.
+ */
+class Want {
+    /**
+     * @param {string} said what a person is told the value should be
+     * @param {(actual: any) => boolean} holds whether it is
+     */
+    constructor(said, holds) {
+        this.said = said;
+        this.holds = holds;
+    }
+}
+
+/** The words a value is said in: the JSON of it, or what `String` makes of it, cut short.
+ *
+ * @param {any} value
+ * @returns {string}
+ */
+function show(value) {
+    if (value === undefined) return "(nothing)";
+
+    const text = JSON.stringify(value) ?? String(value);
+
+    return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+}
+
+/** Whether two read values are the same, deep: a matcher says so itself where one stands.
+ *
+ * @param {any} expected
+ * @param {any} actual
+ * @returns {boolean}
+ */
+function same(expected, actual) {
+    if (expected instanceof Want) return expected.holds(actual);
+
+    if (Array.isArray(expected) && Array.isArray(actual))
+        return (
+            expected.length === actual.length &&
+            expected.every((it, at) => same(it, actual[at]))
+        );
+
+    if (object(expected) && object(actual)) {
+        const keys = new Set([
+            ...Object.keys(expected),
+            ...Object.keys(actual),
+        ]);
+
+        return [...keys].every((key) => same(expected[key], actual[key]));
+    }
+
+    return expected === actual;
+}
+
+/** Whether a value is an object to be read key by key, and not a matcher or an array.
+ *
+ * @param {any} value
+ * @returns {boolean}
+ */
+function object(value) {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        !(value instanceof Want)
+    );
+}
+
+/**
+ * Where what was read parts from what was expected: what a check of one value says, or a line
+ * per place in an object or a list. An empty list is a check that holds.
+ *
+ * @param {any} expected
+ * @param {any} actual
+ * @param {string} [at]
+ * @returns {{at: string, expected: string, actual: string}[]}
+ */
+function departures(expected, actual, at = "") {
+    // A matcher says what it wanted of the value in its own words.
+    if (expected instanceof Want)
+        return expected.holds(actual)
+            ? []
+            : [{ at, expected: expected.said, actual: show(actual) }];
+
+    if (Array.isArray(expected) && Array.isArray(actual)) {
+        const lines = [];
+
+        if (expected.length !== actual.length)
+            lines.push({
+                at: `${at}.length`,
+                expected: `${expected.length} element(s)`,
+                actual: `${actual.length} element(s): ${show(actual)}`,
+            });
+
+        const shared = Math.min(expected.length, actual.length);
+
+        for (let index = 0; index < shared; index++)
+            lines.push(
+                ...departures(
+                    expected[index],
+                    actual[index],
+                    at ? `${at}.${index}` : `${index}`,
+                ),
+            );
+
+        return lines;
+    }
+
+    if (object(expected) && object(actual)) {
+        const keys = new Set([
+            ...Object.keys(expected),
+            ...Object.keys(actual),
+        ]);
+        const lines = [];
+
+        for (const key of keys)
+            lines.push(
+                ...departures(
+                    expected[key],
+                    actual[key],
+                    at ? `${at}.${key}` : key,
+                ),
+            );
+
+        return lines;
+    }
+
+    return same(expected, actual)
+        ? []
+        : [{ at, expected: show(expected), actual: show(actual) }];
+}
+
+/** What a person is told a value should be, and whether it is.
+ *
+ * @param {string} said
+ * @param {(actual: any) => boolean} holds
+ */
+const want = (said, holds) => new Want(said, holds);
+
+/** More than a number. @param {number} than */
+const greater = (than) =>
+    want(`more than ${than}`, (it) => typeof it === "number" && it > than);
+
+/** At least a number. @param {number} than */
+const atLeast = (than) =>
+    want(`at least ${than}`, (it) => typeof it === "number" && it >= than);
+
+/** Less than a number. @param {number} than */
+const less = (than) =>
+    want(`less than ${than}`, (it) => typeof it === "number" && it < than);
+
+/** Anything but a value, or anything but what a matcher wants. @param {any} value */
+const not = (value) =>
+    value instanceof Want
+        ? want(`not ${value.said}`, (it) => !value.holds(it))
+        : want(`not ${show(value)}`, (it) => !same(it, value));
+
+/** A string or a list that holds a part. @param {any} part */
+const includes = (part) =>
+    want(`a value that contains ${show(part)}`, (it) => {
+        return (
+            (typeof it === "string" || Array.isArray(it)) && it.includes(part)
+        );
+    });
+
+/** A string a pattern reads. @param {RegExp} pattern */
+const matches = (pattern) =>
+    want(`a value that matches ${pattern}`, (it) => {
+        return typeof it === "string" && pattern.test(it);
+    });
+
+/**
+ * A list with no element that is something.
+ *
+ * @param {string} said
+ * @param {(it: any) => boolean} holds
+ */
+const none = (said, holds) =>
+    want(`no element that is ${said}`, (it) => {
+        return Array.isArray(it) && !it.some(holds);
+    });
+
+/** A value that satisfies every one of several matchers. @param {...Want} matchers */
+const allOf = (...matchers) =>
+    want(matchers.map((it) => it.said).join(" and "), (actual) => {
+        return matchers.every((it) => it.holds(actual));
+    });
+
+/**
+ * The shape of every capture, named where it is read. They are written down rather than left
+ * to be inferred from the steps, because a step is a string the page evaluates: what a step
+ * reads is known to the step and to the checks that read it, and this is that knowledge
+ * written once.
+ *
+ * @typedef {{panels: number, file: string}} State
+ * @typedef {{label: string, aria: string, title: string, mark: boolean, primary: boolean}} Tool
+ * @typedef {{brand: string, name: boolean, tools: Tool[]}} Header
+ * @typedef {{nodes: number, root: boolean}} Cst
+ * @typedef {{keyword: string, number: string, type: string, name: string, attribute: string, green: string, marks: number}} Painted
+ * @typedef {{count: number, marked: string}} Mark
+ * @typedef {{says: string, count: number, marked: string}} Reach
+ * @typedef {{diagnostics: number}} Clean
+ * @typedef {{empty: boolean, tab: boolean}} Program
+ * @typedef {{files: number}} Width
+ * @typedef {{root: boolean, decl: boolean}} Ast
+ * @typedef {{module: string, item: boolean, body: boolean, pat: boolean, path: boolean}} Hir
+ * @typedef {{says: string, at: string, names: string}} Places
+ * @typedef {{part: string, path: string}} TypeColour
+ * @typedef {{name: string, ty: string}} Entity
+ * @typedef {{kind: string, code: string, ty: string}} Typed
+ * @typedef {{surface: Entity[], bodies: number, nodes: Typed[], errors: number}} Types
+ * @typedef {{form: string, owners: string[], lambdas: string[], blocks: string[], entry: number, stmts: string[], term: string[], locals: string[], blockParams: string[], branches: number}} Mir
+ * @typedef {{owners: string[], lambdas: string[], blocks: string[], entry: number, insts: string[], kinds: string[], term: string[], termKinds: string[], params: string[], locals: string[], blockParams: string[], structure: string[], structureKinds: string[], structureDepths: number[]}} Lir
+ * @typedef {{shown: boolean, text: string, lines: number, marks: number, head: string, gutters: number}} Wat
+ * @typedef {{keyword: string, type: string, string: string, accent: string, typeColour: string, ok: string}} WatPaint
+ * @typedef {{rows: number, marks: number, list: string[], bodyMarked: boolean, headMarked: boolean, moduleMarked: boolean}} WatMarks
+ * @typedef {{shown: boolean, text: string, active: boolean}} Glance
+ * @typedef {{overflows: boolean, start: boolean, end: boolean}} Fades
+ * @typedef {{debug: string, opt: string, options: string}} Config
+ * @typedef {{sections: string[], head: string}} Sections
+ * @typedef {{tab: boolean, printed: string[]}} Ran
+ * @typedef {{size: number, type: string}} Saved
+ * @typedef {{name: string, blob: boolean}} File
+ * @typedef {{name: string, at: number, size: number}} Entry
+ * @typedef {{external: boolean, module: string, name: string}} Imported
+ * @typedef {{file: string, name: string, imports: Imported[]}} Module
+ * @typedef {{project: string, host: string, entry: {module: string, name: string}, modules: Module[]}} Manifest
+ * @typedef {{files: File[], saved: Saved[], lines: string[], entries: Entry[], manifest: Manifest}} Built
+ * @typedef {{files: File[], saved: Saved[], lines: string[], entries: Entry[], main: string}} Sources
+ * @typedef {{disabled: boolean, title: string}} Guard
+ * @typedef {{keyword: string, pub: string, use: string, as: string}} Words
+ * @typedef {{keyword: string, if: string, then: string, else: string, number: string, truth: string}} ChoiceWords
+ * @typedef {{classes: string[], code: string, message: string, number: string, caret: string, whole: string}} Diagnostic
+ * @typedef {{object: boolean, shown: boolean}} Bogus
+ * @typedef {{open: number, listed: boolean}} Closed
+ * @typedef {{file: boolean}} Dropped
+ * @typedef {{file: boolean, open: number}} Made
+ * @typedef {{width: number, switches: number}} Wide
+ * @typedef {{width: number, shown: string, switches: number, handles: number, overflows: boolean}} Phone
+ * @typedef {{shown: string, files: number, overflows: boolean}} PhoneFiles
+ * @typedef {{shown: string, file: string, overflows: boolean}} PhoneBuffer
+ * @typedef {{shown: string, tabs: number, overflows: boolean}} PhoneInspector
+ * @typedef {{shown: string, lines: boolean, overflows: boolean}} PhoneConsole
+ * @typedef {{says: string, shown: string, marked: string, scrolls: boolean, scrolled: boolean}} PhoneToken
+ * @typedef {{files: string[], drop: boolean, file: string, locked: string}} Library
+ * @typedef {{editable: string, text: string, tab: string}} Read
+ * @typedef {{problem: string, made: boolean}} Refused
+ * @typedef {{pass: string, unit: string, hits: number, misses: number, stales: number, kept: number, dropped: number, took: number}} StatsRow
+ * @typedef {{took: number, rows: StatsRow[]}} Stats
+ */
+
+/**
+ * What the run captured, by name: the run and the checks agree on the names, and the shape of
+ * each is what the step that read it made of the page (see `RUN`). A step that could not run
+ * leaves its capture missing at runtime, which is the one thing this shape does not say; the
+ * checks that read it say so rather than the report crashing.
+ *
+ * @typedef {object} Page
+ * @property {State} state
+ * @property {Header} header
+ * @property {Cst} cst
+ * @property {Painted} painted
+ * @property {Reach} hover
+ * @property {Reach} hirHover
+ * @property {Clean} clean
+ * @property {Program} program
+ * @property {Width} width
+ * @property {Ast} ast
+ * @property {Mark} astHover
+ * @property {Hir} hir
+ * @property {Places} pathHover
+ * @property {Places} typeHover
+ * @property {TypeColour} typeColour
+ * @property {Types} tc
+ * @property {Mark} tcHover
+ * @property {Mir} mir
+ * @property {Reach} mirHover
+ * @property {Mir} ssa
+ * @property {Lir} lir
+ * @property {Lir} lirFolded
+ * @property {Lir} lirAgain
+ * @property {Mir} branch
+ * @property {Mir} branchSsa
+ * @property {ChoiceWords} branchWords
+ * @property {Mir} unit
+ * @property {Mir} unitSsa
+ * @property {Mir} lambdaMir
+ * @property {Lir} lambdaLir
+ * @property {Painted} marks
+ * @property {Made} made
+ * @property {Closed} closed
+ * @property {Dropped} dropped
+ * @property {Wat} wat
+ * @property {Wat} watFolded
+ * @property {Wat} watAgain
+ * @property {Wat} watEnd
+ * @property {WatPaint} watPaint
+ * @property {WatMarks} watMarks
+ * @property {Glance} glance
+ * @property {Fades} fades
+ * @property {Config} config
+ * @property {Sections} dwarfWat
+ * @property {Sections} bareWat
+ * @property {Sections} mapWat
+ * @property {Ran} ran
+ * @property {string} zip
+ * @property {Built} built
+ * @property {string} sourceZip
+ * @property {Sources} sources
+ * @property {Guard} compileGuard
+ * @property {Words} words
+ * @property {Diagnostic[]} broken
+ * @property {Glance} brokenGlance
+ * @property {Bogus} bogus
+ * @property {Mark} bogusMark
+ * @property {Wide} wide
+ * @property {Phone} phone
+ * @property {PhoneFiles} phoneFiles
+ * @property {PhoneBuffer} phoneBuffer
+ * @property {PhoneInspector} phoneInspector
+ * @property {PhoneConsole} phoneConsole
+ * @property {PhoneToken} phoneToken
+ * @property {Library} library
+ * @property {Read} readLibrary
+ * @property {Read} writtenLibrary
+ * @property {Refused} refusedStdPath
+ * @property {Stats} stats
+ */
+
+/** @typedef {object} Found
+ * @property {string[]} problems what the page said that it should not have
+ * @property {string[]} warnings what it said that is worth reading
+ * @property {string[]} asked what it asked the network for
+ * @property {{capture: string | null, error: string}[]} failed the steps that could not run
+ *
+ * Everything the run found besides the captures. */
+
+/** @typedef {(page: Page, found: Found) => any} Reading
+ *
+ * What a check reads: a value, or what a function of the captures makes of them. */
+
+/** @typedef {Reading | string | number | boolean | object | null | undefined} Anything */
+
+/** @typedef {[string, Anything, Anything]} Check */
+
+/**
+ * What the run asks of what it captured.
+ *
+ * A check is [what it asks, what the run read, what it expected]. Both sides may be values or
+ * functions of the captures, because an expectation is often read off another capture --- "the
+ * same blocks as the cfg form". A node of an expectation may be a `Want`, for what equality
+ * cannot say. Every check is read even when one fails, so one run says all that is broken.
+ *
+ * @type {Check[]}
+ */
+const CHECKS = [
+    ["the page hydrated", (page) => page.state.panels, greater(0)],
+
+    ["the cst of a clean buffer is a module", (page) => page.cst.root, true],
+    ["the tree is more than its root", (page) => page.cst.nodes, greater(5)],
+    ["a clean buffer reports nothing", (page) => page.clean.diagnostics, 0],
+
+    ["the ast names its root", (page) => page.ast.root, true],
+    ["the ast names a declaration", (page) => page.ast.decl, true],
+
+    ["the editor paints a keyword", (page) => page.painted.keyword, not("")],
+    [
+        "the editor paints code in more than one colour",
+        (page) => ({
+            keyword: page.painted.keyword !== "",
+            number: page.painted.number !== page.painted.keyword,
+            type: page.painted.type !== page.painted.number,
+            name: page.painted.name !== page.painted.keyword,
+        }),
+        { keyword: true, number: true, type: true, name: true },
+    ],
+    [
+        "the editor leaves a name the colour of text",
+        (page) => page.painted.name,
+        "",
+    ],
+    [
+        "the editor paints an attribute the green of the theme",
+        (page) => ({
+            painted: page.painted.attribute !== "",
+            green: page.painted.attribute === page.painted.green,
+        }),
+        { painted: true, green: true },
+    ],
+    [
+        "the editor paints pub, use and as the way it paints fun",
+        (page) => ({
+            keyword: page.words.keyword,
+            pub: page.words.pub,
+            use: page.words.use,
+            as: page.words.as,
+        }),
+        (page) => {
+            const keyword = page.words.keyword;
+
+            return {
+                keyword: not(""),
+                pub: keyword,
+                use: keyword,
+                as: keyword,
+            };
+        },
+    ],
+
+    ["a row of a tree marks code in the editor", (page) => page.hover.count, 1],
+    [
+        "the mark is the code the row says it stands for",
+        (page) => page.hover.marked,
+        (page) => JSON.parse(page.hover.says),
+    ],
+    [
+        "a row of the ast marks code in the editor",
+        (page) => page.astHover.count,
+        greater(0),
+    ],
+    [
+        "a node of the ast marks what it holds",
+        (page) => ({
+            count: page.astHover.count > 0,
+            // What a node covers is written over as many lines as it takes, and a mark is a
+            // piece of a line: the pieces together are what the node covers.
+            covers: page.astHover.marked.includes(page.hover.marked.trim()),
+            more:
+                page.astHover.marked.trim().length >
+                page.hover.marked.trim().length,
+        }),
+        { count: true, covers: true, more: true },
+    ],
+
+    [
+        "the hir is headed by the module and the path it is called by",
+        (page) => page.hir.module,
+        "MODULE #0 project::main",
+    ],
+    ["the hir names the items of the module", (page) => page.hir.item, true],
+    ["the hir reads a body", (page) => page.hir.body, true],
+    [
+        "the hir reads the patterns and the paths of the body",
+        (page) => [page.hir.pat, page.hir.path],
+        [true, true],
+    ],
+    [
+        "a line of the hir marks code in the editor",
+        (page) => page.hirHover.count,
+        1,
+    ],
+    [
+        "the mark is the code the line says it stands for",
+        (page) => ({
+            says: page.hirHover.says.includes("literal 5"),
+            marked: page.hirHover.marked.trim(),
+        }),
+        { says: true, marked: "5" },
+    ],
+    [
+        "a path of the hir marks the code it is written as",
+        (page) => page.pathHover.at,
+        "fib",
+    ],
+    [
+        "and marks what the path resolved to",
+        // What a path leads to is the declaration it names, which is a place in the same
+        // buffer: the path taken above is the call of `fib` in `main`.
+        (page) => page.pathHover.names,
+        includes("fun fib(n : Int) : Int"),
+    ],
+    [
+        "a type of a signature marks the type the declaration wrote",
+        (page) => ({ at: page.typeHover.at, names: page.typeHover.names }),
+        { at: "Int", names: "" },
+    ],
+    [
+        "a type of a signature is painted the way a path of a body is",
+        (page) => ({
+            painted: page.typeColour.part !== "",
+            same: page.typeColour.part === page.typeColour.path,
+        }),
+        { painted: true, same: true },
+    ],
+
+    [
+        "the tc tab reads the surface of the module and the types of its bodies",
+        (page) => ({
+            main: page.tc.surface.some(
+                (it) => it.name === "fun main" && it.ty === "() -> Unit",
+            ),
+            aux: page.tc.surface.some(
+                (it) =>
+                    it.name === "fun fib-aux" &&
+                    it.ty === "(Int, Int, Int) -> Int",
+            ),
+            bodies: page.tc.bodies,
+            pat: page.tc.nodes.some(
+                (it) => it.kind === "pat" && it.code === "n" && it.ty === "Int",
+            ),
+            expr: page.tc.nodes.some(
+                (it) =>
+                    it.kind === "expr" && it.code === "5" && it.ty === "Int",
+            ),
+            errors: page.tc.errors,
+        }),
+        { main: true, aux: true, bodies: 3, pat: true, expr: true, errors: 0 },
+    ],
+    [
+        "a row of the types is a type of a piece of the code, and marks it in the editor",
+        (page) => ({
+            count: page.tcHover.count,
+            marked: page.tcHover.marked !== "",
+        }),
+        { count: 1, marked: true },
+    ],
+
+    [
+        // The example holds three bodies, and the choice in `fib-aux` is what makes one of
+        // them more than one block: the entry is the block that branches, every arm writes
+        // the slot the expression is, and the value is read where the arms meet.
+        "the cfg tab reads a body of the buffer as its blocks",
+        (page) => ({
+            form: page.mir.form,
+            fib: page.mir.owners.some((it) => it.includes("fun fib")),
+            main: page.mir.owners.some((it) => it.includes("fun main")),
+            blocks: page.mir.blocks.length,
+            entry: page.mir.entry,
+            branches: page.mir.branches,
+            cast: page.mir.stmts.some((it) => it.includes("const 5")),
+            returns: page.mir.term.some((it) => it.startsWith("return l")),
+            params: page.mir.blockParams.length,
+        }),
+        {
+            form: "cfg",
+            fib: true,
+            main: true,
+            blocks: 6,
+            entry: 3,
+            branches: 1,
+            cast: true,
+            returns: true,
+            params: 0,
+        },
+    ],
+    [
+        // The CFG form is the lowering as it leaves it: an assignment writes a slot, a
+        // branch reads one, and a body with no choice in it ends by giving one back.
+        "the cfg tab reads the slots of the lowering",
+        (page) => ({
+            stmts: page.mir.stmts.every((it) => /^l\d/.test(it)),
+            terms: page.mir.term.every(
+                (it) =>
+                    it.startsWith("return l") ||
+                    it.startsWith("branch l") ||
+                    it.startsWith("goto b"),
+            ),
+        }),
+        { stmts: true, terms: true },
+    ],
+    [
+        "a line of the cfg marks the code it was read from",
+        (page) => ({
+            count: page.mirHover.count,
+            marked: page.mirHover.marked.trim(),
+        }),
+        { count: 1, marked: "5" },
+    ],
+    [
+        // The slots of the CFG form: the lowering binds every expression to one, and a slot
+        // a pattern bound says the name it was bound under. The SSA form needs none.
+        "the cfg tab reads the slots of the body, and the ssa tab has none",
+        (page) => ({
+            named: page.mir.locals.some((it) => it.includes("(n)")),
+            slots: page.mir.locals.every((it) => /^l\d/.test(it)),
+            none: page.ssa.locals.length,
+        }),
+        { named: true, slots: true, none: 0 },
+    ],
+    [
+        // The SSA form is built from the CFG form: the same bodies, with a value of its own
+        // in place of every slot, and the value `fib-aux` selects is born at the join its
+        // arms branch into.
+        "the ssa tab reads the same body with values in place of slots",
+        (page) => ({
+            form: page.ssa.form,
+            blocks: page.ssa.blocks.length,
+            cast: page.ssa.stmts.some((it) => it.includes("const 5")),
+            values: page.ssa.stmts.every((it) => /^v\d/.test(it)),
+            params: page.ssa.blockParams.length,
+            returns: page.ssa.term.some((it) => it.startsWith("return v")),
+        }),
+        (page) => ({
+            form: "ssa",
+            blocks: page.mir.blocks.length,
+            cast: true,
+            values: true,
+            params: 1,
+            returns: true,
+        }),
+    ],
+    [
+        // The LIR is what the back end encodes: the same bodies, one instruction of the
+        // target per line, and a local for every value that cannot be emitted where it is
+        // read. The dispatch of `fib-aux` keeps its program counter in one of them.
+        "the lir tab reads the target's instructions and where the values live",
+        (page) => ({
+            aux: page.lir.owners.some((it) => it.includes("fun fib-aux")),
+            blocks: page.lir.blocks.length,
+            entry: page.lir.entry,
+            get: page.lir.kinds.includes("i31.get_s"),
+            add: page.lir.kinds.includes("i32.add"),
+            eq: page.lir.kinds.includes("i32.eq"),
+            i31: page.lir.kinds.includes("ref.i31"),
+            call: page.lir.kinds.includes("call"),
+            branch: page.lir.termKinds.includes("branch"),
+            returns: page.lir.term.some((it) => it.startsWith("return v")),
+            params: page.lir.params.some((it) => it.includes("(ref i31)")),
+        }),
+        (page) => ({
+            aux: true,
+            blocks: page.mir.blocks.length,
+            entry: 3,
+            get: true,
+            add: true,
+            eq: true,
+            i31: true,
+            call: true,
+            branch: true,
+            returns: true,
+            params: true,
+        }),
+    ],
+    [
+        // A value the allocation gave a local to says which one; the dispatch form would
+        // keep a program counter in one of them, and every body of the buffer is structured.
+        "the lir reads the locals a value lives in",
+        (page) => ({
+            named: page.lir.locals.some((it) => it.includes(" = v")),
+            param: page.lir.blockParams.some((it) => it.includes("(local ")),
+            pc: page.lir.locals.some((it) => it.includes("(pc)")),
+        }),
+        { named: true, param: true, pc: false },
+    ],
+    [
+        // The structure is the tree of frames the encoder writes around the instructions:
+        // a join is a `block` a branch leaves, an `if` is a choice, a `leaf` is where a
+        // block is written, and what a person folds is a frame and what it holds.
+        "the lir tab reads the structure the encoder writes",
+        (page) => ({
+            block: page.lir.structureKinds.includes("block"),
+            if: page.lir.structureKinds.includes("if"),
+            br: page.lir.structureKinds.includes("br"),
+            leaf: page.lir.structureKinds.includes("leaf"),
+            return: page.lir.structureKinds.includes("return"),
+            frame: page.lir.structure.some((it) => it.startsWith("block b")),
+            write: page.lir.structure.some((it) => it.startsWith("leaf b")),
+            depths: Math.max(...page.lir.structureDepths),
+        }),
+        {
+            block: true,
+            if: true,
+            br: true,
+            leaf: true,
+            return: true,
+            frame: true,
+            write: true,
+            depths: greater(0),
+        },
+    ],
+    [
+        // The structure is a view rather than a note: a frame folds the lines it holds
+        // away, and unfolding it brings them back.
+        "the lir folds and unfolds a frame of the structure",
+        (page) => ({
+            folded: page.lirFolded.structure.length < page.lir.structure.length,
+            again: page.lirAgain.structure.length === page.lir.structure.length,
+        }),
+        { folded: true, again: true },
+    ],
+
+    [
+        // A choice is what makes a body more than one block: the entry evaluates the
+        // condition and branches, every arm writes the slot the expression is and goes to
+        // the block the arms meet in, and what is written after the `if` is written there.
+        // The condition holds a truth value, which is read as the constant it is.
+        "the cfg of a choice reads the blocks it branches into",
+        (page) => ({
+            form: page.branch.form,
+            blocks: page.branch.blocks.length,
+            branches: page.branch.branches,
+            truth: page.branch.stmts.some((it) => it.includes("const true")),
+            one: page.branch.stmts.some((it) => it.includes("const 1")),
+            returns: page.branch.term.some((it) => it.startsWith("return l")),
+            params: page.branch.blockParams.length,
+        }),
+        {
+            form: "cfg",
+            blocks: 4,
+            branches: 1,
+            truth: true,
+            one: true,
+            returns: true,
+            params: 0,
+        },
+    ],
+    [
+        // The keywords of a choice are read out of names like every other keyword, and the
+        // editor paints them the same way.
+        "the editor paints the keywords of a choice as it paints fun",
+        (page) => ({
+            keyword: page.branchWords.keyword,
+            if: page.branchWords.if,
+            then: page.branchWords.then,
+            else: page.branchWords.else,
+        }),
+        (page) => {
+            const keyword = page.branchWords.keyword;
+
+            return {
+                keyword: not(""),
+                if: keyword,
+                then: keyword,
+                else: keyword,
+            };
+        },
+    ],
+    [
+        // A truth value is a literal like an integer: the words are keywords, and what a
+        // reader reads at them is the value.
+        "the editor paints a truth value as it paints a number",
+        (page) => ({
+            painted: page.branchWords.truth !== "",
+            same: page.branchWords.truth === page.branchWords.number,
+        }),
+        { painted: true, same: true },
+    ],
+    [
+        // The value the arms agree on is born at the join: the SSA form enters the block
+        // they meet in through a parameter, and every arm passes its own value to it.
+        "the ssa of a choice is entered through a parameter of the join",
+        (page) => ({
+            form: page.branchSsa.form,
+            blocks: page.branchSsa.blocks.length,
+            branches: page.branchSsa.branches,
+            params: page.branchSsa.blockParams.length,
+            returns: page.branchSsa.term.some((it) =>
+                it.startsWith("return v"),
+            ),
+        }),
+        (page) => ({
+            form: "ssa",
+            blocks: page.branch.blocks.length,
+            branches: 1,
+            params: 1,
+            returns: true,
+        }),
+    ],
+    [
+        // A choice without an `else` selects no value: the block control falls into writes
+        // the unit the choice is, and what is written after the `if` reads one slot.
+        "the cfg of a choice without an else reads the unit it selects",
+        (page) => ({
+            form: page.unit.form,
+            blocks: page.unit.blocks.length,
+            branches: page.unit.branches,
+            unit: page.unit.stmts.some((it) => it.includes("const unit")),
+            returns: page.unit.term.some((it) => it.startsWith("return l")),
+            params: page.unit.blockParams.length,
+        }),
+        {
+            form: "cfg",
+            blocks: 4,
+            branches: 1,
+            unit: true,
+            returns: true,
+            params: 0,
+        },
+    ],
+    [
+        "the ssa of a choice without an else passes the unit to the join",
+        (page) => ({
+            form: page.unitSsa.form,
+            blocks: page.unitSsa.blocks.length,
+            branches: page.unitSsa.branches,
+            params: page.unitSsa.blockParams.length,
+            returns: page.unitSsa.term.some((it) => it.startsWith("return v")),
+        }),
+        (page) => ({
+            form: "ssa",
+            blocks: page.unit.blocks.length,
+            branches: 1,
+            params: 1,
+            returns: true,
+        }),
+    ],
+    [
+        // A lambda is a function of the module, read flat and named under the body that
+        // wrote it; the closure that creates it points at the lifted function.
+        "the cfg tab reads the body of a lambda as a function of the module",
+        (page) => ({
+            form: page.lambdaMir.form,
+            main: page.lambdaMir.owners.some((it) => it.startsWith("fun main")),
+            lambdas: page.lambdaMir.lambdas.length,
+            first:
+                page.lambdaMir.lambdas[0]?.startsWith(
+                    "fun main::<mlkc@lambda-0>",
+                ) ?? false,
+            second:
+                page.lambdaMir.lambdas[1]?.startsWith(
+                    "fun main::<mlkc@lambda-1>",
+                ) ?? false,
+            closure: page.lambdaMir.stmts.some((it) =>
+                it.includes("closure lambda#0"),
+            ),
+            blocks: page.lambdaMir.blocks.length,
+        }),
+        {
+            form: "cfg",
+            main: true,
+            lambdas: 2,
+            first: true,
+            second: true,
+            closure: true,
+            blocks: 3,
+        },
+    ],
+    [
+        // A lifted lambda is a function of the module in everything but its name: the tab
+        // reads its body, and the closure it makes is what `ref.func` and `struct.new` are.
+        "the lir tab reads the body of a lifted lambda",
+        (page) => ({
+            lambdas: page.lambdaLir.lambdas.length,
+            first:
+                page.lambdaLir.lambdas[0]?.startsWith(
+                    "fun main::<mlkc@lambda-0>",
+                ) ?? false,
+            second:
+                page.lambdaLir.lambdas[1]?.startsWith(
+                    "fun main::<mlkc@lambda-1>",
+                ) ?? false,
+            blocks: page.lambdaLir.blocks.length,
+            func: page.lambdaLir.kinds.includes("ref.func"),
+            struct: page.lambdaLir.kinds.includes("struct.new"),
+            call: page.lambdaLir.kinds.includes("call-ref"),
+        }),
+        {
+            lambdas: 2,
+            first: true,
+            second: true,
+            blocks: 3,
+            func: true,
+            struct: true,
+            call: true,
+        },
+    ],
+
+    [
+        "the editor marks what it reported",
+        (page) => page.marks.marks,
+        greater(0),
+    ],
+    ["a buffer can be made at a path", (page) => page.made.file, true],
+    ["a buffer opens as a tab", (page) => page.made.open, 2],
+    [
+        "a tab closes without the file",
+        (page) => ({ open: page.closed.open, listed: page.closed.listed }),
+        { open: 2, listed: true },
+    ],
+    ["a buffer can be dropped", (page) => page.dropped.file, true],
+
+    [
+        // The WASM the buffer assembles to, read as text in a view of its own: the module
+        // names itself, what it imports is what it calls, and the head says how much of it
+        // there is --- and there is enough of it for the forms to fold.
+        "the wat tab reads the module the buffer assembles to",
+        (page) => ({
+            shown: page.wat.shown,
+            module: page.wat.text.includes("(module"),
+            print: page.wat.text.includes("print-int"),
+            head: /\d+ lines/.test(page.wat.head),
+            gutters: page.wat.gutters > 0,
+        }),
+        { shown: true, module: true, print: true, head: true, gutters: true },
+    ],
+    [
+        // The end of the module is read by scrolling to it, where the name section stands.
+        "the name section of the module is read at the end of it",
+        (page) => page.watEnd.text,
+        includes("app::main"),
+    ],
+    [
+        // Diagnostics and Config are in front whatever stage is shown: a buffer that
+        // reports nothing says so while the WAT is in front, and the line is not the view
+        // that is in front.
+        "the diagnostics are read at a glance",
+        (page) => ({
+            shown: page.glance.shown,
+            text: page.glance.text,
+            active: page.glance.active,
+        }),
+        { shown: true, text: "no diagnostics", active: false },
+    ],
+    [
+        // A fade stands at an end of the row of stages only when something is out of
+        // sight on that side: the row is one line that scrolls, and the fade is how a
+        // person knows that it does.
+        "a fade says when a stage is out of sight",
+        (page) =>
+            page.fades.overflows
+                ? page.fades.start || page.fades.end
+                : !page.fades.start && !page.fades.end,
+        true,
+    ],
+    [
+        // The configuration of the compiler is a tab of the inspector rather than tools of
+        // the header: it grows with the pipeline, and the options of a run are read where
+        // a person sets them.
+        "the compiler is configured in a tab of its own",
+        (page) => page.config,
+        {
+            debug: "source-map",
+            opt: "none",
+            options: "none source-map dwarf-lines dwarf-full",
+        },
+    ],
+    [
+        // The debug option is what a module carries: the source map of a browser, the
+        // tables of DWARF, or nothing but the name section. A module carries one of them,
+        // so an engine has no DWARF to prefer to the map (ADR-0025).
+        "the debug option decides what a module carries",
+        (page) => ({
+            dwarf: page.dwarfWat.sections,
+            bare: page.bareWat.sections,
+            map: page.mapWat.sections,
+        }),
+        {
+            dwarf: allOf(
+                includes("name"),
+                includes(".debug_line"),
+                includes(".debug_info"),
+                includes(".debug_abbrev"),
+                not(includes("sourceMappingURL")),
+            ),
+            bare: allOf(
+                includes("name"),
+                none("a .debug section", (it) => it.startsWith(".debug")),
+                not(includes("sourceMappingURL")),
+            ),
+            map: allOf(
+                includes("sourceMappingURL"),
+                none("a .debug section", (it) => it.startsWith(".debug")),
+            ),
+        },
+    ],
+    [
+        // The format is painted: an instruction is the accent of a keyword, a value type
+        // the colour of a type, and a quoted name the green of a string.
+        "the format is painted in the colours of the theme",
+        (page) => ({
+            keyword: page.watPaint.keyword !== "",
+            accent: page.watPaint.keyword === page.watPaint.accent,
+            type: page.watPaint.type !== "",
+            typeColour: page.watPaint.type === page.watPaint.typeColour,
+            string: page.watPaint.string !== "",
+            green: page.watPaint.string === page.watPaint.ok,
+        }),
+        {
+            keyword: true,
+            accent: true,
+            type: true,
+            typeColour: true,
+            string: true,
+            green: true,
+        },
+    ],
+    [
+        // A marker belongs to the line a form opens on: the module and the head of each
+        // `func` fold, and a line of a body does not --- a marker on `local.get $n` was a
+        // bug of the scan reading a line's parenthesis from a later line.
+        "a fold marker belongs to the line a form opens on",
+        (page) => ({
+            marks: page.watMarks.marks,
+            opens: page.watMarks.list.every((it) => it.startsWith("(")),
+            module: page.watMarks.moduleMarked,
+            head: page.watMarks.headMarked,
+            body: page.watMarks.bodyMarked,
+        }),
+        { marks: 3, opens: true, module: true, head: true, body: false },
+    ],
+    [
+        // Folding a form takes its body off the screen and leaves the placeholder where it
+        // was, inside the form: the head and the parenthesis that closes it stay, so a form
+        // reads as `(module $app::main…)` rather than as a head and a line of its own.
+        "a form of the module folds, and unfolds again",
+        (page) => ({
+            folded: page.watFolded.marks > 0,
+            fewer: page.watFolded.lines < page.wat.lines,
+            placeholder: page.watFolded.text.includes("…"),
+            again: page.watAgain.marks === 0,
+            back: page.watAgain.lines > page.watFolded.lines,
+        }),
+        {
+            folded: true,
+            fewer: true,
+            placeholder: true,
+            again: true,
+            back: true,
+        },
+    ],
+    [
+        // The whole program: every buffer compiled and linked, the modules instantiated,
+        // and the entry point called. `fib(5)` is 5, and 5 is what was printed.
+        "running the program prints what it computes",
+        (page) => ({ tab: page.ran.tab, printed: page.ran.printed }),
+        { tab: true, printed: includes("5") },
+    ],
+    [
+        // The header is the tools of the project, and the name of the buffer is not repeated
+        // in it: the tab of the editor says which buffer is in front. A tool is a mark and a
+        // word, and the run is the one painted as the action.
+        "the header holds the tools of the project, and not the name of the buffer",
+        (page) => ({
+            brand: page.header.brand,
+            name: page.header.name,
+            tools: page.header.tools.map((it) => it.label).join(" "),
+            count: page.header.tools.length,
+            marked: page.header.tools.every((it) => it.mark && it.aria !== ""),
+            primary: page.header.tools[3]?.primary ?? false,
+            others: page.header.tools.slice(0, 3).every((it) => !it.primary),
+        }),
+        {
+            brand: "MLK",
+            name: false,
+            tools: "Check Compile Sources Run",
+            count: 4,
+            marked: true,
+            primary: true,
+            others: true,
+        },
+    ],
+    [
+        // The chords are written where a pointer reads them without pressing either tool:
+        // a synthetic key is not sent here, because the engine this check drives hands one
+        // to the page's capture listener only sometimes, and the promise of the tools is
+        // what is read instead.
+        "the tools say which keys ask for them",
+        (page) => ({
+            check:
+                page.header.tools[0]?.title.includes("Ctrl+Shift+Enter") ??
+                false,
+            run: page.header.tools[3]?.title.includes("Ctrl+Enter") ?? false,
+        }),
+        { check: true, run: true },
+    ],
+    [
+        // A build is one archive rather than a file per module: a download cannot make a
+        // folder, and an archive is where the folders of a project survive. Every module is
+        // in it under the file its manifest names, with the module of the host functions
+        // and the manifest itself beside it, and the archive is named by the project.
+        "a build is handed over as one archive of the program",
+        (page) => ({
+            saved: page.built.saved.length,
+            type: page.built.saved[0]?.type ?? "",
+            sized: (page.built.saved[0]?.size ?? 0) > 0,
+            files: page.built.files.map((it) => it.name).join(" "),
+            blob: page.built.files[0]?.blob ?? false,
+            entries: page.built.entries
+                .map((it) => it.name)
+                .sort()
+                .join(" "),
+            said: page.built.lines.some((it) =>
+                it.includes("the build is 6 files in app.zip"),
+            ),
+        }),
+        {
+            saved: 1,
+            type: "application/zip",
+            sized: true,
+            files: "app.zip",
+            blob: true,
+            entries:
+                "app/main.wasm host.wasm manifest.json std/core.wasm std/prelude.wasm std/runtime.wasm",
+            said: true,
+        },
+    ],
+    [
+        // The manifest is what a host that reads the build from files reads: the project,
+        // the file every module is written as, and where the program begins.
+        "the manifest of the build travels beside the modules",
+        (page) => ({
+            project: page.built.manifest.project,
+            host: page.built.manifest.host,
+            module: page.built.manifest.entry.module,
+            name: page.built.manifest.entry.name,
+            modules: page.built.manifest.modules
+                .map((it) => it.file)
+                .sort()
+                .join(" "),
+            print:
+                page.built.manifest.modules
+                    .find((it) => it.name === "app::main")
+                    ?.imports.some(
+                        (it) =>
+                            it.external &&
+                            it.module === "std::runtime" &&
+                            it.name === "print-int",
+                    ) ?? false,
+        }),
+        {
+            project: "app",
+            host: "host.wasm",
+            module: "app::main",
+            name: "main",
+            modules:
+                "app/main.wasm std/core.wasm std/prelude.wasm std/runtime.wasm",
+            print: true,
+        },
+    ],
+    [
+        // The sources are handed over as an archive of their own, and its name says which
+        // build it belongs to. An entry stands where the debug information of a module reads
+        // its path, so unpacking the archive and mapping `/` to the directory finds every
+        // source, the library included.
+        "the sources are handed over as one archive, under the paths of the debug information",
+        (page) => ({
+            files: page.sources.files.length,
+            name: page.sources.files[1]?.name ?? "",
+            blob: page.sources.files[1]?.blob ?? false,
+            saved: page.sources.saved.length,
+            entries: page.sources.entries
+                .map((it) => it.name)
+                .sort()
+                .join(" "),
+            main: page.sources.main.includes("fun fib"),
+            said: page.sources.lines.some((it) =>
+                it.includes("the sources are 4 files in app.sources.zip"),
+            ),
+        }),
+        {
+            files: 2,
+            name: "app.sources.zip",
+            blob: true,
+            saved: 2,
+            entries: "main.mlk std/core.mlk std/prelude.mlk std/runtime.mlk",
+            main: true,
+            said: true,
+        },
+    ],
+
+    [
+        "the console has a program tab",
+        (page) => ({ tab: page.program.tab, empty: page.program.empty }),
+        { tab: true, empty: true },
+    ],
+    ["a panel can be sized", (page) => page.width.files, greater(220)],
+
+    [
+        "a node the grammar has no room for is shown as a node",
+        (page) => page.bogus.shown,
+        true,
+    ],
+    [
+        "nothing the ast shows reads as an object",
+        (page) => page.bogus.object,
+        false,
+    ],
+    [
+        "a node the grammar has no room for marks what it holds",
+        (page) => ({
+            count: page.bogusMark.count > 0,
+            marked: page.bogusMark.marked.includes("abc"),
+        }),
+        { count: true, marked: true },
+    ],
+    [
+        "a broken buffer reports a diagnostic",
+        (page) => page.broken?.length ?? 0,
+        greater(0),
+    ],
+    [
+        // The status line counts what the list holds, and it is picked: the line is the
+        // diagnostics view, and the count says how bad the buffer is.
+        "the status line counts the diagnostics",
+        (page) => ({
+            text: page.brokenGlance.text,
+            active: page.brokenGlance.active,
+        }),
+        { text: includes("error"), active: true },
+    ],
+    [
+        // A project with a mistake in it is not a project to build: the tool is read rather
+        // than pressed, and what it says is the mistake.
+        "a project with a mistake in it offers no build",
+        (page) => ({
+            disabled: page.compileGuard.disabled,
+            title: page.compileGuard.title.includes("error"),
+        }),
+        { disabled: true, title: true },
+    ],
+    [
+        "the diagnostic is an error",
+        (page) => page.broken?.[0]?.classes ?? [],
+        includes("error"),
+    ],
+    [
+        // The code a person reads leads with the level, then says the stage and the kind:
+        // this one is the parser's first, and the parser is the second stage of the pipeline.
+        "the code says the stage and the kind",
+        (page) => page.broken?.[0]?.code ?? "",
+        matches(/^E0201$/),
+    ],
+    [
+        "the diagnostic shows the line it is about",
+        (page) => ({
+            number: page.broken?.[0]?.number ?? "",
+            caret: page.broken?.[0]?.caret ?? "",
+        }),
+        { number: matches(/^\d+$/), caret: includes("^") },
+    ],
+
+    [
+        "a wide screen draws the panels together, with no switcher to pick one",
+        (page) => ({ width: page.wide.width, switches: page.wide.switches }),
+        { width: atLeast(860), switches: 0 },
+    ],
+    [
+        "a phone shows one panel at a time, and the switcher is how it is picked",
+        (page) => ({
+            width: page.phone.width,
+            shown: page.phone.shown,
+            switches: page.phone.switches,
+            handles: page.phone.handles,
+            overflows: page.phone.overflows,
+        }),
+        {
+            width: less(860),
+            shown: "editor",
+            switches: 4,
+            handles: 0,
+            overflows: false,
+        },
+    ],
+    [
+        "picking Files shows the files",
+        (page) => ({
+            shown: page.phoneFiles.shown,
+            files: page.phoneFiles.files,
+            overflows: page.phoneFiles.overflows,
+        }),
+        { shown: "files", files: 4, overflows: false },
+    ],
+    [
+        "picking a buffer shows the editor, with the buffer in front",
+        (page) => ({
+            shown: page.phoneBuffer.shown,
+            file: page.phoneBuffer.file,
+            overflows: page.phoneBuffer.overflows,
+        }),
+        { shown: "editor", file: "main.mlk", overflows: false },
+    ],
+    [
+        "picking Inspect shows the inspector",
+        (page) => ({
+            shown: page.phoneInspector.shown,
+            tabs: page.phoneInspector.tabs,
+            overflows: page.phoneInspector.overflows,
+        }),
+        { shown: "inspector", tabs: 11, overflows: false },
+    ],
+    [
+        "picking Console shows the console",
+        (page) => ({
+            shown: page.phoneConsole.shown,
+            lines: page.phoneConsole.lines,
+            overflows: page.phoneConsole.overflows,
+        }),
+        { shown: "console", lines: true, overflows: false },
+    ],
+    [
+        "picking a token of a tree shows the editor, with the token marked in it",
+        (page) => ({
+            shown: page.phoneToken.shown,
+            marked: page.phoneToken.marked !== "",
+            same: page.phoneToken.marked === page.phoneToken.says,
+        }),
+        { shown: "editor", marked: true, same: true },
+    ],
+    [
+        // A place is brought to a person, not merely marked: a buffer is read through a
+        // window onto it, and a pick moves that window. A browser that lays the editor out
+        // with nothing to scroll — the one this check drives is one — has no window to move,
+        // and is asked for the mark alone.
+        "picking a token brings the place it stands for into view",
+        (page) => !page.phoneToken.scrolls || page.phoneToken.scrolled,
+        true,
+    ],
+
+    [
+        // The library is the compiler's: it is in the files with everything else, and the
+        // directory of the library is what says so --- once, for everything under it.
+        "the standard library is in the files, and offers nothing to drop",
+        (page) => ({
+            core: page.library.files.includes("/std/core.mlk"),
+            prelude: page.library.files.includes("/std/prelude.mlk"),
+            drop: page.library.drop,
+            file: page.library.file,
+            locked: page.library.locked,
+        }),
+        {
+            core: true,
+            prelude: true,
+            drop: false,
+            file: "",
+            locked: "read-only",
+        },
+    ],
+    [
+        // What the editor shows of a file of the library is what the compiler holds: a
+        // state that is read-only takes no text, and the tab says what the file is.
+        "a file of the library is read, and not written in",
+        (page) => ({
+            editable: page.readLibrary.editable,
+            tab: page.readLibrary.tab,
+            core: page.readLibrary.text.includes("module project::core"),
+            same: page.writtenLibrary.text === page.readLibrary.text,
+        }),
+        { editable: "false", tab: "r/o", core: true, same: true },
+    ],
+    [
+        "a buffer cannot be made in the directory of the library",
+        (page) => ({
+            problem: page.refusedStdPath.problem,
+            made: page.refusedStdPath.made,
+        }),
+        { problem: "the standard library is read-only", made: false },
+    ],
+
+    [
+        // An edit of a body is read out of what the driver held: the parse of the edited
+        // buffer is a stale read and never a miss, nothing that was held was dropped, and a
+        // buffer that was dropped before is not read at all --- a host that says a file is
+        // gone takes its module out of the project, and the project is not read over it.
+        // How many looks the two edits are read in is the editor's to decide, so what is
+        // asked is that the edit was read rather than that it was read exactly once.
+        "an edit of a body is paid for out of what the driver held",
+        (page) => ({
+            stales: counted(page, "parse", "stales", "/main.mlk"),
+            misses: counted(page, "parse", "misses", "/main.mlk"),
+            lib: page.stats.rows.every((it) => !it.unit.startsWith("/lib/")),
+            kept: page.stats.rows.every((it) => it.dropped === 0),
+        }),
+        { stales: greater(0), misses: 0, lib: true, kept: true },
+    ],
+    [
+        // What a module shows is a function of its own text and of no body, so the edit
+        // reads the surface of it again and keeps the types it had.
+        "the signature surface of an edited module is read again and kept",
+        (page) => ({
+            stales: counted(page, "signatures", "stales", "/main.mlk"),
+            kept: counted(page, "signatures", "kept", "/main.mlk"),
+        }),
+        { stales: greater(0), kept: greater(0) },
+    ],
+    [
+        "the body that was edited is checked again",
+        (page) => counted(page, "check", "stales"),
+        greater(0),
+    ],
+    [
+        // A check is a value of a body, and the counters say which body: the name of the
+        // entity it belongs to and the file it is written in.
+        "a check is counted for the body it is about",
+        (page) =>
+            page.stats.rows.some(
+                (it) => it.pass === "check" && it.unit === "/main.mlk: main",
+            ),
+        true,
+    ],
+    [
+        // What a look cost is the time of the page around it, and every row carries what
+        // its pass cost. The times of the rows are zero in the browser this check drives
+        // --- its clock reads the same value twice within one task, and a pull is one task
+        // --- which is why the time of a pass is what the tests of the driver measure,
+        // with a clock they control.
+        "a look is timed, and its rows carry the time of their passes",
+        (page) => ({
+            took: page.stats.took > 0,
+            finite: page.stats.rows.every(
+                (it) => Number.isFinite(it.took) && it.took >= 0,
+            ),
+        }),
+        { took: true, finite: true },
+    ],
+
+    [
+        "the page said nothing it should not have",
+        (page, found) => found.problems,
+        [],
+    ],
+];
+
+/**
+ * What the run saw, said the way a person reads it.
+ *
+ * A note is a function of the captures rather than a line of output: a step that could not
+ * run leaves its notes nothing to read, and a note is not a check --- it is skipped rather
+ * than reported.
+ */
+const NOTES = /** @type {((page: Page) => string)[]} */ ([
+    (page) => `the page at ${base} shows: ${page.state.file || "(nothing)"}`,
+    (page) => `the cst holds ${page.cst.nodes} elements`,
+    (page) =>
+        `the editor paints a keyword ${page.painted.keyword}, a number ${page.painted.number}, a type ${page.painted.type}`,
+    (page) =>
+        `it paints pub ${page.words.pub}, use ${page.words.use} and as ${page.words.as}, against fun ${page.words.keyword}`,
+    (page) =>
+        `it paints an attribute ${page.painted.attribute}, which is the green of the theme ${page.painted.green}`,
+    (page) =>
+        `it paints a truth value ${page.branchWords.truth || "(nothing)"}, against a number ${page.branchWords.number || "(nothing)"} and a keyword ${page.branchWords.keyword || "(nothing)"}`,
+    (page) =>
+        `the row that says ${page.hover.says} marks ${page.hover.marked || "nothing"} in the editor`,
+    (page) =>
+        `a row of the ast marks ${JSON.stringify(page.astHover.marked.slice(0, 40))}`,
+    (page) =>
+        `the hir reads ${page.hir.module}, and ${page.hirHover.says} marks ${JSON.stringify(page.hirHover.marked)}`,
+    (page) =>
+        `the path ${page.pathHover.says} marks ${JSON.stringify(page.pathHover.at)} and ${JSON.stringify(page.pathHover.names)}`,
+    (page) =>
+        `the type line ${page.typeHover.says} marks ${JSON.stringify(page.typeHover.at)} and is painted ${page.typeColour.part}`,
+    (page) =>
+        `the mir reads a ${page.mir.form} form of ${page.mir.blocks.length} block(s), which ${page.mirHover.says.trim()} marks ${JSON.stringify(page.mirHover.marked)}, and the ssa ${page.ssa.blocks.length} block(s)`,
+    (page) =>
+        `the lir reads ${page.lir.blocks.length} block(s) of ${page.lir.kinds.length} instruction(s) of ${new Set(page.lir.kinds).size} kind(s), in ${page.lir.locals.length} local line(s), and the structure is ${page.lir.structure.length} line(s) folded to ${page.lirFolded.structure.length}`,
+    (page) =>
+        `a choice reads as ${page.branch.blocks.length} block(s) of a ${page.branch.form} form and ${page.branchSsa.blockParams.length} parameter(s) of the join of the ssa form`,
+    (page) =>
+        `a choice without an else reads ${page.unit.stmts.filter((it) => it.includes("const unit")).length} unit(s) in its ${page.unit.blocks.length} block(s)`,
+    (page) =>
+        `a lambda reads as ${JSON.stringify(page.lambdaMir.lambdas)} in the mir and ${JSON.stringify(page.lambdaLir.lambdas)} in the lir, of ${page.lambdaMir.blocks.length} and ${page.lambdaLir.blocks.length} block(s)`,
+    (page) =>
+        `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
+    (page) =>
+        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.map((it) => it.name).join(", ")}`,
+    (page) =>
+        `the manifest of the build is of the project ${page.built.manifest.project}, and its entry is ${page.built.manifest.entry ? `${page.built.manifest.entry.module}::${page.built.manifest.entry.name}` : "nothing"}`,
+    (page) =>
+        `a broken buffer ${page.compileGuard.disabled ? "refuses" : "takes"} a build`,
+    (page) =>
+        `the debug option gives the module ${page.dwarfWat.sections.length} custom section(s) of DWARF, ${page.bareWat.sections.length} with none, and ${page.mapWat.sections.length} with the source map`,
+    (page) =>
+        `of ${page.watMarks.rows} line(s) on the screen, ${page.watMarks.marks} carry a fold marker: the module ${page.watMarks.moduleMarked ? "folds" : "does not fold"}, a func head ${page.watMarks.headMarked ? "folds" : "does not fold"}, and a line of a body ${page.watMarks.bodyMarked ? "FOLDS" : "does not fold"}`,
+    (page) => `the markers stand at ${JSON.stringify(page.watMarks.list)}`,
+    (page) =>
+        `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,
+    (page) =>
+        `its elements mark ${JSON.stringify(page.bogusMark.marked.slice(0, 24))}`,
+    (page) => `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,
+    (page) =>
+        `a phone at ${page.phone.width}px shows ${page.phone.shown}, and the switcher has ${page.phone.switches} panels to pick`,
+    (page) =>
+        `the files hold ${page.library.files.length} buffers, and the editor ${page.writtenLibrary.text === page.readLibrary.text ? "did not take" : "TOOK"} what was typed into a file of the library`,
+    (page) =>
+        `a pick of ${JSON.stringify(page.phoneToken.says)} in a tree marks ${JSON.stringify(page.phoneToken.marked)}, which the editor ${page.phoneToken.scrolls ? (page.phoneToken.scrolled ? "is taken to" : "stays away from") : "has nothing to scroll to"}`,
+    (page) =>
+        `a read of an edited body took ${page.stats.took} ms, of which ${counted(page, "check", "stales")} check(s) read again and ${page.stats.rows.filter((it) => it.took > 0).length} pass(es) timed`,
+    (page) =>
+        `the rows of that read: ${page.stats.rows.map((it) => `${it.pass}(${it.unit}) ${it.hits}/${it.misses}/${it.stales}/${it.kept}/${it.dropped}`).join(" ")}`,
+    (page) =>
+        page.broken?.[0]?.whole
+            ? `  ${page.broken[0].whole.trim().replace(/\s+/g, " ")}`
+            : "",
+]);
+
+/**
+ * What the counters of a read come to, by pass and by row: what a check of one assertion
+ * asks about is stated over the rows and not over the rows of one pass. A unit is named
+ * when the assertion is about the buffer a person edited and not about every buffer the
+ * driver read around it.
+ *
+ * @param {Page} page
+ * @param {string} pass
+ * @param {"hits" | "misses" | "stales" | "kept" | "dropped" | "took"} field
+ * @param {string} [unit]
+ */
+function counted(page, pass, field, unit) {
+    return page.stats.rows
+        .filter(
+            (it) =>
+                it.pass === pass && (unit === undefined || it.unit === unit),
+        )
+        .reduce((all, it) => all + (it[field] ?? 0), 0);
+}
 
 /** A CDP connection: commands are answered by id, events go to whoever listens. */
 class Connection {
+    /** @type {WebSocket} */
     #socket;
+
+    /** @type {number} */
     #next = 1;
+
+    /** @type {Map<number, {accept: (value: any) => void, reject: (error: Error) => void}>} */
     #pending = new Map();
+
+    /** @type {Set<(message: any) => void>} */
     #listeners = new Set();
 
+    /** @param {string} url @returns {Promise<Connection>} */
     static async open(url) {
         const socket = new WebSocket(url);
 
@@ -992,6 +2992,7 @@ class Connection {
         return new Connection(socket);
     }
 
+    /** @param {WebSocket} socket */
     constructor(socket) {
         this.#socket = socket;
         socket.addEventListener("message", (event) =>
@@ -999,6 +3000,12 @@ class Connection {
         );
     }
 
+    /**
+     * @param {string} method
+     * @param {any} [params]
+     * @param {string} [sessionId]
+     * @returns {Promise<any>}
+     */
     send(method, params = {}, sessionId) {
         const id = this.#next++;
 
@@ -1010,10 +3017,12 @@ class Connection {
         });
     }
 
+    /** @param {(message: any) => void} listener */
     on(listener) {
         this.#listeners.add(listener);
     }
 
+    /** @param {string} raw */
     #receive(raw) {
         const message = JSON.parse(raw);
 
@@ -1033,43 +3042,53 @@ class Connection {
 }
 
 async function main() {
+    // What the check asks is a table, so the list is read without driving anything.
+    if (options.list) {
+        for (const [label] of selectedChecks()) console.log(label);
+
+        process.exit(0);
+    }
+
     if (!options.base) base = `http://127.0.0.1:${await freePort(4173)}`;
 
     await ensureStaticServer();
     await ensureBrowser();
 
     const { connection, session } = await openPage();
-    const problems = [];
-    const warnings = [];
-    const asked = [];
+
+    /** @type {Found} */
+    const found = { problems: [], warnings: [], asked: [], failed: [] };
 
     /** Everything the page said that it should not have. */
     connection.on((message) => {
         if (message.method === "Runtime.exceptionThrown") {
-            problems.push(describe(message.params.exceptionDetails));
+            found.problems.push(describe(message.params.exceptionDetails));
         }
 
         if (message.method === "Runtime.consoleAPICalled") {
-            const said = (message.params.args ?? [])
+            /** @type {any[]} */
+            const args = message.params.args ?? [];
+            const said = args
                 .map((argument) => argument.value ?? argument.description ?? "")
                 .join(" ");
 
             if (message.params.type === "error")
-                problems.push(`console.error: ${said}`);
-            else if (message.params.type === "warning") warnings.push(said);
+                found.problems.push(`console.error: ${said}`);
+            else if (message.params.type === "warning")
+                found.warnings.push(said);
         }
 
         if (message.method === "Log.entryAdded") {
             const entry = message.params.entry;
 
             if (entry.level === "error")
-                problems.push(`${entry.source}: ${entry.text}`);
-            else if (entry.level === "warning") warnings.push(entry.text);
+                found.problems.push(`${entry.source}: ${entry.text}`);
+            else if (entry.level === "warning") found.warnings.push(entry.text);
         }
 
         /** What the page asked for: a page that does not run is usually a request. */
         if (message.method === "Network.responseReceived")
-            asked.push(
+            found.asked.push(
                 `${message.params.response.url} ${message.params.response.status}`,
             );
     });
@@ -1081,7 +3100,7 @@ async function main() {
 
     const loaded = deferred();
     connection.on((message) => {
-        if (message.method === "Page.loadEventFired") loaded.accept();
+        if (message.method === "Page.loadEventFired") loaded.accept(undefined);
     });
 
     await connection.send("Page.navigate", { url: `${base}/` }, session);
@@ -1090,7 +3109,7 @@ async function main() {
         timeout(20000, `the page at ${base} never finished loading`),
     ]);
 
-    /** One question, and the answer the page gave. */
+    /** One question, and the answer the page gave. @param {string} body */
     const ask = async (body) => {
         const result = await connection.send(
             "Runtime.evaluate",
@@ -1113,462 +3132,199 @@ async function main() {
      * A pull of the compiler is answered a message later, and the inspector paints it a render
      * after that: what a step reads is read after this says it is there, rather than after a
      * while that happens to be long enough.
+     *
+     * @param {Wait} wait
      */
-    const until = async (body, what) => {
-        const found = await waitFor(async () => await ask(body), {
-            timeout: 20000,
+    const until = async (wait) => {
+        const found = await waitFor(async () => await ask(wait.test), {
+            timeout: wait.timeout ?? 20000,
             interval: 50,
         });
 
-        if (!found) throw new Error(`the page never showed ${what}`);
+        if (!found) throw new Error(`the page never showed ${wait.what}`);
     };
 
-    // The page hydrates after it has loaded, which is also when the kernel is fetched.
-    const hydrated = await waitFor(
-        async () => {
-            const state = JSON.parse(await ask(STEPS.state));
+    /** What the run captured, under the names the checks read. @type {Page} */
+    const page = /** @type {Page} */ (/** @type {unknown} */ ({}));
 
-            return state.panels > 0;
-        },
-        { timeout: 30000 },
+    /** The captures are filled by name, which is the one thing their shape does not say. */
+    const bag = /** @type {Record<string, any>} */ (
+        /** @type {unknown} */ (page)
     );
 
-    const state = JSON.parse(await ask(STEPS.state));
+    for (const [capture, step, wait, settings = {}] of RUN) {
+        try {
+            if (settings.device)
+                await connection.send(
+                    "Emulation.setDeviceMetricsOverride",
+                    settings.device,
+                    session,
+                );
 
-    // What the header holds, which is what a person reaches for from anywhere in the page.
-    const header = JSON.parse(await ask(STEPS.header));
+            if (wait) await until(wait);
 
-    await ask(STEPS.showCst);
-    await until(WAITS.cst, "the cst of the buffer");
-    const cst = JSON.parse(await ask(STEPS.cst));
+            if (!step) continue;
 
-    // The editor paints the buffer in front, before anything is typed into it.
-    const painted = JSON.parse(await ask(STEPS.painted));
+            const answer = await ask(step);
 
-    // And a pointer on a row of the tree marks the code that row stands for.
-    const says = JSON.parse(await ask(STEPS.hoverTree));
-    const hover = { ...says, ...JSON.parse(await ask(STEPS.hovered)) };
+            if (!capture) continue;
 
-    await ask(STEPS.showDiagnostics);
-    const clean = JSON.parse(await ask(STEPS.clean));
+            const value = settings.raw ? answer : JSON.parse(answer);
+            const kept = settings.transform
+                ? settings.transform(value, page)
+                : value;
 
-    await ask(STEPS.showProgram);
-    const program = JSON.parse(await ask(STEPS.program));
-    await ask(STEPS.showCompiler);
+            bag[capture] = settings.merge ? { ...bag[capture], ...kept } : kept;
+        } catch (error) {
+            found.failed.push({ capture, error: message(error) });
 
-    await ask(STEPS.widen);
-    const width = JSON.parse(await ask(STEPS.width));
+            // A page that never came up fails every step below it in the same way,
+            // and saying so once is the whole of what can be said about it.
+            if (!page.state) break;
+        }
+    }
 
-    await ask(STEPS.showAst);
-    await until(WAITS.ast, "the ast of the buffer");
-    const ast = JSON.parse(await ask(STEPS.ast));
+    return report(page, found);
+}
 
-    // A node of the typed tree covers the tokens under it, and a pointer on its row marks as much.
-    await ask(STEPS.hoverAst);
-    const astHover = JSON.parse(await ask(STEPS.astHovered));
+/** The checks to ask: all of them, or the ones a `--only` names by their wording. */
+function selectedChecks() {
+    const said = options.only;
 
-    await ask(STEPS.showHir);
-    await until(WAITS.hir, "the hir of the buffer");
-    const hir = JSON.parse(await ask(STEPS.hir));
+    if (!said?.length) return CHECKS;
 
-    // A line of the hir stands for a node of the HIR, and the lowering is what says where that
-    // node was written: a pointer on the line asks the editor to mark it.
-    const hirSays = JSON.parse(await ask(STEPS.hoverHir));
-    const hirHover = {
-        ...hirSays,
-        ...JSON.parse(await ask(STEPS.hirHovered)),
-    };
+    const asked = said.map((it) => it.toLowerCase());
 
-    // And a path marks what it names besides itself: the declaration the name comes from.
-    const pathSays = JSON.parse(await ask(STEPS.hoverPath));
-    const pathHover = {
-        ...pathSays,
-        ...JSON.parse(await ask(STEPS.pathHovered)),
-    };
+    return CHECKS.filter(([label]) => {
+        return asked.some((it) => label.toLowerCase().includes(it));
+    });
+}
 
-    // A type of a signature is a place of its declaration: the annotation it was written as.
-    const typeSays = JSON.parse(await ask(STEPS.hoverType));
-    const typeHover = {
-        ...typeSays,
-        ...JSON.parse(await ask(STEPS.typeHovered)),
-    };
-    const typeColour = JSON.parse(await ask(STEPS.typeColour));
+/**
+ * What the run read, or what its reading makes of the captures.
+ *
+ * @param {any} reading
+ * @param {Page} page
+ * @param {Found} found
+ */
+function read(reading, page, found) {
+    return typeof reading === "function" ? reading(page, found) : reading;
+}
 
-    // The types of the buffer: what the checker resolved the surface to, and what it checked
-    // every node of every body to. A row of the tab stands for a node of the HIR, so a pointer
-    // on one marks the code the node was read from.
-    await ask(STEPS.showTc);
-    await until(WAITS.tc, "the types of the buffer");
-    const tc = JSON.parse(await ask(STEPS.tc));
-    await ask(STEPS.hoverTc);
-    const tcHover = JSON.parse(await ask(STEPS.tcHovered));
-
-    // The MIR of the buffer: the CFG form the checked body is lowered into, and the SSA form
-    // built from it. A line of a body stands for the expression it was read from, so a pointer
-    // on one asks the editor to mark that code.
-    await ask(STEPS.showMir);
-    await until(WAITS.mir, "the mir of the buffer");
-    const mir = JSON.parse(await ask(STEPS.mir));
-
-    const mirSays = JSON.parse(await ask(STEPS.hoverMir));
-    const mirHover = {
-        ...mirSays,
-        ...JSON.parse(await ask(STEPS.mirHovered)),
-    };
-
-    await ask(STEPS.showSsa);
-    await until(WAITS.ssa, "the ssa form of the buffer");
-    const ssa = JSON.parse(await ask(STEPS.ssa));
-
-    // The LIR of the buffer: what the WASM back end lowers the SSA form into, the target's own
-    // instructions, where the values that need storage live, and the frames the encoder writes
-    // them as.
-    await ask(STEPS.showLir);
-    await until(WAITS.lir, "the lir of the buffer");
-    const lir = JSON.parse(await ask(STEPS.lir));
-
-    // A frame of the structure folds what it holds away, and unfolding brings the lines back.
-    await ask(STEPS.foldLir);
-    const lirFolded = JSON.parse(await ask(STEPS.lir));
-
-    await ask(STEPS.unfoldLir);
-    const lirAgain = JSON.parse(await ask(STEPS.lir));
-
-    // The module the link stage hands a host: the same bytes a run instantiates, read in a view
-    // of its own, where the forms of it fold.
-    await ask(STEPS.showWat);
-    await until(WAITS.wat, "the wasm of the buffer");
-    const wat = JSON.parse(await ask(STEPS.wat));
-    const watPaint = JSON.parse(await ask(STEPS.watPaint));
-    const watMarks = JSON.parse(await ask(STEPS.watMarks));
-
-    await ask(STEPS.foldWat);
-    const watFolded = JSON.parse(await ask(STEPS.wat));
-
-    await ask(STEPS.unfoldWat);
-    const watAgain = JSON.parse(await ask(STEPS.wat));
-
-    // The name section of the module stands at the end of it: reading it is scrolling to it.
-    await ask(STEPS.scrollWatEnd);
-    await sleep(200);
-    const watEnd = JSON.parse(await ask(STEPS.wat));
-
-    // The status line of the inspector is in front whatever stage is shown: a buffer that
-    // reports nothing says so while the WAT is in front, and picking the line opens the list.
-    const glance = JSON.parse(await ask(STEPS.status));
-    const fades = JSON.parse(await ask(STEPS.fades));
-
-    // The configuration of the compiler is a tab of its own: the source map of a browser, the
-    // tables of DWARF, and nothing are alternatives, and a module carries one of them. A change
-    // is made in the config tab and read off the WAT of the module, which is where the head of
-    // the tab lists what the option added.
-    await ask(STEPS.showConfig);
-    await until(WAITS.config, "the configuration of the compiler");
-    const config = JSON.parse(await ask(STEPS.config));
-
-    await ask(STEPS.debugDwarf);
-    await ask(STEPS.showWat);
-    await until(WAITS.debugTables, "the debug tables of the module");
-    const dwarfWat = JSON.parse(await ask(STEPS.watSections));
-
-    await ask(STEPS.showConfig);
-    await until(WAITS.config, "the configuration of the compiler");
-    await ask(STEPS.debugNone);
-    await ask(STEPS.showWat);
-    await until(WAITS.debugNone, "the module without debug information");
-    const bareWat = JSON.parse(await ask(STEPS.watSections));
-
-    await ask(STEPS.showConfig);
-    await until(WAITS.config, "the configuration of the compiler");
-    await ask(STEPS.debugMap);
-    await ask(STEPS.showWat);
-    await until(WAITS.debugMap, "the source map of the module");
-    const mapWat = JSON.parse(await ask(STEPS.watSections));
-
-    // And the program itself: the modules are instantiated in the order the link stage gives
-    // them, and the `#[entry]` is called. A run of a browser is under the map, which is where
-    // the option stands; what `fib(5)` prints is what the program console holds.
-    await ask(STEPS.run);
-    await until(WAITS.ran, "the program to run");
-    const ran = JSON.parse(await ask(STEPS.ran));
-
-    // The same project, built rather than run: every module of it is compiled and linked, and
-    // each is handed over as a file. A page writes a file by starting the download of a link,
-    // and what this reads is the names and the console, not the file system a page has none of.
-    await ask(STEPS.compile);
-    await until(WAITS.built, "the build of the project");
-    const built = JSON.parse(await ask(STEPS.built));
-
-    // The archive a person gets: what it holds is read off the directory at its end, because
-    // the paths inside are the whole of what an archive adds to a download of loose files, and
-    // the manifest is read out of the archive, because it is what a host that reads the build
-    // from files reads.
-    await until(WAITS.packed, "the archive of the build");
-    const packed = Buffer.from(await ask(STEPS.packed), "base64");
-
-    built.entries = entries(packed);
-
-    const described = built.entries.find((it) => it.name === "manifest.json");
-
-    if (!described) throw new Error("the build holds no manifest");
-
-    built.manifest = JSON.parse(contents(packed, described).toString("utf8"));
-
-    // The sources a debugger reads beside a build: an archive whose entries are the paths of
-    // the debug information without their root, so one mapping rule points a debugger at the
-    // directory they are unpacked into. The name of the archive is the name of the build's.
-    await ask(STEPS.sources);
-    await until(WAITS.sources, "the archive of the sources");
-    const sources = JSON.parse(await ask(STEPS.sourcesRead));
-    const sourceZip = Buffer.from(await ask(STEPS.packed), "base64");
-
-    sources.entries = entries(sourceZip);
-    sources.main = contents(
-        sourceZip,
-        sources.entries.find((it) => it.name === "main.mlk"),
-    ).toString("utf8");
-
-    // A body with a choice in it: the CFG form reads the block that branches and the blocks the
-    // arms meet in, and the SSA form gives the value the arms agree on a parameter of the block
-    // they meet in. The buffer is typed into the one that is in front.
-    await ask(STEPS.typeBranch);
-    await sleep(300);
-    const branchWords = JSON.parse(await ask(STEPS.branchWords));
-
-    await ask(STEPS.showMir);
-    await until(WAITS.branch, "the branches of the mir");
-    const branch = JSON.parse(await ask(STEPS.mir));
-
-    await ask(STEPS.showSsa);
-    await until(WAITS.branchSsa, "the branches of the ssa form");
-    const branchSsa = JSON.parse(await ask(STEPS.ssa));
-
-    // A choice that selects nothing: the block control falls into when no condition holds
-    // writes the unit the choice is, and the SSA form passes it to the join.
-    await ask(STEPS.typeUnit);
-    await sleep(300);
-
-    await ask(STEPS.showMir);
-    await until(WAITS.unit, "the unit of a choice that selects nothing");
-    const unit = JSON.parse(await ask(STEPS.mir));
-
-    await ask(STEPS.showSsa);
-    await until(WAITS.unitSsa, "the unit of the ssa form");
-    const unitSsa = JSON.parse(await ask(STEPS.ssa));
-
-    // A lambda is a body of the module like any other: the tabs read it flat, named under the
-    // body that wrote it, and a lambda written in a lambda is a body of the same set.
-    await ask(STEPS.typeLambda);
-    await sleep(300);
-
-    await ask(STEPS.showMir);
-    await until(WAITS.lambda, "the lambda of the mir");
-    const lambdaMir = JSON.parse(await ask(STEPS.mir));
-
-    await ask(STEPS.showLir);
-    await until(WAITS.lambdaLir, "the lambda of the lir");
-    const lambdaLir = JSON.parse(await ask(STEPS.lir));
-
-    await ask(STEPS.open);
-    await ask(STEPS.typePath);
-    await ask(STEPS.submitPath);
-    const made = JSON.parse(await ask(STEPS.made));
-
-    // Type into the buffer that was just made, the way a person would.
-    await ask(STEPS.type);
-    await sleep(300);
-
-    await ask(STEPS.showDiagnostics);
-    await until(WAITS.broken, "the diagnostics of the broken buffer");
-    const broken = JSON.parse(await ask(STEPS.seen));
-    const brokenGlance = JSON.parse(await ask(STEPS.status));
-
-    // A project with a mistake in it offers no build, and the tool says why.
-    const compileGuard = JSON.parse(await ask(STEPS.compileGuard));
-
-    const marks = JSON.parse(await ask(STEPS.painted));
-
-    // The words the language reads out of names are painted whatever they are written as,
-    // and the buffer in front is asked about the ones a module is written with.
-    await ask(STEPS.typeKeywords);
-    await sleep(300);
-    const words = JSON.parse(await ask(STEPS.keywordColours));
-
-    // A mistake the parser cannot place is a node of the tree, and the ast shows it as one.
-    await ask(STEPS.typeStray);
-    await sleep(300);
-    await ask(STEPS.showAst);
-    await until(WAITS.bogus, "the node the grammar has no room for");
-    const bogus = JSON.parse(await ask(STEPS.bogus));
-
-    await ask(STEPS.hoverBogus);
-    const bogusMark = JSON.parse(await ask(STEPS.bogusMark));
-
-    // A file of the library opens as a tab like any other, and closing the tab is not dropping
-    // the file: the library is read, not locked away.
-    await ask(STEPS.openPrelude);
-
-    await ask(STEPS.closeTab);
-    const closed = JSON.parse(await ask(STEPS.closed));
-
-    await ask(STEPS.askDrop);
-    await ask(STEPS.confirmDrop);
-    const dropped = JSON.parse(await ask(STEPS.dropped));
-
-    // A wide screen draws every panel at once, and its switcher is asked about here: once the
-    // page is narrowed below, the panels take turns being on the screen.
-    const wide = JSON.parse(await ask(STEPS.wide));
-
-    // A phone: the page at the width of one, where the panels are picked rather than laid out
-    // side by side. The questions below are the ones a person asks with a thumb: what is on
-    // the screen now, and what a tap puts there.
-    await connection.send(
-        "Emulation.setDeviceMetricsOverride",
-        {
-            width: 320,
-            height: 568,
-            deviceScaleFactor: 2,
-            mobile: true,
-            screenWidth: 320,
-            screenHeight: 568,
-        },
-        session,
+/**
+ * What the run found, said the way a person reads it.
+ *
+ * @param {Page} page
+ * @param {Found} found
+ * @returns {boolean}
+ */
+function report(page, found) {
+    // The shape of a capture says it is there, and a page that never came up has none: the
+    // one branch that reads a capture without trusting the shape is this one.
+    const state = /** @type {State | undefined} */ (
+        /** @type {unknown} */ (page.state)
     );
 
-    // The page hands the new size to the layout, which is not done before the next line runs.
-    await sleep(300);
+    // A page that never came up fails everything below it in the same way,
+    // and saying so once is the whole of what can be said about it.
+    if (!state) {
+        console.log(`the page at ${base} did not come up`);
+        console.log(
+            `what it answered: ${/** @type {any} */ (state)?.file || "(nothing)"}`,
+        );
+        console.log(
+            `what it asked for:\n  ${[...new Set(found.asked)].join("\n  ")}`,
+        );
+        console.log(
+            `console: ${[...found.problems, ...found.warnings].join(" | ")}`,
+        );
 
-    const phone = JSON.parse(await ask(STEPS.phone));
+        return false;
+    }
 
-    await ask(STEPS.pickFiles);
-    const phoneFiles = JSON.parse(await ask(STEPS.shownFiles));
+    // A run whose checks are picked by a name is a run a person is looking at a check through,
+    // and the notes of everything else are noise.
+    if (!options.only?.length) {
+        for (const note of NOTES) {
+            try {
+                const said = note(page);
 
-    await ask(STEPS.pickBuffer);
-    const phoneBuffer = JSON.parse(await ask(STEPS.shownBuffer));
+                if (said) console.log(said);
+            } catch {
+                // A note about what a failed step would have read is skipped.
+            }
+        }
+    }
 
-    await ask(STEPS.pickInspector);
-    const phoneInspector = JSON.parse(await ask(STEPS.shownInspector));
+    const checks = selectedChecks();
 
-    await ask(STEPS.pickConsole);
-    const phoneConsole = JSON.parse(await ask(STEPS.shownConsole));
+    if (checks.length === 0) {
+        console.log(`no check matches ${options.only?.join(", ")}`);
 
-    // A row of a tree that holds nothing is a place in the source rather than a thing to fold:
-    // picking one puts the editor in front, where the mark the row makes is read. A buffer is
-    // longer than the screen it is read on, so what a pick asks for is the place itself.
-    await ask(STEPS.pickCode);
-    await ask(STEPS.typeLong);
-    await sleep(300);
-    await ask(STEPS.pickInspector);
-    await ask(STEPS.showCst);
-    await until(WAITS.long, "the tree of the long buffer");
-    const phoneSays = JSON.parse(await ask(STEPS.pickLastToken));
-    const phoneToken = {
-        ...phoneSays,
-        ...JSON.parse(await ask(STEPS.pickedToken)),
-    };
+        return false;
+    }
 
-    // The standard library is in the files with everything else, and nothing of it is a
-    // person's to write in or to drop.
-    await ask(STEPS.pickFiles);
-    const library = JSON.parse(await ask(STEPS.library));
+    let held = 0;
+    let broken = 0;
 
-    await ask(STEPS.openLibrary);
-    const readLibrary = JSON.parse(await ask(STEPS.readLibrary));
-    await ask(STEPS.writeLibrary);
-    const writtenLibrary = JSON.parse(await ask(STEPS.readLibrary));
+    for (const [label, seen, expected] of checks) {
+        let lines;
 
-    // And a buffer cannot be made in the directory of the library: the form says why.
-    await ask(STEPS.pickFiles);
-    await ask(STEPS.open);
-    await ask(STEPS.typeStdPath);
-    await ask(STEPS.submitStdPath);
-    const refusedStdPath = JSON.parse(await ask(STEPS.refusedStdPath));
+        try {
+            lines = departures(
+                read(expected, page, found),
+                read(seen, page, found),
+            );
+        } catch (error) {
+            lines = [
+                {
+                    at: "",
+                    expected: "a value",
+                    actual: `could not be read: ${message(error)}`,
+                },
+            ];
+        }
 
-    // What a read cost: the buffer in front is filled with a module, and then the body of it
-    // is edited, which is one value read again and nothing else. The look before the edit is
-    // the one the second is read against: it is what the driver holds afterwards.
-    await ask(STEPS.pickBuffer);
-    await ask(STEPS.typeEdited);
-    await until(WAITS.edited, "the tree of the edited buffer");
-    await ask(STEPS.typeEditedAgain);
-    await until(WAITS.editedAgain, "the tree of the buffer edited again");
-    await ask(STEPS.showStats);
-    const stats = JSON.parse(await ask(STEPS.stats));
+        if (lines.length === 0) {
+            held++;
+            console.log(`ok   ${label}`);
 
-    return report(
-        {
-            status: state.file,
-            hydrated,
-            clean: { root: cst.root, diagnostics: clean.diagnostics },
-            ast,
-            hir,
-            hirHover,
-            pathHover,
-            typeHover,
-            typeColour,
-            tc,
-            tcHover,
-            mir,
-            mirHover,
-            ssa,
-            lir,
-            lirFolded,
-            lirAgain,
-            branch,
-            branchSsa,
-            branchWords,
-            unit,
-            unitSsa,
-            lambdaMir,
-            lambdaLir,
-            wat,
-            watPaint,
-            watMarks,
-            watFolded,
-            watAgain,
-            watEnd,
-            glance,
-            fades,
-            brokenGlance,
-            dwarfWat,
-            bareWat,
-            mapWat,
-            config,
-            ran,
-            built,
-            sources,
-            compileGuard,
-            header,
-            program,
-            width,
-            made,
-            closed,
-            dropped,
-            tree: cst.nodes,
-            painted,
-            words,
-            hover,
-            astHover,
-            marks,
-            broken,
-            bogus,
-            bogusMark,
-            wide,
-            phone,
-            phoneFiles,
-            phoneBuffer,
-            phoneInspector,
-            phoneConsole,
-            phoneToken,
-            library,
-            readLibrary,
-            writtenLibrary,
-            refusedStdPath,
-            stats,
-        },
-        problems,
-        warnings,
-        asked,
+            continue;
+        }
+
+        broken++;
+        console.log(`FAIL ${label}`);
+
+        for (const line of lines)
+            console.log(
+                line.at
+                    ? `  ${line.at}: expected ${line.expected}, saw ${line.actual}`
+                    : `  expected ${line.expected}, saw ${line.actual}`,
+            );
+    }
+
+    if (found.failed.length > 0) {
+        console.log("steps that could not run:");
+
+        for (const { capture, error } of found.failed)
+            console.log(`  ${capture ?? "an action"}: ${error}`);
+    }
+
+    if (found.warnings.length > 0)
+        console.log(`warnings:\n  ${found.warnings.join("\n  ")}`);
+
+    if (found.problems.length > 0)
+        console.log(`problems:\n  ${found.problems.join("\n  ")}`);
+
+    console.log(`${checks.length} check(s): ${held} ok, ${broken} failed`);
+
+    if (broken > 0 || found.failed.length > 0)
+        console.log(
+            `what it asked for:\n  ${[...new Set(found.asked)].join("\n  ")}`,
+        );
+
+    return (
+        broken === 0 && found.failed.length === 0 && found.problems.length === 0
     );
 }
 
@@ -1580,7 +3336,10 @@ async function openPage() {
     const version = await json(`${cdp}/json/version`);
     const connection = await Connection.open(version.webSocketDebuggerUrl);
 
-    const attached = deferred();
+    const attached =
+        /** @type {{promise: Promise<string>, accept: (value: string) => void}} */ (
+            deferred()
+        );
     connection.on((message) => {
         if (message.method === "Target.attachedToTarget")
             attached.accept(message.params.sessionId);
@@ -1595,821 +3354,16 @@ async function openPage() {
     return { connection, session };
 }
 
-/** What the run found, said the way a person reads it. */
-function report(page, problems, warnings, asked) {
-    // A page that never came up fails everything below it in the same way,
-    // and saying so once is the whole of what can be said about it.
-    if (!page.hydrated) {
-        console.log(`the page at ${base} did not come up`);
-        console.log(`what it answered: ${page.status || "(nothing)"}`);
-        console.log(
-            `what it asked for:\n  ${[...new Set(asked)].join("\n  ")}`,
-        );
-        console.log(`console: ${[...problems, ...warnings].join(" | ")}`);
-
-        return false;
-    }
-
-    const diagnostic = page.broken?.[0] ?? {};
-
-    // What the counters of a read come to, by pass and by row: what a check of one assertion
-    // asks about is stated over the rows and not over the rows of one pass. A unit is named
-    // when the assertion is about the buffer a person edited and not about every buffer the
-    // driver read around it.
-    const counted = (pass, field, unit) =>
-        page.stats.rows
-            .filter(
-                (it) =>
-                    it.pass === pass &&
-                    (unit === undefined || it.unit === unit),
-            )
-            .reduce((all, it) => all + (it[field] ?? 0), 0);
-
-    const checks = [
-        ["the page hydrated", page.hydrated],
-        ["the cst of a clean buffer is a module", page.clean.root],
-        ["the tree is more than its root", page.tree > 5],
-        ["the ast names its root", page.ast.root],
-        ["the ast names a declaration", page.ast.decl],
-        ["the editor paints a keyword", page.painted.keyword !== ""],
-        [
-            "the editor paints code in more than one colour",
-            page.painted.keyword !== page.painted.number &&
-                page.painted.number !== page.painted.type &&
-                page.painted.keyword !== page.painted.name,
-        ],
-        [
-            "the editor leaves a name the colour of text",
-            page.painted.name === "",
-        ],
-        [
-            "the editor paints an attribute the green of the theme",
-            page.painted.attribute !== "" &&
-                page.painted.attribute === page.painted.green,
-        ],
-        [
-            "the editor paints pub, use and as the way it paints fun",
-            page.words.keyword !== "" &&
-                [page.words.pub, page.words.use, page.words.as].every(
-                    (it) => it === page.words.keyword,
-                ),
-        ],
-        ["a row of a tree marks code in the editor", page.hover.count === 1],
-        [
-            "the mark is the code the row says it stands for",
-            JSON.parse(page.hover.says) === page.hover.marked,
-        ],
-        ["a row of the ast marks code in the editor", page.astHover.count > 0],
-        [
-            "a node of the ast marks what it holds",
-            // What a node covers is written over as many lines as it takes, and a mark is a
-            // piece of a line: the pieces together are what the node covers.
-            page.astHover.marked.includes(page.hover.marked.trim()) &&
-                page.astHover.marked.trim().length >
-                    page.hover.marked.trim().length,
-        ],
-        [
-            "the hir is headed by the module and the path it is called by",
-            page.hir.module === "MODULE #0 project::main",
-        ],
-        ["the hir names the items of the module", page.hir.item],
-        ["the hir reads a body", page.hir.body],
-        [
-            "the hir reads the patterns and the paths of the body",
-            page.hir.pat && page.hir.path,
-        ],
-        [
-            "a line of the hir marks code in the editor",
-            page.hirHover.count === 1,
-        ],
-        [
-            "a line of the hir marks code in the editor",
-            page.hirHover.count === 1,
-        ],
-        [
-            "the mark is the code the line says it stands for",
-            page.hirHover.says.includes("literal 5") &&
-                page.hirHover.marked.trim() === "5",
-        ],
-        [
-            "a path of the hir marks the code it is written as",
-            page.pathHover.at === "fib",
-        ],
-        [
-            "and marks what the path resolved to",
-            // What a path leads to is the declaration it names, which is a place in the same
-            // buffer: the path taken above is the call of `fib` in `main`.
-            page.pathHover.names.includes("fun fib(n : Int) : Int"),
-        ],
-        [
-            "a type of a signature marks the type the declaration wrote",
-            page.typeHover.at === "Int" && page.typeHover.names === "",
-        ],
-        [
-            "a type of a signature is painted the way a path of a body is",
-            page.typeColour.part !== "" &&
-                page.typeColour.part === page.typeColour.path,
-        ],
-        [
-            "the tc tab reads the surface of the module and the types of its bodies",
-            page.tc.surface.some(
-                (it) => it.name === "fun main" && it.ty === "() -> Unit",
-            ) &&
-                page.tc.surface.some(
-                    (it) =>
-                        it.name === "fun fib-aux" &&
-                        it.ty === "(Int, Int, Int) -> Int",
-                ) &&
-                page.tc.bodies === 3 &&
-                page.tc.nodes.some(
-                    (it) =>
-                        it.kind === "pat" && it.code === "n" && it.ty === "Int",
-                ) &&
-                page.tc.nodes.some(
-                    (it) =>
-                        it.kind === "expr" &&
-                        it.code === "5" &&
-                        it.ty === "Int",
-                ) &&
-                page.tc.errors === 0,
-        ],
-        [
-            "a row of the types is a type of a piece of the code, and marks it in the editor",
-            page.tcHover.count === 1 && page.tcHover.marked !== "",
-        ],
-        [
-            // The example holds three bodies, and the choice in `fib-aux` is what makes one of
-            // them more than one block: the entry is the block that branches, every arm writes
-            // the slot the expression is, and the value is read where the arms meet.
-            "the cfg tab reads a body of the buffer as its blocks",
-            page.mir.form === "cfg" &&
-                page.mir.owners.some((it) => it.includes("fun fib")) &&
-                page.mir.owners.some((it) => it.includes("fun main")) &&
-                page.mir.blocks.length === 6 &&
-                page.mir.entry === 3 &&
-                page.mir.branches === 1 &&
-                page.mir.stmts.some((it) => it.includes("const 5")) &&
-                page.mir.term.some((it) => it.startsWith("return l")) &&
-                page.mir.blockParams.length === 0,
-        ],
-        [
-            // The CFG form is the lowering as it leaves it: an assignment writes a slot, a
-            // branch reads one, and a body with no choice in it ends by giving one back.
-            "the cfg tab reads the slots of the lowering",
-            page.mir.stmts.every((it) => /^l\d/.test(it)) &&
-                page.mir.term.every(
-                    (it) =>
-                        it.startsWith("return l") ||
-                        it.startsWith("branch l") ||
-                        it.startsWith("goto b"),
-                ),
-        ],
-        [
-            "a line of the cfg marks the code it was read from",
-            page.mirHover.count === 1 && page.mirHover.marked.trim() === "5",
-        ],
-        [
-            // The slots of the CFG form: the lowering binds every expression to one, and a slot
-            // a pattern bound says the name it was bound under. The SSA form needs none.
-            "the cfg tab reads the slots of the body, and the ssa tab has none",
-            page.mir.locals.some((it) => it.includes("(n)")) &&
-                page.mir.locals.every((it) => /^l\d/.test(it)) &&
-                page.ssa.locals.length === 0,
-        ],
-        [
-            // The SSA form is built from the CFG form: the same bodies, with a value of its own
-            // in place of every slot, and the value `fib-aux` selects is born at the join its
-            // arms branch into.
-            "the ssa tab reads the same body with values in place of slots",
-            page.ssa.form === "ssa" &&
-                page.ssa.blocks.length === page.mir.blocks.length &&
-                page.ssa.stmts.some((it) => it.includes("const 5")) &&
-                page.ssa.stmts.every((it) => /^v\d/.test(it)) &&
-                page.ssa.blockParams.length === 1 &&
-                page.ssa.term.some((it) => it.startsWith("return v")),
-        ],
-        [
-            // The LIR is what the back end encodes: the same bodies, one instruction of the
-            // target per line, and a local for every value that cannot be emitted where it is
-            // read. The dispatch of `fib-aux` keeps its program counter in one of them.
-            "the lir tab reads the target's instructions and where the values live",
-            page.lir.owners.some((it) => it.includes("fun fib-aux")) &&
-                page.lir.blocks.length === page.mir.blocks.length &&
-                page.lir.entry === 3 &&
-                page.lir.kinds.includes("i31.get_s") &&
-                page.lir.kinds.includes("i32.add") &&
-                page.lir.kinds.includes("i32.eq") &&
-                page.lir.kinds.includes("ref.i31") &&
-                page.lir.kinds.includes("call") &&
-                page.lir.termKinds.includes("branch") &&
-                page.lir.term.some((it) => it.startsWith("return v")) &&
-                page.lir.params.some((it) => it.includes("(ref i31)")),
-        ],
-        [
-            // A value the allocation gave a local to says which one; the dispatch form would
-            // keep a program counter in one of them, and every body of the buffer is structured.
-            "the lir reads the locals a value lives in",
-            page.lir.locals.some((it) => it.includes(" = v")) &&
-                page.lir.blockParams.some((it) => it.includes("(local ")) &&
-                !page.lir.locals.some((it) => it.includes("(pc)")),
-        ],
-        [
-            // The structure is the tree of frames the encoder writes around the instructions:
-            // a join is a `block` a branch leaves, an `if` is a choice, a `leaf` is where a
-            // block is written, and what a person folds is a frame and what it holds.
-            "the lir tab reads the structure the encoder writes",
-            page.lir.structureKinds.includes("block") &&
-                page.lir.structureKinds.includes("if") &&
-                page.lir.structureKinds.includes("br") &&
-                page.lir.structureKinds.includes("leaf") &&
-                page.lir.structureKinds.includes("return") &&
-                page.lir.structure.some((it) => it.startsWith("block b")) &&
-                page.lir.structure.some((it) => it.startsWith("leaf b")) &&
-                Math.max(...page.lir.structureDepths) > 0,
-        ],
-        [
-            // The structure is a view rather than a note: a frame folds the lines it holds
-            // away, and unfolding it brings them back.
-            "the lir folds and unfolds a frame of the structure",
-            page.lirFolded.structure.length < page.lir.structure.length &&
-                page.lirAgain.structure.length === page.lir.structure.length,
-        ],
-        [
-            // A choice is what makes a body more than one block: the entry evaluates the
-            // condition and branches, every arm writes the slot the expression is and goes to
-            // the block the arms meet in, and what is written after the `if` is written there.
-            // The condition holds a truth value, which is read as the constant it is.
-            "the cfg of a choice reads the blocks it branches into",
-            page.branch.form === "cfg" &&
-                page.branch.blocks.length === 4 &&
-                page.branch.branches === 1 &&
-                page.branch.stmts.some((it) => it.includes("const true")) &&
-                page.branch.stmts.some((it) => it.includes("const 1")) &&
-                page.branch.term.some((it) => it.startsWith("return l")) &&
-                page.branch.blockParams.length === 0,
-        ],
-        [
-            // The keywords of a choice are read out of names like every other keyword, and the
-            // editor paints them the same way.
-            "the editor paints the keywords of a choice as it paints fun",
-            page.branchWords.if !== "" &&
-                page.branchWords.if === page.branchWords.keyword &&
-                page.branchWords.then === page.branchWords.keyword &&
-                page.branchWords.else === page.branchWords.keyword,
-        ],
-        [
-            // A truth value is a literal like an integer: the words are keywords, and what a
-            // reader reads at them is the value.
-            "the editor paints a truth value as it paints a number",
-            page.branchWords.truth !== "" &&
-                page.branchWords.truth === page.branchWords.number,
-        ],
-        [
-            // The value the arms agree on is born at the join: the SSA form enters the block
-            // they meet in through a parameter, and every arm passes its own value to it.
-            "the ssa of a choice is entered through a parameter of the join",
-            page.branchSsa.form === "ssa" &&
-                page.branchSsa.blocks.length === page.branch.blocks.length &&
-                page.branchSsa.branches === 1 &&
-                page.branchSsa.blockParams.length === 1 &&
-                page.branchSsa.term.some((it) => it.startsWith("return v")),
-        ],
-        [
-            // A choice without an `else` selects no value: the block control falls into writes
-            // the unit the choice is, and what is written after the `if` reads one slot.
-            "the cfg of a choice without an else reads the unit it selects",
-            page.unit.form === "cfg" &&
-                page.unit.blocks.length === 4 &&
-                page.unit.branches === 1 &&
-                page.unit.stmts.some((it) => it.includes("const unit")) &&
-                page.unit.term.some((it) => it.startsWith("return l")) &&
-                page.unit.blockParams.length === 0,
-        ],
-        [
-            "the ssa of a choice without an else passes the unit to the join",
-            page.unitSsa.form === "ssa" &&
-                page.unitSsa.blocks.length === page.unit.blocks.length &&
-                page.unitSsa.branches === 1 &&
-                page.unitSsa.blockParams.length === 1 &&
-                page.unitSsa.term.some((it) => it.startsWith("return v")),
-        ],
-        [
-            // A lambda is a function of the module, read flat and named under the body that
-            // wrote it; the closure that creates it points at the lifted function.
-            "the cfg tab reads the body of a lambda as a function of the module",
-            page.lambdaMir.form === "cfg" &&
-                page.lambdaMir.owners.some((it) => it.startsWith("fun main")) &&
-                page.lambdaMir.lambdas.length === 2 &&
-                page.lambdaMir.lambdas[0].startsWith(
-                    "fun main::<mlkc@lambda-0>",
-                ) &&
-                page.lambdaMir.lambdas[1].startsWith(
-                    "fun main::<mlkc@lambda-1>",
-                ) &&
-                page.lambdaMir.stmts.some((it) =>
-                    it.includes("closure lambda#0"),
-                ) &&
-                page.lambdaMir.blocks.length === 3,
-        ],
-        [
-            // A lifted lambda is a function of the module in everything but its name: the tab
-            // reads its body, and the closure it makes is what `ref.func` and `struct.new` are.
-            "the lir tab reads the body of a lifted lambda",
-            page.lambdaLir.lambdas.length === 2 &&
-                page.lambdaLir.lambdas[0].startsWith(
-                    "fun main::<mlkc@lambda-0>",
-                ) &&
-                page.lambdaLir.lambdas[1].startsWith(
-                    "fun main::<mlkc@lambda-1>",
-                ) &&
-                page.lambdaLir.blocks.length === 3 &&
-                page.lambdaLir.kinds.includes("ref.func") &&
-                page.lambdaLir.kinds.includes("struct.new") &&
-                page.lambdaLir.kinds.includes("call-ref"),
-        ],
-        ["the editor marks what it reported", page.marks.marks > 0],
-        ["a buffer can be made at a path", page.made.file],
-        ["a buffer opens as a tab", page.made.open === 2],
-        [
-            "a tab closes without the file",
-            page.closed.open === 2 && page.closed.listed,
-        ],
-        ["a buffer can be dropped", page.dropped.file],
-        [
-            // The WASM the buffer assembles to, read as text in a view of its own: the module
-            // names itself, what it imports is what it calls, and the head says how much of it
-            // there is — and there is enough of it for the forms to fold.
-            "the wat tab reads the module the buffer assembles to",
-            page.wat.shown &&
-                page.wat.text.includes("(module") &&
-                page.wat.text.includes("print-int") &&
-                /\d+ lines/.test(page.wat.head) &&
-                page.wat.gutters > 0,
-        ],
-        [
-            // The end of the module is read by scrolling to it, where the name section stands.
-            "the name section of the module is read at the end of it",
-            page.watEnd.text.includes("app::main"),
-        ],
-        [
-            // Diagnostics and Config are in front whatever stage is shown: a buffer that
-            // reports nothing says so while the WAT is in front, and the line is not the view
-            // that is in front.
-            "the diagnostics are read at a glance",
-            page.glance.shown &&
-                page.glance.text === "no diagnostics" &&
-                !page.glance.active,
-        ],
-        [
-            // A fade stands at an end of the row of stages only when something is out of
-            // sight on that side: the row is one line that scrolls, and the fade is how a
-            // person knows that it does.
-            "a fade says when a stage is out of sight",
-            page.fades.overflows
-                ? page.fades.start || page.fades.end
-                : !page.fades.start && !page.fades.end,
-        ],
-        [
-            // The configuration of the compiler is a tab of the inspector rather than tools of
-            // the header: it grows with the pipeline, and the options of a run are read where
-            // a person sets them.
-            "the compiler is configured in a tab of its own",
-            page.config.debug === "source-map" &&
-                page.config.opt === "none" &&
-                page.config.options ===
-                    "none source-map dwarf-lines dwarf-full",
-        ],
-        [
-            // The debug option is what a module carries: the source map of a browser, the
-            // tables of DWARF, or nothing but the name section. A module carries one of them,
-            // so an engine has no DWARF to prefer to the map (ADR-0025).
-            "the debug option decides what a module carries",
-            page.dwarfWat.sections.includes("name") &&
-                page.dwarfWat.sections.includes(".debug_line") &&
-                page.dwarfWat.sections.includes(".debug_info") &&
-                page.dwarfWat.sections.includes(".debug_abbrev") &&
-                !page.dwarfWat.sections.includes("sourceMappingURL") &&
-                page.bareWat.sections.includes("name") &&
-                !page.bareWat.sections.some((it) => it.startsWith(".debug")) &&
-                !page.bareWat.sections.includes("sourceMappingURL") &&
-                page.mapWat.sections.includes("sourceMappingURL") &&
-                !page.mapWat.sections.some((it) => it.startsWith(".debug")),
-        ],
-        [
-            // The format is painted: an instruction is the accent of a keyword, a value type
-            // the colour of a type, and a quoted name the green of a string.
-            "the format is painted in the colours of the theme",
-            page.watPaint.keyword !== "" &&
-                page.watPaint.keyword === page.watPaint.accent &&
-                page.watPaint.type !== "" &&
-                page.watPaint.type === page.watPaint.typeColour &&
-                page.watPaint.string !== "" &&
-                page.watPaint.string === page.watPaint.ok,
-        ],
-        [
-            // A marker belongs to the line a form opens on: the module and the head of each
-            // `func` fold, and a line of a body does not --- a marker on `local.get $n` was a
-            // bug of the scan reading a line's parenthesis from a later line.
-            "a fold marker belongs to the line a form opens on",
-            page.watMarks.marks === 3 &&
-                page.watMarks.list.every((it) => it.startsWith("(")) &&
-                page.watMarks.moduleMarked &&
-                page.watMarks.headMarked &&
-                !page.watMarks.bodyMarked,
-        ],
-        [
-            // Folding a form takes its body off the screen and leaves the placeholder where it
-            // was, inside the form: the head and the parenthesis that closes it stay, so a form
-            // reads as `(module $app::main…)` rather than as a head and a line of its own.
-            "a form of the module folds, and unfolds again",
-            page.watFolded.marks > 0 &&
-                page.watFolded.lines < page.wat.lines &&
-                page.watFolded.text.includes("…)") &&
-                page.watAgain.marks === 0 &&
-                page.watAgain.lines > page.watFolded.lines,
-        ],
-        [
-            // The whole program: every buffer compiled and linked, the modules instantiated,
-            // and the entry point called. `fib(5)` is 5, and 5 is what was printed.
-            "running the program prints what it computes",
-            page.ran.tab && page.ran.printed.includes("5"),
-        ],
-        [
-            // The header is the tools of the project, and the name of the buffer is not repeated
-            // in it: the tab of the editor says which buffer is in front. A tool is a mark and a
-            // word, and the run is the one painted as the action.
-            "the header holds the tools of the project, and not the name of the buffer",
-            page.header.brand === "MLK" &&
-                !page.header.name &&
-                page.header.tools.length === 4 &&
-                page.header.tools.map((it) => it.label).join(" ") ===
-                    "Check Compile Sources Run" &&
-                page.header.tools.every((it) => it.mark && it.aria !== "") &&
-                page.header.tools[3].primary &&
-                page.header.tools.slice(0, 3).every((it) => !it.primary),
-        ],
-        [
-            // The chords are written where a pointer reads them without pressing either tool:
-            // a synthetic key is not sent here, because the engine this check drives hands one
-            // to the page's capture listener only sometimes, and the promise of the tools is
-            // what is read instead.
-            "the tools say which keys ask for them",
-            page.header.tools[0].title.includes("Ctrl+Shift+Enter") &&
-                page.header.tools[3].title.includes("Ctrl+Enter"),
-        ],
-        [
-            // A build is one archive rather than a file per module: a download cannot make a
-            // folder, and an archive is where the folders of a project survive. Every module is
-            // in it under the file its manifest names, with the module of the host functions
-            // and the manifest itself beside it, and the archive is named by the project.
-            "a build is handed over as one archive of the program",
-            page.built.saved.length === 1 &&
-                page.built.saved[0].type === "application/zip" &&
-                page.built.saved[0].size > 0 &&
-                page.built.files.length === 1 &&
-                page.built.files[0].name === "app.zip" &&
-                page.built.files[0].blob &&
-                page.built.entries
-                    .map((it) => it.name)
-                    .sort()
-                    .join(" ") ===
-                    "app/main.wasm host.wasm manifest.json std/core.wasm std/prelude.wasm std/runtime.wasm" &&
-                page.built.lines.some((it) =>
-                    it.includes("the build is 6 files in app.zip"),
-                ),
-        ],
-        [
-            // The manifest is what a host that reads the build from files reads: the project,
-            // the file every module is written as, and where the program begins.
-            "the manifest of the build travels beside the modules",
-            page.built.manifest.project === "app" &&
-                page.built.manifest.host === "host.wasm" &&
-                page.built.manifest.entry.module === "app::main" &&
-                page.built.manifest.entry.name === "main" &&
-                page.built.manifest.modules
-                    .map((it) => it.file)
-                    .sort()
-                    .join(" ") ===
-                    "app/main.wasm std/core.wasm std/prelude.wasm std/runtime.wasm" &&
-                page.built.manifest.modules
-                    .find((it) => it.name === "app::main")
-                    .imports.some(
-                        (it) =>
-                            it.external &&
-                            it.module === "std::runtime" &&
-                            it.name === "print-int",
-                    ),
-        ],
-        [
-            // The sources are handed over as an archive of their own, and its name says which
-            // build it belongs to. An entry stands where the debug information of a module reads
-            // its path, so unpacking the archive and mapping `/` to the directory finds every
-            // source, the library included.
-            "the sources are handed over as one archive, under the paths of the debug information",
-            page.sources.files.length === 2 &&
-                page.sources.files[1].name === "app.sources.zip" &&
-                page.sources.files[1].blob &&
-                page.sources.saved.length === 2 &&
-                page.sources.entries
-                    .map((it) => it.name)
-                    .sort()
-                    .join(" ") ===
-                    "main.mlk std/core.mlk std/prelude.mlk std/runtime.mlk" &&
-                page.sources.main.includes("fun fib") &&
-                page.sources.lines.some((it) =>
-                    it.includes("the sources are 4 files in app.sources.zip"),
-                ),
-        ],
-        [
-            "the console has a program tab",
-            page.program.tab && page.program.empty,
-        ],
-        ["a panel can be sized", page.width.files > 220],
-        ["a clean buffer reports nothing", page.clean.diagnostics === 0],
-        [
-            "a node the grammar has no room for is shown as a node",
-            page.bogus.shown,
-        ],
-        ["nothing the ast shows reads as an object", !page.bogus.object],
-        [
-            "a node the grammar has no room for marks what it holds",
-            page.bogusMark.count > 0 && page.bogusMark.marked.includes("abc"),
-        ],
-        [
-            "a broken buffer reports a diagnostic",
-            (page.broken?.length ?? 0) > 0,
-        ],
-        [
-            // The status line counts what the list holds, and it is picked: the line is the
-            // diagnostics view, and the count says how bad the buffer is.
-            "the status line counts the diagnostics",
-            page.brokenGlance.text.includes("error") &&
-                page.brokenGlance.active,
-        ],
-        [
-            // A project with a mistake in it is not a project to build: the tool is read rather
-            // than pressed, and what it says is the mistake.
-            "a project with a mistake in it offers no build",
-            page.compileGuard.disabled &&
-                page.compileGuard.title.includes("error"),
-        ],
-        [
-            "the diagnostic is an error",
-            (diagnostic.classes ?? []).includes("error"),
-        ],
-        // The code a person reads leads with the level, then says the stage and the kind:
-        // this one is the parser's first, and the parser is the second stage of the pipeline.
-        [
-            "the code says the stage and the kind",
-            /^E0201$/.test(diagnostic.code ?? ""),
-        ],
-        [
-            "the diagnostic shows the line it is about",
-            /^\d+$/.test(diagnostic.number ?? "") &&
-                (diagnostic.caret ?? "").includes("^"),
-        ],
-        [
-            "a wide screen draws the panels together, with no switcher to pick one",
-            page.wide.width >= 860 && page.wide.switches === 0,
-        ],
-        [
-            "a phone shows one panel at a time, and the switcher is how it is picked",
-            page.phone.width < 860 &&
-                page.phone.shown === "editor" &&
-                page.phone.switches === 4 &&
-                page.phone.handles === 0 &&
-                !page.phone.overflows,
-        ],
-        [
-            "picking Files shows the files",
-            page.phoneFiles.shown === "files" &&
-                page.phoneFiles.files === 4 &&
-                !page.phoneFiles.overflows,
-        ],
-        [
-            "picking a buffer shows the editor, with the buffer in front",
-            page.phoneBuffer.shown === "editor" &&
-                page.phoneBuffer.file === "main.mlk" &&
-                !page.phoneBuffer.overflows,
-        ],
-        [
-            "picking Inspect shows the inspector",
-            page.phoneInspector.shown === "inspector" &&
-                page.phoneInspector.tabs === 11 &&
-                !page.phoneInspector.overflows,
-        ],
-        [
-            "picking Console shows the console",
-            page.phoneConsole.shown === "console" &&
-                page.phoneConsole.lines &&
-                !page.phoneConsole.overflows,
-        ],
-        [
-            "picking a token of a tree shows the editor, with the token marked in it",
-            page.phoneToken.shown === "editor" &&
-                page.phoneToken.marked !== "" &&
-                page.phoneToken.marked === page.phoneToken.says,
-        ],
-        [
-            // A place is brought to a person, not merely marked: a buffer is read through a
-            // window onto it, and a pick moves that window. A browser that lays the editor out
-            // with nothing to scroll — the one this check drives is one — has no window to move,
-            // and is asked for the mark alone.
-            "picking a token brings the place it stands for into view",
-            !page.phoneToken.scrolls || page.phoneToken.scrolled,
-        ],
-        [
-            // The library is the compiler's: it is in the files with everything else, and the
-            // directory of the library is what says so --- once, for everything under it.
-            "the standard library is in the files, and offers nothing to drop",
-            page.library.files.includes("/std/core.mlk") &&
-                page.library.files.includes("/std/prelude.mlk") &&
-                page.library.drop === false &&
-                page.library.file === "" &&
-                page.library.locked === "read-only",
-        ],
-        [
-            // What the editor shows of a file of the library is what the compiler holds: a
-            // state that is read-only takes no text, and the tab says what the file is.
-            "a file of the library is read, and not written in",
-            page.readLibrary.editable === "false" &&
-                page.readLibrary.tab === "r/o" &&
-                page.readLibrary.text.includes("module project::core") &&
-                page.writtenLibrary.text === page.readLibrary.text,
-        ],
-        [
-            "a buffer cannot be made in the directory of the library",
-            page.refusedStdPath.problem ===
-                "the standard library is read-only" &&
-                !page.refusedStdPath.made,
-        ],
-        [
-            // An edit of a body is read out of what the driver held: the parse of the edited
-            // buffer is a stale read and never a miss, nothing that was held was dropped, and a
-            // buffer that was dropped before is not read at all --- a host that says a file is
-            // gone takes its module out of the project, and the project is not read over it.
-            // How many looks the two edits are read in is the editor's to decide, so what is
-            // asked is that the edit was read rather than that it was read exactly once.
-            "an edit of a body is paid for out of what the driver held",
-            counted("parse", "stales", "/main.mlk") >= 1 &&
-                counted("parse", "misses", "/main.mlk") === 0 &&
-                page.stats.rows.every((it) => !it.unit.startsWith("/lib/")) &&
-                page.stats.rows.every((it) => it.dropped === 0),
-        ],
-        [
-            // What a module shows is a function of its own text and of no body, so the edit
-            // reads the surface of it again and keeps the types it had.
-            "the signature surface of an edited module is read again and kept",
-            counted("signatures", "stales", "/main.mlk") >= 1 &&
-                counted("signatures", "kept", "/main.mlk") >= 1,
-        ],
-        [
-            "the body that was edited is checked again",
-            counted("check", "stales") >= 1,
-        ],
-        [
-            // A check is a value of a body, and the counters say which body: the name of the
-            // entity it belongs to and the file it is written in.
-            "a check is counted for the body it is about",
-            page.stats.rows.some(
-                (it) => it.pass === "check" && it.unit === "/main.mlk: main",
-            ),
-        ],
-        [
-            // What a look cost is the time of the page around it, and every row carries what
-            // its pass cost. The times of the rows are zero in the browser this check drives
-            // --- its clock reads the same value twice within one task, and a pull is one task
-            // --- which is why the time of a pass is what the tests of the driver measure,
-            // with a clock they control.
-            "a look is timed, and its rows carry the time of their passes",
-            page.stats.took > 0 &&
-                page.stats.rows.every(
-                    (it) => Number.isFinite(it.took) && it.took >= 0,
-                ),
-        ],
-        ["the page said nothing it should not have", problems.length === 0],
-    ];
-
-    const held = checks.every(([, it]) => it);
-
-    console.log(`the page at ${base} shows: ${page.status || "(nothing)"}`);
-    console.log(`the cst holds ${page.tree} elements`);
-    console.log(
-        `the editor paints a keyword ${page.painted.keyword}, a number ${page.painted.number}, a type ${page.painted.type}`,
-    );
-    console.log(
-        `it paints pub ${page.words.pub}, use ${page.words.use} and as ${page.words.as}, against fun ${page.words.keyword}`,
-    );
-    console.log(
-        `it paints an attribute ${page.painted.attribute}, which is the green of the theme ${page.painted.green}`,
-    );
-    console.log(
-        `it paints a truth value ${page.branchWords.truth || "(nothing)"}, against a number ${page.branchWords.number || "(nothing)"} and a keyword ${page.branchWords.keyword || "(nothing)"}`,
-    );
-    console.log(
-        `the row that says ${page.hover.says} marks ${page.hover.marked || "nothing"} in the editor`,
-    );
-    console.log(
-        `a row of the ast marks ${JSON.stringify(page.astHover.marked.slice(0, 40))}`,
-    );
-    console.log(
-        `the hir reads ${page.hir.module}, and ${page.hirHover.says} marks ${JSON.stringify(page.hirHover.marked)}`,
-    );
-    console.log(
-        `the path ${page.pathHover.says} marks ${JSON.stringify(page.pathHover.at)} and ${JSON.stringify(page.pathHover.names)}`,
-    );
-    console.log(
-        `the type line ${page.typeHover.says} marks ${JSON.stringify(page.typeHover.at)} and is painted ${page.typeColour.part}`,
-    );
-    console.log(
-        `the mir reads a ${page.mir.form} form of ${page.mir.blocks.length} block(s), which ${page.mirHover.says.trim()} marks ${JSON.stringify(page.mirHover.marked)}, and the ssa ${page.ssa.blocks.length} block(s)`,
-    );
-    console.log(
-        `the lir reads ${page.lir.blocks.length} block(s) of ${page.lir.kinds.length} instruction(s) of ${new Set(page.lir.kinds).size} kind(s), in ${page.lir.locals.length} local line(s), and the structure is ${page.lir.structure.length} line(s) folded to ${page.lirFolded.structure.length}`,
-    );
-    console.log(
-        `a choice reads as ${page.branch.blocks.length} block(s) of a ${page.branch.form} form and ${page.branchSsa.blockParams.length} parameter(s) of the join of the ssa form`,
-    );
-    console.log(
-        `a choice without an else reads ${page.unit.stmts.filter((it) => it.includes("const unit")).length} unit(s) in its ${page.unit.blocks.length} block(s)`,
-    );
-    console.log(
-        `a lambda reads as ${JSON.stringify(page.lambdaMir.lambdas)} in the mir and ${JSON.stringify(page.lambdaLir.lambdas)} in the lir, of ${page.lambdaMir.blocks.length} and ${page.lambdaLir.blocks.length} block(s)`,
-    );
-    console.log(
-        `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
-    );
-    console.log(
-        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.map((it) => it.name).join(", ")}`,
-    );
-    console.log(
-        `the manifest of the build is of the project ${page.built.manifest.project}, and its entry is ${page.built.manifest.entry ? `${page.built.manifest.entry.module}::${page.built.manifest.entry.name}` : "nothing"}`,
-    );
-    console.log(
-        `a broken buffer ${page.compileGuard.disabled ? "refuses" : "takes"} a build`,
-    );
-    console.log(
-        `the debug option gives the module ${page.dwarfWat.sections.length} custom section(s) of DWARF, ${page.bareWat.sections.length} with none, and ${page.mapWat.sections.length} with the source map`,
-    );
-    console.log(
-        `of ${page.watMarks.rows} line(s) on the screen, ${page.watMarks.marks} carry a fold marker: the module ${page.watMarks.moduleMarked ? "folds" : "does not fold"}, a func head ${page.watMarks.headMarked ? "folds" : "does not fold"}, and a line of a body ${page.watMarks.bodyMarked ? "FOLDS" : "does not fold"}`,
-    );
-    console.log(`the markers stand at ${JSON.stringify(page.watMarks.list)}`);
-    console.log(
-        `a node the grammar has no room for reads as ${page.bogus.shown ? "a node" : "nothing"}`,
-    );
-    console.log(
-        `its elements mark ${JSON.stringify(page.bogusMark.marked.slice(0, 24))}`,
-    );
-    console.log(
-        `a broken buffer gives ${page.broken?.length ?? 0} diagnostic(s)`,
-    );
-    console.log(
-        `a phone at ${page.phone.width}px shows ${page.phone.shown}, and the switcher has ${page.phone.switches} panels to pick`,
-    );
-    console.log(
-        `the files hold ${page.library.files.length} buffers, and the editor ${page.writtenLibrary.text === page.readLibrary.text ? "did not take" : "TOOK"} what was typed into a file of the library`,
-    );
-    console.log(
-        `a pick of ${JSON.stringify(page.phoneToken.says)} in a tree marks ${JSON.stringify(page.phoneToken.marked)}, which the editor ${page.phoneToken.scrolls ? (page.phoneToken.scrolled ? "is taken to" : "stays away from") : "has nothing to scroll to"}`,
-    );
-    console.log(
-        `a read of an edited body took ${page.stats.took} ms, of which ${counted("check", "stales")} check(s) read again and ${page.stats.rows.filter((it) => it.took > 0).length} pass(es) timed`,
-    );
-    console.log(
-        `the rows of that read: ${page.stats.rows.map((it) => `${it.pass}(${it.unit}) ${it.hits}/${it.misses}/${it.stales}/${it.kept}/${it.dropped}`).join(" ")}`,
-    );
-
-    if (diagnostic.whole)
-        console.log(`  ${diagnostic.whole.trim().replace(/\s+/g, " ")}`);
-
-    for (const [what, it] of checks)
-        console.log(`${it ? "ok  " : "FAIL"} ${what}`);
-
-    if (warnings.length > 0)
-        console.log(`warnings:\n  ${warnings.join("\n  ")}`);
-
-    if (problems.length > 0)
-        console.log(`problems:\n  ${problems.join("\n  ")}`);
-
-    if (!held)
-        console.log(
-            `what it asked for:\n  ${[...new Set(asked)].join("\n  ")}`,
-        );
-
-    return held;
-}
-
-/**
 /**
  * The files an archive holds: the path of each, where its header stands, and how long it is
- * ([ZIP]).
+ * ([ZIP](https://en.wikipedia.org/wiki/ZIP_(file_format))).
  *
  * The directory stands at the end of an archive, and every entry of it names the path a file
  * is written under and where that file stands: a check that reads a build reads the paths
  * here, because the paths are the whole of what an archive adds to a download of loose files.
  *
- * [zip]: https://en.wikipedia.org/wiki/ZIP_(file_format)
+ * @param {Buffer} archive
+ * @returns {{name: string, at: number, size: number}[]}
  */
 function entries(archive) {
     const end = archive.length - 22;
@@ -2440,7 +3394,12 @@ function entries(archive) {
     return files;
 }
 
-/** The bytes of one file of an archive, read where its entry says they stand. */
+/**
+ * The bytes of one file of an archive, read where its entry says they stand.
+ *
+ * @param {Buffer} archive
+ * @param {{at: number, size: number}} entry
+ */
 function contents(archive, entry) {
     const name = archive.readUInt16LE(entry.at + 26);
     const extra = archive.readUInt16LE(entry.at + 28);
@@ -2451,13 +3410,19 @@ function contents(archive, entry) {
     );
 }
 
-/** Starts a process of its own group, so that taking it down takes down what it spawned. */
+/** Starts a process of its own group, so that taking it down takes down what it spawned.
+ *
+ * @param {string} name
+ * @param {string} command
+ * @param {string[]} args
+ */
 function start(name, command, args) {
     const child = spawn(command, args, { cwd: root, detached: true });
+    /** @type {string[]} */
     const said = [];
 
-    child.stdout.on("data", (chunk) => said.push(String(chunk)));
-    child.stderr.on("data", (chunk) => said.push(String(chunk)));
+    child.stdout?.on("data", (chunk) => said.push(String(chunk)));
+    child.stderr?.on("data", (chunk) => said.push(String(chunk)));
 
     started.push({ name, child, said });
 
@@ -2541,7 +3506,11 @@ async function ensureBrowser() {
     }
 }
 
-/** Whether something answers at a URL, which is all this needs to know about it. */
+/** Whether something answers at a URL, which is all this needs to know about it.
+ *
+ * @param {string} url
+ * @returns {Promise<boolean>}
+ */
 async function reachable(url) {
     try {
         const response = await fetch(url, {
@@ -2559,6 +3528,9 @@ async function reachable(url) {
  *
  * A server left over from an older run may hold the usual one,
  * and a preview started before the last build serves a site whose scripts are gone.
+ *
+ * @param {number} preferred
+ * @returns {Promise<number>}
  */
 async function freePort(preferred) {
     for (let port = preferred; port < preferred + 20; port++) {
@@ -2568,6 +3540,7 @@ async function freePort(preferred) {
     throw new Error(`every port from ${preferred} upwards is taken`);
 }
 
+/** @param {number} port @returns {Promise<boolean>} */
 function available(port) {
     return new Promise((accept) => {
         const probe = createServer();
@@ -2578,6 +3551,10 @@ function available(port) {
     });
 }
 
+/**
+ * @param {() => Promise<boolean> | boolean} check
+ * @param {{timeout?: number, interval?: number}} [settings]
+ */
 async function waitFor(check, { timeout: limit = 30000, interval = 250 } = {}) {
     const deadline = Date.now() + limit;
 
@@ -2589,22 +3566,34 @@ async function waitFor(check, { timeout: limit = 30000, interval = 250 } = {}) {
     return false;
 }
 
+/** @param {number} ms */
 function sleep(ms) {
     return new Promise((accept) => setTimeout(accept, ms));
 }
 
+/** @param {string} url */
 async function json(url) {
     return await (await fetch(url)).json();
 }
 
+/**
+ * @param {number} after
+ * @param {string} message
+ * @returns {Promise<never>}
+ */
 function timeout(after, message) {
     return new Promise((_, reject) =>
         setTimeout(() => reject(new Error(message)), after),
     );
 }
 
+/**
+ * @template T
+ * @returns {{promise: Promise<T>, accept: (value: T) => void}}
+ */
 function deferred() {
-    let accept;
+    /** @type {(value: T) => void} */
+    let accept = () => {};
     const promise = new Promise((resolve) => {
         accept = resolve;
     });
@@ -2612,6 +3601,12 @@ function deferred() {
     return { promise, accept };
 }
 
+/** What an error says, whatever kind of thing was thrown. @param {unknown} error */
+function message(error) {
+    return error instanceof Error ? error.message : String(error);
+}
+
+/** @param {any} details */
 function describe(details) {
     return (
         details?.exception?.description ??
@@ -2620,7 +3615,12 @@ function describe(details) {
     );
 }
 
+/**
+ * @param {string[]} argv
+ * @returns {Options}
+ */
 function parseArguments(argv) {
+    /** @type {Options} */
     const options = {};
 
     for (let index = 0; index < argv.length; index++) {
@@ -2629,15 +3629,18 @@ function parseArguments(argv) {
 
         if (name === "--help" || name === "-h") {
             console.log(
-                "usage: node scripts/browser-check.mjs [--base URL] [--cdp URL] [--keep]",
+                "usage: node scripts/browser-check.mjs [--base URL] [--cdp URL] [--keep] [--list] [--only TEXT]",
             );
             process.exit(0);
         }
 
         if (name === "--keep") options.keep = true;
+        else if (name === "--list") options.list = true;
         else if (name === "--base") options.base = value ?? argv[++index];
         else if (name === "--cdp") options.cdp = value ?? argv[++index];
-        else throw new Error(`unknown argument ${argument}`);
+        else if (name === "--only") {
+            options.only = [...(options.only ?? []), value ?? argv[++index]];
+        } else throw new Error(`unknown argument ${argument}`);
     }
 
     return options;
@@ -2648,7 +3651,7 @@ let ok = false;
 try {
     ok = await main();
 } catch (error) {
-    console.error(`the check could not run: ${error.message}`);
+    console.error(`the check could not run: ${message(error)}`);
     ok = false;
 } finally {
     if (!options.keep) {
@@ -2661,6 +3664,12 @@ try {
             }
 
             // The group, not the process: what a preview server spawned has to go too.
+            if (child.pid === undefined) {
+                child.kill();
+
+                continue;
+            }
+
             try {
                 process.kill(-child.pid, "SIGTERM");
             } catch {

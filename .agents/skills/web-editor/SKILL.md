@@ -24,7 +24,7 @@ pipeline for the buffer.
 ## Commands
 
 - `just dev-web` — the dev server; it builds the wasm package first.
-- `just check-web` — `svelte-check` (types and templates).
+- `just check-web` — `oxlint` over the editor sources and `svelte-check` (types and templates).
 - `just check-browser` — builds the site and drives it in a browser; needs `obscura`.
 - `just verify-web` — the full gate: `verify` plus the browser check.
 - `just build-web` — the static site.
@@ -42,9 +42,17 @@ To extend it:
 
 1. Give the DOM a stable `data-*` attribute — the check selects by data attributes, not classes.
 2. Add the JavaScript step to `STEPS` and, when the page has to wait, a predicate to `WAITS`.
-3. Run the step from `main()` and capture what the later steps need.
-4. Add a `[label, predicate]` entry to `checks` in `report()`, so a failure names the check.
-5. Run `just check-browser`.
+3. Add a row to `RUN` — `[capture, step, wait, settings?]` — so the step runs in order and its
+   answer is kept under the capture name.
+4. Add a check to `CHECKS` — `[what it asks, what the run read, what it expected]`. Both sides
+   may be values or functions of the captures, and an expectation may be a matcher
+   (`greater`, `includes`, `matches`, `allOf`, ...) where equality is too plain.
+5. Run `just check-browser`; iterate with `--only TEXT` (the run is the same, the report is
+   filtered) and `--list` to see the checks.
+
+A new capture needs its shape written down in the `Page` types of the script: `just check-web`
+type-checks the script (JSDoc with `checkJs`) and lints it (oxlint), and a check that reads a
+capture the run no longer makes fails rather than crashing the report.
 
 Constraints, documented at the top of the script:
 
@@ -52,7 +60,9 @@ Constraints, documented at the top of the script:
   as a classic script whatever its type says;
 - keystrokes are not sent: the buffer text goes in through the DOM with a synthetic `input`
   event, and key chords are not serialized;
-- prefer polling with `until` over adding `sleep`;
+- no fixed sleeps: a step waits for the thing it reads through a `WAITS` predicate;
+- a failing check or step does not stop the run: every check is read, each failure prints what
+  was expected against what the run saw, and the end is a tally;
 - parts of the check are obscura-specific workarounds; do not weaken an assertion without
   understanding why it asserts it.
 

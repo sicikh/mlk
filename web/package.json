@@ -15,7 +15,7 @@
         "build:grammar": "lezer-generator --noTerms --typeScript src/lib/grammar/mlk.grammar -o src/lib/grammar/mlk.ts",
         "preview": "vite preview",
         "check": "oxlint --deny-warnings scripts src vite.config.ts vitest.config.ts && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-        "test": "vitest run",
+        "test": "svelte-kit sync && vitest run",
         "check:browser": "pnpm build && node scripts/browser-check.mjs"
     },
     "dependencies": {

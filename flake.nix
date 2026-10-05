@@ -215,6 +215,20 @@
             rustfmtNightly
             obscuraPkg
             ;
+
+          # The environment variable that tells cargo which flags the target takes is
+          # named after the target; rustc builds for the host here.
+          cargoTarget = lib.toUpper (
+            lib.replaceStrings [ "-" ] [ "_" ] pkgs.stdenv.hostPlatform.rust.rustcTarget
+          );
+
+          # Linking is what a build waits on last, and mold is quicker at it than the
+          # host's linker; `cc` stays the linker, because rustc drives a C compiler, and
+          # it finds mold through `-fuse-ld`, the shell having put it on the path.
+          # Systems whose shell has no mold link the way they did before.
+          moldExport = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+            export CARGO_TARGET_${cargoTarget}_RUSTFLAGS="-C link-arg=-fuse-ld=mold"
+          '';
         in
         {
           default = pkgs.mkShell {
@@ -231,7 +245,8 @@
               pkgs.nodejs_26
               pkgs.corepack
               obscuraPkg
-            ];
+            ]
+            ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.mold ];
 
             shellHook = ''
               # `just format` and `just gen-all` format with a nightly rustfmt: `cargo fmt`
@@ -245,6 +260,8 @@
               mkdir -p "$COREPACK_HOME/pnpm"
               corepack enable --install-directory "$COREPACK_HOME/pnpm" pnpm >/dev/null 2>&1 || true
               export PATH="$COREPACK_HOME/pnpm:$PATH"
+
+              ${moldExport}
 
               echo "mlk dev shell"
               echo "  rust    $(rustc --version)"

@@ -174,3 +174,31 @@ unsafe_attr_outside_unsafe = "warn"
 unused_import_braces = "warn"
 unused_lifetimes = "warn"
 unused_macro_rules = "warn"
+
+# The dev profile's default debug info — variables and types — is much of what a build
+# spends its time on, and this repository rarely looks at it. Line tables stay, because
+# the backtrace of an internal compiler exception is part of the report a person reads
+# (`crates/mlkc-diagnostics/src/ice.rs`), and a frame without its file and line says
+# little. Raise this locally when stepping through a build under a debugger.
+[profile.dev]
+debug = 1
+
+# A test run spends its time in a few dependencies rather than in the crates under test:
+# in the snapshot library and the diffing it pulls in (`insta` asks for this pair), in
+# the syntax trees, the hashers, the lexer, and the serialization the tests read the
+# compiler's values back through. Building those optimized makes the parts of a test run
+# that go through them faster — the diff of a snapshot that fails most of all — and only
+# those: the workspace itself stays at the dev profile's `opt-level`.
+# The list is the one rust-analyzer keeps for its own suite, adapted to this one.
+# `wasmtime` is deliberately absent: few tests execute wasm, and building it optimized
+# costs far more than it saves.
+[profile.dev.package]
+hashbrown.opt-level = 3
+insta.opt-level = 3
+logos.opt-level = 3
+mlkc-rowan.opt-level = 3
+mlkc-text-size.opt-level = 3
+rustc-hash.opt-level = 3
+serde.opt-level = 3
+serde_json.opt-level = 3
+similar.opt-level = 3

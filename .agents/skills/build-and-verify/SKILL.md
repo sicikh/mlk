@@ -70,4 +70,5 @@ local `verify`; run it when a dependency or the lockfile changed.
 - no `obscura`: `check-browser` and `verify-web` cannot run; say so, and note that CI runs them;
 - no Node/pnpm: `check-web` and the browser check cannot run; the Rust checks still work;
 - no `cargo-insta`: `just test` still runs; `just test-review` cannot;
+- no `cargo-nextest`: `just test` and `just test-crate` cannot run; `cargo test` still does;
 - no `cargo-deny`: `just deny` cannot run; say so, and note that CI runs it.

@@ -28,3 +28,19 @@ updates:
       groups:
           npm:
               patterns: ["*"]
+
+    # The inputs of `flake.lock`: nixpkgs, rust-overlay, and crane. A bump of nixpkgs
+    # moves wasm-bindgen-cli too, which the flake asserts against `Cargo.lock`.
+    - package-ecosystem: nix
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          nix:
+              patterns: ["*"]
+
+    # The channel of `rust-toolchain.toml`, which `flake.nix` reads.
+    - package-ecosystem: rust-toolchain
+      directory: /
+      schedule:
+          interval: weekly

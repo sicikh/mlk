@@ -46,7 +46,7 @@ Read the one that matches the task before starting:
 | `just lint`                           | `cargo clippy --workspace --all-features --all-targets -- --deny warnings`.               |
 | `just doc`                            | Build the workspace docs, with every rustdoc warning denied.                              |
 | `just deny`                           | Check the dependencies (licenses, advisories, bans, sources); needs the RustSec database. |
-| `just test`                           | The workspace test suite.                                                                 |
+| `just test`                           | The workspace test suite (cargo-nextest).                                                 |
 | `just test-crate mlkc-lower`          | One crate; the fast loop while iterating.                                                 |
 | `just test-doc`                       | Doc tests.                                                                                |
 | `just test-review`                    | Run the snapshot tests and review the pending changes interactively.                      |
@@ -56,7 +56,7 @@ Read the one that matches the task before starting:
 | `just test-web`                       | Tests of the pure editor modules (Vitest), with no browser.                               |
 | `just verify-web`                     | `verify` plus the editor in a real browser. Needs `obscura` on the path.                  |
 | `just gen-all`                        | Regenerate every generated file; commit the result.                                       |
-| `just format`                         | `cargo fmt` (nightly rustfmt) and `tombi format`.                                         |
+| `just format`                         | `cargo fmt` (nightly rustfmt), `tombi format`, and `nixfmt`.                              |
 | `just dev-web`                        | The editor on a dev server.                                                               |
 | `cargo run -p mlkc-cli -- parse FILE` | Parse one file and print the trees.                                                       |
 | `cargo run -p mlkc-cli -- run BUILD`  | Run a build: a directory or an archive.                                                   |
@@ -133,17 +133,24 @@ Read the one that matches the task before starting:
 - The Nix flake provides the whole toolchain: `nix develop` gives the pinned Rust,
   the nightly rustfmt the formatter needs, wasm-bindgen-cli
   (the version nixpkgs builds, which `Cargo.toml` pins the crate to),
-  wasm-tools, wasmtime, cargo-insta, cargo-deny, just, Node and pnpm through corepack,
-  and obscura.
+  wasm-tools, wasmtime, cargo-insta, cargo-deny, cargo-nextest, just,
+  Node and pnpm through corepack, and obscura.
+  It also carries `rg` and `fd` (prefer them to `grep` and `find`),
+  `jq` and `tokei` for reading the tree,
+  `nixfmt` for `flake.nix`, and `nil`, the Nix language server.
   Inside the shell `just install-tools` installs only the pnpm dependencies.
   The flake also builds the compiler as a package: `nix build .#mlkc` (`nix run .#mlkc`).
 - Without Nix, `just install-tools` installs the rest: cargo-insta, cargo-deny,
-  wasm-bindgen-cli (its version is derived from `Cargo.lock` and must match the `wasm-bindgen` crate),
-  wasm-tools, wasmtime, and the pnpm dependencies.
+  cargo-nextest, wasm-bindgen-cli
+  (its version is derived from `Cargo.lock` and must match the `wasm-bindgen` crate),
+  wasm-tools, wasmtime, and the pnpm dependencies;
+  `rg`, `fd`, `jq`, `tokei`, `nixfmt`, and `nil` come from the system's package manager.
 - `obscura` is needed only by `just check-browser` and `just verify-web`;
   the dev shell and CI both provide it.
 - `cargo-deny` is needed by `just deny`, which CI runs when a dependency changes;
   the flake and `just install-tools` both provide it.
+- `just test` and `just test-crate` run the suites through `cargo-nextest`;
+  `just test-doc` and `just test-review` stay on `cargo test`.
 - `just doctor` reports what is missing.
 
 ## Delegation

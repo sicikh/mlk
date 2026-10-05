@@ -55,7 +55,7 @@ Without Nix, install the prerequisites and the tools by hand:
 Then:
 
 ```sh
-just install-tools   # cargo-insta, wasm-bindgen-cli, wasm-tools, wasmtime, pnpm dependencies
+just install-tools   # cargo-insta, cargo-deny, cargo-nextest, wasm-bindgen-cli, wasm-tools, wasmtime, pnpm dependencies
 just test            # the workspace test suite
 just lint            # clippy with warnings denied
 just dev-web         # the editor on a dev server, with the wasm compiler built first

@@ -24,6 +24,7 @@ install-tools:
     command -v cargo-binstall >/dev/null || cargo install cargo-binstall
     cargo binstall cargo-insta
     cargo binstall cargo-deny
+    cargo binstall cargo-nextest
     cargo binstall wasm-bindgen-cli --version "={{ wasm_bindgen }}"
     cargo binstall wasm-tools
     cargo binstall wasmtime-cli
@@ -35,6 +36,7 @@ upgrade-tools:
     cargo install cargo-binstall --force
     cargo binstall cargo-insta --force
     cargo binstall cargo-deny --force
+    cargo binstall cargo-nextest --force
     cargo binstall wasm-bindgen-cli --force
     cargo binstall wasm-tools --force
     cargo binstall wasmtime-cli --force
@@ -44,7 +46,7 @@ doctor:
     #!/usr/bin/env sh
     set -u
     missing=""
-    for tool in cargo rustc just node pnpm; do
+    for tool in cargo rustc just node pnpm cargo-nextest; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf 'ok       %s\n' "$tool"
         else
@@ -59,17 +61,26 @@ doctor:
             printf 'optional %s is missing; the checks that use it cannot run\n' "$tool"
         fi
     done
+    # The search and browsing tools of the dev shell; a setup without Nix may not have them.
+    for tool in rg fd jq tokei nixfmt nil; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            printf 'ok       %s\n' "$tool"
+        else
+            printf 'optional %s is missing; the Nix dev shell provides it\n' "$tool"
+        fi
+    done
     if [ -n "$missing" ]; then
         printf '\nthe required tools above are missing: install the prerequisites of README.md, then run `just install-tools`\n' >&2
         exit 1
     fi
 
-# Format Rust and TOML files.
+# Format the Rust, TOML, and Nix files.
 # The Rust formatting needs the nightly rustfmt: `RUSTUP_TOOLCHAIN` selects it where rustup is
 # installed, and `RUSTFMT` does in the Nix dev shell.
 format:
     RUSTUP_TOOLCHAIN=nightly cargo fmt --all --verbose
     pnpm format
+    nixfmt flake.nix
 
 # Run clippy on the whole codebase
 lint:
@@ -86,11 +97,11 @@ deny:
 
 # Run tests of all crates
 test:
-    cargo test --no-fail-fast
+    cargo nextest run
 
 # Run tests for the crate passed as argument e.g. just test-crate mlkc-cli
 test-crate name:
-    cargo test -p {{ name }} --no-fail-fast
+    cargo nextest run -p {{ name }}
 
 # Run doc tests
 test-doc:

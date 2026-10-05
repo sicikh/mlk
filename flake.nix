@@ -240,11 +240,21 @@
               pkgs.just
               pkgs.cargo-insta
               pkgs.cargo-deny
+              pkgs.cargo-nextest
               pkgs.wasm-bindgen-cli
               pkgs.wasm-tools
               pkgs.wasmtime
               pkgs.nodejs_26
               pkgs.corepack
+              # Search and browse the tree: `rg` and `fd` stand in for `grep` and
+              # `find`, `jq` reads JSON, and `tokei` counts what is there.
+              pkgs.ripgrep
+              pkgs.fd
+              pkgs.jq
+              pkgs.tokei
+              # `nixfmt` formats `flake.nix`; `nil` speaks Nix to an editor.
+              pkgs.nixfmt
+              pkgs.nil
               obscuraPkg
             ]
             ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.mold ];

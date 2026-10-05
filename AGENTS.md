@@ -21,6 +21,23 @@ more often than to be rearchitected.
 4. `docs/adr/README.md` — the decision index and its drift notes;
    read the ADRs of the area you are about to touch.
 
+## Task playbooks
+
+Skills under `.agents/skills/` are loaded on demand.
+Read the one that matches the task before starting:
+
+| Skill                | When                                                                   |
+| -------------------- | ---------------------------------------------------------------------- |
+| `build-and-verify`   | Choosing checks and tests, updating snapshots, a tool that is missing. |
+| `pipeline-pass`      | Adding or changing a compiler pass.                                    |
+| `syntax-and-sugar`   | Changing the grammar, the parser, generated nodes, or lowering.        |
+| `parser-development` | Parse rules, recovery, lists, the lexer, inline specs.                 |
+| `snapshot-tests`     | Adding or updating fixtures and snapshots.                             |
+| `backend-wasm`       | MIR, LIR, codegen, linking, debug information.                         |
+| `web-editor`         | The editor, the wasm host, `browser-check.mjs`.                        |
+| `doc-comments`       | Writing or editing Rust comments and crate docs.                       |
+| `delegating-work`    | A task large enough to split across subagents.                         |
+
 ## Commands
 
 | Command                               | What it is for                                                                             |
@@ -114,6 +131,10 @@ more often than to be rearchitected.
 - There is no Nix flake yet; do not assume one. `just doctor` reports what is missing.
 
 ## Delegation
+
+The `delegating-work` skill is the full playbook: when to split, the brief a subagent needs,
+which files have one writer, and how to integrate the pieces.
+The short version:
 
 When a task is big enough to split, split it and keep the pieces independent:
 

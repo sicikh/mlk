@@ -1,7 +1,6 @@
 pub mod ctx;
 mod diagnostic;
 mod ice;
-mod render;
 
 use mlkc_span::TextRange;
 

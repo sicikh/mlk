@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { Types } from "$lib/driver";
-    import { utf16At } from "$lib/offsets";
+    import type { Types } from "#lib/driver.js";
+    import { utf16At } from "#lib/offsets.js";
 
     interface Props {
         /** What checking the types of the buffer left. */

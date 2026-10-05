@@ -66,7 +66,7 @@ export const mlkLanguage = LRLanguage.define({
 /**
  * What a painted part of the syntax looks like: the colours of the page, worn by code.
  *
- * The style is shared: the viewer of the text format ([`$lib/wat`]) wears the same one, because
+ * The style is shared: the viewer of the text format ([`#lib/wat.js`]) wears the same one, because
  * a module a person reads beside the buffer is read in the colours of the buffer, and a keyword
  * is the accent wherever it is written.
  */

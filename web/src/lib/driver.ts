@@ -635,7 +635,7 @@ export interface RunEntry {
  *
  * A build written out is a directory of modules and this file beside them: a host that holds
  * the modules in memory does not read it, and a host that reads them from files cannot do
- * without it. It is written into the archive the editor hands over (see `$lib/archive`), and
+ * without it. It is written into the archive the editor hands over (see `#lib/archive.js`), and
  * `mlkc run` reads it back.
  */
 export interface Manifest {

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Mir, MirBlock, MirBody, MirLocal } from "$lib/driver";
+    import type { Mir, MirBlock, MirBody, MirLocal } from "#lib/driver.js";
 
     interface Props {
         /** The MIR of the buffer, in one of its two forms: the CFG form or the SSA form. */

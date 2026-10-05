@@ -6,7 +6,7 @@
         LirLocal,
         LirStructureLine,
         LirValue,
-    } from "$lib/driver";
+    } from "#lib/driver.js";
 
     interface Props {
         /** The LIR of the buffer: the target's instructions in SSA form. */

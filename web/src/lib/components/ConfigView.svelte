@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { DebugInfo, OptLevel } from "$lib/driver";
+    import type { DebugInfo, OptLevel } from "#lib/driver.js";
 
     interface Props {
         /** What debug information a module carries. */

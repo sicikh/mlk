@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { codeOf, mainLabel } from "$lib/diagnostics";
-    import type { Diagnostic, Label } from "$lib/driver";
-    import { byteLength, utf16At } from "$lib/offsets";
+    import { codeOf, mainLabel } from "#lib/diagnostics.js";
+    import type { Diagnostic, Label } from "#lib/driver.js";
+    import { byteLength, utf16At } from "#lib/offsets.js";
 
     interface Props {
         /** What the parser and the lowering reported, in the order they reported it. */

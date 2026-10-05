@@ -25,10 +25,10 @@
     } from "@codemirror/view";
     import { untrack } from "svelte";
 
-    import { codeOf, mainLabel, rangeOf, severityOf } from "$lib/diagnostics";
-    import type { Diagnostic } from "$lib/driver";
-    import { mlkLanguageSupport } from "$lib/highlight";
-    import { utf16At } from "$lib/offsets";
+    import { codeOf, mainLabel, rangeOf, severityOf } from "#lib/diagnostics.js";
+    import type { Diagnostic } from "#lib/driver.js";
+    import { mlkLanguageSupport } from "#lib/highlight.js";
+    import { utf16At } from "#lib/offsets.js";
 
     interface Props {
         /** The buffers open in the editor, in the order of their tabs. */
@@ -164,7 +164,7 @@
 
             /* And what the compiler has to say about the text, marked the way an editor
                marks mistakes. The colours of the code itself are the language's:
-               see `$lib/highlight`. */
+               see `#lib/highlight.js`. */
             ".cm-lintRange-error": {
                 backgroundImage: "none",
                 textDecoration: "underline wavy var(--error)",
@@ -308,7 +308,7 @@
     /**
      * Shows what the compiler made of the buffer that is in front.
      *
-     * The colours are the editor's own ([`$lib/highlight`]), so what arrives here is
+     * The colours are the editor's own ([`#lib/highlight.js`]), so what arrives here is
      * what the compiler has to say about the text: the places it complained about.
      */
     function show() {

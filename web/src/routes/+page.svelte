@@ -1,21 +1,21 @@
 <script lang="ts">
     import { onMount, tick } from "svelte";
 
-    import { archive, type ArchivedFile } from "$lib/archive";
-    import AstView from "$lib/components/AstView.svelte";
-    import ConfigView from "$lib/components/ConfigView.svelte";
-    import Console, { type Line } from "$lib/components/Console.svelte";
-    import Diagnostics from "$lib/components/Diagnostics.svelte";
-    import Editor from "$lib/components/Editor.svelte";
-    import FileList from "$lib/components/FileList.svelte";
-    import HirView from "$lib/components/HirView.svelte";
-    import LirView from "$lib/components/LirView.svelte";
-    import MirView from "$lib/components/MirView.svelte";
-    import Splitter from "$lib/components/Splitter.svelte";
-    import StatsView from "$lib/components/StatsView.svelte";
-    import TreeView from "$lib/components/TreeView.svelte";
-    import TypeView from "$lib/components/TypeView.svelte";
-    import WatView from "$lib/components/WatView.svelte";
+    import { archive, type ArchivedFile } from "#lib/archive.js";
+    import AstView from "#lib/components/AstView.svelte";
+    import ConfigView from "#lib/components/ConfigView.svelte";
+    import Console, { type Line } from "#lib/components/Console.svelte";
+    import Diagnostics from "#lib/components/Diagnostics.svelte";
+    import Editor from "#lib/components/Editor.svelte";
+    import FileList from "#lib/components/FileList.svelte";
+    import HirView from "#lib/components/HirView.svelte";
+    import LirView from "#lib/components/LirView.svelte";
+    import MirView from "#lib/components/MirView.svelte";
+    import Splitter from "#lib/components/Splitter.svelte";
+    import StatsView from "#lib/components/StatsView.svelte";
+    import TreeView from "#lib/components/TreeView.svelte";
+    import TypeView from "#lib/components/TypeView.svelte";
+    import WatView from "#lib/components/WatView.svelte";
     import {
         loadDriver,
         type Cost,
@@ -31,7 +31,7 @@
         type SyntaxNode,
         type Types,
         type Wat,
-    } from "$lib/driver";
+    } from "#lib/driver.js";
 
     interface Buffer {
         path: string;

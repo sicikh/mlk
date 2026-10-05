@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Cost } from "$lib/driver";
+    import type { Cost } from "#lib/driver.js";
 
     interface Props {
         /** What the read of the buffer cost the driver: the counters, and the time it took. */

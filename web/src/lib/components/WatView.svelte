@@ -10,8 +10,8 @@
     import { EditorState } from "@codemirror/state";
     import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 
-    import type { Wat } from "$lib/driver";
-    import { watLanguageSupport } from "$lib/wat";
+    import type { Wat } from "#lib/driver.js";
+    import { watLanguageSupport } from "#lib/wat.js";
 
     interface Props {
         /** The module the back end assembled, as text, with what compiling it reported. */

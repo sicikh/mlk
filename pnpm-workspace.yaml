@@ -1,3 +1,17 @@
 packages:
     - "web"
     - "packages/*"
+
+# pnpm refuses a package younger than its minimum release age; tombi 1.7.2 was
+# installed while it was that fresh, and the packages it pulls in are exempted here.
+minimumReleaseAgeExclude:
+    - "@tombi-toml/cli-darwin-arm64@1.7.2"
+    - "@tombi-toml/cli-darwin-x64@1.7.2"
+    - "@tombi-toml/cli-linux-arm64-musl@1.7.2"
+    - "@tombi-toml/cli-linux-arm64@1.7.2"
+    - "@tombi-toml/cli-linux-x64-musl@1.7.2"
+    - "@tombi-toml/cli-linux-x64@1.7.2"
+    - "@tombi-toml/cli-sunos-x64@1.7.2"
+    - "@tombi-toml/cli-win32-arm64@1.7.2"
+    - "@tombi-toml/cli-win32-x64@1.7.2"
+    - "tombi@1.7.2"

@@ -167,8 +167,8 @@ importers:
   .:
     devDependencies:
       tombi:
-        specifier: 1.5.4
-        version: 1.5.4
+        specifier: 1.7.2
+        version: 1.7.2
 
   packages/wasm: {}
 
@@ -203,14 +203,17 @@ importers:
         specifier: ^1.8.0
         version: 1.8.1
       '@sveltejs/adapter-static':
-        specifier: ^3.0.10
-        version: 3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2))
+        specifier: ^4.0.0
+        version: 4.0.0(@sveltejs/kit@3.0.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4)))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2(@types/node@26.6.4)))
       '@sveltejs/kit':
-        specifier: ^2.70.3
-        version: 2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2)
+        specifier: ^3.0.0
+        version: 3.0.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4)))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2(@types/node@26.6.4))
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.0
-        version: 7.3.1(svelte@5.57.1)(vite@8.3.2)
+        version: 7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4))
+      '@types/node':
+        specifier: ^26.6.4
+        version: 26.6.4
       svelte:
         specifier: ^5.57.1
         version: 5.57.1
@@ -222,7 +225,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: ^8.3.0
-        version: 8.3.2
+        version: 8.3.2(@types/node@26.6.4)
 
 packages:
 
@@ -386,21 +389,21 @@ packages:
     peerDependencies:
       acorn: ^8.9.0
 
-  '@sveltejs/adapter-static@3.0.10':
-    resolution: {integrity: sha512-7D9lYFWJmB7zxZyTE/qxjksvMqzMuYrrsyh1f4AlZqeZeACPRySjbC3aFiY55wb1tWUaKOQG9PVbm74JcN2Iew==}
+  '@sveltejs/adapter-static@4.0.0':
+    resolution: {integrity: sha512-aF1J23R1ebKqUxQ4/qLr/Lxu63NFmLAtg8UZl3HFLxaoA1D/nhTVGcD9lTqx65iUbjNR2iOL0TgOxSX82x6Paw==}
     peerDependencies:
-      '@sveltejs/kit': ^2.0.0
+      '@sveltejs/kit': ^3.0.0-next.0
 
-  '@sveltejs/kit@2.70.3':
-    resolution: {integrity: sha512-UDvEYuZqAMbfB/oXIoqKvbKcb7YczK5zYrzmsGV1zRJk03jntwp8dXiYoIJotxAndsKvcPFtx9H1GRSKFdSHgg==}
-    engines: {node: '>=18.13'}
+  '@sveltejs/kit@3.0.0':
+    resolution: {integrity: sha512-dmP6gjz41DAT7erONGW8FdTWjmsmOJ/SaWVEsuEc1MXDcpH6YV+Pt98biZFPuinH4LldJPmScxDqiHwCDLRCrg==}
+    engines: {node: '>=22.17'}
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.0.0
-      '@sveltejs/vite-plugin-svelte': ^3.0.0 || ^4.0.0-next.1 || ^5.0.0 || ^6.0.0-next.0 || ^7.0.0
-      svelte: ^4.0.0 || ^5.0.0-next.0
-      typescript: ^5.3.3 || ^6.0.0
-      vite: ^5.0.3 || ^6.0.0 || ^7.0.0-beta.0 || ^8.0.0
+      '@sveltejs/vite-plugin-svelte': ^7.0.0
+      svelte: ^5.57.1
+      typescript: ^6.0.0
+      vite: ^8.0.12
     peerDependenciesMeta:
       '@opentelemetry/api':
         optional: true
@@ -418,69 +421,69 @@ packages:
       svelte: ^5.46.4
       vite: ^8.0.0-beta.7 || ^8.0.0
 
-  '@tombi-toml/cli-darwin-arm64@1.5.4':
-    resolution: {integrity: sha512-J8ppYaHt83UEM8qOQLcVkvHPFN+BKuDrPpfaX1dRd3+Ir56+BB9E2HTUQxxb4UCk0rskQo96ONNGrEWN4IFNqA==}
+  '@tombi-toml/cli-darwin-arm64@1.7.2':
+    resolution: {integrity: sha512-9WU/UfSQdoa43/TKIOytcg8EcRXbZtvuzrB02461uj/JD8EY1Y/0YRqBgSB8EXhZWFvhokeCJIwpfOaK0BPJrw==}
     engines: {node: '>=14.0.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@tombi-toml/cli-darwin-x64@1.5.4':
-    resolution: {integrity: sha512-nZDd/jFGaQMTRhLymE3/Ptu1jaBFFjvxv/opB26Zl2XaJv8ndQBhCiFq1EBoQt8I8gTEttR7DXD8vwf/1sm3/w==}
+  '@tombi-toml/cli-darwin-x64@1.7.2':
+    resolution: {integrity: sha512-Fu6nYQ576aqzSwndpp8PtQhLDnUHfaVgH9ibT8dV2Oafe5CEUrZ4wqtsoab5QlcHrzsS5NaKNUS0mBMMkhfOwQ==}
     engines: {node: '>=14.0.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@tombi-toml/cli-linux-arm64-musl@1.5.4':
-    resolution: {integrity: sha512-03g9GT+tOF8rsMG1gcDeyqRGVFh5gNDqUizxWT6/uHn7UlB/mp9yMGEwzn2xAPOo5HHguDK7Jk/GhPeIyPADAA==}
+  '@tombi-toml/cli-linux-arm64-musl@1.7.2':
+    resolution: {integrity: sha512-qvLK5lj+LX6yI2pChyolVDmFfbrMXOtw26MzG2GXosYwcaZfXCTCUc/nnwZZ/yvHuIDBTlhH4zppH1vky5T7bw==}
     engines: {node: '>=14.0.0'}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@tombi-toml/cli-linux-arm64@1.5.4':
-    resolution: {integrity: sha512-4eVM+U6DDSWsFmJFxITmTcR6NWsu92o2TDBVD+fe1yVwYdEn9C7ryvWG/NSZHYT4VRZ9hqhc5MbSWN0g4isIEA==}
+  '@tombi-toml/cli-linux-arm64@1.7.2':
+    resolution: {integrity: sha512-UzX3dVzSdm+Vm9wqiqxjYLMTLHWyOH2kVO43E5SwTx9lZXROGRRKDGWMePuOK1M4ExZetkk/YhUka7C7WRMpDQ==}
     engines: {node: '>=14.0.0'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@tombi-toml/cli-linux-x64-musl@1.5.4':
-    resolution: {integrity: sha512-tAjufBrG05GWSfwautBCX2B5FJcwb3XuCGKi17yek7TxokuysIvV7gqryzPPGvPjXQfbCfQwX+O/b/OOsCGgXg==}
+  '@tombi-toml/cli-linux-x64-musl@1.7.2':
+    resolution: {integrity: sha512-qlFEbMqPfzLAQbK9RuXlcgbmsfBrBVhiMMJGMfuGU9QLMTrrQbWdIv44x57Ka6Ihay1JbIFm3ixm4jDH/bzFXA==}
     engines: {node: '>=14.0.0'}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@tombi-toml/cli-linux-x64@1.5.4':
-    resolution: {integrity: sha512-YR0mt+aw78HSpBAtzcIL5kbsEb4BqEGxlPmAueMZkNYHRuuhDzdnlvwPhuC6KbGbbpLq2mSvISIqU5ySzvtSNg==}
+  '@tombi-toml/cli-linux-x64@1.7.2':
+    resolution: {integrity: sha512-0L64QA64mWuLpCEDtSJSSEOsVMqPQyzhyX7y52h1JjPWPtzfdAuhcUvGB4Ykd09AZn/amDPmbCjQQ6nxrPkNoA==}
     engines: {node: '>=14.0.0'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@tombi-toml/cli-sunos-x64@1.5.4':
-    resolution: {integrity: sha512-tlsUBOXVbxHLr3BhxcxbkyJ9DQlVMqnbGLJdThKlTOcU0o1OehIzYjm5g0i+bhxaclQBWKHiTOjjcWLonHXQ1Q==}
+  '@tombi-toml/cli-sunos-x64@1.7.2':
+    resolution: {integrity: sha512-wFPrs0ylxTiWvgyhIHgN30kuygQm+QX6d+sbYN8qUr245h6hcEr57Y1uNzXw9LWEQAa3Y5tVW7Cn+FH24l1JpA==}
     engines: {node: '>=14.0.0'}
     cpu: [x64]
     os: [sunos]
 
-  '@tombi-toml/cli-win32-arm64@1.5.4':
-    resolution: {integrity: sha512-IJ54EmHeizMuIEEPviGsksZj7jsTk4vnB9/KGNebAmj8/NP5DlvJ1P03uZgwPSVB3u6TWmqDczhQzanrjuNnnQ==}
+  '@tombi-toml/cli-win32-arm64@1.7.2':
+    resolution: {integrity: sha512-joRFv2YZ12FvnEjCpZWThv12biwDB+6xVaxJ+vDCoCCwUvIwxRL7fvkZUmsZsvY77yKyb79vbKL+cWFgUP7kEw==}
     engines: {node: '>=14.0.0'}
     cpu: [arm64]
     os: [win32]
 
-  '@tombi-toml/cli-win32-x64@1.5.4':
-    resolution: {integrity: sha512-KRkU+SatHT2rjT/qnoKtrZg2VlyNHLboV5SM+/G64cc5gFieroiITy5Hy8MhUqIsvDKLOrPX9/ZNI4v71Deacg==}
+  '@tombi-toml/cli-win32-x64@1.7.2':
+    resolution: {integrity: sha512-aFze+5MYhMLatX0TI+3GJNqyJA4beJafDmSLy1BnPMwWmbWCPzT90W1nU15UM474Zh6vv5fTM0z7KOMcZB+Zig==}
     engines: {node: '>=14.0.0'}
     cpu: [x64]
     os: [win32]
 
-  '@types/cookie@0.6.0':
-    resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
-
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/node@26.6.4':
+    resolution: {integrity: sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg==}
 
   acorn@8.18.0:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
@@ -503,9 +506,9 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
-  cookie@0.6.0:
-    resolution: {integrity: sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw==}
-    engines: {node: '>= 0.6'}
+  cookie@2.0.1:
+    resolution: {integrity: sha512-yuToqVvRrj6pfDXREyQAAv8SkAEk/8GS3jQRTiUMm66TVtBYmqQeoEjL2Lmq8Rpo6271vH76InTChTitEAm65w==}
+    engines: {node: '>=22'}
 
   crelt@1.0.7:
     resolution: {integrity: sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA==}
@@ -548,10 +551,6 @@ packages:
 
   is-reference@3.0.3:
     resolution: {integrity: sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw==}
-
-  kleur@4.1.5:
-    resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
-    engines: {node: '>=6'}
 
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
@@ -677,9 +676,6 @@ packages:
     resolution: {integrity: sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A==}
     engines: {node: '>=6'}
 
-  set-cookie-parser@3.1.2:
-    resolution: {integrity: sha512-5/r/lTwbJ3zQ+qwdUFZYeRNqda7P5HD8zQKqlSjdGt1/S0cjLAphHusj4Y58ahDtWn/g32xrIS58/ikOvwl0Lw==}
-
   sirv@3.0.2:
     resolution: {integrity: sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g==}
     engines: {node: '>=18'}
@@ -707,8 +703,8 @@ packages:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
-  tombi@1.5.4:
-    resolution: {integrity: sha512-l6h2dpKEjf3C35NHZD9RuIB3iibyWSQDKarFO+2DnnFOr5KbTvGbH0LHVwGvQ0XAe0UVDBV5QoRqKkgvVdR9wA==}
+  tombi@1.7.2:
+    resolution: {integrity: sha512-6c0GSnLAfPaA/rMhHenEiLs/C4MD9YJl/vrFSIU5iY4KdF/sBvEZTE8wQSo9aTiO4VTPrl+a9wajHE1w3t3JKA==}
     engines: {node: '>=14.0.0'}
     hasBin: true
 
@@ -720,6 +716,9 @@ packages:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  undici-types@8.9.0:
+    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
   vite@8.3.2:
     resolution: {integrity: sha512-SQr1x6W5vVSbROg7vsyXIaxK9b0G7zsT68acdWWRmnBUsgDieLCRG+Rep9WdZgcposvv/GSnr4GUUBqB3vXq6w==}
@@ -906,71 +905,69 @@ snapshots:
     dependencies:
       acorn: 8.18.0
 
-  '@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2))':
+  '@sveltejs/adapter-static@4.0.0(@sveltejs/kit@3.0.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4)))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2(@types/node@26.6.4)))':
     dependencies:
-      '@sveltejs/kit': 2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2)
+      '@sveltejs/kit': 3.0.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4)))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2(@types/node@26.6.4))
 
-  '@sveltejs/kit@2.70.3(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2)':
+  '@sveltejs/kit@3.0.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4)))(svelte@5.57.1)(typescript@6.0.3)(vite@8.3.2(@types/node@26.6.4))':
     dependencies:
+      '@rolldown/pluginutils': 1.0.1
       '@standard-schema/spec': 1.1.0
-      '@sveltejs/acorn-typescript': 1.0.13(acorn@8.18.0)
-      '@sveltejs/vite-plugin-svelte': 7.3.1(svelte@5.57.1)(vite@8.3.2)
-      '@types/cookie': 0.6.0
-      acorn: 8.18.0
-      cookie: 0.6.0
+      '@sveltejs/vite-plugin-svelte': 7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4))
+      cookie: 2.0.1
       devalue: 5.9.4
       esm-env: 1.2.2
-      kleur: 4.1.5
-      magic-string: 0.30.21
+      magic-string: 1.4.2
       mrmime: 2.0.1
-      set-cookie-parser: 3.1.2
       sirv: 3.0.2
       svelte: 5.57.1
-      vite: 8.3.2
+      vite: 8.3.2(@types/node@26.6.4)
     optionalDependencies:
       typescript: 6.0.3
 
   '@sveltejs/load-config@0.2.3': {}
 
-  '@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2)':
+  '@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.1)(vite@8.3.2(@types/node@26.6.4))':
     dependencies:
       deepmerge: 4.3.1
       magic-string: 1.4.2
       obug: 2.2.1
       svelte: 5.57.1
-      vite: 8.3.2
-      vitefu: 1.1.3(vite@8.3.2)
+      vite: 8.3.2(@types/node@26.6.4)
+      vitefu: 1.1.3(vite@8.3.2(@types/node@26.6.4))
 
-  '@tombi-toml/cli-darwin-arm64@1.5.4':
+  '@tombi-toml/cli-darwin-arm64@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-darwin-x64@1.5.4':
+  '@tombi-toml/cli-darwin-x64@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-linux-arm64-musl@1.5.4':
+  '@tombi-toml/cli-linux-arm64-musl@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-linux-arm64@1.5.4':
+  '@tombi-toml/cli-linux-arm64@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-linux-x64-musl@1.5.4':
+  '@tombi-toml/cli-linux-x64-musl@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-linux-x64@1.5.4':
+  '@tombi-toml/cli-linux-x64@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-sunos-x64@1.5.4':
+  '@tombi-toml/cli-sunos-x64@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-win32-arm64@1.5.4':
+  '@tombi-toml/cli-win32-arm64@1.7.2':
     optional: true
 
-  '@tombi-toml/cli-win32-x64@1.5.4':
+  '@tombi-toml/cli-win32-x64@1.7.2':
     optional: true
-
-  '@types/cookie@0.6.0': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/node@26.6.4':
+    dependencies:
+      undici-types: 8.9.0
 
   acorn@8.18.0: {}
 
@@ -984,7 +981,7 @@ snapshots:
 
   clsx@2.1.1: {}
 
-  cookie@0.6.0: {}
+  cookie@2.0.1: {}
 
   crelt@1.0.7: {}
 
@@ -1010,8 +1007,6 @@ snapshots:
   is-reference@3.0.3:
     dependencies:
       '@types/estree': 1.0.9
-
-  kleur@4.1.5: {}
 
   lightningcss-android-arm64@1.33.0:
     optional: true
@@ -1117,8 +1112,6 @@ snapshots:
     dependencies:
       mri: 1.2.0
 
-  set-cookie-parser@3.1.2: {}
-
   sirv@3.0.2:
     dependencies:
       '@polka/url': 1.0.0-next.29
@@ -1167,23 +1160,25 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
 
-  tombi@1.5.4:
+  tombi@1.7.2:
     optionalDependencies:
-      '@tombi-toml/cli-darwin-arm64': 1.5.4
-      '@tombi-toml/cli-darwin-x64': 1.5.4
-      '@tombi-toml/cli-linux-arm64': 1.5.4
-      '@tombi-toml/cli-linux-arm64-musl': 1.5.4
-      '@tombi-toml/cli-linux-x64': 1.5.4
-      '@tombi-toml/cli-linux-x64-musl': 1.5.4
-      '@tombi-toml/cli-sunos-x64': 1.5.4
-      '@tombi-toml/cli-win32-arm64': 1.5.4
-      '@tombi-toml/cli-win32-x64': 1.5.4
+      '@tombi-toml/cli-darwin-arm64': 1.7.2
+      '@tombi-toml/cli-darwin-x64': 1.7.2
+      '@tombi-toml/cli-linux-arm64': 1.7.2
+      '@tombi-toml/cli-linux-arm64-musl': 1.7.2
+      '@tombi-toml/cli-linux-x64': 1.7.2
+      '@tombi-toml/cli-linux-x64-musl': 1.7.2
+      '@tombi-toml/cli-sunos-x64': 1.7.2
+      '@tombi-toml/cli-win32-arm64': 1.7.2
+      '@tombi-toml/cli-win32-x64': 1.7.2
 
   totalist@3.0.1: {}
 
   typescript@6.0.3: {}
 
-  vite@8.3.2:
+  undici-types@8.9.0: {}
+
+  vite@8.3.2(@types/node@26.6.4):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -1191,11 +1186,12 @@ snapshots:
       rolldown: 1.2.12
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 26.6.4
       fsevents: 2.3.3
 
-  vitefu@1.1.3(vite@8.3.2):
+  vitefu@1.1.3(vite@8.3.2(@types/node@26.6.4)):
     optionalDependencies:
-      vite: 8.3.2
+      vite: 8.3.2(@types/node@26.6.4)
 
   w3c-keyname@2.2.8: {}
 

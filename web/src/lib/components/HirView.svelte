@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { HirNode } from "$lib/driver";
+    import type { HirNode } from "#lib/driver.js";
     import HirView from "./HirView.svelte";
 
     interface Props {

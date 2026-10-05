@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isToken, type SyntaxNode } from '$lib/driver';
+	import { isToken, type SyntaxNode } from '#lib/driver.js';
 	import TreeView from './TreeView.svelte';
 
 	interface Props {

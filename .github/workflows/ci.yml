@@ -187,6 +187,9 @@ jobs:
             - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
               with:
                   path: web/build
+                  # Since v4 the action leaves dotfiles out of the artifact unless asked,
+                  # and `.nojekyll` above is one.
+                  include-hidden-files: true
 
     deploy:
         name: deploy

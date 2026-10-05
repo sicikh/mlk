@@ -7,6 +7,11 @@ repository.workspace = true
 license.workspace = true
 publish.workspace = true
 
+# `quickcheck_macros::quickcheck` expands to code that names the `quickcheck` crate,
+# so the dependency is real even though no source file mentions it.
+[package.metadata.cargo-machete]
+ignored = ["quickcheck"]
+
 [dependencies]
 logos.workspace = true
 mlkc-parser-core.workspace = true

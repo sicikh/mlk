@@ -17,7 +17,7 @@ caseless = "0.2.2"
 mlkc-rowan = { workspace = true, optional = true }
 
 [dev-dependencies]
-divan = { package = "codspeed-divan-compat", version = "=5.0.1" }
+divan = { package = "codspeed-divan-compat", version = "=5.0.2" }
 
 [features]
 mlkc-rowan = ["dep:mlkc-rowan"]

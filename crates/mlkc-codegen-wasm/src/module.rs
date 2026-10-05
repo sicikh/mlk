@@ -794,7 +794,7 @@ pub fn assemble_module(
         let closure_ref = reference(fn_type + 1);
         let function = SubType {
             is_final: true,
-            supertype_idx: None,
+            supertype_idxs: Vec::new(),
             composite_type: CompositeType {
                 inner: CompositeInnerType::Func(FuncType::new(
                     std::iter::once(closure_ref)
@@ -808,7 +808,7 @@ pub fn assemble_module(
         };
         let closure = SubType {
             is_final: false,
-            supertype_idx: None,
+            supertype_idxs: Vec::new(),
             composite_type: CompositeType {
                 inner: CompositeInnerType::Struct(StructType {
                     fields: vec![FieldType {
@@ -846,7 +846,7 @@ pub fn assemble_module(
 
         types.ty().subtype(&SubType {
             is_final: true,
-            supertype_idx: Some(closure_types.closure),
+            supertype_idxs: vec![closure_types.closure],
             composite_type: CompositeType {
                 inner: CompositeInnerType::Struct(StructType {
                     fields: fields.into(),

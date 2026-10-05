@@ -11,7 +11,7 @@ expression: snapshot
     (type (;3;) (sub (struct (field (ref 2)))))
   )
   (type (;4;) (sub final 3 (struct (field (ref 2)) (field (ref i31)))))
-  (import "std::runtime" "print-int" (func $print-int (;0;) (type 0)))
+  (import "std::runtime" "print-int" (func $print-int (;0;) (type 0) (param (ref i31)) (result (ref i31))))
   (export "main" (func $main))
   (export "announce" (func $announce))
   (elem (;0;) declare func $main::<mlkc@lambda-0> $main::<mlkc@lambda-1> $announce::<mlkc@lambda-0>)

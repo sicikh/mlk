@@ -119,13 +119,13 @@ fn every_function_is_a_subprogram_over_its_body() {
         assert_eq!(subprogram.name, function.name);
         assert_eq!(
             subprogram.low_pc,
-            (body.start - contents) as u64,
+            body.start - contents,
             "`{}` to begin where its body does",
             function.name,
         );
         assert_eq!(
             subprogram.high_pc,
-            body.len() as u64,
+            body.end - body.start,
             "`{}` to reach the end of its body",
             function.name,
         );
@@ -258,7 +258,7 @@ fn the_segments_of_the_map_are_the_rows_of_the_line_program() {
     for (segment, row) in segments.iter().zip(&rows) {
         assert_eq!(
             segment.address,
-            (contents + row.address as usize) as i64,
+            (contents + row.address) as i64,
             "a segment to stand where its row does, counted in module bytes",
         );
         assert_eq!(sources[segment.file as usize], row.file);
@@ -305,7 +305,7 @@ fn custom_sections(bytes: &[u8]) -> BTreeMap<&str, &[u8]> {
 
 /// The code section of an emitted module: the offset of its contents --- the first byte DWARF
 /// counts addresses from --- and the range of every body inside it.
-fn bodies(bytes: &[u8]) -> (usize, Vec<Range<usize>>) {
+fn bodies(bytes: &[u8]) -> (u64, Vec<Range<u64>>) {
     let mut contents = 0;
     let mut bodies = Vec::new();
 
@@ -415,7 +415,7 @@ fn subprograms(bytes: &[u8]) -> Vec<Subprogram> {
         let unit = dwarf.unit(header).expect("a unit to parse");
         let mut entries = unit.entries();
 
-        while let Some((_, entry)) = entries.next_dfs().expect("the entries to parse") {
+        while let Some(entry) = entries.next_dfs().expect("the entries to parse") {
             if entry.tag() != DW_TAG_subprogram {
                 continue;
             }
@@ -446,15 +446,11 @@ fn attribute<'a>(
     entry: &DebuggingInformationEntry<Slice<'a>>,
     name: gimli::constants::DwAt,
 ) -> Option<AttributeValue<Slice<'a>>> {
-    let mut attributes = entry.attrs();
-
-    while let Some(attribute) = attributes.next().expect("the attributes to parse") {
-        if attribute.name() == name {
-            return Some(attribute.value());
-        }
-    }
-
-    None
+    entry
+        .attrs()
+        .iter()
+        .find(|attribute| attribute.name() == name)
+        .map(|attribute| attribute.value())
 }
 
 /// The number one attribute of an entry carries.

@@ -53,7 +53,7 @@ Read the one that matches the task before starting:
 | `just check-web`                      | Type-check the editor (svelte-check).                                                      |
 | `just verify-web`                     | `verify` plus the editor in a real browser. Needs `obscura` on the path.                   |
 | `just gen-all`                        | Regenerate every generated file; commit the result.                                        |
-| `just format`                         | `cargo +nightly fmt` and `tombi format`.                                                   |
+| `just format`                         | `cargo fmt` (nightly rustfmt) and `tombi format`.                                          |
 | `just dev-web`                        | The editor on a dev server.                                                                |
 | `cargo run -p mlkc-cli -- parse FILE` | Parse one file and print the trees.                                                        |
 | `cargo run -p mlkc-cli -- run BUILD`  | Run a build: a directory or an archive.                                                    |
@@ -122,13 +122,19 @@ Read the one that matches the task before starting:
 
 ## Environment
 
-- Rust stable, edition 2024.
+- Rust 1.99.0, edition 2024, pinned in `rust-toolchain.toml`.
   Node from `.nvmrc`, pnpm through corepack, `just`.
-- `just install-tools` installs the rest: cargo-insta,
+- The Nix flake provides the whole toolchain: `nix develop` gives the pinned Rust,
+  the nightly rustfmt the formatter needs, wasm-bindgen-cli
+  (the version nixpkgs builds, which `Cargo.toml` pins the crate to),
+  wasm-tools, wasmtime, cargo-insta, just, Node and pnpm through corepack, and obscura.
+  Inside the shell `just install-tools` installs only the pnpm dependencies.
+- Without Nix, `just install-tools` installs the rest: cargo-insta,
   wasm-bindgen-cli (its version is derived from `Cargo.lock` and must match the `wasm-bindgen` crate),
   wasm-tools, wasmtime, and the pnpm dependencies.
-- `obscura` is needed only by `just check-browser` and `just verify-web`.
-- There is no Nix flake yet; do not assume one. `just doctor` reports what is missing.
+- `obscura` is needed only by `just check-browser` and `just verify-web`;
+  the dev shell and CI both provide it.
+- `just doctor` reports what is missing.
 
 ## Delegation
 

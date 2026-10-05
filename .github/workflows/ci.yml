@@ -30,7 +30,7 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.0
               with:
                   components: clippy
             - uses: Swatinem/rust-cache@v2
@@ -49,9 +49,10 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@stable
-            # `just format` is `cargo +nightly fmt`, because the style the repository is written
-            # in needs a nightly rustfmt.
+            - uses: dtolnay/rust-toolchain@1.99.0
+            # `just format` formats Rust with the nightly rustfmt, because the style the
+            # repository is written in needs it. The dev shell pins the same nightly by date;
+            # CI takes the current one, and this job is what notices when it changes.
             - uses: dtolnay/rust-toolchain@nightly
               with:
                   components: rustfmt
@@ -88,7 +89,7 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.0
               with:
                   targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2
@@ -103,12 +104,12 @@ jobs:
               with:
                   tool: just,cargo-binstall
             - run: just install-tools
-            # Obscura is the browser the check drives the page in. It comes from a release until
-            # it comes from nix: the archive holds the browser and its worker, which is why it is
-            # unpacked into a directory on the path rather than into the workspace.
+            # Obscura is the browser the check drives the page in. The release is pinned by the
+            # digest published with it; the flake builds the same release for the dev shell.
             - name: obscura
               run: |
                   curl -fsSLo /tmp/obscura.tar.gz https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-x86_64-linux.tar.gz
+                  echo "1534d1e6ddaf3d080ec4091eb41d0a4d8cc042a48b607d3c410fc13b482a9eec  /tmp/obscura.tar.gz" | sha256sum -c -
                   mkdir -p "$HOME/.local/bin"
                   tar xzf /tmp/obscura.tar.gz -C "$HOME/.local/bin"
                   echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -132,7 +133,7 @@ jobs:
             id-token: write
         steps:
             - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.0
               with:
                   targets: wasm32-unknown-unknown
             - uses: Swatinem/rust-cache@v2

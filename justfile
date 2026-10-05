@@ -8,10 +8,17 @@ _default:
 # `Cargo.toml`, run `just install-tools`, and the tool follows it.
 wasm_bindgen := trim_start_matches(`cargo tree -p mlkc-wasm -i wasm-bindgen --depth 0 --format "{p}"`, "wasm-bindgen v")
 
-# Install the tools needed to develop
+# Install the tools needed to develop.
+# Inside the Nix dev shell the tools come from the shell, and this installs only the pnpm
+# dependencies; see `flake.nix`.
 install-tools:
     #!/usr/bin/env sh
     set -eu
+    if [ -n "${IN_NIX_SHELL:-}" ]; then
+        echo "the Nix dev shell provides the Rust tools; installing the pnpm dependencies"
+        pnpm install
+        exit 0
+    fi
     # `cargo binstall` is the one thing that cannot come from itself, so it is here first;
     # where it is already around — a CI image, a second run — it is not built again.
     command -v cargo-binstall >/dev/null || cargo install cargo-binstall
@@ -55,9 +62,11 @@ doctor:
         exit 1
     fi
 
-# Format Rust and TOML files
+# Format Rust and TOML files.
+# The Rust formatting needs the nightly rustfmt: `RUSTUP_TOOLCHAIN` selects it where rustup is
+# installed, and `RUSTFMT` does in the Nix dev shell.
 format:
-    cargo +nightly fmt --all --verbose
+    RUSTUP_TOOLCHAIN=nightly cargo fmt --all --verbose
     pnpm format
 
 # Run clippy on the whole codebase

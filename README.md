@@ -35,9 +35,17 @@ Try it in the browser at [MLK playground](https://sicikh.github.io/mlk/).
 
 ## Getting started
 
-Prerequisites:
+With [Nix](https://nixos.org/) and flakes enabled, the toolchain comes from `flake.nix`:
 
-- Rust stable (`rustup`), edition 2024.
+```sh
+nix develop   # rust 1.99.0, the nightly rustfmt, node, pnpm, wasm-bindgen-cli, obscura
+pnpm install  # once; pnpm comes from corepack
+just verify
+```
+
+Without Nix, install the prerequisites and the tools by hand:
+
+- Rust (`rustup`; the version is pinned in `rust-toolchain.toml`), edition 2024.
 - Node.js, the version in `.nvmrc`; pnpm through Corepack (`corepack enable`).
 - [`just`](https://github.com/casey/just).
 

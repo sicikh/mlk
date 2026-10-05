@@ -6,6 +6,7 @@ description: "Use when choosing or running checks and tests in the MLK repositor
 # Build and verify
 
 The `justfile` is the source of truth for commands (`just --list` shows every recipe).
+`nix develop` provides every tool the recipes need; without it, `just install-tools` does.
 This skill says which recipe a change needs, and how to read the result.
 
 ## The loop

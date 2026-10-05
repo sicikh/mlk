@@ -124,7 +124,7 @@
             overlays = [ rust-overlay.overlays.default ];
           };
 
-          toolchain = builtins.fromTOML (builtins.readFile ./rust-toolchain.toml);
+          toolchain = fromTOML (builtins.readFile ./rust-toolchain.toml);
           channel = toolchain.toolchain.channel;
 
           # The toolchain the repository builds with; the components and targets come

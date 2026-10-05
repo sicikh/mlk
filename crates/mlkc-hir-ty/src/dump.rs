@@ -78,7 +78,7 @@ pub fn ty(ty: &Ty) -> String {
 mod tests {
     use mlkc_hir_def::{BodyBuilder, Expr, Literal, LocalScope, Pat};
 
-    use super::*;
+    use super::{CheckedBody, Ty, checked_body};
 
     #[test]
     fn a_checked_body_reads_in_the_order_of_the_positions_of_the_body() {

@@ -98,7 +98,7 @@ const COMMENT: &str = "//";
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Module, modules};
 
     #[test]
     fn a_fixture_is_the_modules_it_writes() {

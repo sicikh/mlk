@@ -220,7 +220,7 @@ fn intersect(a: usize, b: usize, idom: &[Option<usize>], number: &[usize]) -> us
 mod tests {
     use mlkc_span::Span;
 
-    use super::*;
+    use super::{Cfg, Terminator};
     use crate::{Block, BlockTarget, BodyBuilder, Ty, ValueData};
 
     /// A body of four blocks: an entry that branches to two of them, and a fourth that nothing

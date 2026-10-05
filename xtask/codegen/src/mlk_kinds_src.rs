@@ -329,7 +329,10 @@ impl Field {
 mod tests {
     use std::collections::HashMap;
 
-    use super::*;
+    use super::{
+        AstEnumSrc, AstListSeparatorConfiguration, AstListSrc, AstNodeSrc, AstSrc, Field,
+        MLK_KINDS_SRC, TokenKind,
+    };
     use crate::language_kind::LanguageKind;
 
     fn token_field(name: &str) -> Field {

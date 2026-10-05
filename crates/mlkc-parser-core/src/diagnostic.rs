@@ -576,7 +576,10 @@ pub fn merge_diagnostics(
 mod tests {
     use mlkc_syntax::SyntaxKind::{self, *};
 
-    use super::*;
+    use super::{
+        AdviceKind, Category, FileId, Level, ParseDiagnostic, Parser, Span, TextRange, TextSize,
+        ToDiagnostic, TokenSource, expected_token, merge_diagnostics,
+    };
     use crate::{ParserContext, token_source::Trivia};
 
     const FILE: FileId = FileId::from_raw(0);

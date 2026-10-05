@@ -1167,7 +1167,11 @@ mod tests {
     use mlkc_intern::Interned;
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{
+        BodyEntityLoc, EntityData, EntityLoc, Expr, Literal, ModuleId, ModuleLocator, ModuleScope,
+        Node, NodeKind, Part, PathAnchor, PathData, PerNs, ProjectDefMap, Signature, Target,
+        TypePlace, TypeRef, Visibility, entity_data_lines, fmt::Write as _,
+    };
     use crate::{
         Name,
         body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData, Pat},

@@ -429,7 +429,9 @@ fn normalize_path(path: &Utf8Path) -> Utf8PathBuf {
 mod tests {
     use std::collections::HashMap;
 
-    use super::*;
+    use super::{
+        AbsPath, AbsPathBuf, OsStr, Path, PathBuf, RelPath, RelPathBuf, Utf8Path, Utf8PathBuf,
+    };
 
     /// An absolute path for a test, which must be absolute for `assert` not to panic.
     fn abs(path: &str) -> &AbsPath {

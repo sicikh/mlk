@@ -1017,9 +1017,9 @@ version = "0.1.0"
 name = "mlkc-hir-def"
 version = "0.1.0"
 dependencies = [
- "indexmap",
  "mlkc-intern",
  "mlkc-la-arena",
+ "mlkc-stdx",
  "mlkc-vfs",
  "rustc-hash",
 ]
@@ -1028,8 +1028,8 @@ dependencies = [
 name = "mlkc-hir-ty"
 version = "0.1.0"
 dependencies = [
- "indexmap",
  "mlkc-hir-def",
+ "mlkc-stdx",
  "mlkc-vfs",
  "rustc-hash",
 ]
@@ -1206,6 +1206,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlkc-stdx"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "rustc-hash",
+]
+
+[[package]]
 name = "mlkc-string-case"
 version = "0.1.0"
 dependencies = [
@@ -1252,7 +1260,6 @@ dependencies = [
 name = "mlkc-typeck"
 version = "0.1.0"
 dependencies = [
- "indexmap",
  "mlkc-diagnostics",
  "mlkc-hir-def",
  "mlkc-hir-ty",
@@ -1261,6 +1268,7 @@ dependencies = [
  "mlkc-resolve",
  "mlkc-span",
  "mlkc-stdlib",
+ "mlkc-stdx",
  "mlkc-syntax",
  "mlkc-vfs",
  "rustc-hash",
@@ -1278,6 +1286,7 @@ dependencies = [
  "fst",
  "indexmap",
  "mlkc-paths",
+ "mlkc-stdx",
  "nohash-hasher",
  "rustc-hash",
  "tracing",

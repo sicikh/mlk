@@ -113,7 +113,7 @@ impl ModuleIndex {
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{ModuleId, ModuleIndex, Name, PathRoot, PlainPath, ProjectId};
     use crate::path::PlainPathId;
 
     fn module(index: u32) -> ModuleId {

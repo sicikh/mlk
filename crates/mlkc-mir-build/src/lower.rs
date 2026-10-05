@@ -978,7 +978,7 @@ mod tests {
     use mlkc_typeck::{Builtins, CheckDeps, check_body, resolve_module_types};
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::*;
+    use super::{Bodies, Callee, FunctionLoc, LiftedId, MirBody, Rvalue, StmtKind, lower_body};
     use crate::construct_ssa;
 
     /// The classes of the language, as a module of a test declares them.

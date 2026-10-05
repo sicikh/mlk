@@ -12,7 +12,10 @@ use mlkc_text_size::TextLen;
 use mlkc_vfs::{Change, FileId, FileState, VfsPath};
 use wasmparser::{Parser, Payload};
 
-use super::*;
+use super::{
+    BodyEntityLoc, DebugInfo, Driver, LinkPlan, Lowered, ModuleId, OptLevel, Options, Parse, Pass,
+    Stats, StdFile, Tally, Unit,
+};
 
 /// A module of the language, written the way a person writes one.
 const MODULE: &str = "\

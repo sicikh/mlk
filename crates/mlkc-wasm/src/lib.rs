@@ -2194,7 +2194,10 @@ fn to_js(value: &impl Serialize) -> Result<JsValue, JsValue> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        Form, ItemLoc, MirBody, MirFunctionLoc, ModuleId, ProjectId, Span, Stats, StatsRow,
+        Terminator, Ty, VfsPath, WasmDriver, custom_sections, is_debug_section, path_of,
+    };
 
     /// The wasm module is compiled for the host in tests,
     /// so everything but the conversions is exercised where it is cheap to inspect.

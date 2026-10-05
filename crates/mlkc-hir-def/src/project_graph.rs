@@ -3,8 +3,8 @@
 
 use std::{cmp::Ordering, collections::BTreeMap, fmt};
 
-use indexmap::IndexMap;
 use mlkc_intern::Interned;
+use mlkc_stdx::FxIndexMap;
 
 use crate::{id::ModuleId, name::Name, path::PlainPathId, prelude::Prelude};
 
@@ -123,7 +123,7 @@ pub enum ModuleLocator {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectData {
     /// The dependencies, by the name each of them is declared under.
-    pub dependencies: IndexMap<Name, ProjectId>,
+    pub dependencies: FxIndexMap<Name, ProjectId>,
     /// The prelude of the project: what every module of it is given without writing it
     /// ([ADR-0011]).
     ///
@@ -220,7 +220,7 @@ impl ProjectGraph {
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{ModuleId, Name, Prelude, ProjectData, ProjectGraph, ProjectId};
     use crate::path::PlainPath;
 
     fn module(index: u32) -> ModuleId {

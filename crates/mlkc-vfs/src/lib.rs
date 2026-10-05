@@ -45,11 +45,11 @@ pub mod loader;
 mod path_interner;
 mod vfs_path;
 
-use std::{fmt, hash::BuildHasherDefault, mem, sync::Arc};
+use std::{fmt, mem, sync::Arc};
 
-use indexmap::{IndexMap, map::Entry};
+use indexmap::map::Entry;
 pub use mlkc_paths::{AbsPath, AbsPathBuf, RelPath, RelPathBuf};
-use rustc_hash::FxHasher;
+use mlkc_stdx::FxIndexMap;
 use tracing::{Level, span};
 
 use crate::path_interner::PathInterner;
@@ -281,7 +281,7 @@ impl File {
 pub struct Vfs {
     interner: PathInterner,
     files: Vec<File>,
-    changes: IndexMap<FileId, ChangedFile, BuildHasherDefault<FxHasher>>,
+    changes: FxIndexMap<FileId, ChangedFile>,
 }
 
 impl Vfs {
@@ -416,7 +416,7 @@ impl Vfs {
     /// A change is a net effect, not an event:
     /// at most one change per file is reported,
     /// and its [`version`](ChangedFile::version) is the version of the file at this point.
-    pub fn take_changes(&mut self) -> IndexMap<FileId, ChangedFile, BuildHasherDefault<FxHasher>> {
+    pub fn take_changes(&mut self) -> FxIndexMap<FileId, ChangedFile> {
         mem::take(&mut self.changes)
     }
 
@@ -591,7 +591,7 @@ impl fmt::Debug for Vfs {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Change, ChangeKind, FileExcluded, FileState, Vfs, VfsPath};
 
     fn path(name: &str) -> VfsPath {
         VfsPath::new_virtual_path(format!("/{name}"))

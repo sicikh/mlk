@@ -78,7 +78,7 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    use super::*;
+    use super::{Mode, UpdateResult, to_capitalized, update};
 
     struct TestDir(PathBuf);
 

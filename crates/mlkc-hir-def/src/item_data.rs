@@ -313,7 +313,10 @@ impl EntityData {
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{
+        Attributes, EntityData, FunctionData, ImplData, LocalScope, ModuleAttributes, Name,
+        ParamData, Signature, Visibility,
+    };
     use crate::{
         id::{ClassLoc, EntityLoc, ItemLoc, ItemLocData, ModuleId},
         path::{PathAnchor, PathData},

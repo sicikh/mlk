@@ -146,7 +146,7 @@ mod tests {
     };
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::Ty;
 
     fn class(name: &str) -> EntityLoc<ClassLoc> {
         let mut builder = ItemTreeBuilder::new(

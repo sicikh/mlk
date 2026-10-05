@@ -5,7 +5,12 @@
 //! stands, so a record added to `docs/adr` without a line in the index, a status that drifts
 //! from the record it belongs to, or a `*.snap.new` left behind fails `just test`.
 
-use std::{collections::BTreeMap, fs, path::PathBuf, process::Command};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use xtask_glue::project_root;
 
@@ -92,6 +97,69 @@ fn word(status: &str) -> String {
         .chars()
         .take_while(|it| it.is_ascii_alphabetic())
         .collect()
+}
+
+/// The paths of the `.rs` files under `dir`, with the directories of the tree walked.
+fn rust_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|_| panic!("{} is not readable", dir.display())) {
+        let path = entry.expect("the tree is readable").path();
+
+        if path.is_dir() {
+            if path.file_name().and_then(|it| it.to_str()) != Some("target") {
+                rust_files(&path, files);
+            }
+        } else if path.extension().and_then(|it| it.to_str()) == Some("rs") {
+            files.push(path);
+        }
+    }
+}
+
+/// The `use` statements of a source, as `(line, text)`: each begins at a line whose first word
+/// is `use` --- a visibility in front of it is dropped, and so is the `///` or `//!` of a
+/// doctest example --- and ends at its semicolon.
+fn use_statements(source: &str) -> Vec<(usize, String)> {
+    let mut statements = Vec::new();
+    let mut current: Option<(usize, String)> = None;
+
+    for (number, line) in source.lines().enumerate() {
+        let trimmed = line.trim_start();
+        let trimmed = trimmed
+            .strip_prefix("///")
+            .or_else(|| trimmed.strip_prefix("//!"))
+            .map_or(trimmed, str::trim_start);
+
+        if current.is_none() {
+            let import = trimmed
+                .strip_prefix("pub ")
+                .or_else(|| trimmed.strip_prefix("pub(crate) "))
+                .unwrap_or(trimmed);
+
+            if import.starts_with("use ") {
+                current = Some((number + 1, String::new()));
+            }
+        }
+
+        let mut done = false;
+
+        if let Some((_, statement)) = current.as_mut() {
+            match trimmed.find(';') {
+                Some(end) => {
+                    statement.push_str(&trimmed[..end]);
+                    done = true;
+                },
+                None => {
+                    statement.push_str(trimmed);
+                    statement.push(' ');
+                },
+            }
+        }
+
+        if done {
+            statements.push(current.take().expect("a statement is being built"));
+        }
+    }
+
+    statements
 }
 
 /// The index names every record, and every link it makes to a record is one that is there.
@@ -214,5 +282,87 @@ fn no_snapshot_is_left_half_accepted() {
     assert!(
         strays.trim().is_empty(),
         "a snapshot was left half-accepted:\n{strays}",
+    );
+}
+
+/// The identifiers a glob of `statement` whose `*` stands at `star` imports through:
+/// the path before the `::` of `...::*`, or the path the enclosing group was opened on
+/// for a bare `*` in a `{...}`.
+fn glob_path(statement: &str, star: usize) -> Option<String> {
+    let before = statement[..star].trim_end();
+
+    if let Some(path) = before.strip_suffix("::").map(str::trim_end) {
+        return last_word(path);
+    }
+
+    if !before.ends_with('{') && !before.ends_with(',') {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut open = None;
+
+    for (index, character) in statement[..star].char_indices().rev() {
+        match character {
+            '}' => depth += 1,
+            '{' if depth == 0 => {
+                open = Some(index);
+                break;
+            },
+            '{' => depth -= 1,
+            _ => (),
+        }
+    }
+
+    let path = statement[..open?].trim_end();
+    last_word(path.strip_suffix("::").map_or(path, str::trim_end))
+}
+
+/// The identifier a path-like text ends with.
+fn last_word(text: &str) -> Option<String> {
+    let word: String = text
+        .chars()
+        .rev()
+        .take_while(|it| it.is_ascii_alphanumeric() || *it == '_')
+        .collect();
+    let word: String = word.chars().rev().collect();
+
+    if word.is_empty() { None } else { Some(word) }
+}
+
+/// A module reaches into the one it is written in by naming what it reads: a glob over `super`
+/// or `crate` hides the dependency, and clippy does not lint the test modules of a build.
+/// Every source of the workspace --- the tests included --- says what it imports.
+#[test]
+fn no_source_globs_the_module_it_is_written_in() {
+    let root = project_root();
+    let mut files = Vec::new();
+
+    for tree in ["crates", "xtask"] {
+        rust_files(&root.join(tree), &mut files);
+    }
+
+    let mut found = Vec::new();
+
+    for path in files {
+        let source = fs::read_to_string(&path).expect("a source file is readable");
+
+        for (line, statement) in use_statements(&source) {
+            let ancestor = statement
+                .match_indices('*')
+                .filter_map(|(star, _)| glob_path(&statement, star))
+                .any(|word| word == "super" || word == "crate");
+
+            if ancestor {
+                let name = path.strip_prefix(&root).unwrap_or(&path);
+                found.push(format!("{}:{line}: {statement}", name.display()));
+            }
+        }
+    }
+
+    assert!(
+        found.is_empty(),
+        "a module imports a glob over the one it is written in:\n{}",
+        found.join("\n"),
     );
 }

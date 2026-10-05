@@ -122,7 +122,9 @@ Read the one that matches the task before starting:
 ### Lints
 
 - The workspace lint set is in the root `Cargo.toml`; `just lint` denies whatever it warns about.
-- No wildcard imports outside a module named `prelude`;
+- No wildcard imports outside a module named `prelude`, and no glob over `super` or `crate`
+  anywhere --- the test modules included, which the repository test of `xtask/glue` checks
+  because clippy does not lint them;
   an enum's variants are named rather than glob-imported.
 - Every `unsafe` block and `unsafe impl` carries a `// SAFETY:` comment saying why it is sound;
   the generated code and the vendored `mlkc-rowan` say where the lint is expected away.

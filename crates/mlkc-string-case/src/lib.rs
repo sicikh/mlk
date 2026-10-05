@@ -933,7 +933,10 @@ mod tests {
     use core::cmp::Ordering;
     use std::ffi::OsStr;
 
-    use super::*;
+    use super::{
+        AsciiCollator, Case, Cases, CldrAsciiCollator, Cow, LEADING_BIT_INDEX_TO_CASE,
+        StrLikeExtension, StrOnlyExtension,
+    };
 
     #[test]
     fn test_case_identify() {

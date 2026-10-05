@@ -155,7 +155,7 @@ impl Default for Prelude {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Name, PlainPath, Prelude, PreludeImport};
 
     #[test]
     fn an_import_brings_a_path_in_under_its_last_segment() {

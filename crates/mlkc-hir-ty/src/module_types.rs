@@ -1,7 +1,7 @@
 //! The type surface of a module: the types of its entities, as the modules that read it see them.
 
-use indexmap::IndexMap;
 use mlkc_hir_def::{EntityLoc, ItemLocLike};
+use mlkc_stdx::FxIndexMap;
 
 use crate::ty::Ty;
 
@@ -17,7 +17,7 @@ use crate::ty::Ty;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ModuleTypes {
     /// The type of every entity that has one, in the order the module declares them.
-    types: IndexMap<EntityLoc, Ty>,
+    types: FxIndexMap<EntityLoc, Ty>,
 }
 
 impl ModuleTypes {
@@ -82,7 +82,7 @@ mod tests {
     };
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{ModuleTypes, Ty};
 
     /// A module that declares a class `Int` and a function `double`.
     fn module() -> ItemTree {

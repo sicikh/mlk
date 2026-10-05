@@ -17,7 +17,6 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use indexmap::IndexMap;
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
     ItemTree, LambdaParam, Literal, LocalDefId, LocalFunctionId, ModuleId, Name, Namespace, Pat,
@@ -25,7 +24,8 @@ use mlkc_hir_def::{
 };
 use mlkc_hir_ty::{Builtins, CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
 use mlkc_resolve::{Closure, Resolution};
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use mlkc_stdx::FxIndexMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
     diagnostic::{TypeDiag, TypeError, TypePlace},
@@ -125,9 +125,9 @@ pub fn check_body(
         resolver: PathResolver::new(module, resolution, deps),
         deps,
         bindings: FxHashMap::default(),
-        local_types: IndexMap::default(),
-        expr_types: IndexMap::default(),
-        pat_types: IndexMap::default(),
+        local_types: FxIndexMap::default(),
+        expr_types: FxIndexMap::default(),
+        pat_types: FxIndexMap::default(),
         diagnostics: Vec::new(),
     };
     checker.run();
@@ -180,11 +180,11 @@ struct Checker<'a> {
     /// What the patterns of the body are bound to, generalized where a `let` generalized them.
     bindings: FxHashMap<PatId, Scheme>,
     /// The type of every function declared inside the body, in the order they are checked.
-    local_types: IndexMap<LocalDefId, InferTy, FxBuildHasher>,
+    local_types: FxIndexMap<LocalDefId, InferTy>,
     /// The type of every expression checked so far.
-    expr_types: IndexMap<ExprId, InferTy, FxBuildHasher>,
+    expr_types: FxIndexMap<ExprId, InferTy>,
     /// The type of every pattern checked so far.
-    pat_types: IndexMap<PatId, InferTy, FxBuildHasher>,
+    pat_types: FxIndexMap<PatId, InferTy>,
     /// What the check found, in the order of the body.
     diagnostics: Vec<TypeDiag>,
 }
@@ -1005,7 +1005,7 @@ mod tests {
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::*;
+    use super::{Builtins, CheckDeps, Expr, TypeError, check_body};
     use crate::signatures::resolve_module_types;
 
     /// The classes of the language, as a module of a test declares them.

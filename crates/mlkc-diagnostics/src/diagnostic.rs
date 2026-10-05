@@ -161,7 +161,7 @@ pub trait DiagKind {
 mod tests {
     use mlkc_span::{FileId, Span, TextRange, TextSize};
 
-    use super::*;
+    use super::{Category, DiagKind, Diagnostic, Label, Level};
 
     /// A diagnostic kind a test controls, where the real ones come from a pass.
     struct TestKind {

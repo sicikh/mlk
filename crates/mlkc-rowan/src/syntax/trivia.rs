@@ -608,11 +608,10 @@ impl<L: Language> SyntaxTrivia<L> {
     /// use std::iter::Iterator;
     ///
     /// use mlkc_rowan::{
+    ///     TriviaPiece,
     ///     raw_language::{RawLanguage, RawLanguageKind, RawSyntaxTreeBuilder},
-    ///     *,
     /// };
     ///
-    /// use crate::*;
     /// let mut node = RawSyntaxTreeBuilder::wrap_with_node(RawLanguageKind::ROOT, |builder| {
     ///     builder.token_with_trivia(
     ///         RawLanguageKind::LET_TOKEN,

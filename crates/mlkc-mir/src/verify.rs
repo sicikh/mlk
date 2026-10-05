@@ -815,7 +815,7 @@ mod tests {
     use mlkc_hir_ty::Ty;
     use mlkc_span::Span;
 
-    use super::*;
+    use super::{Body, Invalid, LocalId, Operand, Place, Rvalue, StmtKind, Terminator, ValueId};
     use crate::{
         Block, BlockTarget, BodyBuilder, Const, FunctionLoc, LocalData, PrimOp, Stmt, ValueData,
         test_support,

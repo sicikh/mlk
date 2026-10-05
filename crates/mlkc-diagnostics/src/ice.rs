@@ -130,7 +130,7 @@ pub fn ice_impl(message: String, file: &'static str, line: u32, column: u32) -> 
 mod tests {
     use std::error::Error;
 
-    use super::*;
+    use super::Ice;
 
     #[test]
     fn new_keeps_the_message_and_the_place_it_was_given() {

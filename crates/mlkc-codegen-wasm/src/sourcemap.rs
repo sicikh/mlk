@@ -244,7 +244,7 @@ fn leb(mut value: u32) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{base64, leb, string, vlq};
 
     #[test]
     fn a_number_is_a_base64_vlq_delta() {

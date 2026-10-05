@@ -511,7 +511,10 @@ fn handle_tokens_in_unions(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        AstEnumSrc, AstNodeSrc, AstSrc, Field, Grammar, LanguageKind, TokenKind, check_unions,
+        load_ast, make_ast,
+    };
 
     fn ast_src(src: &str) -> AstSrc {
         make_ast(

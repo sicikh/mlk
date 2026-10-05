@@ -24,7 +24,7 @@ pub(crate) fn has_live() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{GreenElement, GreenNode, GreenToken};
     use crate::green::trivia::GreenTrivia;
 
     #[test]

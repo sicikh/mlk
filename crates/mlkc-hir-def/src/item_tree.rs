@@ -477,7 +477,11 @@ for_each_item_kind!(define_entity_accessors);
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{
+        BodyLoc, ClassData, EntityData, EntityLoc, FunctionData, ImplData, ItemKind, ItemLoc,
+        ItemLocLike, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity, ModuleFunctionId,
+        ModuleId, Name, PreludeImport, UseData,
+    };
     use crate::{
         def_map::{LocalEntry, LocalTarget, Namespace},
         id::{FunctionLoc, UseLoc, WrongKind},

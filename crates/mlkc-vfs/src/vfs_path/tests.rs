@@ -1,4 +1,4 @@
-use super::*;
+use super::VirtualPath;
 
 #[test]
 fn virtual_path_extensions() {

@@ -277,7 +277,10 @@ pub type PathId = Idx<PathData>;
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{
+        EntityLoc, LocalScope, Name, PathAnchor, PathData, PathRoot, PathSegmentData, PlainPath,
+        ProjectId,
+    };
     use crate::{
         def_map::{LocalTarget, Namespace},
         id::{FunctionLoc, ItemLoc, ItemLocData, ModuleId},

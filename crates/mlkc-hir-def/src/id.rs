@@ -372,7 +372,7 @@ impl From<LocalConstId> for LocalDefId {
 mod tests {
     use std::collections::HashMap;
 
-    use super::*;
+    use super::{BodyLoc, ClassLoc, ConstLoc, FunctionLoc, ItemKind, ItemLoc, ItemLocData, Name};
 
     fn function(name: &str, disambiguator: u32) -> FunctionLoc {
         FunctionLoc(ItemLocData {

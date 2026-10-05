@@ -84,7 +84,7 @@ impl LanguageKind {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{ALL_LANGUAGE_KIND, LanguageKind};
 
     #[test]
     fn language_kind_parses_its_name() {

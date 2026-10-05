@@ -320,7 +320,7 @@ impl<'a, IDX, V> OccupiedEntry<'a, IDX, V> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{ArenaIndex, ArenaMap, ArenaToken, Entry, RawIdx};
     use crate::{Arena, Idx};
 
     fn ids(count: usize) -> Vec<Idx<()>> {

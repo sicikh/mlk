@@ -198,7 +198,7 @@ impl Manifest {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Manifest;
 
     #[test]
     fn a_canonical_name_becomes_a_path_under_a_directory() {

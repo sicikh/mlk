@@ -113,7 +113,7 @@ impl fmt::Display for Name {
 mod tests {
     use std::collections::hash_map::DefaultHasher;
 
-    use super::*;
+    use super::{Hash, Hasher, Name};
 
     fn hash(name: &Name) -> u64 {
         let mut state = DefaultHasher::new();

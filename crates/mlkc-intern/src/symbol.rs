@@ -299,7 +299,7 @@ impl fmt::Display for Symbol {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{MAP, Symbol};
 
     #[test]
     fn smoke_test() {

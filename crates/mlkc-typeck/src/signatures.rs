@@ -193,7 +193,7 @@ mod tests {
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::*;
+    use super::{CheckDeps, TypeError, resolve_module_types};
 
     /// The classes of the language, as a module of a test declares them.
     const CLASSES: &str = "#[builtin]\ntype Int\n\n#[builtin]\ntype Unit\n\n#[builtin]\ntype String\n\n#[builtin]\ntype Bool\n";

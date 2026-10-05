@@ -685,7 +685,7 @@ mod tests {
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::*;
+    use super::{Namespace, PathAnchor, PathData, ResolveError, Target, Walk};
     use crate::{Closure, Resolution};
 
     /// The module the tests of the walk are written in.

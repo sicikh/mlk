@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use indexmap::IndexMap;
+use mlkc_stdx::FxIndexMap;
 
 use crate::{
     id::{EntityLoc, ItemKind, ItemLocLike, ModuleId, UseLoc},
@@ -151,7 +151,7 @@ impl LocalEntry {
 /// [ADR-0004]: ../../docs/adr/0004-module-system.md
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalScope {
-    entries: IndexMap<Name, LocalEntry>,
+    entries: FxIndexMap<Name, LocalEntry>,
     /// The projects the module may name, which is what a name at the root of a path is read
     /// against when it is no name of the module ([ADR-0016]).
     ///
@@ -327,7 +327,7 @@ impl PerNs {
 /// What the names of one module denote once every module has been read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ModuleScope {
-    entries: IndexMap<Name, PerNs>,
+    entries: FxIndexMap<Name, PerNs>,
 }
 
 impl ModuleScope {
@@ -407,7 +407,10 @@ impl ProjectDefMap {
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{
+        Arc, EntityLoc, ItemKind, LocalScope, LocalTarget, ModuleId, ModuleLocator, ModuleScope,
+        Name, Namespace, PathAnchor, PerNs, ProjectDefMap, ProjectId, UseLoc, Visibility,
+    };
     use crate::{
         id::ItemLoc,
         path::{PlainPath, PlainPathId},

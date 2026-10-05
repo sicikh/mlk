@@ -659,7 +659,10 @@ impl BodyBuilder {
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{
+        BinaryOp, Body, BodyBuilder, Expr, ExprId, Interned, LambdaParam, Literal, LocalDefId,
+        LocalFunctionData, LocalScope, Name, Pat, PatId, PathData, Signature,
+    };
     use crate::{
         id::{EntityLoc, FunctionLoc, ItemLoc, ItemLocData, ModuleId},
         path::PathAnchor,

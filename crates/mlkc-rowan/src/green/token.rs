@@ -203,7 +203,7 @@ impl ops::Deref for GreenToken {
 mod tests {
     use quickcheck_macros::*;
 
-    use super::*;
+    use super::{GreenToken, GreenTokenHead, GreenTrivia, RawSyntaxKind, TextSize};
 
     #[test]
     fn green_token_text_and_len() {

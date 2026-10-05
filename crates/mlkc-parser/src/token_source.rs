@@ -198,7 +198,7 @@ mod tests {
     use mlkc_parser_core::token_source::NthToken;
     use mlkc_syntax::SyntaxKind::{EQ, FUN_KW, IDENT, LET_KW, UNICODE_BOM};
 
-    use super::*;
+    use super::{EOF, TextRange, TextSize, TokenSource, TokenSourceTrait, TriviaPieceKind};
 
     /// The trivia the source collected, as `(kind, trailing)` pairs.
     fn trivia(source: &TokenSource<'_>) -> Vec<(TriviaPieceKind, bool)> {

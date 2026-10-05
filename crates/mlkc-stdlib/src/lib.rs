@@ -106,7 +106,7 @@ pub fn path(module: &Module) -> VfsPath {
 mod tests {
     use std::{fs, path::Path};
 
-    use super::*;
+    use super::{PROJECT, modules, path, prelude};
 
     /// The modules of the library are the files of it: a file a person adds to `library/std` is
     /// a module of the library, and a module that names a file nothing writes is not one.

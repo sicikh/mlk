@@ -1,4 +1,4 @@
-use super::*;
+use super::{FileSetConfig, Vfs, VfsPath};
 
 #[test]
 fn path_prefix() {

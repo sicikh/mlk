@@ -749,6 +749,8 @@ fn remap_target(target: BlockTarget, map: &impl Fn(ValueId) -> ValueId) -> Block
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use mlkc_hir_ty::Ty;
     use mlkc_mir::{
         Block, BlockTarget, BodyBuilder, Const, LocalData, Operand, Place, PrimOp, Rvalue, Stmt,
@@ -756,7 +758,7 @@ mod tests {
     };
     use mlkc_span::Span;
 
-    use super::*;
+    use super::{BlockId, Bodies, Body, LocalId, ValueId, construct_ssa};
 
     /// A builder of the body of a test function.
     fn builder() -> BodyBuilder {

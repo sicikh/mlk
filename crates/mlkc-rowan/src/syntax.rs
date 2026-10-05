@@ -127,7 +127,7 @@ impl<L: Language> IntoIterator for SyntaxList<L> {
 
 #[cfg(test)]
 mod tests {
-    use mlkc_text_size::TextRange;
+    use mlkc_text_size::{TextRange, TextSize};
 
     use crate::{
         Direction,
@@ -479,7 +479,6 @@ mod tests {
 
     #[test]
     pub fn syntax_trivia_pieces() {
-        use crate::*;
         let node = RawSyntaxTreeBuilder::wrap_with_node(RawLanguageKind::ROOT, |builder| {
             builder.token_with_trivia(
                 RawLanguageKind::LET_TOKEN,

@@ -687,7 +687,10 @@ impl BodyBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        Block, BodyBuilder, FunctionLoc, LocalData, Name, Operand, Place, PrimOp, Rvalue, Span,
+        Stmt, StmtKind, Terminator, Ty, ValueData,
+    };
 
     #[test]
     fn a_body_reads_back_what_the_builder_allocated() {

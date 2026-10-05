@@ -106,6 +106,7 @@ so they are also the names to look for when something is slow.
 | [`mlkc-text-edit`](../../crates/mlkc-text-edit)     | The representation of a `TextEdit`.                                |
 | [`mlkc-intern`](../../crates/mlkc-intern)           | Global `Arc`-based interning of names.                             |
 | [`mlkc-la-arena`](../../crates/mlkc-la-arena)       | An index arena with option-optimized indices.                      |
+| [`mlkc-stdx`](../../crates/mlkc-stdx)               | The ordered map the crates share: `FxIndexMap`.                    |
 | [`mlkc-string-case`](../../crates/mlkc-string-case) | String case detection and conversion, used by codegen.             |
 | [`mlkc-ungrammar`](../../crates/mlkc-ungrammar)     | The fork of the ungrammar DSL the code generator reads.            |
 

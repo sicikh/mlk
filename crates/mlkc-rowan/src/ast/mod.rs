@@ -1310,9 +1310,9 @@ mod tests {
     #[test]
     fn ok_typed_parent_navigation() {
         use crate::{
+            AstNode, Language, RawSyntaxKind, SyntaxKindSet, SyntaxNode,
             ast::SyntaxNodeCast,
             raw_language::{RawLanguage, RawLanguageKind, RawSyntaxTreeBuilder},
-            *,
         };
 
         // This test creates the following tree

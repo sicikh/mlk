@@ -544,7 +544,7 @@ impl BodyBuilder {
 mod tests {
     use mlkc_span::Span;
 
-    use super::*;
+    use super::{Block, BodyBuilder, Inst, Op, RefTy, Terminator, Ty, ValueData};
 
     #[test]
     fn a_body_reads_back_what_the_builder_allocated() {

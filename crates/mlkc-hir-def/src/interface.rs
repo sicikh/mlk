@@ -7,7 +7,7 @@
 //! [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 
-use indexmap::IndexMap;
+use mlkc_stdx::FxIndexMap;
 
 use crate::{
     def_map::Namespace,
@@ -33,7 +33,7 @@ pub struct Interface {
     /// The path the module is called by in its project.
     path: PlainPathId,
     /// The names the module exports, in the order it declares them.
-    exports: IndexMap<Name, Export>,
+    exports: FxIndexMap<Name, Export>,
 }
 
 /// What one exported name of a module denotes to the modules that read it.
@@ -77,7 +77,7 @@ impl Interface {
     /// the module and not of the modules that read it, and an `impl` has no name of its own.
     /// The first declaration of a name wins, as it does in the scope of the module.
     pub fn of(tree: &ItemTree) -> Self {
-        let mut exports: IndexMap<Name, Export> = IndexMap::new();
+        let mut exports: FxIndexMap<Name, Export> = FxIndexMap::default();
 
         for (item, id) in tree.entities() {
             let Some(name) = item.name() else {
@@ -153,7 +153,7 @@ impl Interface {
 mod tests {
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{EntityData, Interface, ItemLocLike, Name, Visibility};
     use crate::{
         id::{ItemKind, ItemLoc, ModuleId},
         item_data::{Attributes, ClassData, FunctionData, Signature, UseData},

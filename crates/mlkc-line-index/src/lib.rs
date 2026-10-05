@@ -131,7 +131,7 @@ impl LineIndex {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{LineCol, LineIndex, TextLen, TextRange, TextSize};
 
     fn at(line: u32, col: u32) -> LineCol {
         LineCol { line, col }

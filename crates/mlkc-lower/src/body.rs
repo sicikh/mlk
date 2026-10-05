@@ -966,7 +966,7 @@ mod tests {
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::*;
+    use super::{Expr, FunDecl, Literal};
 
     /// The path of the file these tests read a module from, which is what the module is called
     /// by: the modules here stand in no project, and a module of none is called by its name.

@@ -268,7 +268,7 @@ impl<P: TokenTextPattern> Iterator for TokenTextSplit<P> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TextSize, TokenText};
     use crate::RawSyntaxKind;
 
     fn tt(text: &str) -> TokenText {

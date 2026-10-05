@@ -76,7 +76,7 @@ macro_rules! token_set {
 mod tests {
     use mlkc_rowan::RawSyntaxKind;
 
-    use super::*;
+    use super::{SyntaxKind, TokenSet, mask};
 
     #[derive(Debug, PartialEq, Eq, Clone, Copy)]
     enum TestKind {

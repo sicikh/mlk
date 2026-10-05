@@ -797,7 +797,7 @@ impl<T> Extend<T> for Arena<T> {
 mod tests {
     use std::num::NonZeroU32;
 
-    use super::*;
+    use super::{Arena, ArenaIndex, ArenaToken, Idx, IdxRange, RawIdx};
 
     #[test]
     fn alloc_hands_out_dense_zero_based_ids_in_order() {

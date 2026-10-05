@@ -657,7 +657,10 @@ mod tests {
     };
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::*;
+    use super::{
+        EntityData, EntityLoc, LoweredModule, LoweringDiag, LoweringError, ModuleRoot, Name,
+        Prelude, ProjectId,
+    };
 
     /// A module that is wrong in the ways the surface of a module can be wrong on its own.
     const SOURCE: &str = "\

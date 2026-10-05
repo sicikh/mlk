@@ -430,7 +430,7 @@ mod tests {
     use mlkc_hir_ty::Ty;
     use mlkc_vfs::FileId;
 
-    use super::*;
+    use super::{Engine, InferTy, UnifyError};
 
     /// A module with a function `f`, which a check generalizes over, and a class `Int`.
     fn entities() -> (EntityLoc, EntityLoc<ClassLoc>) {

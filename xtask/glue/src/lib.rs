@@ -108,7 +108,7 @@ pub fn ensure_rustfmt() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{PREAMBLE, prepend_generated_preamble};
 
     #[test]
     fn prepend_generated_preamble_adds_preamble() {

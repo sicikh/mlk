@@ -77,7 +77,7 @@ impl<D: DiagKind> DiagCtx<D> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::DiagCtx;
     use crate::{Category, DiagKind, Level};
 
     /// A diagnostic a test controls, where the real ones come from a pass.

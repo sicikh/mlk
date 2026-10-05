@@ -8,8 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-indexmap.workspace = true
 mlkc-hir-def.workspace = true
+mlkc-stdx.workspace = true
 rustc-hash.workspace = true
 
 [dev-dependencies]

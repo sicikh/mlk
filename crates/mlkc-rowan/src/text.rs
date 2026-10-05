@@ -344,7 +344,7 @@ impl Drop for SmallStr {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Text;
 
     #[test]
     fn verify_type_size() {

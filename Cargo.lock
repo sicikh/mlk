@@ -1039,7 +1039,7 @@ name = "mlkc-intern"
 version = "0.1.0"
 dependencies = [
  "dashmap",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "rustc-hash",
  "triomphe",
 ]

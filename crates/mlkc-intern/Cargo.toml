@@ -16,7 +16,7 @@ triomphe = { workspace = true }
 # in their guards, so this must be the hashbrown DashMap was built with; it moves
 # with `dashmap` and not with the workspace's own hashbrown.
 [dependencies.hashbrown]
-version = "0.14.*"
+version = "0.17.*"
 default-features = false
 features = ["inline-more"]
 

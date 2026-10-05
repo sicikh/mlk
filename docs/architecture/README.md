@@ -222,8 +222,9 @@ so they are also the names to look for when something is slow.
   invariants over arbitrary inputs are the place for property tests.
 - The interpreter is tested against MIR (`crates/mlkc-interp/tests/`),
   and the back end against wasmtime (`crates/mlkc-codegen-wasm/tests/`).
-- The editor sources are linted and type-checked by `just check-web` (oxlint, svelte-check);
-  `just check-browser` drives the built site in a real browser.
+- The editor's pure modules (`web/src/lib/*.ts`) are tested by `just test-web` (Vitest),
+  with values in and values out; the lint and the types of the sources are `just check-web`,
+  and `just check-browser` drives the built site in a real browser.
 
 ## Maintaining this file
 

@@ -24,6 +24,7 @@ pipeline for the buffer.
 ## Commands
 
 - `just dev-web` — the dev server; it builds the wasm package first.
+- `just test-web` — the tests of the pure modules (Vitest); no browser, no wasm.
 - `just check-web` — `oxlint` over the editor sources and `svelte-check` (types and templates).
 - `just check-browser` — builds the site and drives it in a browser; needs `obscura`.
 - `just verify-web` — the full gate: `verify` plus the browser check.
@@ -32,6 +33,11 @@ pipeline for the buffer.
   `wasm-bindgen` crate, and `just install-tools` derives the version from `Cargo.lock`.
 
 ## The browser check
+
+The pure modules — `offsets.ts`, `archive.ts` (which writes and reads the ZIP of a build),
+`wat.ts`, `diagnostics.ts`, `highlight.ts` — are values in and values out, and are tested as
+them by `just test-web`; a fixture under `src/lib/fixtures/` is what a zipper other than the
+editor's own wrote.
 
 `web/scripts/browser-check.mjs` serves the built site (`vite preview` on a free port), starts
 `obscura serve` when no browser answers at `--cdp`, and drives the page over CDP.

@@ -14,7 +14,8 @@
         "build": "vite build",
         "build:grammar": "lezer-generator --noTerms --typeScript src/lib/grammar/mlk.grammar -o src/lib/grammar/mlk.ts",
         "preview": "vite preview",
-        "check": "oxlint --deny-warnings scripts src vite.config.ts && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "check": "oxlint --deny-warnings scripts src vite.config.ts vitest.config.ts && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+        "test": "vitest run",
         "check:browser": "pnpm build && node scripts/browser-check.mjs"
     },
     "dependencies": {
@@ -37,6 +38,7 @@
         "svelte": "^5.57.1",
         "svelte-check": "^4.7.6",
         "typescript": "^6.0.3",
-        "vite": "^8.3.0"
+        "vite": "^8.3.0",
+        "vitest": "^5.0.3"
     }
 }

@@ -32,6 +32,10 @@ import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Node reads the types of a `.ts` module itself, so the reader of an archive is the one the
+// editor writes the archive with rather than a copy of it written here.
+import { readArchive } from "../src/lib/archive.ts";
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** @typedef {object} Options
@@ -582,7 +586,7 @@ const STEPS = {
 		})`,
 
     // The archive itself, as the text a check reads bytes in: what it holds is its paths, and
-    // the paths are read off the directory at its end (see `entries`).
+    // the paths are read off the directory at its end (see `readArchive` in `src/lib/archive`).
     packed: `return window.__zip ?? ''`,
 
     // The sources beside the build: every buffer of the project and of the library, under the
@@ -1271,24 +1275,22 @@ const RUN = [
         STEPS.built,
         WAITS.built,
         {
-            // The archive a person gets: what it holds is read off the directory at its end,
-            // because the paths inside are the whole of what an archive adds to a download of
-            // loose files, and the manifest is read out of the archive, because it is what a
-            // host that reads the build from files reads.
+            // The archive a person gets: what it holds is read by the reader the editor
+            // writes it with, and the manifest is read out of the archive, because it is
+            // what a host that reads the build from files reads.
             transform: (value, page) => {
-                const archive = Buffer.from(page.zip, "base64");
-                const paths = entries(archive);
-                const described = paths.find(
-                    (it) => it.name === "manifest.json",
+                const files = readArchive(Buffer.from(page.zip, "base64"));
+                const described = files.find(
+                    (it) => it.path === "manifest.json",
                 );
 
                 if (!described) throw new Error("the build holds no manifest");
 
                 return {
                     ...value,
-                    entries: paths,
+                    entries: files.map((it) => it.path),
                     manifest: JSON.parse(
-                        contents(archive, described).toString("utf8"),
+                        new TextDecoder().decode(described.bytes),
                     ),
                 };
             },
@@ -1306,16 +1308,17 @@ const RUN = [
         null,
         {
             transform: (value, page) => {
-                const archive = Buffer.from(page.sourceZip, "base64");
-                const paths = entries(archive);
-                const main = paths.find((it) => it.name === "main.mlk");
+                const files = readArchive(
+                    Buffer.from(page.sourceZip, "base64"),
+                );
+                const main = files.find((it) => it.path === "main.mlk");
 
                 if (!main) throw new Error("the sources hold no main.mlk");
 
                 return {
                     ...value,
-                    entries: paths,
-                    main: contents(archive, main).toString("utf8"),
+                    entries: files.map((it) => it.path),
+                    main: new TextDecoder().decode(main.bytes),
                 };
             },
         },
@@ -1691,12 +1694,11 @@ const allOf = (...matchers) =>
  * @typedef {{tab: boolean, printed: string[]}} Ran
  * @typedef {{size: number, type: string}} Saved
  * @typedef {{name: string, blob: boolean}} File
- * @typedef {{name: string, at: number, size: number}} Entry
  * @typedef {{external: boolean, module: string, name: string}} Imported
  * @typedef {{file: string, name: string, imports: Imported[]}} Module
  * @typedef {{project: string, host: string, entry: {module: string, name: string}, modules: Module[]}} Manifest
- * @typedef {{files: File[], saved: Saved[], lines: string[], entries: Entry[], manifest: Manifest}} Built
- * @typedef {{files: File[], saved: Saved[], lines: string[], entries: Entry[], main: string}} Sources
+ * @typedef {{files: File[], saved: Saved[], lines: string[], entries: string[], manifest: Manifest}} Built
+ * @typedef {{files: File[], saved: Saved[], lines: string[], entries: string[], main: string}} Sources
  * @typedef {{disabled: boolean, title: string}} Guard
  * @typedef {{keyword: string, pub: string, use: string, as: string}} Words
  * @typedef {{keyword: string, if: string, then: string, else: string, number: string, truth: string}} ChoiceWords
@@ -2535,10 +2537,7 @@ const CHECKS = [
             sized: (page.built.saved[0]?.size ?? 0) > 0,
             files: page.built.files.map((it) => it.name).join(" "),
             blob: page.built.files[0]?.blob ?? false,
-            entries: page.built.entries
-                .map((it) => it.name)
-                .sort()
-                .join(" "),
+            entries: [...page.built.entries].sort().join(" "),
             said: page.built.lines.some((it) =>
                 it.includes("the build is 6 files in app.zip"),
             ),
@@ -2598,10 +2597,7 @@ const CHECKS = [
             name: page.sources.files[1]?.name ?? "",
             blob: page.sources.files[1]?.blob ?? false,
             saved: page.sources.saved.length,
-            entries: page.sources.entries
-                .map((it) => it.name)
-                .sort()
-                .join(" "),
+            entries: [...page.sources.entries].sort().join(" "),
             main: page.sources.main.includes("fun fib"),
             said: page.sources.lines.some((it) =>
                 it.includes("the sources are 4 files in app.sources.zip"),
@@ -2911,7 +2907,7 @@ const NOTES = /** @type {((page: Page) => string)[]} */ ([
     (page) =>
         `the module assembles to ${page.wat.head}, which ${page.watPaint.keyword === page.watPaint.accent ? "is" : "is NOT"} painted, and folds to ${JSON.stringify(page.watFolded.text.trim())}, and the program printed ${JSON.stringify(page.ran.printed)}`,
     (page) =>
-        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.map((it) => it.name).join(", ")}`,
+        `the build is ${page.built.files.map((it) => it.name).join(", ") || "(nothing)"}, holding ${page.built.entries.join(", ")}`,
     (page) =>
         `the manifest of the build is of the project ${page.built.manifest.project}, and its entry is ${page.built.manifest.entry ? `${page.built.manifest.entry.module}::${page.built.manifest.entry.name}` : "nothing"}`,
     (page) =>
@@ -3352,62 +3348,6 @@ async function openPage() {
     ]);
 
     return { connection, session };
-}
-
-/**
- * The files an archive holds: the path of each, where its header stands, and how long it is
- * ([ZIP](https://en.wikipedia.org/wiki/ZIP_(file_format))).
- *
- * The directory stands at the end of an archive, and every entry of it names the path a file
- * is written under and where that file stands: a check that reads a build reads the paths
- * here, because the paths are the whole of what an archive adds to a download of loose files.
- *
- * @param {Buffer} archive
- * @returns {{name: string, at: number, size: number}[]}
- */
-function entries(archive) {
-    const end = archive.length - 22;
-
-    if (archive.readUInt32LE(end) !== 0x06054b50)
-        throw new Error("the archive has no directory at its end");
-
-    const count = archive.readUInt16LE(end + 10);
-    const files = [];
-    let at = archive.readUInt32LE(end + 16);
-
-    for (let index = 0; index < count; index++) {
-        if (archive.readUInt32LE(at) !== 0x02014b50)
-            throw new Error(`entry ${index} of the archive is not a header`);
-
-        const name = archive.readUInt16LE(at + 28);
-        const extra = archive.readUInt16LE(at + 30);
-        const comment = archive.readUInt16LE(at + 32);
-
-        files.push({
-            name: archive.subarray(at + 46, at + 46 + name).toString("utf8"),
-            at: archive.readUInt32LE(at + 42),
-            size: archive.readUInt32LE(at + 24),
-        });
-        at += 46 + name + extra + comment;
-    }
-
-    return files;
-}
-
-/**
- * The bytes of one file of an archive, read where its entry says they stand.
- *
- * @param {Buffer} archive
- * @param {{at: number, size: number}} entry
- */
-function contents(archive, entry) {
-    const name = archive.readUInt16LE(entry.at + 26);
-    const extra = archive.readUInt16LE(entry.at + 28);
-
-    return archive.subarray(
-        entry.at + 30 + name + extra,
-        entry.at + 30 + name + extra + entry.size,
-    );
 }
 
 /** Starts a process of its own group, so that taking it down takes down what it spawned.

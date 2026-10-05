@@ -51,6 +51,7 @@ Read the one that matches the task before starting:
 | `just check-generated`                | Verify that generated files are up to date, without writing them. Works on a dirty tree.   |
 | `just verify`                         | `check-generated` + `lint` + `test` + `test-doc` + `check-web`. Run this before finishing. |
 | `just check-web`                      | Lint and type-check the editor (oxlint, svelte-check).                                     |
+| `just test-web`                       | Tests of the pure editor modules (Vitest), with no browser.                                |
 | `just verify-web`                     | `verify` plus the editor in a real browser. Needs `obscura` on the path.                   |
 | `just gen-all`                        | Regenerate every generated file; commit the result.                                        |
 | `just format`                         | `cargo fmt` (nightly rustfmt) and `tombi format`.                                          |

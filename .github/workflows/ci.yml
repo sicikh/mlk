@@ -106,6 +106,9 @@ jobs:
               with:
                   shared-key: ci
             - run: nix develop -c pnpm install --frozen-lockfile
+            # The modules behind the panels are values in and values out: their tests need no
+            # browser and no wasm, so they run before anything is built.
+            - run: nix develop -c just test-web
             # The site is built on every pull request and not only where it is published: the
             # wasm package is not committed, and the build is where a bundling mistake shows.
             # The browser the check drives is the obscura the flake builds, pinned by the

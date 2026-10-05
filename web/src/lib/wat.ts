@@ -226,6 +226,12 @@ function closes(doc: Text, start: number): number | null {
         }
 
         if (text.startsWith("(;", at)) {
+            // `(;)` is a comment of nothing: the `;` of the opening is the one of the closing.
+            if (text[at + 2] === ")") {
+                at += 2;
+                continue;
+            }
+
             comment = 1;
             at += 1;
             continue;

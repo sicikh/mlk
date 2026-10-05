@@ -105,6 +105,10 @@ dev-web:
 check-web:
     pnpm --filter @mlk/web check
 
+# Run the tests of the pure editor modules: values in and values out, with no browser
+test-web:
+    pnpm --filter @mlk/web test
+
 # Check the editor in a browser: the wasm boundary, and what a person would see.
 # Needs `obscura` on the path, and builds the site it drives.
 check-browser:
@@ -126,7 +130,7 @@ check-generated:
     fi
 
 # Check the tree the way CI does, without a browser; unlike `just ready`, works on a dirty tree
-verify: check-generated lint test test-doc check-web
+verify: check-generated lint test test-doc test-web check-web
 
 # `just verify` plus the editor in a real browser; needs `obscura`, and builds the site
 verify-web: verify check-browser

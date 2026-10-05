@@ -528,7 +528,7 @@ impl Vfs {
 
 /// A read-only view of the state of the [`Vfs`] at the moment it was taken.
 ///
-/// A [`Span`](mlkc_span::Span) is a file id and a range, with no version attached:
+/// A `Span` is a file id and a range, with no version attached:
 /// the range belongs to the text the file had when the span was created.
 /// A snapshot is what makes that text reachable again:
 ///

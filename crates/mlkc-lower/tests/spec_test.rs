@@ -21,6 +21,15 @@
 //!
 //! [ADR-0011]: ../../docs/adr/0011-module-prelude.md
 
+// The file is a harness of the suite, and cargo compiles it as a test target of its own as
+// well: in that target nothing calls it, which is what the allowance is for. An `allow`
+// rather than an `expect` because the target that includes the file does call it, and an
+// expectation that is not fulfilled is an error too.
+#![allow(
+    dead_code,
+    reason = "the harness is a test target of its own, where nothing calls it"
+)]
+
 use std::{
     fmt::Write,
     fs,

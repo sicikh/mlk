@@ -53,6 +53,12 @@ jobs:
               with:
                   shared-key: ci
             - run: nix develop -c just lint
+            # The documentation is built and checked as part of the gate: a broken link or a
+            # stale code sample fails the job before anything else reads it.
+            - run: nix develop -c just doc
+            # Every dependency of the lockfile is read for its license, its advisories, and
+            # the sources it comes from; the RustSec database is fetched on the first run.
+            - run: nix develop -c just deny
             - run: nix develop -c just test
             - run: nix develop -c just test-doc
 

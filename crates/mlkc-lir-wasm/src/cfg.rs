@@ -9,7 +9,9 @@
 //! exists, and an analysis may look at it --- but it is not in the reverse postorder, and the
 //! promises of the form are vacuous for it: there is no path for them to be about.
 
-use crate::{BlockId, Body, Terminator};
+#[cfg(test)]
+use crate::Terminator;
+use crate::{BlockId, Body};
 
 /// The edges of a body, and the order a walk visits its blocks in.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,14 +121,6 @@ impl Cfg {
     pub fn dominator_children(&self, position: usize) -> &[usize] {
         &self.children[position]
     }
-}
-
-/// The blocks a terminator goes to, in the order it lists them.
-pub(crate) fn targets(term: &Terminator) -> Vec<BlockId> {
-    term.targets()
-        .into_iter()
-        .map(|target| target.block)
-        .collect()
 }
 
 /// The blocks reached from the entry, in reverse postorder.

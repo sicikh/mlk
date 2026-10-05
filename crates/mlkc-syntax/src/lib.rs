@@ -1,3 +1,17 @@
+//! The syntax of MLK as data: the untyped kinds, and the typed nodes over a tree.
+//!
+//! The tree is lossless ([ADR-0002][adr-0002]):
+//! it holds every token and every piece of trivia, and the text of its root is the source
+//! that was parsed, mistakes included.
+//! The kinds and the typed nodes are generated from `xtask/codegen/mlk.ungram` into
+//! `generated/` and are not edited by hand;
+//! this file is the glue around them, and the re-export of the tree machinery of [`mlkc_rowan`].
+//!
+//! A typed node is a view over an untyped one: an [`AstNode`] implementation casts a kind and
+//! names the children, and none of it copies the text.
+//!
+//! [adr-0002]: ../../docs/adr/0002-lossless-syntax-tree.md
+
 #[macro_use]
 mod generated;
 mod syntax_node;

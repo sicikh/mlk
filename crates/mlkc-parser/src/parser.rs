@@ -73,14 +73,6 @@ impl<'src> Parser<'src> {
         NodeParse::new(root, diagnostics).into()
     }
 
-    /// The kind of the `n`th token after the current one, trivia excluded.
-    ///
-    /// The [`ParserTrait`] method needs the lexer type spelled out, which no parse rule
-    /// should care about; this wrapper fixes it to the lexer of this crate.
-    pub(crate) fn nth(&mut self, n: usize) -> SyntaxKind {
-        <Self as ParserTrait>::nth::<Lexer<'src>>(self, n)
-    }
-
     /// Whether the `n`th token after the current one is of kind `kind`.
     pub(crate) fn nth_at(&mut self, n: usize, kind: SyntaxKind) -> bool {
         <Self as ParserTrait>::nth_at::<Lexer<'src>>(self, n, kind)

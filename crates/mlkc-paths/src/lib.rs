@@ -1,4 +1,4 @@
-//! Thin wrappers around [`camino::path`], distinguishing between absolute and
+//! Thin wrappers around [`camino`], distinguishing between absolute and
 //! relative paths.
 
 use std::{
@@ -417,4 +417,266 @@ fn normalize_path(path: &Utf8Path) -> Utf8PathBuf {
         }
     }
     ret
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    /// An absolute path for a test, which must be absolute for `assert` not to panic.
+    fn abs(path: &str) -> &AbsPath {
+        AbsPath::assert(Utf8Path::new(path))
+    }
+
+    /// An absolute path buffer for a test, which must be absolute for `assert` not to panic.
+    fn abs_buf(path: &str) -> AbsPathBuf {
+        AbsPathBuf::assert(Utf8PathBuf::from(path))
+    }
+
+    /// A relative path buffer for a test, which must be relative for `try_from` to accept it.
+    fn rel_buf(path: &str) -> RelPathBuf {
+        RelPathBuf::try_from(path).unwrap()
+    }
+
+    #[test]
+    fn try_from_rejects_a_relative_path_and_returns_it() {
+        let relative = Utf8PathBuf::from("a/b");
+
+        assert_eq!(AbsPathBuf::try_from(relative.clone()), Err(relative));
+
+        let rejected = AbsPathBuf::try_from("a/b").unwrap_err();
+        assert_eq!(rejected, Utf8PathBuf::from("a/b"));
+    }
+
+    #[test]
+    fn an_abs_path_borrows_from_an_absolute_utf8_path_only() {
+        let absolute = Utf8Path::new("/a/b");
+        assert_eq!(<&AbsPath>::try_from(absolute).unwrap(), absolute);
+
+        let relative = Utf8Path::new("a/b");
+        assert_eq!(<&AbsPath>::try_from(relative), Err(relative));
+    }
+
+    #[test]
+    #[should_panic(expected = "expected absolute path")]
+    fn assert_rejects_a_relative_path() {
+        AbsPathBuf::assert(Utf8PathBuf::from("a/b"));
+    }
+
+    #[test]
+    #[should_panic(expected = "is not absolute")]
+    fn abs_path_assert_rejects_a_relative_path() {
+        AbsPath::assert(Utf8Path::new("a/b"));
+    }
+
+    #[test]
+    fn assert_utf8_wraps_an_absolute_os_path() {
+        assert_eq!(AbsPathBuf::assert_utf8(PathBuf::from("/a/b")), "/a/b");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[should_panic(expected = "expected utf8 path")]
+    fn assert_utf8_rejects_a_path_that_is_not_utf8() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let path = PathBuf::from(std::ffi::OsString::from_vec(vec![b'/', 0xFF]));
+        AbsPathBuf::assert_utf8(path);
+    }
+
+    #[test]
+    fn an_abs_path_buf_lends_an_abs_path_of_the_same_path() {
+        let path = abs_buf("/a/b");
+
+        assert_eq!(path.as_path(), abs("/a/b"));
+        assert_eq!(path.file_name(), Some("b"), "the buffer derefs to its path");
+    }
+
+    #[test]
+    fn pop_truncates_to_the_parent_and_stops_at_the_root() {
+        let mut path = abs_buf("/a/b");
+
+        assert!(path.pop());
+        assert_eq!(path, "/a");
+
+        assert!(path.pop());
+        assert_eq!(path, "/");
+
+        assert!(!path.pop(), "the root has no parent to pop to");
+        assert_eq!(path, "/");
+    }
+
+    #[test]
+    fn push_extends_the_path_and_an_absolute_suffix_replaces_it() {
+        let mut path = abs_buf("/a");
+        path.push("b");
+        assert_eq!(path, "/a/b");
+
+        path.push("/x/y");
+        assert_eq!(path, "/x/y", "an absolute path starts over");
+    }
+
+    #[test]
+    fn join_appends_without_normalizing_but_absolutize_resolves_the_result() {
+        let base = abs_buf("/a/b");
+
+        assert_eq!(base.join("c"), "/a/b/c");
+        assert_eq!(base.join("../c"), "/a/b/../c");
+        assert_eq!(base.join("/x"), "/x", "an absolute path replaces the base");
+
+        assert_eq!(base.as_path().absolutize("../c"), "/a/c");
+    }
+
+    #[test]
+    fn normalize_removes_cur_dir_repeated_separators_and_parent_dir() {
+        assert_eq!(abs_buf("/a/../../b/.//c//").normalize(), "/b/c");
+    }
+
+    #[test]
+    fn normalize_cannot_climb_above_the_root() {
+        assert_eq!(abs_buf("/../a").normalize(), "/a");
+    }
+
+    #[test]
+    fn parent_walks_up_to_the_root_and_stops() {
+        assert_eq!(abs("/a/b").parent(), Some(abs("/a")));
+        assert_eq!(abs("/a").parent(), Some(abs("/")));
+        assert_eq!(abs("/").parent(), None);
+    }
+
+    #[test]
+    fn strip_prefix_returns_the_rest_of_the_path() {
+        let path = abs("/a/b/c");
+
+        assert_eq!(
+            path.strip_prefix(abs("/a")).map(RelPath::as_str),
+            Some("b/c")
+        );
+        assert_eq!(
+            path.strip_prefix(abs("/a/b/c")).map(RelPath::as_str),
+            Some("")
+        );
+        assert_eq!(path.strip_prefix(abs("/a/bc")).map(RelPath::as_str), None);
+        assert_eq!(path.strip_prefix(abs("/x")).map(RelPath::as_str), None);
+    }
+
+    #[test]
+    fn starts_with_matches_whole_components() {
+        let path = abs("/a/b/c");
+
+        assert!(path.starts_with(abs("/a")));
+        assert!(path.starts_with(abs("/a/b")));
+        assert!(!path.starts_with(abs("/a/bc")));
+        assert!(!path.starts_with(abs("/x")));
+    }
+
+    #[test]
+    fn ends_with_matches_whole_components() {
+        let path = abs("/a/b/c");
+
+        assert!(path.ends_with(rel_buf("b/c").as_path()));
+        assert!(path.ends_with(rel_buf("c").as_path()));
+        assert!(!path.ends_with(rel_buf("bc").as_path()));
+        assert!(!path.ends_with(rel_buf("x/c").as_path()));
+    }
+
+    #[test]
+    fn name_and_extension_split_the_file_stem_from_its_extension() {
+        assert_eq!(
+            abs("/src/main.mlk").name_and_extension(),
+            Some(("main", Some("mlk")))
+        );
+        assert_eq!(abs("/src/main").name_and_extension(), Some(("main", None)));
+        assert_eq!(abs("/").name_and_extension(), None);
+    }
+
+    #[test]
+    fn file_name_extension_and_stem_read_the_last_component() {
+        let path = abs("/src/main.mlk");
+
+        assert_eq!(path.file_name(), Some("main.mlk"));
+        assert_eq!(path.extension(), Some("mlk"));
+        assert_eq!(path.file_stem(), Some("main"));
+
+        assert_eq!(abs("/src/main").extension(), None);
+        assert_eq!(abs("/").file_name(), None);
+    }
+
+    #[test]
+    fn display_writes_the_path_it_wraps() {
+        assert_eq!(abs_buf("/a/b").to_string(), "/a/b");
+        assert_eq!(abs("/a/b").to_string(), "/a/b");
+    }
+
+    #[test]
+    fn conversions_hand_back_the_path_beneath_the_wrapper() {
+        let path = abs_buf("/a/b");
+
+        let utf8: Utf8PathBuf = path.clone().into();
+        let std_path: PathBuf = path.clone().into();
+        let as_utf8: &Utf8Path = path.as_ref();
+        let as_std: &Path = path.as_ref();
+        let as_os: &OsStr = path.as_ref();
+        let as_abs: &AbsPath = path.as_ref();
+
+        assert_eq!(utf8, "/a/b");
+        assert_eq!(std_path, Path::new("/a/b"));
+        assert_eq!(as_utf8, Utf8Path::new("/a/b"));
+        assert_eq!(as_std, Path::new("/a/b"));
+        assert_eq!(as_os, OsStr::new("/a/b"));
+        assert_eq!(as_abs, abs("/a/b"));
+    }
+
+    #[test]
+    fn an_abs_path_buf_is_found_under_its_abs_path_borrow() {
+        let mut paths = HashMap::new();
+        paths.insert(abs_buf("/a/b"), "value");
+
+        assert_eq!(paths.get(abs("/a/b")), Some(&"value"));
+    }
+
+    #[test]
+    fn to_path_buf_and_to_owned_copy_the_path() {
+        let path = abs("/a/b");
+
+        assert_eq!(path.to_path_buf().as_path(), path);
+
+        let owned = <AbsPath as ToOwned>::to_owned(path);
+        assert_eq!(owned.as_path(), path);
+    }
+
+    #[test]
+    fn a_rel_path_buf_accepts_only_a_relative_path() {
+        assert_eq!(
+            rel_buf("a/b").as_str(),
+            "a/b",
+            "the buffer derefs to its path"
+        );
+
+        let rejected = RelPathBuf::try_from("/a/b").unwrap_err();
+        assert_eq!(
+            rejected,
+            Utf8PathBuf::from("/a/b"),
+            "the rejected path comes back unchanged"
+        );
+    }
+
+    #[test]
+    fn a_rel_path_can_borrow_a_relative_path_without_a_check() {
+        let path = Utf8Path::new("a/b");
+        let rel = RelPath::new_unchecked(path);
+
+        assert_eq!(rel.as_str(), "a/b");
+        assert_eq!(rel.as_utf8_path(), path);
+        assert_eq!(rel.to_path_buf(), rel_buf("a/b"));
+    }
+
+    #[test]
+    fn a_rel_path_buf_converts_into_a_utf8_path_buf() {
+        let converted: Utf8PathBuf = rel_buf("a/b").into();
+
+        assert_eq!(converted, Utf8PathBuf::from("a/b"));
+    }
 }

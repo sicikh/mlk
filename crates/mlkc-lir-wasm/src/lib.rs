@@ -26,7 +26,7 @@
 //!
 //! - [`body`] --- the data of one body, and the builder a stage builds with.
 //! - [`ty`] --- the types of the target a value has.
-//! - [`cfg`] --- the edges of a body, an order to walk them in, and the dominator tree.
+//! - [`mod@cfg`] --- the edges of a body, an order to walk them in, and the dominator tree.
 //! - [`structure`] --- the structured control flow the structuring pass builds.
 //! - [`verify`] --- the verifier: what tells a well-formed body from one that is not.
 //! - [`dump`] --- a reading of a body, for a person and for a diff.

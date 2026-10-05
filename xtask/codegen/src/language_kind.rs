@@ -59,7 +59,6 @@ macro_rules! define_language_kind_functions {
         define_language_kind_function!([$($kind),*], syntax_token, SyntaxToken);
         define_language_kind_function!([$($kind),*], syntax_element_children, SyntaxElementChildren);
         define_language_kind_function!([$($kind),*], syntax_list, SyntaxList);
-        define_language_kind_function!([$($kind),*], language, Language);
     }
 }
 
@@ -79,6 +78,39 @@ impl LanguageKind {
     pub fn load_grammar(&self) -> &'static str {
         match self {
             Self::Mlk => include_str!("../mlk.ungram"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn language_kind_parses_its_name() {
+        assert_eq!("mlk".parse::<LanguageKind>(), Ok(LanguageKind::Mlk));
+    }
+
+    #[test]
+    fn an_unknown_language_name_is_rejected_and_the_supported_one_named() {
+        let error = "css".parse::<LanguageKind>().unwrap_err();
+
+        assert!(error.contains("not supported"), "{error}");
+        assert!(error.contains("`mlk`"), "{error}");
+    }
+
+    #[test]
+    fn every_language_kind_round_trips_through_its_display_name() {
+        for kind in ALL_LANGUAGE_KIND {
+            assert_eq!(kind.to_string().parse::<LanguageKind>(), Ok(kind));
+        }
+    }
+
+    #[test]
+    fn every_language_kind_has_a_grammar_and_kinds() {
+        for kind in ALL_LANGUAGE_KIND {
+            assert!(!kind.load_grammar().is_empty());
+            assert!(!kind.kinds().nodes.is_empty());
         }
     }
 }

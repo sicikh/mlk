@@ -69,3 +69,125 @@ pub enum TaskCommand {
     #[bpaf(command)]
     Check,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        env, fs,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    use super::*;
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new() -> Self {
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+            let path = env::temp_dir().join(format!(
+                "xtask-codegen-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            // A recycled pid can find the directory of a crashed earlier run.
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).unwrap();
+
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn update_reports_not_updated_for_a_file_that_already_has_the_contents() {
+        for mode in [Mode::Verify, Mode::Overwrite] {
+            let dir = TestDir::new();
+            let path = dir.path().join("file.txt");
+            fs::write(&path, "contents").unwrap();
+
+            let result = update(&path, "contents", &mode).unwrap();
+
+            assert!(matches!(result, UpdateResult::NotUpdated), "mode {mode:?}");
+            assert_eq!(fs::read_to_string(&path).unwrap(), "contents");
+        }
+    }
+
+    #[test]
+    fn update_in_verify_mode_refuses_a_stale_file_and_leaves_it_untouched() {
+        let dir = TestDir::new();
+        let path = dir.path().join("file.txt");
+        fs::write(&path, "old contents").unwrap();
+
+        let error = update(&path, "new contents", &Mode::Verify)
+            .err()
+            .expect("verify mode to refuse a stale file");
+
+        assert!(error.to_string().contains("not up-to-date"), "{error}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "old contents");
+    }
+
+    #[test]
+    fn update_in_verify_mode_refuses_a_file_that_does_not_exist() {
+        let dir = TestDir::new();
+        let path = dir.path().join("missing.txt");
+
+        let error = update(&path, "contents", &Mode::Verify)
+            .err()
+            .expect("verify mode to refuse a missing file");
+
+        assert!(error.to_string().contains("not up-to-date"), "{error}");
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn update_in_overwrite_mode_replaces_a_stale_file() {
+        let dir = TestDir::new();
+        let path = dir.path().join("file.txt");
+        fs::write(&path, "old contents").unwrap();
+
+        let result = update(&path, "new contents", &Mode::Overwrite).unwrap();
+
+        assert!(matches!(result, UpdateResult::Updated));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new contents");
+    }
+
+    #[test]
+    fn update_in_overwrite_mode_creates_the_parent_directories_of_a_new_file() {
+        let dir = TestDir::new();
+        let path = dir.path().join("nested").join("file.txt");
+
+        let result = update(&path, "contents", &Mode::Overwrite).unwrap();
+
+        assert!(matches!(result, UpdateResult::Updated));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "contents");
+    }
+
+    #[test]
+    fn to_capitalized_returns_an_empty_string_for_empty_input() {
+        assert_eq!(to_capitalized(""), "");
+    }
+
+    #[test]
+    fn to_capitalized_uppercases_the_first_character_only() {
+        assert_eq!(to_capitalized("foo"), "Foo");
+        assert_eq!(to_capitalized("Foo"), "Foo");
+        assert_eq!(to_capitalized("fooBar"), "FooBar");
+        assert_eq!(to_capitalized("f"), "F");
+    }
+
+    #[test]
+    fn to_capitalized_uppercases_a_non_ascii_first_character() {
+        assert_eq!(to_capitalized("éclair"), "Éclair");
+    }
+}

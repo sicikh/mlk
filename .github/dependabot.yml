@@ -10,3 +10,21 @@ updates:
       groups:
           actions:
               patterns: ["*"]
+
+    # The crates of the workspace and of `Cargo.lock`; one pull request for the tree.
+    - package-ecosystem: cargo
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          cargo:
+              patterns: ["*"]
+
+    # The packages of the pnpm workspace, `web` and `packages/*` included.
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          npm:
+              patterns: ["*"]

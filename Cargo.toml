@@ -162,7 +162,6 @@ zero_sized_map_values = "warn"
 [workspace.lints.rust]
 # https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html
 ambiguous_negative_literals = "warn"
-dead_code = "allow"
 explicit_outlives_requirements = "warn"
 impl_trait_overcaptures = "warn"
 impl_trait_redundant_captures = "warn"

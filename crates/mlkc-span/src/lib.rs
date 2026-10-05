@@ -1,3 +1,15 @@
+//! The place a thing was written: a file, and a range of its text.
+//!
+//! The compiler reads and writes text in bytes,
+//! so everything that points back at the source --- a token, the label of a diagnostic,
+//! an item of the HIR --- points with a [`Span`].
+//! A span is a plain value that is copied and stored:
+//! it outlives the tree it was read from, which is what lets a report be built and kept
+//! after the parse that raised it is gone.
+//!
+//! [`Span::dummy`] stands for what has no place in any file,
+//! such as a node the compiler made up while lowering.
+
 pub use mlkc_text_size::{TextLen, TextRange, TextSize};
 pub use mlkc_vfs::FileId;
 

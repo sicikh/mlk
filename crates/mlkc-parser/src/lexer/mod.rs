@@ -31,23 +31,6 @@ use mlkc_syntax::{
     TextRange, TextSize,
 };
 
-/// A token, as lexed: its kind and the range of the source it covers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Token {
-    kind: SyntaxKind,
-    range: TextRange,
-}
-
-impl Token {
-    pub fn kind(&self) -> SyntaxKind {
-        self.kind
-    }
-
-    pub fn range(&self) -> TextRange {
-        self.range
-    }
-}
-
 /// The tokens of MLK, as recognized by the generated lexer.
 ///
 /// The variant order does not matter: the longest match wins, and a keyword wins
@@ -279,22 +262,20 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// Lexes the next token and returns it together with its range,
+    /// Lexes the next token and returns the range it covers,
     /// or `None` at the end of the file.
     ///
-    /// This is a convenience wrapper over [`LexerTrait::next_token`] for the
-    /// callers that do not track the current token: tests, tools, the driver.
-    /// The parser reads tokens through the token source instead.
-    pub(crate) fn next_token(&mut self) -> Option<Token> {
+    /// This is a convenience wrapper over [`LexerTrait::next_token`] for the tests of the
+    /// lexer, which read the source back out of the ranges;
+    /// the parser reads tokens through the token source instead.
+    #[cfg(test)]
+    pub(crate) fn next_token_range(&mut self) -> Option<TextRange> {
         let kind = LexerTrait::next_token(self, ());
 
         if kind == EOF {
             None
         } else {
-            Some(Token {
-                kind,
-                range: self.current_range(),
-            })
+            Some(self.current_range())
         }
     }
 

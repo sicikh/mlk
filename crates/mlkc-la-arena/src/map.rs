@@ -317,3 +317,338 @@ impl<'a, IDX, V> OccupiedEntry<'a, IDX, V> {
         self.slot.take().expect("Occupied")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Arena, Idx};
+
+    fn ids(count: usize) -> Vec<Idx<()>> {
+        let mut arena = Arena::new();
+        (0..count).map(|_| arena.alloc(())).collect()
+    }
+
+    #[test]
+    fn inserting_a_new_index_returns_none_and_replacing_returns_the_old_value() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+
+        assert_eq!(map.insert(a, 1), None);
+        assert!(map.contains_idx(a));
+        assert_eq!(map.get(a), Some(&1));
+
+        assert_eq!(map.insert(a, 2), Some(1));
+        assert_eq!(map.get(a), Some(&2));
+    }
+
+    #[test]
+    fn a_gap_between_indexes_stays_vacant() {
+        let ids = ids(4);
+        let (a, b, c, d) = (ids[0], ids[1], ids[2], ids[3]);
+
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+        map.insert(c, 3);
+
+        assert!(!map.contains_idx(b));
+        assert_eq!(map.get(b), None);
+        assert_eq!(map.remove(b), None);
+
+        // The gap lies inside the map, and the index at its end is absent too.
+        assert!(!map.contains_idx(d));
+        assert_eq!(map.get(d), None);
+        assert_eq!(map.iter().collect::<Vec<_>>(), [(a, &1), (c, &3)]);
+    }
+
+    #[test]
+    fn removing_an_entry_vacates_its_index_for_reuse() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+
+        assert_eq!(map.remove(a), Some(1));
+        assert!(!map.contains_idx(a));
+        assert_eq!(map.get(a), None);
+        assert_eq!(map.remove(a), None);
+
+        map.insert(a, 2);
+        assert_eq!(map.get(a), Some(&2));
+        assert_eq!(map.iter().collect::<Vec<_>>(), [(a, &2)]);
+    }
+
+    #[test]
+    fn entries_iterate_in_index_order_and_skip_vacancies() {
+        let ids = ids(3);
+        let (a, b, c) = (ids[0], ids[1], ids[2]);
+        let mut map = ArenaMap::new();
+        map.insert(c, 3);
+        map.insert(a, 1);
+        map.insert(b, 2);
+        map.remove(b);
+
+        assert_eq!(map.values().collect::<Vec<_>>(), [&1, &3]);
+        assert_eq!(map.values().rev().collect::<Vec<_>>(), [&3, &1]);
+        assert_eq!(map.iter().collect::<Vec<_>>(), [(a, &1), (c, &3)]);
+        assert_eq!(map.iter().rev().collect::<Vec<_>>(), [(c, &3), (a, &1)]);
+    }
+
+    #[test]
+    fn values_mut_and_iter_mut_write_through() {
+        let ids = ids(2);
+        let (a, b) = (ids[0], ids[1]);
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+        map.insert(b, 2);
+
+        for value in map.values_mut() {
+            *value *= 10;
+        }
+        for (_, value) in map.iter_mut() {
+            *value += 1;
+        }
+
+        assert_eq!(map.get(a), Some(&11));
+        assert_eq!(map.get(b), Some(&21));
+    }
+
+    #[test]
+    fn into_iter_yields_entries_in_index_order_and_is_double_ended() {
+        let ids = ids(2);
+        let (a, b) = (ids[0], ids[1]);
+        let mut map = ArenaMap::new();
+        map.insert(b, 2);
+        map.insert(a, 1);
+
+        assert_eq!(map.clone().into_iter().collect::<Vec<_>>(), [
+            (a, 1),
+            (b, 2)
+        ]);
+        assert_eq!(map.into_iter().rev().collect::<Vec<_>>(), [(b, 2), (a, 1)]);
+    }
+
+    #[test]
+    fn entry_reports_whether_an_index_is_vacant_or_occupied() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+
+        assert!(matches!(map.entry(a), Entry::Vacant(_)));
+
+        map.insert(a, 1);
+
+        assert!(matches!(map.entry(a), Entry::Occupied(_)));
+    }
+
+    #[test]
+    fn or_insert_keeps_an_existing_value() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+
+        assert_eq!(*map.entry(a).or_insert(1), 1);
+        assert_eq!(*map.entry(a).or_insert(2), 1);
+        assert_eq!(map.get(a), Some(&1));
+    }
+
+    #[test]
+    fn or_insert_with_builds_the_default_only_when_vacant() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+        let mut calls = 0;
+
+        let first = *map.entry(a).or_insert_with(|| {
+            calls += 1;
+            1
+        });
+        let second = *map.entry(a).or_insert_with(|| {
+            calls += 1;
+            2
+        });
+
+        assert_eq!(first, 1);
+        assert_eq!(second, 1);
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn or_default_fills_a_vacant_entry() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+
+        assert_eq!(*map.entry(a).or_default(), 0);
+
+        *map.entry(a).or_default() = 7;
+
+        assert_eq!(map.get(a), Some(&7));
+    }
+
+    #[test]
+    fn and_modify_applies_to_an_occupied_entry_only() {
+        let ids = ids(2);
+        let (a, b) = (ids[0], ids[1]);
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+
+        map.entry(a).and_modify(|value| *value += 1).or_insert(10);
+        map.entry(b).and_modify(|value| *value += 1).or_insert(20);
+
+        assert_eq!(map.get(a), Some(&2));
+        assert_eq!(map.get(b), Some(&20));
+    }
+
+    #[test]
+    fn an_occupied_entry_reads_replaces_and_takes_the_value() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+
+        let Entry::Occupied(mut entry) = map.entry(a) else {
+            panic!("an inserted index is occupied");
+        };
+
+        assert_eq!(*entry.get(), 1);
+        *entry.get_mut() += 1;
+        assert_eq!(entry.insert(3), 2);
+        assert_eq!(*entry.into_mut(), 3);
+
+        assert_eq!(map.get(a), Some(&3));
+    }
+
+    #[test]
+    fn removing_through_an_occupied_entry_vacates_the_index() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+
+        let Entry::Occupied(entry) = map.entry(a) else {
+            panic!("an inserted index is occupied");
+        };
+
+        assert_eq!(entry.remove(), 1);
+
+        assert!(!map.contains_idx(a));
+        assert_eq!(map.get(a), None);
+    }
+
+    #[test]
+    fn indexing_reaches_a_present_value_and_writes_through() {
+        let ids = ids(1);
+        let a = ids[0];
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+
+        assert_eq!(map[a], 1);
+
+        map[a] = 5;
+
+        assert_eq!(map[a], 5);
+    }
+
+    #[test]
+    #[should_panic]
+    fn indexing_a_vacant_index_panics() {
+        let ids = ids(1);
+
+        let map: ArenaMap<Idx<()>, i32> = ArenaMap::new();
+        let _ = map[ids[0]];
+    }
+
+    #[test]
+    fn clearing_removes_every_entry() {
+        let ids = ids(2);
+        let (a, b) = (ids[0], ids[1]);
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+        map.insert(b, 2);
+
+        map.clear();
+
+        assert!(!map.contains_idx(a));
+        assert_eq!(map.get(b), None);
+        assert_eq!(map.iter().count(), 0);
+
+        map.insert(b, 3);
+        assert_eq!(map.get(b), Some(&3));
+    }
+
+    #[test]
+    fn a_map_is_built_from_pairs_and_extended_with_more() {
+        let ids = ids(3);
+        let (a, b, c) = (ids[0], ids[1], ids[2]);
+
+        let mut map: ArenaMap<Idx<()>, i32> = [(b, 2), (a, 1)].into_iter().collect();
+        map.extend([(c, 3), (a, 10)]);
+
+        assert_eq!(map.get(a), Some(&10));
+        assert_eq!(map.get(b), Some(&2));
+        assert_eq!(map.get(c), Some(&3));
+        assert_eq!(map.iter().map(|(_, value)| *value).collect::<Vec<_>>(), [
+            10, 2, 3
+        ]);
+    }
+
+    #[test]
+    fn a_fresh_map_has_no_entry() {
+        let ids = ids(1);
+        let a = ids[0];
+
+        let empty: ArenaMap<Idx<()>, i32> = ArenaMap::new();
+        let defaulted: ArenaMap<Idx<()>, i32> = ArenaMap::default();
+        let mut reserved = ArenaMap::with_capacity(8);
+        reserved.reserve(8);
+        reserved.insert(a, 1);
+
+        assert_eq!(empty.get(a), None);
+        assert_eq!(defaulted.get(a), None);
+        assert_eq!(reserved.get(a), Some(&1));
+    }
+
+    #[test]
+    fn shrinking_to_fit_keeps_the_entries_and_drops_the_vacant_tail() {
+        let ids = ids(2);
+        let (a, b) = (ids[0], ids[1]);
+        let mut map = ArenaMap::new();
+        map.insert(a, 1);
+        map.insert(b, 2);
+        map.remove(b);
+
+        map.shrink_to_fit();
+
+        assert_eq!(map.get(a), Some(&1));
+        assert!(!map.contains_idx(b));
+        assert_eq!(map.iter().collect::<Vec<_>>(), [(a, &1)]);
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct NodeId(RawIdx);
+
+    impl ArenaIndex for NodeId {
+        fn into_raw(self) -> RawIdx {
+            self.0
+        }
+
+        fn from_raw(raw: RawIdx, _token: ArenaToken) -> Self {
+            NodeId(raw)
+        }
+    }
+
+    #[test]
+    fn any_arena_index_type_can_key_a_map() {
+        let mut arena = Arena::new();
+        let first = NodeId(arena.alloc("a").into_raw());
+        let second = NodeId(arena.alloc("b").into_raw());
+
+        let mut map = ArenaMap::new();
+        map.insert(second, 2);
+        map.insert(first, 1);
+
+        assert_eq!(map.get(first), Some(&1));
+        assert_eq!(map.iter().collect::<Vec<_>>(), [(first, &1), (second, &2)]);
+    }
+}

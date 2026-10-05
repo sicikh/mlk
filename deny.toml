@@ -1,0 +1,43 @@
+# What the dependencies of the workspace may be.
+#
+# `cargo deny check` reads this file: every crate the build pulls in has to be licensed by
+# one of the licenses below, has to be free of advisories the RustSec database knows, and has
+# to come from the registry rather than from a URL or a git repository. The workspace is
+# Apache-2.0 OR MIT (see `Cargo.toml`), so what a dependency may be is what a user of either
+# license can keep.
+
+[advisories]
+# A yanked release is worth knowing about, and it does not break the build: it is read and
+# not refused, because the lockfile is what decides what is built.
+version = 2
+yanked = "warn"
+ignore = []
+
+[licenses]
+version = 2
+# The licenses every crate of the dependency tree is under, as the tree takes them.
+# A license that is not here is a decision: add it only after reading what it asks of a user of
+# either the Apache-2.0 or the MIT half of MLK.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "MIT",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Two versions of one crate are sometimes what the tree takes, and a duplicate is a cost
+# rather than a mistake: it is warned about. A wildcard version is a mistake, because a
+# build of it is not reproducible.
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+# A dependency comes from crates.io or it comes from a vendored crate in the workspace;
+# anywhere else is a supply chain the lockfile does not name.
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -14,8 +14,7 @@ use mlkc_parser_core::{
     diagnostic::ParseDiagnostic,
     lexer::BufferedLexer,
     token_source::{
-        BumpWithContext, TokenSource as TokenSourceTrait, TokenSourceCheckpoint,
-        TokenSourceWithBufferedLexer, Trivia,
+        BumpWithContext, TokenSource as TokenSourceTrait, TokenSourceWithBufferedLexer, Trivia,
     },
 };
 use mlkc_rowan::{TextRange, TextSize, TriviaPieceKind};
@@ -24,7 +23,10 @@ use mlkc_syntax::SyntaxKind::{self, *};
 use crate::lexer::Lexer;
 
 /// The state of the token source: where it is, and how much trivia it has seen.
-pub(crate) type Checkpoint = TokenSourceCheckpoint<SyntaxKind>;
+///
+/// The tests of the token source save one and return to it; the parser reads forward only.
+#[cfg(test)]
+pub(crate) type Checkpoint = mlkc_parser_core::token_source::TokenSourceCheckpoint<SyntaxKind>;
 
 /// Token source for the parser that skips over any trivia token.
 pub(crate) struct TokenSource<'src> {
@@ -86,7 +88,8 @@ impl<'src> TokenSource<'src> {
         }
     }
 
-    /// Creates a checkpoint the token source can later return to with [Self::rewind].
+    /// Creates a checkpoint the tests can later return to with [Self::rewind].
+    #[cfg(test)]
     pub fn checkpoint(&self) -> Checkpoint {
         Checkpoint {
             trivia_len: self.trivia_list.len() as u32,
@@ -98,6 +101,7 @@ impl<'src> TokenSource<'src> {
     ///
     /// The trivia the parser collected since the checkpoint is dropped: it belongs
     /// to tokens the parser decided not to parse.
+    #[cfg(test)]
     pub fn rewind(&mut self, checkpoint: Checkpoint) {
         assert!(self.trivia_list.len() >= checkpoint.trivia_len as usize);
 

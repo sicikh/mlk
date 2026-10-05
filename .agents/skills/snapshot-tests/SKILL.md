@@ -25,6 +25,11 @@ The list is the source of test names: **a new fixture needs a line there**, and 
 when a fixture on disk has no entry.
 The names are spelled out, not derived, so the review sees them when a fixture changes.
 
+A harness lives in `tests/`, so cargo compiles it as a test target of its own as well, where
+nothing calls it: it carries an `#[allow(dead_code, reason = ...)]` for that.
+It is the one place a blanket allowance is honest; elsewhere an item that nothing uses is
+removed or kept with an `#[expect(dead_code, reason = ...)]`.
+
 ## The fixture format
 
 - A single-module fixture is a plain `.mlk` file.

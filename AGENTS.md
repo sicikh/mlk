@@ -40,24 +40,26 @@ Read the one that matches the task before starting:
 
 ## Commands
 
-| Command                               | What it is for                                                                             |
-| ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `just doctor`                         | Check the environment; run it before blaming the build.                                    |
-| `just lint`                           | `cargo clippy --workspace --all-features --all-targets -- --deny warnings`.                |
-| `just test`                           | The workspace test suite.                                                                  |
-| `just test-crate mlkc-lower`          | One crate; the fast loop while iterating.                                                  |
-| `just test-doc`                       | Doc tests.                                                                                 |
-| `just test-review`                    | Run the snapshot tests and review the pending changes interactively.                       |
-| `just check-generated`                | Verify that generated files are up to date, without writing them. Works on a dirty tree.   |
-| `just verify`                         | `check-generated` + `lint` + `test` + `test-doc` + `check-web`. Run this before finishing. |
-| `just check-web`                      | Lint and type-check the editor (oxlint, svelte-check).                                     |
-| `just test-web`                       | Tests of the pure editor modules (Vitest), with no browser.                                |
-| `just verify-web`                     | `verify` plus the editor in a real browser. Needs `obscura` on the path.                   |
-| `just gen-all`                        | Regenerate every generated file; commit the result.                                        |
-| `just format`                         | `cargo fmt` (nightly rustfmt) and `tombi format`.                                          |
-| `just dev-web`                        | The editor on a dev server.                                                                |
-| `cargo run -p mlkc-cli -- parse FILE` | Parse one file and print the trees.                                                        |
-| `cargo run -p mlkc-cli -- run BUILD`  | Run a build: a directory or an archive.                                                    |
+| Command                               | What it is for                                                                            |
+| ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `just doctor`                         | Check the environment; run it before blaming the build.                                   |
+| `just lint`                           | `cargo clippy --workspace --all-features --all-targets -- --deny warnings`.               |
+| `just doc`                            | Build the workspace docs, with every rustdoc warning denied.                              |
+| `just deny`                           | Check the dependencies (licenses, advisories, bans, sources); needs the RustSec database. |
+| `just test`                           | The workspace test suite.                                                                 |
+| `just test-crate mlkc-lower`          | One crate; the fast loop while iterating.                                                 |
+| `just test-doc`                       | Doc tests.                                                                                |
+| `just test-review`                    | Run the snapshot tests and review the pending changes interactively.                      |
+| `just check-generated`                | Verify that generated files are up to date, without writing them. Works on a dirty tree.  |
+| `just verify`                         | `check-generated` + `lint` + `doc` + `test` + `test-doc` + `test-web` + `check-web`.      |
+| `just check-web`                      | Lint and type-check the editor (oxlint, svelte-check).                                    |
+| `just test-web`                       | Tests of the pure editor modules (Vitest), with no browser.                               |
+| `just verify-web`                     | `verify` plus the editor in a real browser. Needs `obscura` on the path.                  |
+| `just gen-all`                        | Regenerate every generated file; commit the result.                                       |
+| `just format`                         | `cargo fmt` (nightly rustfmt) and `tombi format`.                                         |
+| `just dev-web`                        | The editor on a dev server.                                                               |
+| `cargo run -p mlkc-cli -- parse FILE` | Parse one file and print the trees.                                                       |
+| `cargo run -p mlkc-cli -- run BUILD`  | Run a build: a directory or an archive.                                                   |
 
 `just --list` shows everything.
 
@@ -80,7 +82,8 @@ Read the one that matches the task before starting:
 - Snapshot testing is the primary test strategy ([ADR-0006](docs/adr/0006-snapshot-testing.md)).
   A change to an output is accepted deliberately:
   `INSTA_UPDATE=always cargo test -p CRATE`, then `just test-review`.
-- Do not hand-edit `.snap` files, and do not leave `.snap.new` files behind.
+- Do not hand-edit `.snap` files, and do not leave `.snap.new` files behind:
+  the tests of the repository fail on one left in the tree.
 - Fixtures use the one-file project format of `mlkc-fixture` (`//- /path.mlk` headers).
   A new fixture needs an entry in the `*_specs.rs` of its suite;
   the suite fails on an unlisted fixture.
@@ -92,6 +95,8 @@ Read the one that matches the task before starting:
   (one sentence or clause per line), status `proposed` until reviewed.
 - Accepted ADRs are immutable; a changed decision is superseded by a new record.
 - Add the record to `docs/adr/README.md` and link the code it touches.
+  The tests of the repository fail when the index does not name a record beside it,
+  when a link of the index points nowhere, or when a status disagrees with the record's own.
 
 ### Passes
 
@@ -128,14 +133,17 @@ Read the one that matches the task before starting:
 - The Nix flake provides the whole toolchain: `nix develop` gives the pinned Rust,
   the nightly rustfmt the formatter needs, wasm-bindgen-cli
   (the version nixpkgs builds, which `Cargo.toml` pins the crate to),
-  wasm-tools, wasmtime, cargo-insta, just, Node and pnpm through corepack, and obscura.
+  wasm-tools, wasmtime, cargo-insta, cargo-deny, just, Node and pnpm through corepack,
+  and obscura.
   Inside the shell `just install-tools` installs only the pnpm dependencies.
   The flake also builds the compiler as a package: `nix build .#mlkc` (`nix run .#mlkc`).
-- Without Nix, `just install-tools` installs the rest: cargo-insta,
+- Without Nix, `just install-tools` installs the rest: cargo-insta, cargo-deny,
   wasm-bindgen-cli (its version is derived from `Cargo.lock` and must match the `wasm-bindgen` crate),
   wasm-tools, wasmtime, and the pnpm dependencies.
 - `obscura` is needed only by `just check-browser` and `just verify-web`;
   the dev shell and CI both provide it.
+- `cargo-deny` is needed by `just deny`, which CI runs when a dependency changes;
+  the flake and `just install-tools` both provide it.
 - `just doctor` reports what is missing.
 
 ## Delegation
@@ -164,7 +172,10 @@ When a task is big enough to split, split it and keep the pieces independent:
   never let interning order affect an output.
 - The type checker is explicitly temporary ([ADR-0017](docs/adr/0017-resolved-types.md));
   do not design around its internals.
-- `dead_code` is allowed workspace-wide, so the compiler will not flag unused items.
+- `dead_code` is not allowed: an item nothing uses fails the lint gate, so remove it or keep it
+  with `#[expect(dead_code, reason = ...)]` saying what it waits for.
+  A test harness shared by several binaries is the exception, because no single one of them uses
+  all of it: it carries `#[allow(dead_code, reason = ...)]`.
 - The vendored crates are `mlkc-rowan`, `mlkc-text-size`, `mlkc-text-edit`,
   `mlkc-string-case`, `mlkc-ungrammar`;
   their headers say where they came from and how they were stripped.

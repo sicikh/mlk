@@ -239,6 +239,7 @@
               rustfmtNightly
               pkgs.just
               pkgs.cargo-insta
+              pkgs.cargo-deny
               pkgs.wasm-bindgen-cli
               pkgs.wasm-tools
               pkgs.wasmtime

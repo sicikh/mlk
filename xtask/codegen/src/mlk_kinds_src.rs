@@ -165,7 +165,6 @@ pub struct AstListSeparatorConfiguration {
 
 #[derive(Debug)]
 pub struct AstNodeSrc {
-    pub documentation: Vec<String>,
     pub name: String,
     // pub traits: Vec<String>,
     pub fields: Vec<Field>,
@@ -198,7 +197,6 @@ pub enum Field {
 
 #[derive(Debug, Clone)]
 pub struct AstEnumSrc {
-    pub documentation: Vec<String>,
     pub name: String,
     // pub traits: Vec<String>,
     pub variants: Vec<String>,
@@ -323,6 +321,175 @@ impl Field {
         match self {
             Self::Node { unordered, .. } => *unordered,
             Self::Token { unordered, .. } => *unordered,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::language_kind::LanguageKind;
+
+    fn token_field(name: &str) -> Field {
+        Field::Token {
+            name: name.to_string(),
+            kind: TokenKind::Single(name.to_string()),
+            optional: false,
+            unordered: false,
+        }
+    }
+
+    fn node_field(name: &str, ty: &str) -> Field {
+        Field::Node {
+            name: name.to_string(),
+            ty: ty.to_string(),
+            optional: false,
+            unordered: false,
+        }
+    }
+
+    fn ast_node(name: &str) -> AstNodeSrc {
+        AstNodeSrc {
+            name: name.to_string(),
+            fields: vec![],
+            dynamic: false,
+        }
+    }
+
+    fn union(name: &str, variants: &[&str]) -> AstEnumSrc {
+        AstEnumSrc {
+            name: name.to_string(),
+            variants: variants.iter().map(|variant| variant.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn token_field_method_name_maps_punctuation_to_its_accessor_name() {
+        for (token, expected) in [
+            ("=", "eq_token"),
+            (";", "semicolon_token"),
+            ("->", "arrow_token"),
+            ("::", "double_colon_token"),
+            ("'('", "l_paren_token"),
+            ("'['", "l_brack_token"),
+        ] {
+            let method_name = token_field(token).method_name(LanguageKind::Mlk);
+
+            assert_eq!(method_name.to_string(), expected, "token `{token}`");
+        }
+    }
+
+    #[test]
+    fn token_field_method_name_marks_a_keyword_token() {
+        let method_name = token_field("fn").method_name(LanguageKind::Mlk);
+
+        assert_eq!(method_name.to_string(), "fn_token");
+    }
+
+    #[test]
+    fn node_field_method_name_keeps_a_snake_case_name() {
+        let method_name =
+            node_field("path_qualifier", "PathQualifier").method_name(LanguageKind::Mlk);
+
+        assert_eq!(method_name.to_string(), "path_qualifier");
+    }
+
+    #[test]
+    fn node_field_method_name_calls_the_reserved_type_accessor_ty() {
+        let method_name = node_field("type", "Type").method_name(LanguageKind::Mlk);
+
+        assert_eq!(method_name.to_string(), "ty");
+    }
+
+    #[test]
+    fn field_ty_is_syntax_token_for_tokens_and_the_stored_type_for_nodes() {
+        assert_eq!(token_field("'('").ty().to_string(), "SyntaxToken");
+        assert_eq!(node_field("name", "Name").ty().to_string(), "Name");
+    }
+
+    #[test]
+    fn field_flags_report_optionality_and_order() {
+        let field = Field::Token {
+            name: "'+'".to_string(),
+            kind: TokenKind::Single("'+'".to_string()),
+            optional: true,
+            unordered: true,
+        };
+
+        assert!(field.is_optional());
+        assert!(field.is_unordered());
+
+        let required = token_field("'+'");
+        assert!(!required.is_optional());
+        assert!(!required.is_unordered());
+    }
+
+    #[test]
+    fn sort_orders_nodes_unions_variants_and_bogus_by_name() {
+        let mut ast = AstSrc::default();
+        ast.nodes.push(ast_node("Zeta"));
+        ast.nodes.push(ast_node("Alpha"));
+        ast.unions.push(union("Zeta", &["B", "A"]));
+        ast.unions.push(union("Alpha", &["D", "C"]));
+        ast.bogus.push("Zeta".to_string());
+        ast.bogus.push("Alpha".to_string());
+
+        ast.sort();
+
+        let node_names: Vec<_> = ast.nodes.iter().map(|node| node.name.as_str()).collect();
+        let union_names: Vec<_> = ast.unions.iter().map(|union| union.name.as_str()).collect();
+
+        assert_eq!(node_names, ["Alpha", "Zeta"]);
+        assert_eq!(union_names, ["Alpha", "Zeta"]);
+        assert_eq!(ast.unions[0].variants, ["C", "D"]);
+        assert_eq!(ast.unions[1].variants, ["A", "B"]);
+        assert_eq!(ast.bogus, ["Alpha", "Zeta"]);
+    }
+
+    #[test]
+    fn a_pushed_list_is_found_by_name_and_lists_iterate_in_name_order() {
+        let mut ast = AstSrc::default();
+        ast.push_list("Zeta", AstListSrc {
+            element_name: "Z".to_string(),
+            separator: None,
+        });
+        ast.push_list("Alpha", AstListSrc {
+            element_name: "A".to_string(),
+            separator: Some(AstListSeparatorConfiguration {
+                separator_token: ",".to_string(),
+                allow_trailing: true,
+            }),
+        });
+
+        assert!(ast.is_list("Alpha"));
+        assert!(!ast.is_list("Missing"));
+
+        let names: Vec<_> = ast.lists().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["Alpha", "Zeta"]);
+    }
+
+    #[test]
+    fn mlk_kinds_src_declares_each_kind_name_once() {
+        let mut named: Vec<(&str, &str)> = Vec::new();
+        named.extend(
+            MLK_KINDS_SRC
+                .punct
+                .iter()
+                .map(|(_, name)| ("punctuation", *name)),
+        );
+        named.extend(MLK_KINDS_SRC.keywords.iter().map(|name| ("keyword", *name)));
+        named.extend(MLK_KINDS_SRC.literals.iter().map(|name| ("literal", *name)));
+        named.extend(MLK_KINDS_SRC.tokens.iter().map(|name| ("token", *name)));
+        named.extend(MLK_KINDS_SRC.nodes.iter().map(|name| ("node", *name)));
+
+        let mut seen: HashMap<&str, &str> = HashMap::new();
+
+        for (category, name) in named {
+            if let Some(previous) = seen.insert(name, category) {
+                panic!("`{name}` is declared both as a {previous} and as a {category}");
+            }
         }
     }
 }

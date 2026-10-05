@@ -1,7 +1,7 @@
 //! The structured control flow of a body ([ADR-0022][adr-0022]).
 //!
 //! The LIR is a control-flow graph, and WASM is not: its control flow is a tree of `block`,
-//! `loop`, and `if` frames, and a branch names the frame it leaves. The [structure] of a body
+//! `loop`, and `if` frames, and a branch names the frame it leaves. The structure of a body
 //! is that tree: the plan the structuring pass builds, and what encoding writes out. It is a
 //! record of a decision, like the [`Locals`](crate::Locals) table, and not a second form of the
 //! IR: the blocks and their instructions are the body's, and a [`Node::Leaf`] is where the

@@ -30,6 +30,8 @@ Then read the cluster of the area you are about to touch.
 | [0001](0001-adr-process.md)       | Use ADR to record architecture decisions                  | accepted |
 | [0005](0005-compiler-pipeline.md) | Define the compilation pipeline and its stage terminology | proposed |
 | [0006](0006-snapshot-testing.md)  | Use snapshot testing as the primary test strategy         | accepted |
+| [0008](0008-compiler-driver.md)   | Drive the compiler from a host-agnostic pull-based cache  | accepted |
+| [0009](0009-pass-contract.md)     | Define the contract of a compiler pass                    | accepted |
 
 ### Syntax and surface language
 

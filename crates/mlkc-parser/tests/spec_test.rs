@@ -14,6 +14,15 @@
 //! `specs/valid` must be diagnostics-free and hold no bogus or incomplete node at all,
 //! while the ones under `specs/invalid` are a mistake and where the parser got to after it.
 
+// The file is a harness of the suite, and cargo compiles it as a test target of its own as
+// well: in that target nothing calls it, which is what the allowance is for. An `allow`
+// rather than an `expect` because the target that includes the file does call it, and an
+// expectation that is not fulfilled is an error too.
+#![allow(
+    dead_code,
+    reason = "the harness is a test target of its own, where nothing calls it"
+)]
+
 use std::{
     fmt::Write,
     fs,

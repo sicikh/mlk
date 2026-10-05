@@ -199,18 +199,13 @@ fn make_ast(grammar: &Grammar) -> AstSrc {
                     variants
                 };
 
-                ast.unions.push(AstEnumSrc {
-                    documentation: vec![],
-                    name,
-                    variants,
-                })
+                ast.unions.push(AstEnumSrc { name, variants })
             },
             NodeRuleClassification::Node => {
                 let mut fields = vec![];
                 handle_rule(&mut fields, grammar, rule, None, false, false);
                 let is_dynamic = fields.iter().any(|field| field.is_unordered());
                 ast.nodes.push(AstNodeSrc {
-                    documentation: vec![],
                     name,
                     fields,
                     dynamic: is_dynamic,
@@ -220,7 +215,6 @@ fn make_ast(grammar: &Grammar) -> AstSrc {
                 let mut fields = vec![];
                 handle_rule(&mut fields, grammar, rule, None, false, true);
                 ast.nodes.push(AstNodeSrc {
-                    documentation: vec![],
                     name,
                     fields,
                     dynamic: true,
@@ -513,4 +507,188 @@ fn handle_tokens_in_unions(
     };
     fields.push(field);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ast_src(src: &str) -> AstSrc {
+        make_ast(
+            &src.parse::<Grammar>()
+                .expect("the grammar literal to parse"),
+        )
+    }
+
+    fn node_named<'a>(ast: &'a AstSrc, name: &str) -> &'a AstNodeSrc {
+        ast.nodes
+            .iter()
+            .find(|node| node.name == name)
+            .unwrap_or_else(|| panic!("expected a node named `{name}`"))
+    }
+
+    #[test]
+    fn a_union_rule_is_read_as_its_node_variants() {
+        let ast = ast_src("Choice = First | Second\nFirst = 'a'\nSecond = 'b'");
+
+        assert_eq!(ast.unions.len(), 1);
+        assert_eq!(ast.unions[0].name, "Choice");
+        assert_eq!(ast.unions[0].variants, ["First", "Second"]);
+    }
+
+    #[test]
+    fn a_repetition_rule_is_read_as_a_list_of_its_element() {
+        let ast = ast_src("Items = Item*\nItem = 'i'");
+
+        assert!(ast.is_list("Items"));
+
+        let list = &ast.lists["Items"];
+        assert_eq!(list.element_name, "Item");
+        assert!(list.separator.is_none());
+    }
+
+    #[test]
+    fn a_comma_separated_rule_is_read_as_a_list_with_its_separator() {
+        let ast = ast_src("Items = (Item (',' Item)*)\nItem = 'i'");
+
+        let separator = ast.lists["Items"].separator.as_ref().expect("a separator");
+        assert_eq!(separator.separator_token, ",");
+        assert!(!separator.allow_trailing);
+    }
+
+    #[test]
+    fn a_trailing_comma_in_the_rule_is_read_on_the_list() {
+        let ast = ast_src("Items = (Item (',' Item)* ','?)\nItem = 'i'");
+
+        let separator = ast.lists["Items"].separator.as_ref().expect("a separator");
+        assert!(separator.allow_trailing);
+    }
+
+    #[test]
+    fn a_syntax_element_repetition_is_read_as_a_bogus_node() {
+        let ast = ast_src("Bogus = SyntaxElement*\nSyntaxElement = SyntaxElement");
+
+        assert_eq!(ast.bogus, ["Bogus"]);
+        assert!(ast.nodes.is_empty());
+    }
+
+    #[test]
+    fn a_node_rule_takes_its_fields_from_labels_and_positions() {
+        let ast = ast_src("Pair = left: Value ',' right: Value?\nValue = 'v'");
+
+        let expected = [
+            Field::Node {
+                name: "left".into(),
+                ty: "Value".into(),
+                optional: false,
+                unordered: false,
+            },
+            Field::Token {
+                name: ",".into(),
+                kind: TokenKind::Single(",".into()),
+                optional: false,
+                unordered: false,
+            },
+            Field::Node {
+                name: "right".into(),
+                ty: "Value".into(),
+                optional: true,
+                unordered: false,
+            },
+        ];
+
+        assert_eq!(node_named(&ast, "Pair").fields, expected);
+    }
+
+    #[test]
+    fn an_unordered_rule_is_read_as_a_dynamic_node() {
+        let ast = ast_src(
+            "Required = a: Value && b: Value\nOptional = a: Value || b: Value\nValue = 'v'",
+        );
+
+        let required = node_named(&ast, "Required");
+        assert!(required.dynamic);
+        assert!(
+            required
+                .fields
+                .iter()
+                .all(|field| field.is_unordered() && !field.is_optional())
+        );
+
+        let optional = node_named(&ast, "Optional");
+        assert!(optional.dynamic);
+        assert!(
+            optional
+                .fields
+                .iter()
+                .all(|field| field.is_unordered() && field.is_optional())
+        );
+    }
+
+    #[test]
+    fn a_labeled_alternation_of_tokens_is_read_as_one_field_of_many_kinds() {
+        let ast = ast_src("Unary = op: ('-' | '+')\n");
+
+        let expected = [Field::Token {
+            name: "op".into(),
+            kind: TokenKind::Many(vec!["-".into(), "+".into()]),
+            optional: false,
+            unordered: false,
+        }];
+
+        assert_eq!(node_named(&ast, "Unary").fields, expected);
+    }
+
+    #[test]
+    #[should_panic(expected = "used twice")]
+    fn a_repeated_union_variant_is_rejected() {
+        check_unions(&[AstEnumSrc {
+            name: "Choice".to_string(),
+            variants: vec!["Value".to_string(), "Value".to_string()],
+        }]);
+    }
+
+    #[test]
+    #[should_panic(expected = "circular dependency")]
+    fn a_cycle_between_unions_is_rejected() {
+        check_unions(&[
+            AstEnumSrc {
+                name: "A".to_string(),
+                variants: vec!["B".to_string()],
+            },
+            AstEnumSrc {
+                name: "B".to_string(),
+                variants: vec!["A".to_string()],
+            },
+        ]);
+    }
+
+    #[test]
+    fn the_mlk_grammar_parses_into_the_expected_ast_source() {
+        let ast = load_ast(LanguageKind::Mlk);
+
+        assert!(ast.nodes.iter().any(|node| node.name == "IfExpr"));
+        assert_eq!(ast.bogus, [
+            "Bogus",
+            "BogusDecl",
+            "BogusExpr",
+            "BogusParameter",
+            "BogusPat",
+            "BogusType"
+        ]);
+
+        let parameter_list = &ast.lists["ParameterList"];
+        assert_eq!(parameter_list.element_name, "AnyParameter");
+
+        let separator = parameter_list
+            .separator
+            .as_ref()
+            .expect("a comma separator");
+        assert_eq!(separator.separator_token, ",");
+        assert!(!separator.allow_trailing);
+
+        let type_arg_list = &ast.lists["TypeArgList"];
+        let separator = type_arg_list.separator.as_ref().expect("a comma separator");
+        assert!(separator.allow_trailing);
+    }
 }

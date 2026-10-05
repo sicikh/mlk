@@ -125,3 +125,101 @@ macro_rules! ice {
 pub fn ice_impl(message: String, file: &'static str, line: u32, column: u32) -> ! {
     std::panic::panic_any(Ice::new(message, file, line, column))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use super::*;
+
+    #[test]
+    fn new_keeps_the_message_and_the_place_it_was_given() {
+        let ice = Ice::new(
+            "a resolved name without a declaration".to_owned(),
+            "crates/mlkc-resolve/src/name.rs",
+            42,
+            7,
+        );
+
+        assert_eq!(ice.message(), "a resolved name without a declaration");
+        assert_eq!(ice.location(), "crates/mlkc-resolve/src/name.rs:42:7");
+        assert!(!ice.backtrace().to_string().trim().is_empty());
+    }
+
+    #[test]
+    fn display_reports_the_message_the_place_and_that_it_is_a_bug() {
+        let ice = Ice::new("an assumption broke".to_owned(), "src/pass.rs", 9, 1);
+
+        let rendered = ice.to_string();
+
+        assert!(rendered.starts_with("an assumption broke\n  at src/pass.rs:9:1\n"));
+        assert!(
+            rendered.ends_with("  = note: this is a bug of the compiler, and not of your program")
+        );
+    }
+
+    #[test]
+    fn an_ice_is_an_error_a_host_can_carry() {
+        let ice = Ice::new("an assumption broke".to_owned(), "src/pass.rs", 9, 1);
+
+        let error: &dyn Error = &ice;
+
+        assert!(error.source().is_none());
+    }
+
+    #[test]
+    fn of_gives_an_ice_payload_back_at_its_own_place() {
+        let caught = Ice::of(Box::new(Ice::new(
+            "an assumption broke".to_owned(),
+            "src/pass.rs",
+            9,
+            1,
+        )));
+
+        assert_eq!(caught.message(), "an assumption broke");
+        assert_eq!(caught.location(), "src/pass.rs:9:1");
+    }
+
+    #[test]
+    fn of_reads_a_str_payload_the_way_a_panic_writes_it() {
+        let caught = Ice::of(Box::new("index out of bounds"));
+
+        assert_eq!(caught.message(), "index out of bounds");
+        assert_eq!(caught.location(), "<unknown>:0:0");
+    }
+
+    #[test]
+    fn of_reads_a_string_payload() {
+        let caught = Ice::of(Box::new(String::from("assertion failed")));
+
+        assert_eq!(caught.message(), "assertion failed");
+        assert_eq!(caught.location(), "<unknown>:0:0");
+    }
+
+    #[test]
+    fn of_names_a_payload_it_cannot_read() {
+        let caught = Ice::of(Box::new(42_u32));
+
+        assert_eq!(
+            caught.message(),
+            "<a panic with a payload the compiler cannot read>"
+        );
+        assert_eq!(caught.location(), "<unknown>:0:0");
+    }
+
+    #[test]
+    fn the_ice_macro_carries_the_message_and_the_place_it_was_written() {
+        let caught = std::panic::catch_unwind(|| crate::ice!("no declaration for {}", "Name"))
+            .expect_err("the macro to stop the compiler");
+        let caught = caught
+            .downcast::<Ice>()
+            .expect("the payload to be an internal compiler exception");
+
+        assert_eq!(caught.message(), "no declaration for Name");
+        assert!(
+            caught.location().starts_with(&format!("{}:", file!())),
+            "the exception is raised where the macro was written, got {}",
+            caught.location()
+        );
+    }
+}

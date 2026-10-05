@@ -665,27 +665,6 @@ impl CodeRef<'_> {
 
         Ok(())
     }
-
-    /// The successors and the predecessors of every block, by position.
-    fn edges(&self) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
-        let mut succs = vec![Vec::new(); self.blocks.len()];
-        let mut preds = vec![Vec::new(); self.blocks.len()];
-
-        for (id, block) in self.blocks.iter() {
-            let from = id.index();
-
-            for target in targets(&block.term) {
-                let to = target.block.index();
-
-                if to < self.blocks.len() {
-                    succs[from].push(to);
-                    preds[to].push(from);
-                }
-            }
-        }
-
-        (succs, preds)
-    }
 }
 
 /// Where a value is defined.

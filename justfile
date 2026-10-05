@@ -23,6 +23,7 @@ install-tools:
     # where it is already around — a CI image, a second run — it is not built again.
     command -v cargo-binstall >/dev/null || cargo install cargo-binstall
     cargo binstall cargo-insta
+    cargo binstall cargo-deny
     cargo binstall wasm-bindgen-cli --version "={{ wasm_bindgen }}"
     cargo binstall wasm-tools
     cargo binstall wasmtime-cli
@@ -33,6 +34,7 @@ install-tools:
 upgrade-tools:
     cargo install cargo-binstall --force
     cargo binstall cargo-insta --force
+    cargo binstall cargo-deny --force
     cargo binstall wasm-bindgen-cli --force
     cargo binstall wasm-tools --force
     cargo binstall wasmtime-cli --force
@@ -50,7 +52,7 @@ doctor:
             missing="$missing $tool"
         fi
     done
-    for tool in cargo-insta wasm-bindgen wasm-tools wasmtime obscura; do
+    for tool in cargo-insta wasm-bindgen wasm-tools wasmtime obscura cargo-deny; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf 'ok       %s\n' "$tool"
         else
@@ -72,6 +74,15 @@ format:
 # Run clippy on the whole codebase
 lint:
     cargo clippy --workspace --all-features --all-targets -- --deny warnings
+
+# Build the documentation of the workspace, refusing every warning of rustdoc
+doc:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+
+# Check every dependency of the lockfile: its license, its advisories, and the bans the workspace keeps
+# The advisories are read from the RustSec database, which is fetched on the first run.
+deny:
+    cargo deny check
 
 # Run tests of all crates
 test:
@@ -130,7 +141,7 @@ check-generated:
     fi
 
 # Check the tree the way CI does, without a browser; unlike `just ready`, works on a dirty tree
-verify: check-generated lint test test-doc test-web check-web
+verify: check-generated lint doc test test-doc test-web check-web
 
 # `just verify` plus the editor in a real browser; needs `obscura`, and builds the site
 verify-web: verify check-browser

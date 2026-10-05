@@ -257,15 +257,6 @@ impl Refinements {
     pub(crate) fn get(&self, value: ValueId) -> &Refinement {
         &self.values[value.index()]
     }
-
-    /// The refinement of an operand.
-    pub(crate) fn operand(&self, operand: &Operand) -> Refinement {
-        match operand {
-            Operand::Value(value) => self.get(*value).clone(),
-            Operand::Local(_) => Refinement::Word,
-            Operand::Const(constant) => of_const(constant),
-        }
-    }
 }
 
 /// The refinement a right-hand side computes.

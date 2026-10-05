@@ -40,13 +40,6 @@ impl<T> ArenaIndex for Idx<T> {
 #[repr(transparent)]
 pub struct RawIdx(NonZeroU32);
 
-impl RawIdx {
-    /// Maximum value of [`RawIdx`].
-    const MAX: u32 = u32::MAX - 1;
-    /// Minimum value of [`RawIdx`].
-    const MIN: u32 = 1;
-}
-
 const _: () = assert!(size_of::<Option<Idx<()>>>() == size_of::<Idx<()>>());
 
 impl RawIdx {
@@ -769,5 +762,302 @@ impl<T> Extend<T> for Arena<T> {
         for t in iter {
             self.alloc(t);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU32;
+
+    use super::*;
+
+    #[test]
+    fn alloc_hands_out_dense_zero_based_ids_in_order() {
+        let mut arena = Arena::new();
+
+        let a = arena.alloc(10);
+        let b = arena.alloc(20);
+        let c = arena.alloc(30);
+
+        assert_eq!(a.index(), 0);
+        assert_eq!(b.index(), 1);
+        assert_eq!(c.index(), 2);
+        assert_eq!(a.into_raw().into_u32(), 1);
+        assert_eq!(arena[a], 10);
+        assert_eq!(arena[b], 20);
+        assert_eq!(arena[c], 30);
+    }
+
+    #[test]
+    fn ids_order_by_allocation_not_by_value() {
+        let mut arena = Arena::new();
+
+        let first = arena.alloc(9);
+        let second = arena.alloc(1);
+
+        assert!(first < second);
+        assert_eq!(arena.values().copied().collect::<Vec<_>>(), [9, 1]);
+    }
+
+    #[test]
+    fn iteration_follows_allocation_order() {
+        let mut arena = Arena::new();
+        let a = arena.alloc("a");
+        let b = arena.alloc("b");
+        let c = arena.alloc("c");
+
+        assert_eq!(arena.iter().collect::<Vec<_>>(), [
+            (a, &"a"),
+            (b, &"b"),
+            (c, &"c")
+        ]);
+        assert_eq!(arena.values().collect::<Vec<_>>(), [&"a", &"b", &"c"]);
+        assert_eq!(arena.iter().rev().collect::<Vec<_>>(), [
+            (c, &"c"),
+            (b, &"b"),
+            (a, &"a")
+        ]);
+        assert_eq!(arena.iter().len(), arena.len());
+    }
+
+    #[test]
+    fn iter_mut_and_values_mut_write_through() {
+        let mut arena = Arena::new();
+        let a = arena.alloc(1);
+        let b = arena.alloc(2);
+
+        for (_, value) in arena.iter_mut() {
+            *value *= 10;
+        }
+        for value in arena.values_mut() {
+            *value += 1;
+        }
+
+        assert_eq!(arena[a], 11);
+        assert_eq!(arena[b], 21);
+    }
+
+    #[test]
+    fn into_iter_yields_ids_and_values_in_order() {
+        let mut arena = Arena::new();
+        let a = arena.alloc('a');
+        let b = arena.alloc('b');
+
+        assert_eq!(arena.into_iter().collect::<Vec<_>>(), [(a, 'a'), (b, 'b')]);
+    }
+
+    #[test]
+    fn collecting_allocates_densely_in_order() {
+        let arena: Arena<i32> = (10..13).collect();
+
+        assert_eq!(arena.len(), 3);
+        assert_eq!(arena.values().copied().collect::<Vec<_>>(), [10, 11, 12]);
+        assert_eq!(
+            arena.iter().map(|(idx, _)| idx.index()).collect::<Vec<_>>(),
+            [0, 1, 2]
+        );
+    }
+
+    #[test]
+    fn extending_appends_without_moving_existing_ids() {
+        let mut arena = Arena::new();
+        let first = arena.alloc(1);
+
+        arena.extend([2, 3]);
+
+        assert_eq!(arena[first], 1);
+        assert_eq!(arena.values().copied().collect::<Vec<_>>(), [1, 2, 3]);
+        assert_eq!(
+            arena.iter().map(|(idx, _)| idx.index()).collect::<Vec<_>>(),
+            [0, 1, 2]
+        );
+    }
+
+    #[test]
+    fn clearing_empties_the_arena_and_restarts_the_ids() {
+        let mut arena = Arena::new();
+        arena.alloc(1);
+        arena.alloc(2);
+
+        arena.clear();
+
+        assert!(arena.is_empty());
+        assert_eq!(arena, Arena::new());
+
+        let fresh = arena.alloc(3);
+        assert_eq!(fresh.index(), 0);
+        assert_eq!(arena[fresh], 3);
+        assert_eq!(arena.len(), 1);
+    }
+
+    #[test]
+    fn default_and_with_capacity_start_empty() {
+        assert!(Arena::<i32>::new().is_empty());
+        assert!(Arena::<i32>::default().is_empty());
+        assert!(Arena::<i32>::with_capacity(8).is_empty());
+        assert_eq!(Arena::<i32>::with_capacity(8).len(), 0);
+    }
+
+    #[test]
+    fn alloc_many_returns_the_half_open_range_of_new_ids() {
+        let mut arena = Arena::new();
+        arena.alloc(99);
+
+        let range = arena.alloc_many([1, 2, 3]);
+
+        assert_eq!(range.start().index(), 1);
+        assert_eq!(range.end().index(), 4);
+        assert!(!range.is_empty());
+        assert_eq!(&arena[range], &[1, 2, 3]);
+    }
+
+    #[test]
+    fn allocating_no_value_yields_an_empty_range() {
+        let mut arena: Arena<i32> = Arena::new();
+
+        let range = arena.alloc_many([]);
+
+        assert!(range.is_empty());
+        assert_eq!(range.start(), range.end());
+        assert!(arena[range].is_empty());
+        assert_eq!(range.iter().count(), 0);
+    }
+
+    #[test]
+    fn an_index_range_indexes_a_half_open_slice() {
+        let mut arena = Arena::new();
+        arena.alloc("a");
+        let b = arena.alloc("b");
+        arena.alloc("c");
+        let d = arena.alloc("d");
+
+        let exclusive = IdxRange::from(b..d);
+
+        assert_eq!(&arena[exclusive], &["b", "c"]);
+        assert_eq!(exclusive.start(), b);
+        assert_eq!(exclusive.end(), d);
+
+        let inclusive = IdxRange::from(b..=d);
+
+        assert_eq!(&arena[inclusive], &["b", "c", "d"]);
+        assert_eq!(inclusive.end().index(), d.index() + 1);
+        assert_eq!(&arena[IdxRange::from(b..=b)], &["b"]);
+
+        assert!(IdxRange::from(b..b).is_empty());
+        assert!(!IdxRange::from(b..=b).is_empty());
+    }
+
+    #[test]
+    fn an_index_range_can_be_written_through() {
+        let mut arena = Arena::new();
+        arena.alloc(0);
+        let b = arena.alloc(1);
+        arena.alloc(2);
+        let d = arena.alloc(3);
+
+        let range = IdxRange::from(b..d);
+
+        for value in &mut arena[range] {
+            *value *= 10;
+        }
+
+        assert_eq!(&arena[range], &[10, 20]);
+    }
+
+    #[test]
+    fn a_range_iterates_forward_and_backward_over_its_ids() {
+        let mut arena = Arena::new();
+        arena.alloc(0);
+        let b = arena.alloc(1);
+        let c = arena.alloc(2);
+        let d = arena.alloc(3);
+
+        let range = IdxRange::from(b..d);
+
+        assert_eq!(range.iter().collect::<Vec<_>>(), [b, c]);
+        assert_eq!(range.iter().rev().collect::<Vec<_>>(), [c, b]);
+        assert_eq!(range.iter().len(), 2);
+        assert_eq!(range.into_iter().next_back(), Some(c));
+        assert_eq!(range.into_iter().count(), 2);
+    }
+
+    #[test]
+    fn shrinking_preserves_ids_and_values() {
+        let mut arena = Arena::with_capacity(64);
+        let a = arena.alloc("a");
+        let b = arena.alloc("b");
+
+        arena.shrink_to_fit();
+
+        assert_eq!(arena[a], "a");
+        assert_eq!(arena[b], "b");
+        assert_eq!(arena.iter().collect::<Vec<_>>(), [(a, &"a"), (b, &"b")]);
+    }
+
+    #[test]
+    fn as_mut_exposes_the_values_as_a_slice_in_allocation_order() {
+        let mut arena = Arena::new();
+        let first = arena.alloc(1);
+        arena.alloc(2);
+
+        let slice: &mut [i32] = arena.as_mut();
+        slice.swap(0, 1);
+
+        assert_eq!(arena[first], 2);
+        assert_eq!(arena.values().copied().collect::<Vec<_>>(), [2, 1]);
+    }
+
+    #[test]
+    fn option_of_an_idx_costs_no_more_than_the_idx() {
+        fn assert_niche<T>() {
+            assert_eq!(size_of::<Option<Idx<T>>>(), size_of::<Idx<T>>());
+        }
+
+        assert_niche::<u32>();
+        assert_niche::<String>();
+        assert_eq!(size_of::<RawIdx>(), size_of::<u32>());
+        assert_eq!(size_of::<Option<RawIdx>>(), size_of::<RawIdx>());
+        assert_eq!(size_of::<ArenaToken>(), 0);
+    }
+
+    #[test]
+    fn a_raw_idx_roundtrips_through_the_u32_conversions() {
+        let raw = RawIdx::new(NonZeroU32::new(7).unwrap());
+
+        assert_eq!(raw.into_u32(), 7);
+        assert_eq!(u32::from(raw), 7);
+        assert_eq!(NonZeroU32::from(raw), NonZeroU32::new(7).unwrap());
+        assert_eq!(RawIdx::from(NonZeroU32::new(7).unwrap()), raw);
+    }
+
+    #[test]
+    fn a_raw_idx_carries_the_position_plus_one() {
+        assert_eq!(RawIdx::from_index(0).into_u32(), 1);
+        assert_eq!(RawIdx::from_index(0).to_index(), 0);
+        assert_eq!(RawIdx::from_index(41).to_index(), 41);
+    }
+
+    #[test]
+    #[should_panic]
+    fn a_raw_idx_refuses_the_value_reserved_for_none() {
+        RawIdx::new(NonZeroU32::new(u32::MAX).unwrap());
+    }
+
+    #[test]
+    #[should_panic]
+    fn converting_the_sentinel_from_a_nonzero_u32_panics_too() {
+        let _ = RawIdx::from(NonZeroU32::new(u32::MAX).unwrap());
+    }
+
+    #[test]
+    fn an_idx_roundtrips_through_the_arena_index_trait() {
+        let mut arena = Arena::new();
+        let idx = arena.alloc("value");
+
+        let raw = ArenaIndex::into_raw(idx);
+        let back = <Idx<&str> as ArenaIndex>::from_raw(raw, ArenaToken(()));
+
+        assert_eq!(back, idx);
+        assert_eq!(arena[back], "value");
     }
 }

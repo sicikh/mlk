@@ -92,8 +92,8 @@ fn losslessness(string: String) -> bool {
         let mut lexer = Lexer::from_str(&source);
         let mut ranges = Vec::new();
 
-        while let Some(token) = lexer.next_token() {
-            ranges.push(token.range());
+        while let Some(range) = lexer.next_token_range() {
+            ranges.push(range);
         }
 
         sender.send(ranges).expect("could not send the tokens");

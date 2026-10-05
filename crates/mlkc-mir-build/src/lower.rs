@@ -92,13 +92,12 @@ pub fn lower_body(
         .and_then(|types| types.get(&EntityLoc::from(owner.clone())).cloned())
         .unwrap_or(Ty::Error);
     let function = FunctionLoc::Entity(owner.clone());
-    let mut builder = BodyBuilder::new(function.clone(), ty)
+    let mut builder = BodyBuilder::new(function, ty)
         .name(owner.item.name().cloned())
         .param_names(param_names(body, body.params()));
     let entry = open_block(&mut builder);
     let lowerer = Lowerer {
         origin: owner.clone(),
-        function: function.clone(),
         module,
         body,
         source_map,
@@ -129,7 +128,7 @@ pub fn lower_body(
             origin: owner.clone(),
             id: LiftedId::Local(id),
         };
-        let mut builder = BodyBuilder::new(function.clone(), ty)
+        let mut builder = BodyBuilder::new(function, ty)
             .name(Some(data.name.clone()))
             .param_names(param_names(body, &data.params));
         let entry = open_block(&mut builder);
@@ -138,7 +137,6 @@ pub fn lower_body(
             .expect("a function declared inside a body to have a root");
         let lowerer = Lowerer {
             origin: owner.clone(),
-            function,
             module,
             body,
             source_map,
@@ -202,8 +200,6 @@ fn open_block(builder: &mut BodyBuilder) -> BlockId {
 struct Lowerer<'a, 'g> {
     /// The entity whose HIR body is being lowered; every function lifted out of it names it.
     origin: BodyEntityLoc,
-    /// The function being lowered.
-    function: FunctionLoc,
     /// The module the body is of.
     module: ModuleId,
     /// The HIR body.
@@ -414,14 +410,13 @@ impl Lowerer<'_, '_> {
 
         self.lambdas.push(None);
 
-        let mut builder = BodyBuilder::new(function.clone(), ty).param_names(param_names(
+        let mut builder = BodyBuilder::new(function, ty).param_names(param_names(
             self.body,
             &params.iter().map(|param| param.pat).collect::<Vec<_>>(),
         ));
         let entry = open_block(&mut builder);
         let lowerer = Lowerer {
             origin: self.origin.clone(),
-            function,
             module: self.module,
             body: self.body,
             source_map: self.source_map,

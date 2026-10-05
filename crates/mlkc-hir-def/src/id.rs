@@ -1,6 +1,6 @@
 //! The identity of a module-level entity: its kind, its name, and its id.
 //!
-//! The kinds are declared once, in [`crate::macros`], and the families that have
+//! The kinds are declared once, in `crate::macros`, and the families that have
 //! to agree with them are generated from that list; what is written here is the part
 //! that is not a function of the list: module ids, the shared data of a name,
 //! the subsets the language defines, and the ids of the entities inside a body.

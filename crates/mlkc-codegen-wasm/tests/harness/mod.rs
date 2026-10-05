@@ -13,6 +13,13 @@
 //! [adr-0020]: ../../../docs/adr/0020-wasm-backend.md
 //! [adr-0021]: ../../../docs/adr/0021-translation-units.md
 
+// One harness is shared by the test binaries of the suite, and no single one of them uses all
+// of what it offers: what a binary does not call is not dead code.
+#![allow(
+    dead_code,
+    reason = "the harness is shared by the test binaries of the suite, and no one of them uses all of it"
+)]
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

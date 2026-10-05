@@ -1,6 +1,6 @@
 # Represent a lambda as a lifted function and a closure word
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-04
 
 ## Context and Problem Statement

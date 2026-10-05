@@ -30,6 +30,31 @@ upgrade-tools:
     cargo binstall wasm-tools --force
     cargo binstall wasmtime-cli --force
 
+# Check that the tools the repository uses are on the path; run it before blaming the build
+doctor:
+    #!/usr/bin/env sh
+    set -u
+    missing=""
+    for tool in cargo rustc just node pnpm; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            printf 'ok       %s\n' "$tool"
+        else
+            printf 'MISSING  %s\n' "$tool"
+            missing="$missing $tool"
+        fi
+    done
+    for tool in cargo-insta wasm-bindgen wasm-tools wasmtime obscura; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            printf 'ok       %s\n' "$tool"
+        else
+            printf 'optional %s is missing; the checks that use it cannot run\n' "$tool"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        printf '\nthe required tools above are missing: install the prerequisites of README.md, then run `just install-tools`\n' >&2
+        exit 1
+    fi
+
 # Format Rust and TOML files
 format:
     cargo +nightly fmt --all --verbose
@@ -50,6 +75,10 @@ test-crate name:
 # Run doc tests
 test-doc:
     cargo test --doc
+
+# Review the pending snapshot changes interactively, and accept the ones you mean
+test-review:
+    cargo insta test --review
 
 # Build the wasm package the editor loads from `packages/wasm`
 build-wasm:
@@ -72,6 +101,27 @@ check-web:
 check-browser:
     pnpm --filter @mlk/web check:browser
 
+# Say whether generated files are up to date, without writing them; works on a dirty tree
+check-generated:
+    #!/usr/bin/env sh
+    set -eu
+    cargo run -p xtask-codegen -- check
+    # lezer-generator writes the output as `<path>.ts`, so the temporary name ends in `.ts` too.
+    tmp="$(mktemp).ts"
+    trap 'rm -f "$tmp"' EXIT
+    pnpm --filter @mlk/web exec lezer-generator --noTerms --typeScript src/lib/grammar/mlk.grammar -o "$tmp"
+    if ! cmp -s web/src/lib/grammar/mlk.ts "$tmp"; then
+        echo 'web/src/lib/grammar/mlk.ts is not what lezer-generator makes of src/lib/grammar/mlk.grammar' >&2
+        echo 'run `just gen-grammar` and commit the result' >&2
+        exit 1
+    fi
+
+# Check the tree the way CI does, without a browser; unlike `just ready`, works on a dirty tree
+verify: check-generated lint test test-doc check-web
+
+# `just verify` plus the editor in a real browser; needs `obscura`, and builds the site
+verify-web: verify check-browser
+
 # Generates the code of the grammars
 gen-grammar:
     cargo run -p xtask-codegen -- grammar
@@ -90,9 +140,6 @@ ready:
     git diff --exit-code --quiet
     just gen-all
     #just format # format is already run in `just gen-all`
-    just lint
-    just test
-    just test-doc
-    just check-web
+    just verify
     just check-browser
     git diff --exit-code --quiet

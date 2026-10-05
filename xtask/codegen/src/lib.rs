@@ -65,4 +65,7 @@ pub enum TaskCommand {
     /// Runs ALL the codegen
     #[bpaf(command)]
     All,
+    /// Checks that the generated files are what the generators make of their sources
+    #[bpaf(command)]
+    Check,
 }

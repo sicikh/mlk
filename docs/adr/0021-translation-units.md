@@ -385,3 +385,4 @@ and shared memories and tables.
 [0018-values-as-words.md]: 0018-values-as-words.md
 [0020-wasm-backend.md]: 0020-wasm-backend.md
 [0025-debug-information-formats.md]: 0025-debug-information-formats.md
+[`Manifest`]: ../../crates/mlkc-driver/src/manifest.rs

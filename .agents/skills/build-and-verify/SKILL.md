@@ -37,6 +37,21 @@ The dependencies have gates of their own, which CI runs rather than `verify`:
 `cargo-deny` fetches the RustSec database on the first run, which is why it is not part of a
 local `verify`; run it when a dependency or the lockfile changed.
 
+## Reports
+
+The slow checks report rather than gate ([ADR-0027](../../../docs/adr/0027-scheduled-reports.md)):
+none of them is part of `just verify`, and CI runs them on a weekly schedule and by hand.
+Run one when the change makes it interesting, and say what it reported.
+
+| Command                        | Reports                                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `just coverage`                | What the suite reaches (`cargo-llvm-cov`), as HTML and LCOV under `target/coverage`.               |
+| `just mutants [crate]`         | Which mutants of one crate the tests do not notice (`cargo-mutants`); a test run per mutant.       |
+| `just fuzz [target] [seconds]` | Arbitrary bytes through `parse` (losslessness) or `lower` (no panic); needs the nightly toolchain. |
+
+`just lint` compiles the fuzz targets, so `just verify` does catch the API drift between
+reports; what it never does is run a fuzzer or measure the suite.
+
 ## Snapshots
 
 - `INSTA_UPDATE=always cargo test -p CRATE` rewrites the snapshots of a crate.
@@ -63,6 +78,7 @@ local `verify`; run it when a dependency or the lockfile changed.
 | Editor modules under `src/lib`   | `just test-web`                                      |
 | Editor types, templates, script  | `just check-web`                                     |
 | Editor behavior, wasm boundary   | `just verify-web`                                    |
+| The shape of the suite           | `just coverage`, `just mutants CRATE` (reports)      |
 | Anything, before reporting       | `just verify`                                        |
 
 ## When a tool is missing
@@ -72,3 +88,5 @@ local `verify`; run it when a dependency or the lockfile changed.
 - no `cargo-insta`: `just test` still runs; `just test-review` cannot;
 - no `cargo-nextest`: `just test` and `just test-crate` cannot run; `cargo test` still does;
 - no `cargo-deny`: `just deny` cannot run; say so, and note that CI runs it.
+- no `cargo-llvm-cov`, `cargo-mutants`, or `cargo-fuzz`: the reports cannot run;
+  say so, and note that CI runs them on a schedule.

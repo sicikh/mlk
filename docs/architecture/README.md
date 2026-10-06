@@ -226,6 +226,13 @@ so they are also the names to look for when something is slow.
 - The editor's pure modules (`web/src/lib/*.ts`) are tested by `just test-web` (Vitest),
   with values in and values out; the lint and the types of the sources are `just check-web`,
   and `just check-browser` drives the built site in a real browser.
+- The suite is measured rather than gated ([ADR-0027](../adr/0027-scheduled-reports.md)):
+  `just coverage` reports what the tests reach (`cargo-llvm-cov`),
+  `just mutants [crate]` reports what they would not notice (`cargo-mutants`),
+  and `just fuzz [target] [seconds]` runs the targets of `fuzz/` on arbitrary bytes ---
+  `parse` for losslessness, `lower` for the totality of the lowering.
+  CI runs all three on a schedule; `just lint` compiles the fuzz targets,
+  and none of it is part of `just verify`.
 
 ## Maintaining this file
 
@@ -234,6 +241,11 @@ Update it in the same change that:
 - adds, removes, or renames a crate — the crate tables;
 - adds or renames a driver pass — the pass table;
 - adds a pipeline stage or changes the pipeline order — the diagram and the pass table;
-- moves a responsibility between crates — the recipe that names it.
+- moves a responsibility between crates --- the recipe that names it.
+
+Two tests of `xtask/glue` hold the file to the code:
+a crate of `crates/` or `xtask/` that no table names,
+a row that names nothing that is a crate,
+and a pass table that disagrees with `Pass` all fail `just test`.
 
 `docs/adr/README.md` carries the decision index; a new ADR is added there, not here.

@@ -25,6 +25,16 @@ updates:
           # move in one change, and a lone hashbrown bump never compiles.
           - dependency-name: "hashbrown"
 
+    # The fuzz targets are a workspace of their own, so the root `Cargo.lock` does not
+    # cover them; `libfuzzer-sys` is bumped here.
+    - package-ecosystem: cargo
+      directory: /fuzz
+      schedule:
+          interval: weekly
+      groups:
+          fuzz:
+              patterns: ["*"]
+
     # The packages of the pnpm workspace, `web` and `packages/*` included.
     - package-ecosystem: npm
       directory: /

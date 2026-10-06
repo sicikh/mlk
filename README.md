@@ -27,6 +27,7 @@ Try it in the browser at [MLK playground](https://sicikh.github.io/mlk/).
 | `crates/`            | The compiler workspace: one crate per pipeline stage, plus the infrastructure and the hosts. |
 | `xtask/`             | Code generation: the syntax tree and AST are generated from `xtask/codegen/mlk.ungram`.      |
 | `library/std/`       | The standard library, written in MLK.                                                        |
+| `fuzz/`              | The fuzz targets of the parser and the lowering; a workspace of its own.                     |
 | `web/`               | The editor: SvelteKit, CodeMirror 6, and the inspector panels.                               |
 | `packages/wasm/`     | The `wasm-bindgen` package the editor loads, built from `mlkc-wasm`.                         |
 | `docs/architecture/` | The map of the compiler: pipeline, crates, where to change what.                             |
@@ -77,6 +78,9 @@ cargo run -p mlkc-cli -- run path/to/a/build          # run a build the editor p
 | `just ready`      | The human's final gate: requires a clean tree and a browser, and regenerates everything. |
 
 `just --list` shows every recipe.
+
+The slow checks report rather than gate ([ADR-0027](docs/adr/0027-scheduled-reports.md)):
+`just coverage`, `just mutants`, and `just fuzz`; CI runs them on a schedule.
 
 ## Documentation
 

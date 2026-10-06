@@ -32,6 +32,7 @@ Then read the cluster of the area you are about to touch.
 | [0006](0006-snapshot-testing.md)  | Use snapshot testing as the primary test strategy         | accepted |
 | [0008](0008-compiler-driver.md)   | Drive the compiler from a host-agnostic pull-based cache  | accepted |
 | [0009](0009-pass-contract.md)     | Define the contract of a compiler pass                    | accepted |
+| [0027](0027-scheduled-reports.md) | Run coverage, mutation, and fuzzing as scheduled reports  | accepted |
 
 ### Syntax and surface language
 

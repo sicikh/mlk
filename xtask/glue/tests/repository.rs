@@ -1,5 +1,6 @@
 //! What the repository itself has to hold: the index of the ADRs agrees with the records
-//! beside it, and no snapshot was left half-accepted.
+//! beside it, no snapshot was left half-accepted, the map names the crates and the passes
+//! that are there, and no source globs the module it is written in.
 //!
 //! These are checks rather than unit tests of a function: what they read is the tree as it
 //! stands, so a record added to `docs/adr` without a line in the index, a status that drifts
@@ -364,5 +365,157 @@ fn no_source_globs_the_module_it_is_written_in() {
         found.is_empty(),
         "a module imports a glob over the one it is written in:\n{}",
         found.join("\n"),
+    );
+}
+
+/// The workspace members of the root `Cargo.toml`: every directory `crates/*` and `xtask/*`
+/// that carries a `Cargo.toml`, by the path the map links it by --- `crates/mlkc-parser`.
+fn workspace_members() -> Vec<String> {
+    let root = project_root();
+    let mut members = Vec::new();
+
+    for tree in ["crates", "xtask"] {
+        let dir = root.join(tree);
+        let entries =
+            fs::read_dir(&dir).unwrap_or_else(|_| panic!("{} is not readable", dir.display()));
+
+        for entry in entries {
+            let path = entry.expect("the tree is readable").path();
+
+            if path.join("Cargo.toml").is_file() {
+                let name = path
+                    .file_name()
+                    .and_then(|it| it.to_str())
+                    .unwrap_or_default();
+
+                members.push(format!("{tree}/{name}"));
+            }
+        }
+    }
+
+    members.sort();
+    members
+}
+
+/// The passes `Pass::name` gives, in the order the match writes them.
+///
+/// The list is read from the source rather than linked against `mlkc-driver`, so that the
+/// check is a text of the repository and the test of the driver remains the one that keeps
+/// `Pass` and `Pass::ALL` in step.
+fn driver_passes() -> Vec<String> {
+    let path = project_root().join("crates/mlkc-driver/src/driver/stats.rs");
+    let source = fs::read_to_string(&path).expect("the passes of the driver are readable");
+    let mut passes = Vec::new();
+
+    for line in source.lines() {
+        let Some(rest) = line.trim().strip_prefix("Pass::") else {
+            continue;
+        };
+        let Some((_, arm)) = rest.split_once("=>") else {
+            continue;
+        };
+        let name = arm
+            .trim()
+            .strip_prefix('"')
+            .and_then(|it| it.split('"').next());
+
+        if let Some(name) = name {
+            passes.push(name.to_owned());
+        }
+    }
+
+    passes
+}
+
+/// The names of the pass table of the map, in the order it writes them.
+fn map_passes(map: &str) -> Vec<String> {
+    let mut passes = Vec::new();
+    let mut in_table = false;
+
+    for line in map.lines() {
+        let line = line.trim_start();
+
+        if !in_table {
+            if line.starts_with("| Pass") {
+                in_table = true;
+            }
+
+            continue;
+        }
+
+        if !line.starts_with('|') {
+            break;
+        }
+
+        let name = line
+            .trim_start_matches('|')
+            .split('|')
+            .next()
+            .map(str::trim)
+            .and_then(|it| it.strip_prefix('`'))
+            .and_then(|it| it.strip_suffix('`'));
+
+        if let Some(name) = name {
+            passes.push(name.to_owned());
+        }
+    }
+
+    passes
+}
+
+/// The map names every crate of the workspace, and every crate it names is one: a crate
+/// added to `crates/` or `xtask/` without a row in a table of the map fails here, and so
+/// does a row that outlives its crate.
+#[test]
+fn the_map_and_the_workspace_name_the_same_crates() {
+    let root = project_root();
+    let map = fs::read_to_string(root.join("docs/architecture/README.md"))
+        .expect("the map of the architecture is not readable");
+    let mut named = Vec::new();
+
+    for link in links_in(&map) {
+        if link.starts_with('#') || link.contains("://") {
+            continue;
+        }
+
+        let target = link
+            .split('#')
+            .next()
+            .unwrap_or(&link)
+            .trim_end_matches('/');
+        let Some(member) = target.strip_prefix("../../") else {
+            continue;
+        };
+
+        if !(member.starts_with("crates/") || member.starts_with("xtask/")) {
+            continue;
+        }
+
+        assert!(
+            root.join(member).join("Cargo.toml").is_file(),
+            "the map links `{target}`, which is not a crate of the workspace",
+        );
+        named.push(member.to_owned());
+    }
+
+    for member in workspace_members() {
+        assert!(
+            named.iter().any(|it| it == &member),
+            "the map does not name `{member}`, a member of the workspace; add it to a crate table",
+        );
+    }
+}
+
+/// The map lists the passes the driver runs, in the order it runs them: a pass added to
+/// `Pass` without a row here --- or a row that outlives its pass --- fails the test.
+#[test]
+fn the_map_lists_the_passes_the_driver_runs() {
+    let map = fs::read_to_string(project_root().join("docs/architecture/README.md"))
+        .expect("the map of the architecture is not readable");
+
+    assert_eq!(
+        map_passes(&map),
+        driver_passes(),
+        "the pass table of the map and `Pass` have drifted apart",
     );
 }

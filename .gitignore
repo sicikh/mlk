@@ -13,6 +13,12 @@ packages/wasm/lib
 
 **/mutants.out*/
 
+# The corpus a fuzz run builds, and the crashes it finds; the seeds that are committed
+# live in `fuzz/seeds`.
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
+
 rustc-ice-*.txt
 
 .idea/

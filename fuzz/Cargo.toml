@@ -1,0 +1,59 @@
+# The fuzz targets of the parser and the lowering, in a workspace of their own.
+#
+# They are not members of the root workspace on purpose: `cargo fuzz` builds them with the
+# sanitizer flags only a nightly rustc accepts, and those flags would invalidate the build
+# cache of every other command. `just fuzz` drives them, and the `Reports` workflow of CI
+# runs them on a schedule; they are not part of `just verify` ([ADR-0027]).
+#
+# `just format` formats this crate; `just check-generated` knows nothing of it, since nothing
+# here is generated.
+#
+# [adr-0027]: ../docs/adr/0027-scheduled-reports.md
+
+[package]
+name = "mlkc-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+# The targets are binaries, and not tests: the suite of the root workspace does not run them,
+# and a release build keeps the debug information a crash report is read through.
+[[bin]]
+bench = false
+doc = false
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+
+[[bin]]
+bench = false
+doc = false
+name = "lower"
+path = "fuzz_targets/lower.rs"
+test = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.mlkc-hir-def]
+path = "../crates/mlkc-hir-def"
+
+[dependencies.mlkc-lower]
+path = "../crates/mlkc-lower"
+
+[dependencies.mlkc-parser]
+path = "../crates/mlkc-parser"
+
+[dependencies.mlkc-syntax]
+path = "../crates/mlkc-syntax"
+
+[dependencies.mlkc-vfs]
+path = "../crates/mlkc-vfs"
+
+[profile.release]
+debug = 1

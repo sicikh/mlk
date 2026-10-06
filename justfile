@@ -25,6 +25,13 @@ install-tools:
     cargo binstall cargo-insta
     cargo binstall cargo-deny
     cargo binstall cargo-nextest
+    # The reports that never gate (`docs/adr/0027-scheduled-reports.md`): coverage,
+    # mutation testing, and fuzzing. `cargo-fuzz` publishes no binaries, and the fuzz
+    # targets build with the nightly toolchain `just fuzz` falls back to.
+    cargo binstall cargo-llvm-cov
+    cargo binstall cargo-mutants
+    cargo install cargo-fuzz
+    rustup toolchain install nightly --profile minimal
     cargo binstall wasm-bindgen-cli --version "={{ wasm_bindgen }}"
     cargo binstall wasm-tools
     cargo binstall wasmtime-cli
@@ -37,6 +44,10 @@ upgrade-tools:
     cargo binstall cargo-insta --force
     cargo binstall cargo-deny --force
     cargo binstall cargo-nextest --force
+    cargo binstall cargo-llvm-cov --force
+    cargo binstall cargo-mutants --force
+    cargo install cargo-fuzz --force
+    rustup update nightly
     cargo binstall wasm-bindgen-cli --force
     cargo binstall wasm-tools --force
     cargo binstall wasmtime-cli --force
@@ -54,7 +65,7 @@ doctor:
             missing="$missing $tool"
         fi
     done
-    for tool in cargo-insta wasm-bindgen wasm-tools wasmtime obscura cargo-deny; do
+    for tool in cargo-insta wasm-bindgen wasm-tools wasmtime obscura cargo-deny cargo-llvm-cov cargo-mutants cargo-fuzz; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf 'ok       %s\n' "$tool"
         else
@@ -79,12 +90,14 @@ doctor:
 # installed, and `RUSTFMT` does in the Nix dev shell.
 format:
     RUSTUP_TOOLCHAIN=nightly cargo fmt --all --verbose
+    RUSTUP_TOOLCHAIN=nightly cargo fmt --manifest-path fuzz/Cargo.toml --verbose
     pnpm format
     nixfmt flake.nix
 
-# Run clippy on the whole codebase
+# Run clippy on the whole codebase, the fuzz targets included
 lint:
     cargo clippy --workspace --all-features --all-targets -- --deny warnings
+    cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- --deny warnings
 
 # Build the documentation of the workspace, refusing every warning of rustdoc
 doc:
@@ -110,6 +123,41 @@ test-doc:
 # Review the pending snapshot changes interactively, and accept the ones you mean
 test-review:
     cargo insta test --review
+
+# Report the coverage of the suite with cargo-llvm-cov; a report, never a gate.
+# The vendored crates and the generated files are not ours to cover, so they are left out.
+# The suite runs once, writing LCOV; the HTML report is rendered from the same run.
+coverage:
+    #!/usr/bin/env sh
+    set -eu
+    ignore='(mlkc-rowan|mlkc-text-size|mlkc-text-edit|mlkc-ungrammar|mlkc-string-case|/generated/)'
+    mkdir -p target/coverage
+    cargo llvm-cov --workspace --all-features \
+        --lcov --output-path target/coverage/lcov.info \
+        --ignore-filename-regex "$ignore"
+    cargo llvm-cov report --html --output-dir target/coverage/html \
+        --ignore-filename-regex "$ignore"
+
+# Run mutation testing on one crate with cargo-mutants; a report, never a gate.
+# It is slow --- a test run per mutant --- so it takes one crate at a time.
+mutants crate="mlkc-paths":
+    cargo mutants -p {{ crate }} --in-place
+
+# Fuzz one target of the `fuzz` workspace for a while; a report, never a gate.
+# The dev shell provides the nightly toolchain through `MLK_FUZZ_TOOLCHAIN`; without it,
+# rustup's nightly is used. The seeds of `fuzz/seeds` open the corpus of a fresh target.
+fuzz target="parse" seconds="60":
+    #!/usr/bin/env sh
+    set -eu
+    corpus="fuzz/corpus/{{ target }}"
+    mkdir -p "$corpus"
+    if [ -z "$(ls -A "$corpus")" ]; then
+        cp fuzz/seeds/* "$corpus"/
+    fi
+    if [ -n "${MLK_FUZZ_TOOLCHAIN:-}" ]; then
+        PATH="${MLK_FUZZ_TOOLCHAIN}/bin:$PATH" exec cargo fuzz run {{ target }} -- -max_total_time={{ seconds }}
+    fi
+    exec cargo +nightly fuzz run {{ target }} -- -max_total_time={{ seconds }}
 
 # Build the wasm package the editor loads from `packages/wasm`
 build-wasm:

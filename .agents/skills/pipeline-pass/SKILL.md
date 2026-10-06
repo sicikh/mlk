@@ -41,7 +41,9 @@ See `CheckDeps` in `crates/mlkc-hir-ty` and its use in
    are the models to copy.
 4. Register the pass: add a variant to `Pass` in `crates/mlkc-driver/src/driver/stats.rs`.
    The test `every_pass_is_counted` there fails when a variant is missing from `ALL` or has no
-   name. Add a `Unit` if the pass runs per body, module, file, or project.
+   name. Add a `Unit` if the pass runs per body, module, file, or project. The pass table of
+   `docs/architecture/README.md` is held to `Pass` by a test of `xtask/glue`, so add its row in
+   the same change.
 5. Never let a pipeline crate depend on `mlkc-driver`; the direction is driver → pipeline.
 6. Test the pass directly: a snapshot test with a hand-built input, no driver and no file system
    (`docs/adr/0009-pass-contract.md`; the `snapshot-tests` skill). Snapshot invalid inputs too.
@@ -54,4 +56,5 @@ See `CheckDeps` in `crates/mlkc-hir-ty` and its use in
       (a missing dependency shows up as an unresolved name, never as an unkeyed read);
 - [ ] the pass is in `Pass::ALL` and has a name;
 - [ ] `just test-crate CRATE` passes, and `just verify` passes before finishing;
-- [ ] `docs/architecture/README.md` is updated when a stage or a pass is added or renamed.
+- [ ] `docs/architecture/README.md` is updated when a stage or a pass is added or renamed;
+      the map tests of `xtask/glue` fail until the table and the workspace agree again.

@@ -128,11 +128,13 @@
           channel = toolchain.toolchain.channel;
 
           # The toolchain the repository builds with; the components and targets come
-          # from `rust-toolchain.toml`, so a laptop and CI agree.
+          # from `rust-toolchain.toml`, so a laptop and CI agree. `llvm-tools-preview` is
+          # what `cargo llvm-cov` reads the coverage data with.
           rust = pkgs.rust-bin.stable.${channel}.minimal.override {
             extensions = (toolchain.toolchain.components or [ ]) ++ [
               "rust-analyzer"
               "rust-src"
+              "llvm-tools-preview"
             ];
             targets = toolchain.toolchain.targets or [ ];
           };
@@ -143,6 +145,12 @@
           rustNightly = pkgs.rust-bin.nightly."2026-09-30".minimal.override {
             extensions = [ "rustfmt" ];
           };
+
+          # The nightly toolchain the fuzz targets build with: `cargo fuzz` asks rustc for
+          # sanitizer flags only a nightly accepts. It is deliberately not on the shell's
+          # path --- those flags would invalidate the build cache of everything else ---
+          # and `just fuzz` puts it first on the path of its own command.
+          rustFuzz = pkgs.rust-bin.nightly."2026-09-30".minimal;
 
           # A `rustfmt` that is the pinned nightly one and nothing else. The stable toolchain
           # has no rustfmt; `cargo fmt` reads `RUSTFMT`, and xtask runs `rustfmt --version`.
@@ -200,6 +208,7 @@
             pkgs
             rust
             rustfmtNightly
+            rustFuzz
             mlkc
             obscuraPkg
             ;
@@ -213,6 +222,7 @@
             pkgs
             rust
             rustfmtNightly
+            rustFuzz
             obscuraPkg
             ;
 
@@ -241,6 +251,11 @@
               pkgs.cargo-insta
               pkgs.cargo-deny
               pkgs.cargo-nextest
+              # The reports that never gate: the coverage of the suite, mutation testing,
+              # and the fuzz targets ([ADR-0027](docs/adr/0027-scheduled-reports.md)).
+              pkgs.cargo-llvm-cov
+              pkgs.cargo-mutants
+              pkgs.cargo-fuzz
               pkgs.wasm-bindgen-cli
               pkgs.wasm-tools
               pkgs.wasmtime
@@ -264,6 +279,10 @@
               # reads `RUSTFMT`, and xtask checks that `rustfmt --version` says nightly.
               # `rustfmtNightly` provides the one `rustfmt` the shell has.
               export RUSTFMT="${rustfmtNightly}/bin/rustfmt"
+
+              # The fuzz targets build with the nightly toolchain; `just fuzz` reads this
+              # path and puts it before the shell's stable one for its own command.
+              export MLK_FUZZ_TOOLCHAIN="${rustFuzz}"
 
               # pnpm is the one corepack pins in `package.json`; it is downloaded on
               # first use, with the integrity hash from that field.

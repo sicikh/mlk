@@ -1,0 +1,141 @@
+# The reports that would slow the gate down instead of guarding it: the coverage of the
+# suite, mutation testing of one crate, and a short fuzz of the parser and the lowering.
+#
+# They run on a schedule and by hand, never on a pull request, and nothing here is required
+# to merge: a red run is a finding to read, not a branch to unblock ([ADR-0027]). Each job
+# runs its commands inside the same Nix dev shell as `ci.yml`, so the tools are the pins of
+# `flake.nix` and `just --list` is the same on a laptop.
+#
+# [adr-0027]: ../docs/adr/0027-scheduled-reports.md
+name: Reports
+
+on:
+    schedule:
+        # Monday, 04:23 UTC: after the week's merges, before the week's work.
+        - cron: "23 4 * * 1"
+    workflow_dispatch:
+        inputs:
+            mutants-crate:
+                description: The crate `just mutants` runs on
+                default: mlkc-paths
+            fuzz-seconds:
+                description: How long each fuzz target runs
+                default: "120"
+
+permissions:
+    contents: read
+
+# A report that is still running while a new one starts is a waste of a runner; the new
+# one replaces it on the same ref.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    coverage:
+        name: coverage
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+              with:
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+              with:
+                  shared-key: ci
+                  workspaces: |
+                      . -> target
+                      fuzz -> target
+            # The suite runs instrumented, and the report is written under `target/coverage`;
+            # the vendored crates and the generated files are left out of it.
+            - run: nix develop -c just coverage
+            # The summary is what a person reads without downloading the HTML report.
+            - name: the summary in the run
+              run: nix develop -c cargo llvm-cov report --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              if: always()
+              with:
+                  name: coverage
+                  path: target/coverage
+                  if-no-files-found: ignore
+
+    mutants:
+        name: mutants
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+              with:
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+              with:
+                  shared-key: ci
+                  workspaces: |
+                      . -> target
+                      fuzz -> target
+            # One test run per mutant: the crate is the input, and the report says which of
+            # its mutants the tests did not notice.
+            - name: mutation testing
+              env:
+                  CRATE: ${{ inputs.mutants-crate || 'mlkc-paths' }}
+              run: nix develop -c just mutants "$CRATE"
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              if: always()
+              with:
+                  name: mutants
+                  path: mutants.out
+                  if-no-files-found: ignore
+
+    fuzz:
+        name: fuzz ${{ matrix.target }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        strategy:
+            # One target that finds a bug does not cancel the other's run.
+            fail-fast: false
+            matrix:
+                target: [parse, lower]
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+              with:
+                  primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
+                  restore-prefixes-first-match: nix-${{ runner.os }}-
+            - name: the toolchain, for the cache below
+              run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
+            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+              with:
+                  shared-key: ci
+                  workspaces: |
+                      . -> target
+                      fuzz -> target
+            # The targets build with the nightly toolchain of the flake; the run starts from
+            # the corpus just fuzzed in CI and walks away from it.
+            - name: fuzzing
+              env:
+                  RUN_SECONDS: ${{ inputs.fuzz-seconds || '120' }}
+              run: nix develop -c just fuzz ${{ matrix.target }} "$RUN_SECONDS"
+            # A crash is an input, and the input is the artifact; the corpus of the run is
+            # uploaded beside it so that the next run can start from where this one stopped.
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              if: always()
+              with:
+                  name: fuzz-${{ matrix.target }}
+                  path: |
+                      fuzz/artifacts
+                      fuzz/corpus
+                  if-no-files-found: ignore

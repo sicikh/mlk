@@ -50,6 +50,9 @@ Read the one that matches the task before starting:
 | `just test-crate mlkc-lower`          | One crate; the fast loop while iterating.                                                 |
 | `just test-doc`                       | Doc tests.                                                                                |
 | `just test-review`                    | Run the snapshot tests and review the pending changes interactively.                      |
+| `just coverage`                       | Report the coverage of the tests; slow, and never a gate.                                 |
+| `just mutants [crate]`                | Which mutants of one crate the tests do not notice (`cargo-mutants`); slow.               |
+| `just fuzz [target] [seconds]`        | Run a fuzz target of `fuzz/` (parse, lower); needs a nightly toolchain.                   |
 | `just check-generated`                | Verify that generated files are up to date, without writing them. Works on a dirty tree.  |
 | `just verify`                         | `check-generated` + `lint` + `doc` + `test` + `test-doc` + `test-web` + `check-web`.      |
 | `just check-web`                      | Lint and type-check the editor (oxlint, svelte-check).                                    |
@@ -118,6 +121,9 @@ Read the one that matches the task before starting:
   When the editor or the wasm boundary changed, also `just verify-web` —
   and if `obscura` is missing, say so instead of silently skipping it.
 - Never claim a check passed unless you ran it.
+- The reports — `just coverage`, `just mutants`, `just fuzz` — are not part of the gate
+  ([ADR-0027](docs/adr/0027-scheduled-reports.md)); CI runs them on a schedule.
+  Run one when the change makes it interesting, and say what it reported.
 
 ### Lints
 
@@ -144,6 +150,7 @@ Read the one that matches the task before starting:
   the nightly rustfmt the formatter needs, wasm-bindgen-cli
   (the version nixpkgs builds, which `Cargo.toml` pins the crate to),
   wasm-tools, wasmtime, cargo-insta, cargo-deny, cargo-nextest, just,
+  cargo-llvm-cov, cargo-mutants, and cargo-fuzz with the nightly toolchain `just fuzz` uses,
   Node and pnpm through corepack, and obscura.
   It also carries `rg` and `fd` (prefer them to `grep` and `find`),
   `jq` and `tokei` for reading the tree,
@@ -151,7 +158,8 @@ Read the one that matches the task before starting:
   Inside the shell `just install-tools` installs only the pnpm dependencies.
   The flake also builds the compiler as a package: `nix build .#mlkc` (`nix run .#mlkc`).
 - Without Nix, `just install-tools` installs the rest: cargo-insta, cargo-deny,
-  cargo-nextest, wasm-bindgen-cli
+  cargo-nextest, cargo-llvm-cov, cargo-mutants, cargo-fuzz,
+  a nightly toolchain for the fuzz targets, wasm-bindgen-cli
   (its version is derived from `Cargo.lock` and must match the `wasm-bindgen` crate),
   wasm-tools, wasmtime, and the pnpm dependencies;
   `rg`, `fd`, `jq`, `tokei`, `nixfmt`, and `nil` come from the system's package manager.
@@ -177,7 +185,7 @@ When a task is big enough to split, split it and keep the pieces independent:
 - Give each subagent: the goal, the exact paths it may write, the relevant ADR numbers,
   the commands that will verify it, and what "done" means.
 - Shared files have exactly one writer: `Cargo.toml`, `Cargo.lock`, `justfile`, `AGENTS.md`,
-  `docs/architecture/*`, `docs/adr/README.md`, `.github/workflows/ci.yml`.
+  `docs/architecture/*`, `docs/adr/README.md`, `.github/workflows/*.yml`.
 - After merging the pieces, run `just verify` on the combined result.
 - Small tasks are cheaper with one agent; delegation costs context.
 
@@ -199,3 +207,7 @@ When a task is big enough to split, split it and keep the pieces independent:
   Prefer adapting to them over rewriting them.
 - The editor's browser check drives real wasm-GC and has obscura-specific workarounds.
   Do not weaken what a check asserts without understanding why it asserts it.
+- Fuzzing lives in `fuzz/`, a workspace of its own with its own lockfile and build cache
+  ([ADR-0027](docs/adr/0027-scheduled-reports.md)): `cargo fuzz` needs the nightly rustc
+  the dev shell pins, `just verify` compiles the targets through `just lint` but never runs
+  them, and the seeded and found inputs are committed under `fuzz/seeds`, not `fuzz/corpus`.

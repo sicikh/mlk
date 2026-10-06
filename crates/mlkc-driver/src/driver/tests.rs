@@ -74,7 +74,7 @@ fn driver_with(name: &str, text: &str) -> (Driver, FileId) {
     let mut driver = Driver::new();
     let path = path(name);
 
-    driver.set_file_text(path.clone(), Some(text.to_string()));
+    driver.set_file_text(path.clone(), Some(text.to_owned()));
 
     let file = driver.file_id(&path).expect("the file to have an id");
 
@@ -100,7 +100,7 @@ fn driver_with_std(name: &str, text: &str) -> (Driver, FileId) {
     driver.set_project(project(), data);
 
     let path = path(name);
-    driver.set_file_text(path.clone(), Some(text.to_string()));
+    driver.set_file_text(path.clone(), Some(text.to_owned()));
 
     let file = driver.file_id(&path).expect("the file to have an id");
     driver.set_module_project(ModuleId(file), project());
@@ -312,7 +312,7 @@ fn pushing_the_same_text_again_changes_nothing() {
     let (mut driver, file) = driver_with("main.mlk", MODULE);
     let first = driver.parse(file).expect("the file to be parsed");
 
-    let changed = driver.set_file_text(path("main.mlk"), Some(MODULE.to_string()));
+    let changed = driver.set_file_text(path("main.mlk"), Some(MODULE.to_owned()));
 
     assert!(!changed, "the contents were the same");
     assert!(Arc::ptr_eq(
@@ -458,7 +458,7 @@ fn the_hir_follows_the_text_and_the_old_one_keeps_its_own() {
     let (mut driver, file) = driver_with("main.mlk", MODULE);
     let before = driver.lower(file).expect("the file to be lowered");
 
-    driver.set_file_text(path("main.mlk"), Some(BROKEN.to_string()));
+    driver.set_file_text(path("main.mlk"), Some(BROKEN.to_owned()));
     let after = driver.lower(file).expect("the file to be lowered");
 
     assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
@@ -568,7 +568,7 @@ fn a_module_is_called_by_where_its_file_stands() {
     let (mut driver, main) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
     let lib = path("lib/arith.mlk");
 
-    driver.set_file_text(lib.clone(), Some("fun size(): Int =\n    1\n".to_string()));
+    driver.set_file_text(lib.clone(), Some("fun size(): Int =\n    1\n".to_owned()));
     let lib = driver.file_id(&lib).expect("the file to have an id");
 
     // A module is called by the place of its file, and a project is a set of modules:
@@ -598,7 +598,7 @@ fn a_module_is_called_by_where_its_file_stands() {
 
     driver.set_file_text(
         elsewhere.clone(),
-        Some("fun size(): Int =\n    1\n".to_string()),
+        Some("fun size(): Int =\n    1\n".to_owned()),
     );
     let elsewhere = driver.file_id(&elsewhere).expect("the file to have an id");
 
@@ -627,7 +627,7 @@ fn a_project_changes_only_what_belongs_to_it() {
     let (mut driver, main) = driver_with("main.mlk", "fun main(): Int =\n    1\n");
     driver.set_file_text(
         path("lib.mlk"),
-        Some("fun size(): Int =\n    1\n".to_string()),
+        Some("fun size(): Int =\n    1\n".to_owned()),
     );
     let lib = driver
         .file_id(&path("lib.mlk"))
@@ -681,7 +681,7 @@ fn a_module_that_changes_project_is_read_with_the_other_project() {
     // recorded as a module of a project is read with the prelude of it.
     driver.set_file_text(
         path("lib.mlk"),
-        Some("fun size(): Int =\n    1\n".to_string()),
+        Some("fun size(): Int =\n    1\n".to_owned()),
     );
     let lib = driver
         .file_id(&path("lib.mlk"))
@@ -1799,7 +1799,7 @@ fn the_parses_of_two_files_share_no_nodes() {
     // parses: what one file shares is with the revision before it, and not with another
     // file. That is the price of parsing the files of a project at once.
     let (mut driver, first) = driver_with("one.mlk", MODULE);
-    driver.set_file_text(path("two.mlk"), Some(MODULE.to_string()));
+    driver.set_file_text(path("two.mlk"), Some(MODULE.to_owned()));
 
     let second = driver
         .file_id(&path("two.mlk"))
@@ -1853,7 +1853,7 @@ fn a_changed_file_is_parsed_again_and_the_old_value_keeps_its_text() {
     let (mut driver, file) = driver_with("main.mlk", MODULE);
     let before = driver.parse(file).expect("the file to be parsed");
 
-    driver.set_file_text(path("main.mlk"), Some(BROKEN.to_string()));
+    driver.set_file_text(path("main.mlk"), Some(BROKEN.to_owned()));
     let after = driver.parse(file).expect("the file to be parsed");
 
     assert!(!Arc::ptr_eq(&before, &after), "the slot was not rebuilt");
@@ -1985,7 +1985,7 @@ fn the_diagnostics_follow_the_text_and_the_old_ones_stay_as_they_were() {
 
     assert!(!broken.is_empty());
 
-    driver.set_file_text(path("main.mlk"), Some(MODULE.to_string()));
+    driver.set_file_text(path("main.mlk"), Some(MODULE.to_owned()));
     let fixed = driver.diagnostics(file).expect("the file to be parsed");
 
     assert!(fixed.is_empty(), "the module parses cleanly now");
@@ -2018,7 +2018,7 @@ fn the_line_index_follows_the_text() {
         col: 0
     });
 
-    driver.set_file_text(path("main.mlk"), Some("x\n".to_string()));
+    driver.set_file_text(path("main.mlk"), Some("x\n".to_owned()));
     let rebuilt = driver.line_index(file).expect("the file to have an index");
 
     assert!(!Arc::ptr_eq(&index, &rebuilt), "the index was not rebuilt");
@@ -2031,20 +2031,20 @@ fn take_changes_reports_the_net_effect_since_the_last_call() {
     let path = path("main.mlk");
     let others = ["one", "two"];
 
-    driver.set_file_text(path.clone(), Some(others[0].to_string()));
+    driver.set_file_text(path.clone(), Some(others[0].to_owned()));
 
     let created = driver.take_changes();
     assert_eq!(created.len(), 1);
     assert_eq!(created[0].change, Change::Create);
     assert!(driver.take_changes().is_empty(), "a drain drains");
 
-    driver.set_file_text(path.clone(), Some(others[0].to_string()));
+    driver.set_file_text(path.clone(), Some(others[0].to_owned()));
     assert!(
         driver.take_changes().is_empty(),
         "the same contents are not a change"
     );
 
-    driver.set_file_text(path.clone(), Some(others[1].to_string()));
+    driver.set_file_text(path.clone(), Some(others[1].to_owned()));
     assert_eq!(driver.take_changes()[0].change, Change::Modify);
 
     driver.set_file_text(path, None);
@@ -2207,7 +2207,7 @@ fn an_edit_of_a_body_links_the_program_again() {
 
     driver.set_file_text(
         path("math.mlk"),
-        Some("pub fun twice(value: Int): Int =\n    value * 3\n".to_string()),
+        Some("pub fun twice(value: Int): Int =\n    value * 3\n".to_owned()),
     );
 
     let after = driver.link(&project()).expect("the project to link");

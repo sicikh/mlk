@@ -2161,7 +2161,7 @@ impl Diagnostic {
     ///
     /// The line and the column are counted from zero and in bytes,
     /// because that is what a byte offset turns into without reading the text again.
-    /// An editor that speaks another unit — `CodeMirror` counts UTF-16 code units —
+    /// An editor that speaks another unit — CodeMirror counts UTF-16 code units —
     /// converts the column of the line it already has.
     fn of(diagnostic: &mlkc_diagnostics::Diagnostic, index: &LineIndex) -> Self {
         Self::rendered(diagnostic, |span| {
@@ -2195,10 +2195,10 @@ impl Diagnostic {
         mut line_col: impl FnMut(Span) -> (u32, u32),
     ) -> Self {
         Self {
-            level: diagnostic.level.as_str().to_string(),
-            category: diagnostic.category.as_str().to_string(),
-            category_code: diagnostic.category.as_code().to_string(),
-            code: diagnostic.code.to_string(),
+            level: diagnostic.level.as_str().to_owned(),
+            category: diagnostic.category.as_str().to_owned(),
+            category_code: diagnostic.category.as_code().to_owned(),
+            code: diagnostic.code.to_owned(),
             message: diagnostic.message.clone(),
             labels: diagnostic
                 .labels
@@ -2288,7 +2288,7 @@ mod tests {
         assert_eq!(path_of("main.mlk"), path_of("/main.mlk"));
         assert_eq!(
             path_of("/main.mlk"),
-            VfsPath::new_virtual_path("/main.mlk".to_string())
+            VfsPath::new_virtual_path("/main.mlk".to_owned())
         );
     }
 
@@ -2338,7 +2338,7 @@ mod tests {
 
         assert!(driver.set_text(
             "/main.mlk",
-            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string())
+            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_owned())
         ));
         let cst = serde_json::to_value(driver.cst_of("/main.mlk").expect("the file to parse"))
             .expect("the tree to serialize");
@@ -2395,7 +2395,7 @@ mod tests {
         driver.register_library();
         driver.set_text(
             "/main.mlk",
-            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string()),
+            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_owned()),
         );
 
         let _ = driver
@@ -2454,7 +2454,7 @@ mod tests {
         driver.register_library();
         driver.set_text(
             "/main.mlk",
-            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_string()),
+            Some("fun main(): Int =\n    let x = 1 in\n    x\n".to_owned()),
         );
 
         // A host that has a clock of its own hands it over, and what the passes it runs cost is
@@ -2498,7 +2498,7 @@ mod tests {
         let source = "fun main(): Unit =\n    let x = 1 in\n    x\n";
         let mut driver = WasmDriver::new();
 
-        driver.set_text("/main.mlk", Some(source.to_string()));
+        driver.set_text("/main.mlk", Some(source.to_owned()));
         let hir = driver
             .hir_of("/main.mlk")
             .expect("the file to lower")
@@ -2591,7 +2591,7 @@ mod tests {
         let source = "fun main(): Int =\n    let x = 42 in\n    x + x\n";
         let mut driver = WasmDriver::new();
 
-        driver.set_text("/main.mlk", Some(source.to_string()));
+        driver.set_text("/main.mlk", Some(source.to_owned()));
         let hir = driver
             .hir_of("/main.mlk")
             .expect("the file to lower")
@@ -2642,7 +2642,7 @@ mod tests {
         let source = "use std::core::Int\n\nfun main(value: Int): Int =\n    value\n";
         let mut driver = WasmDriver::new();
 
-        driver.set_text("/main.mlk", Some(source.to_string()));
+        driver.set_text("/main.mlk", Some(source.to_owned()));
         let hir = driver
             .hir_of("/main.mlk")
             .expect("the file to lower")
@@ -2700,7 +2700,7 @@ mod tests {
         let source = "use std::core::Int\n\nfun main(): Int =\n    Int\n";
         let mut driver = WasmDriver::new();
 
-        driver.set_text("/main.mlk", Some(source.to_string()));
+        driver.set_text("/main.mlk", Some(source.to_owned()));
         let hir = driver
             .hir_of("/main.mlk")
             .expect("the file to lower")
@@ -2727,7 +2727,7 @@ mod tests {
             "/main.mlk",
             Some(
                 "fun f(): Unit =\n    g()\n\nfun g(): Unit =\n    g()\n\nfun f(): Unit =\n    g()\n"
-                    .to_string(),
+                    .to_owned(),
             ),
         );
         let diagnostics = driver
@@ -2749,7 +2749,7 @@ mod tests {
         let mut driver = WasmDriver::new();
         driver.register_library();
 
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
         let diagnostics = driver
             .diagnostics_of("/main.mlk")
             .expect("the file to be diagnosed");
@@ -2782,7 +2782,7 @@ mod tests {
         let mut driver = WasmDriver::new();
         driver.register_library();
 
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
         let diagnostics = driver
             .diagnostics_of("/main.mlk")
             .expect("the file to be diagnosed");
@@ -2822,7 +2822,7 @@ mod tests {
         let mut driver = WasmDriver::new();
         driver.register_library();
 
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
         let types = driver
             .types_of("/main.mlk")
             .expect("the file to be checked")
@@ -2876,7 +2876,7 @@ mod tests {
         let mut driver = WasmDriver::new();
         driver.register_library();
 
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
         let types = driver
             .types_of("/main.mlk")
             .expect("the file to be checked")
@@ -2914,7 +2914,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         // The CFG form reads a body as one block of slots: every expression is lowered into
         // a slot of its own, and the terminator gives one back. Every line says where it was
@@ -3031,7 +3031,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         let lir = driver
             .lir_of("/main.mlk")
@@ -3102,7 +3102,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         let cfg = driver
             .mir_of("/main.mlk", Form::Cfg)
@@ -3170,7 +3170,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         // The MIR reads the function as a body of its own, named under the entity that declares
         // it, with the parameters its signature wrote.
@@ -3211,7 +3211,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         let lir = driver
             .lir_of("/main.mlk")
@@ -3257,7 +3257,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         // The CFG form reads the choice as the blocks it branches into: the entry evaluates
         // the first condition, the block of every arm that fails evaluates the next one, and
@@ -3338,7 +3338,7 @@ mod tests {
 
         let mut driver = WasmDriver::new();
         driver.register_library();
-        driver.set_text("/main.mlk", Some(SOURCE.to_string()));
+        driver.set_text("/main.mlk", Some(SOURCE.to_owned()));
 
         // The choice selects no value when it has no `else`: the block control falls into writes
         // the unit it is, and a host reads it as the arm that is not written.
@@ -3534,7 +3534,7 @@ mod tests {
         driver.register_library();
         driver.set_text(
             "/main.mlk",
-            Some("#[entry]\npub fun main(): Unit =\n    print-int(21 + 21)\n".to_string()),
+            Some("#[entry]\npub fun main(): Unit =\n    print-int(21 + 21)\n".to_owned()),
         );
 
         let wat = driver
@@ -3571,7 +3571,7 @@ mod tests {
         // is not one the back end assembles.
         driver.set_text(
             "/main.mlk",
-            Some("fun main(): Int =\n    true + 1\n".to_string()),
+            Some("fun main(): Int =\n    true + 1\n".to_owned()),
         );
 
         assert!(
@@ -3595,7 +3595,7 @@ mod tests {
                 "#[entry]\npub fun main(): Unit =\n    let flag = small(3) in\n    let noted = \
                  print-bool(flag) in\n    print-int(21 + 21)\n\npub fun small(value: Int): Bool =\n    \
                  value < 5\n"
-                    .to_string(),
+                    .to_owned(),
             ),
         );
 
@@ -3759,7 +3759,7 @@ mod tests {
         driver.register_library();
         driver.set_text(
             "/main.mlk",
-            Some("pub fun twice(value: Int): Int =\n    value * 2\n".to_string()),
+            Some("pub fun twice(value: Int): Int =\n    value * 2\n".to_owned()),
         );
 
         let run = driver.program_of().expect("the program to describe");
@@ -3777,7 +3777,7 @@ mod tests {
             Some(
                 "#[entry]\npub fun main(): Unit =\n    putchar(65)\n\n#[extern]\npub fun \
                  putchar(value: Int): Unit\n"
-                    .to_string(),
+                    .to_owned(),
             ),
         );
 
@@ -3802,7 +3802,7 @@ mod tests {
         // the compiler put it in ([ADR-0015]).
         //
         // [adr-0015]: ../../docs/adr/0015-standard-library.md
-        driver.set_text("/std/core.mlk", Some(core.text.to_string()));
+        driver.set_text("/std/core.mlk", Some(core.text.to_owned()));
 
         let file = driver
             .driver
@@ -3823,11 +3823,11 @@ mod tests {
         driver.register_library();
         driver.set_text(
             "/main.mlk",
-            Some("#[entry]\npub fun main(): Unit =\n    print-int(1)\n".to_string()),
+            Some("#[entry]\npub fun main(): Unit =\n    print-int(1)\n".to_owned()),
         );
         driver.set_text(
             "/gone.mlk",
-            Some("pub fun gone(): Int =\n    1\n".to_string()),
+            Some("pub fun gone(): Int =\n    1\n".to_owned()),
         );
 
         // The buffer is a module of the project while it is there.
@@ -3867,7 +3867,7 @@ mod tests {
         // And the buffer written again is a module of the project again.
         driver.set_text(
             "/gone.mlk",
-            Some("pub fun gone(): Int =\n    2\n".to_string()),
+            Some("pub fun gone(): Int =\n    2\n".to_owned()),
         );
 
         let run = driver.program_of().expect("the program to describe");
@@ -3888,7 +3888,7 @@ mod tests {
     /// The text of the first token of a kind, wherever in a serialized tree it sits.
     fn token_text(node: &serde_json::Value, kind: &str) -> Option<String> {
         if node["kind"] == kind {
-            return node["text"].as_str().map(str::to_string);
+            return node["text"].as_str().map(str::to_owned);
         }
 
         node["children"]
@@ -3903,7 +3903,7 @@ mod tests {
 
         driver.set_text(
             "/main.mlk",
-            Some("fun main(): Unit =\n    let x = 1\n".to_string()),
+            Some("fun main(): Unit =\n    let x = 1\n".to_owned()),
         );
         let diagnostics = driver
             .diagnostics_of("/main.mlk")
@@ -3940,7 +3940,7 @@ mod tests {
 
         driver.set_text(
             "/main.mlk",
-            Some("fun main(): Unit =\n    x\nabc\n".to_string()),
+            Some("fun main(): Unit =\n    x\nabc\n".to_owned()),
         );
         let ast = driver
             .ast_of("/main.mlk")

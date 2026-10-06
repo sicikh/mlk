@@ -1,8 +1,7 @@
 //! The source map of a module ([ADR-0025][adr-0025]).
 //!
 //! A browser reads a source map rather than DWARF: V8 parses the `sourceMappingURL` custom
-//! section of a module and hands the URL to the browser's developer tools, which load and
-//! parse the map themselves.
+//! section of a module and hands the URL to DevTools, which loads and parses the map itself.
 //! The map is written here as a `data:` URL embedded in the module, so a module carries the
 //! text of every file its bodies were read from --- `sourcesContent` --- and the browser shows
 //! them without a host serving anything ([ADR-0025][adr-0025]).

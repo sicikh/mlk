@@ -58,9 +58,9 @@ fn write(tag: &str) -> PathBuf {
     );
     driver.set_project(ProjectId::new(PROJECT), data);
 
-    let path = VfsPath::new_virtual_path("/main.mlk".to_string());
+    let path = VfsPath::new_virtual_path("/main.mlk".to_owned());
 
-    driver.set_file_text(path.clone(), Some(SOURCE.to_string()));
+    driver.set_file_text(path.clone(), Some(SOURCE.to_owned()));
 
     let file = driver.file_id(&path).expect("the file to have an id");
 

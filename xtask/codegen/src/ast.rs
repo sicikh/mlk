@@ -313,9 +313,9 @@ fn classify_node_rule(grammar: &Grammar, rule: &Rule, _name: &str) -> NodeRuleCl
                 NodeRuleClassification::List {
                     separator: Some(AstListSeparatorConfiguration {
                         allow_trailing: comma_list.trailing_separator,
-                        separator_token: comma_list.separator_name.to_string(),
+                        separator_token: comma_list.separator_name.to_owned(),
                     }),
-                    element_name: comma_list.node_name.to_string(),
+                    element_name: comma_list.node_name.to_owned(),
                 }
             } else {
                 NodeRuleClassification::Node
@@ -511,7 +511,7 @@ fn handle_tokens_in_unions(
     }
 
     let field = Field::Token {
-        name: label.to_string(),
+        name: label.to_owned(),
         kind: TokenKind::Many(token_kinds),
         optional,
         unordered,
@@ -657,8 +657,8 @@ mod tests {
     #[should_panic(expected = "used twice")]
     fn a_repeated_union_variant_is_rejected() {
         check_unions(&[AstEnumSrc {
-            name: "Choice".to_string(),
-            variants: vec!["Value".to_string(), "Value".to_string()],
+            name: "Choice".to_owned(),
+            variants: vec!["Value".to_owned(), "Value".to_owned()],
         }]);
     }
 
@@ -667,12 +667,12 @@ mod tests {
     fn a_cycle_between_unions_is_rejected() {
         check_unions(&[
             AstEnumSrc {
-                name: "A".to_string(),
-                variants: vec!["B".to_string()],
+                name: "A".to_owned(),
+                variants: vec!["B".to_owned()],
             },
             AstEnumSrc {
-                name: "B".to_string(),
-                variants: vec!["A".to_string()],
+                name: "B".to_owned(),
+                variants: vec!["A".to_owned()],
             },
         ]);
     }

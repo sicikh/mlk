@@ -143,6 +143,9 @@ Read the one that matches the task before starting:
   `mlkc-cli` and the xtask tools --- carry the expectation that says so.
 - `unreachable_pub` keeps visibility honest; the generator crate and the vendored crates,
   whose modules are their own API, expect it away at the crate root.
+- `clippy.toml` holds the view the lints take of the workspace: `msrv` is the toolchain of
+  `rust-toolchain.toml`, and `doc-valid-idents` names the products (`CodeMirror`, `DevTools`)
+  that are prose rather than code; a new proper noun goes there, not into backticks.
 
 ### The working tree
 

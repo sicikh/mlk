@@ -1,0 +1,10 @@
+# The knobs clippy reads for this workspace.
+
+# The compiler the repository pins in `rust-toolchain.toml`: a lint may not suggest an API the
+# pinned toolchain does not have, whatever version of clippy a contributor runs.
+msrv = "1.99.0"
+
+# Names of products and tools that are not items of the code: `doc_markdown` would ask for
+# backticks around them, and backticks would say they are code. `..` keeps the list clippy
+# ships with, so a proper noun of the project is added here, not to the default list.
+doc-valid-idents = ["CodeMirror", "DevTools", ".."]

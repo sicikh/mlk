@@ -775,8 +775,8 @@ mod tests {
         assert!(!converted.labels[1].primary);
 
         assert_eq!(converted.notes, [
-            "add a closing brace".to_string(),
-            "expected one of:\n- `}`\n- `;`".to_string(),
+            "add a closing brace".to_owned(),
+            "expected one of:\n- `}`\n- `;`".to_owned(),
         ]);
     }
 

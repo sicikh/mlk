@@ -259,7 +259,7 @@ impl Case {
     /// ```
     pub fn convert(self, value: &str) -> String {
         if value.is_empty() || matches!(self, Self::Unknown | Self::Number) {
-            return value.to_string();
+            return value.to_owned();
         }
         let mut word_separator = matches!(self, Self::Pascal);
         let mut output = String::with_capacity(value.len());

@@ -1104,14 +1104,14 @@ mod tests {
                         .trailing_separator
                         .ok()
                         .flatten()
-                        .map(|separator| separator.text().to_string()),
+                        .map(|separator| separator.text().to_owned()),
                 )
             })
             .collect::<Vec<_>>();
 
         let expected = expected
             .into_iter()
-            .map(|(value, separator)| (value, separator.map(|sep| sep.to_string())))
+            .map(|(value, separator)| (value, separator.map(|sep| sep.to_owned())))
             .collect::<Vec<_>>();
 
         (actual, expected)
@@ -1321,18 +1321,11 @@ mod tests {
         //         Let
         // then selects the CONDITION node, cast it,
         // then navigate upwards to its parent.
-        // All casts are fake and implemented below
-
-        let tree = RawSyntaxTreeBuilder::wrap_with_node(RawLanguageKind::ROOT, |builder| {
-            builder.start_node(RawLanguageKind::CONDITION);
-            builder.token(RawLanguageKind::LET_TOKEN, "let");
-            builder.finish_node();
-        });
-        let typed = tree.first_child().unwrap().cast::<RawRoot>().unwrap();
-        let _ = typed.parent::<RawRoot>().unwrap();
+        // All casts are fake and implemented here
 
         #[derive(Clone)]
         struct RawRoot(SyntaxNode<RawLanguage>);
+
         impl AstNode for RawRoot {
             type Language = RawLanguage;
 
@@ -1358,6 +1351,14 @@ mod tests {
                 unreachable!("the raw root of this test only navigates, and never unwraps")
             }
         }
+
+        let tree = RawSyntaxTreeBuilder::wrap_with_node(RawLanguageKind::ROOT, |builder| {
+            builder.start_node(RawLanguageKind::CONDITION);
+            builder.token(RawLanguageKind::LET_TOKEN, "let");
+            builder.finish_node();
+        });
+        let typed = tree.first_child().unwrap().cast::<RawRoot>().unwrap();
+        let _ = typed.parent::<RawRoot>().unwrap();
     }
 
     #[test]

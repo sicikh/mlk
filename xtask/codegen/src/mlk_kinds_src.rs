@@ -337,8 +337,8 @@ mod tests {
 
     fn token_field(name: &str) -> Field {
         Field::Token {
-            name: name.to_string(),
-            kind: TokenKind::Single(name.to_string()),
+            name: name.to_owned(),
+            kind: TokenKind::Single(name.to_owned()),
             optional: false,
             unordered: false,
         }
@@ -346,8 +346,8 @@ mod tests {
 
     fn node_field(name: &str, ty: &str) -> Field {
         Field::Node {
-            name: name.to_string(),
-            ty: ty.to_string(),
+            name: name.to_owned(),
+            ty: ty.to_owned(),
             optional: false,
             unordered: false,
         }
@@ -355,7 +355,7 @@ mod tests {
 
     fn ast_node(name: &str) -> AstNodeSrc {
         AstNodeSrc {
-            name: name.to_string(),
+            name: name.to_owned(),
             fields: vec![],
             dynamic: false,
         }
@@ -363,7 +363,7 @@ mod tests {
 
     fn union(name: &str, variants: &[&str]) -> AstEnumSrc {
         AstEnumSrc {
-            name: name.to_string(),
+            name: name.to_owned(),
             variants: variants.iter().map(|variant| variant.to_string()).collect(),
         }
     }
@@ -415,8 +415,8 @@ mod tests {
     #[test]
     fn field_flags_report_optionality_and_order() {
         let field = Field::Token {
-            name: "'+'".to_string(),
-            kind: TokenKind::Single("'+'".to_string()),
+            name: "'+'".to_owned(),
+            kind: TokenKind::Single("'+'".to_owned()),
             optional: true,
             unordered: true,
         };
@@ -436,8 +436,8 @@ mod tests {
         ast.nodes.push(ast_node("Alpha"));
         ast.unions.push(union("Zeta", &["B", "A"]));
         ast.unions.push(union("Alpha", &["D", "C"]));
-        ast.bogus.push("Zeta".to_string());
-        ast.bogus.push("Alpha".to_string());
+        ast.bogus.push("Zeta".to_owned());
+        ast.bogus.push("Alpha".to_owned());
 
         ast.sort();
 
@@ -455,13 +455,13 @@ mod tests {
     fn a_pushed_list_is_found_by_name_and_lists_iterate_in_name_order() {
         let mut ast = AstSrc::default();
         ast.push_list("Zeta", AstListSrc {
-            element_name: "Z".to_string(),
+            element_name: "Z".to_owned(),
             separator: None,
         });
         ast.push_list("Alpha", AstListSrc {
-            element_name: "A".to_string(),
+            element_name: "A".to_owned(),
             separator: Some(AstListSeparatorConfiguration {
-                separator_token: ",".to_string(),
+                separator_token: ",".to_owned(),
                 allow_trailing: true,
             }),
         });

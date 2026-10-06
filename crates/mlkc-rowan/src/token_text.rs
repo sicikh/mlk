@@ -278,42 +278,42 @@ mod tests {
     #[test]
     fn split_char_basic() {
         let t = tt("a,b,c");
-        let parts: Vec<String> = t.split(',').map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split(',').map(|p| p.text().to_owned()).collect();
         assert_eq!(parts, vec!["a", "b", "c"]);
     }
 
     #[test]
     fn split_char_adjacent_delims() {
         let t = tt("a,,b,,,c,");
-        let parts: Vec<String> = t.split(',').map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split(',').map(|p| p.text().to_owned()).collect();
         assert_eq!(parts, vec!["a", "", "b", "", "", "c", ""]);
     }
 
     #[test]
     fn split_char_leading_trailing() {
         let t = tt(",a,b,");
-        let parts: Vec<String> = t.split(',').map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split(',').map(|p| p.text().to_owned()).collect();
         assert_eq!(parts, vec!["", "a", "b", ""]);
     }
 
     #[test]
     fn split_char_no_match() {
         let t = tt("abc");
-        let parts: Vec<String> = t.split(',').map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split(',').map(|p| p.text().to_owned()).collect();
         assert_eq!(parts, vec!["abc"]);
     }
 
     #[test]
     fn split_str_basic() {
         let t = tt("foo::bar::baz");
-        let parts: Vec<String> = t.split("::").map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split("::").map(|p| p.text().to_owned()).collect();
         assert_eq!(parts, vec!["foo", "bar", "baz"]);
     }
 
     #[test]
     fn split_str_adjacent_delims() {
         let t = tt("a--b----c-");
-        let parts: Vec<String> = t.split("--").map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split("--").map(|p| p.text().to_owned()).collect();
         // "a--b----c-" -> ["a", "b", "", "c-"]
         assert_eq!(parts, vec!["a", "b", "", "c-"]);
     }
@@ -321,14 +321,14 @@ mod tests {
     #[test]
     fn split_str_leading_trailing() {
         let t = tt("::a::b::");
-        let parts: Vec<String> = t.split("::").map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split("::").map(|p| p.text().to_owned()).collect();
         assert_eq!(parts, vec!["", "a", "b", ""]);
     }
 
     #[test]
     fn split_str_empty_pattern_is_noop() {
         let t = tt("abc");
-        let parts: Vec<String> = t.split("").map(|p| p.text().to_string()).collect();
+        let parts: Vec<String> = t.split("").map(|p| p.text().to_owned()).collect();
         // We chose to treat empty pattern as no-op: single item
         assert_eq!(parts, vec!["abc"]);
     }
@@ -342,7 +342,7 @@ mod tests {
         assert_eq!(first.text(), "a");
         assert_eq!(second.text(), "b");
         // Ensure both items are views into the same underlying token by comparing against slices of the original text
-        let original = t.text().to_string();
+        let original = t.text().to_owned();
         assert_eq!(&original[0..1], first.text());
         assert_eq!(&original[2..3], second.text());
     }

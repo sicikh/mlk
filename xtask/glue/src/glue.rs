@@ -193,19 +193,19 @@ fn run_process_inner(cmd: &str, echo: bool, stdin: Option<&[u8]>) -> Result<Stri
         bail!("{}", output.status)
     }
 
-    Ok(stdout.trim().to_string())
+    Ok(stdout.trim().to_owned())
 }
 
 fn shelx(cmd: &str) -> Vec<String> {
     let mut res = Vec::new();
     for (string_piece, in_quotes) in cmd.split('\'').zip([false, true].iter().copied().cycle()) {
         if in_quotes {
-            res.push(string_piece.to_string())
+            res.push(string_piece.to_owned())
         } else if !string_piece.is_empty() {
             res.extend(
                 string_piece
                     .split_ascii_whitespace()
-                    .map(|it| it.to_string()),
+                    .map(|it| it.to_owned()),
             )
         }
     }

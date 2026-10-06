@@ -40,8 +40,8 @@ pub fn generate_syntax_kinds(grammar: KindsSrc, language_kind: LanguageKind) -> 
     // color-profile
     let all_keywords = &grammar.keywords;
     // color-profile => "color-profile"
-    let all_keyword_strings = all_keywords.iter().map(|name| (*name).to_string());
-    let all_keyword_to_strings = all_keywords.iter().map(|name| (*name).to_string()).clone();
+    let all_keyword_strings = all_keywords.iter().map(|name| (*name).to_owned());
+    let all_keyword_to_strings = all_keywords.iter().map(|name| (*name).to_owned()).clone();
     // we need to replace "-" with "_" for the keywords
     // e.g. we have `color-profile` in css but it's an invalid ident in rust code
     // color-profile => "color_profile"
@@ -52,7 +52,7 @@ pub fn generate_syntax_kinds(grammar: KindsSrc, language_kind: LanguageKind) -> 
         .map(|kw| {
             let kw = kw.replace('-', "_");
             if kw.chars().all(|c| c.is_uppercase()) {
-                "UPPER_".to_string() + kw.as_str()
+                "UPPER_".to_owned() + kw.as_str()
             } else {
                 kw
             }

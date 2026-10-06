@@ -332,7 +332,7 @@ pub(crate) fn run_inline_specs() {
         let mut problems = problems(&parsed);
 
         if parsed.syntax::<MlkLanguage>().to_string() != spec.source {
-            problems.push("the tree does not hold the source it was parsed from".to_string());
+            problems.push("the tree does not hold the source it was parsed from".to_owned());
         }
 
         if !problems.is_empty() {
@@ -407,9 +407,9 @@ fn specs_of(file: &str, text: &str) -> Vec<InlineSpec> {
         }
 
         specs.push(InlineSpec {
-            file: file.to_string(),
+            file: file.to_owned(),
             line: index + 1,
-            name: name.to_string(),
+            name: name.to_owned(),
             source: module_text(&source),
         });
     }

@@ -28,12 +28,12 @@ use mlkc_codegen_wasm::{LoweredFunctions, ModuleMir};
 use mlkc_diagnostics::{Diagnostic, Ice};
 use mlkc_hir_def::{
     BodyEntityLoc, Closure, Interface, ItemLocLike, ModuleId, ModuleIndex, ProjectDefMap,
-    ProjectGraph, ProjectId,
+    ProjectGraph, ProjectId, Resolution,
 };
 use mlkc_hir_ty::{Builtins, CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
 use mlkc_mir::{Bodies, Body as MirBody};
-use mlkc_resolve::Resolution;
+use mlkc_resolve::ResolvedModule;
 use mlkc_rowan::NodeCache;
 use mlkc_typeck::TypeDiag;
 use mlkc_vfs::{FileId, FileVersion, Vfs};
@@ -178,7 +178,7 @@ struct ResolutionSlot {
     /// The interfaces the walk reached, and the entries of the indexes it read.
     closure: Closure,
     /// The value, retained so that a recomputation that ends up equal keeps it.
-    value: Arc<Resolution>,
+    value: Arc<ResolvedModule>,
 }
 
 /// The def map of one project, and the resolutions it was built from ([ADR-0016]).

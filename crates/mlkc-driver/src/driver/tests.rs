@@ -843,6 +843,7 @@ fn a_name_of_another_module_resolves_in_the_middle_of_a_project() {
     );
 
     let point = resolution
+        .resolution()
         .scope()
         .get(&Name::new("Point"))
         .expect("`Point` to be a name of the reader");
@@ -1178,7 +1179,7 @@ fn the_def_map_of_a_project_holds_the_scopes_of_its_modules() {
         Arc::ptr_eq(
             map.get(ModuleId(main))
                 .expect("the reader to be in the map"),
-            resolution.scope(),
+            resolution.resolution().scope(),
         ),
         "the map to hold the scope of the resolution",
     );
@@ -1262,7 +1263,13 @@ fun get(): Point = get()
 
     // No module of `data` is there yet, so the paths that read it name nothing.
     assert!(!before.diagnostics().is_empty());
-    assert!(before.scope().get(&Name::new("Point")).is_none());
+    assert!(
+        before
+            .resolution()
+            .scope()
+            .get(&Name::new("Point"))
+            .is_none()
+    );
 
     let path = path("data/utils.mlk");
     driver.set_file_text(path.clone(), Some("pub type Point\n".to_owned()));
@@ -1281,6 +1288,7 @@ fun get(): Point = get()
     assert!(after.diagnostics().is_empty(), "{:?}", after.diagnostics());
     assert_eq!(
         after
+            .resolution()
             .scope()
             .get(&Name::new("Point"))
             .and_then(|per_ns| per_ns.ty.clone())
@@ -1304,6 +1312,7 @@ fn the_names_of_the_language_resolve_through_the_library() {
     );
 
     let unit = resolution
+        .resolution()
         .scope()
         .get(&Name::new("Unit"))
         .expect("`Unit` to be a name of the module");

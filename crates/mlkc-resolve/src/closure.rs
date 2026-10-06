@@ -10,10 +10,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    Body, Closure, Interface, ItemTree, ModuleId, ModuleIndex, ProjectGraph, ProjectId,
+    Body, Closure, Interface, ItemTree, ModuleId, ModuleIndex, ProjectGraph, ProjectId, Walk,
 };
-
-use crate::walk::Walk;
 
 /// The closure of a module: the modules its paths reach, and the entries they read.
 ///

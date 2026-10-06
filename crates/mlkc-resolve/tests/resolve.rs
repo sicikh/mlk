@@ -15,10 +15,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use mlkc_hir_def::{
     Closure, EntityLoc, Interface, ItemKind, ItemLocLike, ItemTree, ModuleId, ModuleIndex,
     ModuleLocator, ModuleScope, Name, Namespace, PathAnchor, PathRoot, PlainPath, PlainPathId,
-    Prelude, ProjectData, ProjectGraph, ProjectId, Read, Visibility, dump::TypePlace,
+    Prelude, ProjectData, ProjectGraph, ProjectId, Read, ResolveError, Visibility, dump::TypePlace,
 };
 use mlkc_lower::lower_module;
-use mlkc_resolve::{ResolveDeps, ResolveDiag, ResolveError, closure, resolve_module};
+use mlkc_resolve::{ResolveDeps, ResolveDiag, closure, resolve_module};
 use mlkc_syntax::ModuleRoot;
 use mlkc_vfs::{FileId, RelPathBuf};
 
@@ -91,11 +91,11 @@ impl World {
         };
 
         // A test reads the parts a resolution is made of; the driver keeps the whole value.
-        let resolution = resolve_module(module, self.tree(module), &deps);
+        let resolved = resolve_module(module, self.tree(module), &deps);
 
         (
-            ModuleScope::clone(resolution.scope()),
-            resolution.diagnostics().to_vec(),
+            ModuleScope::clone(resolved.resolution().scope()),
+            resolved.diagnostics().to_vec(),
         )
     }
 }

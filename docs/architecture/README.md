@@ -72,26 +72,26 @@ so they are also the names to look for when something is slow.
 
 ### The pipeline
 
-| Crate                                                     | Responsibility                                                                                         |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`mlkc-driver`](../../crates/mlkc-driver)                 | Owns the inputs and the memoized passes; the only component that decides what has to be recomputed.    |
-| [`mlkc-parser`](../../crates/mlkc-parser)                 | Turns the source of a module into a lossless CST and diagnostics.                                      |
-| [`mlkc-parser-core`](../../crates/mlkc-parser-core)       | The event-based parser infrastructure; see its `CONTRIBUTING.md`.                                      |
-| [`mlkc-syntax`](../../crates/mlkc-syntax)                 | The typed AST view over the CST: `SyntaxKind`, generated node wrappers.                                |
-| [`mlkc-syntax-factory`](../../crates/mlkc-syntax-factory) | The generated factory that builds syntax nodes.                                                        |
-| [`mlkc-rowan`](../../crates/mlkc-rowan)                   | The vendored lossless syntax tree library.                                                             |
-| [`mlkc-lower`](../../crates/mlkc-lower)                   | The lowering of MLK into the HIR; the only stage that knows syntactic sugar.                           |
-| [`mlkc-hir-def`](../../crates/mlkc-hir-def)               | The definitions of the high-level IR, the module/def-map values, and the closure a pass walks.         |
-| [`mlkc-resolve`](../../crates/mlkc-resolve)               | Global name resolution: what a module's paths denote, against the interfaces of the modules they name. |
-| [`mlkc-hir-ty`](../../crates/mlkc-hir-ty)                 | A resolved type, what a check reads of the project, and what it leaves behind.                         |
-| [`mlkc-typeck`](../../crates/mlkc-typeck)                 | The temporary checker: one body at a time ([ADR-0017](../adr/0017-resolved-types.md)).                 |
-| [`mlkc-mir`](../../crates/mlkc-mir)                       | The middle IR: a uniform control-flow graph over words.                                                |
-| [`mlkc-mir-build`](../../crates/mlkc-mir-build)           | The construction of MIR and its SSA form.                                                              |
-| [`mlkc-interp`](../../crates/mlkc-interp)                 | The interpreter of MIR: the reference semantics a back end is measured against.                        |
-| [`mlkc-lir-wasm`](../../crates/mlkc-lir-wasm)             | The WASM LIR: the target's instructions in SSA form ([ADR-0022](../adr/0022-wasm-lir.md)).             |
-| [`mlkc-codegen-wasm`](../../crates/mlkc-codegen-wasm)     | The WASM back end: MIR to LIR, LIR to a module ([ADR-0020](../adr/0020-wasm-backend.md)).              |
-| [`mlkc-stdlib`](../../crates/mlkc-stdlib)                 | The standard library sources and the values that describe it.                                          |
-| [`mlkc-fixture`](../../crates/mlkc-fixture)               | The one-file project format the tests are written in, and the corpus the suites compile.               |
+| Crate                                                     | Responsibility                                                                                                   |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [`mlkc-driver`](../../crates/mlkc-driver)                 | Owns the inputs and the memoized passes; the only component that decides what has to be recomputed.              |
+| [`mlkc-parser`](../../crates/mlkc-parser)                 | Turns the source of a module into a lossless CST and diagnostics.                                                |
+| [`mlkc-parser-core`](../../crates/mlkc-parser-core)       | The event-based parser infrastructure; see its `CONTRIBUTING.md`.                                                |
+| [`mlkc-syntax`](../../crates/mlkc-syntax)                 | The typed AST view over the CST: `SyntaxKind`, generated node wrappers.                                          |
+| [`mlkc-syntax-factory`](../../crates/mlkc-syntax-factory) | The generated factory that builds syntax nodes.                                                                  |
+| [`mlkc-rowan`](../../crates/mlkc-rowan)                   | The vendored lossless syntax tree library.                                                                       |
+| [`mlkc-lower`](../../crates/mlkc-lower)                   | The lowering of MLK into the HIR; the only stage that knows syntactic sugar.                                     |
+| [`mlkc-hir-def`](../../crates/mlkc-hir-def)               | The definitions of the high-level IR, the module/def-map values, the closure a pass walks, and the walk over it. |
+| [`mlkc-resolve`](../../crates/mlkc-resolve)               | Global name resolution: what a module's paths denote, against the interfaces of the modules they name.           |
+| [`mlkc-hir-ty`](../../crates/mlkc-hir-ty)                 | A resolved type, what a check reads of the project, and what it leaves behind.                                   |
+| [`mlkc-typeck`](../../crates/mlkc-typeck)                 | The temporary checker: one body at a time ([ADR-0017](../adr/0017-resolved-types.md)).                           |
+| [`mlkc-mir`](../../crates/mlkc-mir)                       | The middle IR: a uniform control-flow graph over words.                                                          |
+| [`mlkc-mir-build`](../../crates/mlkc-mir-build)           | The construction of MIR and its SSA form.                                                                        |
+| [`mlkc-interp`](../../crates/mlkc-interp)                 | The interpreter of MIR: the reference semantics a back end is measured against.                                  |
+| [`mlkc-lir-wasm`](../../crates/mlkc-lir-wasm)             | The WASM LIR: the target's instructions in SSA form ([ADR-0022](../adr/0022-wasm-lir.md)).                       |
+| [`mlkc-codegen-wasm`](../../crates/mlkc-codegen-wasm)     | The WASM back end: MIR to LIR, LIR to a module ([ADR-0020](../adr/0020-wasm-backend.md)).                        |
+| [`mlkc-stdlib`](../../crates/mlkc-stdlib)                 | The standard library sources and the values that describe it.                                                    |
+| [`mlkc-fixture`](../../crates/mlkc-fixture)               | The one-file project format the tests are written in, and the corpus the suites compile.                         |
 
 ### Infrastructure
 
@@ -167,7 +167,8 @@ so they are also the names to look for when something is slow.
   and [ADR-0016](../adr/0016-inter-module-resolution.md):
   named imports only, no globs;
   resolution reads only the interfaces of the modules a path names.
-- `crates/mlkc-hir-def/src/def_map.rs`, `interface.rs`, `module_index.rs`;
+- `crates/mlkc-hir-def/src/def_map.rs`, `interface.rs`, `module_index.rs`,
+  `resolution.rs`, `walk.rs`;
   `crates/mlkc-resolve/src/resolve.rs`.
 - The driver keys these values by identity and retained inputs
   ([ADR-0008](../adr/0008-compiler-driver.md),

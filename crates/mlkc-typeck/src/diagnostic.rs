@@ -9,9 +9,10 @@
 use std::fmt;
 
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Level};
-use mlkc_hir_def::{ExprId, FunctionLoc, ItemLoc, Name, PatId, dump::TypePlace as DeclaredType};
+use mlkc_hir_def::{
+    ExprId, FunctionLoc, ItemLoc, Name, PatId, ResolveError, dump::TypePlace as DeclaredType,
+};
 use mlkc_hir_ty::Ty;
-use mlkc_resolve::ResolveError;
 use mlkc_span::Span;
 
 /// What a check could not do.

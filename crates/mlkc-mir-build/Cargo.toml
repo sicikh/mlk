@@ -13,7 +13,6 @@ mlkc-hir-def.workspace = true
 mlkc-hir-ty.workspace = true
 mlkc-la-arena.workspace = true
 mlkc-mir.workspace = true
-mlkc-resolve.workspace = true
 mlkc-span.workspace = true
 rustc-hash.workspace = true
 
@@ -23,6 +22,7 @@ mlkc-driver.workspace = true
 mlkc-fixture.workspace = true
 mlkc-lower.workspace = true
 mlkc-parser.workspace = true
+mlkc-resolve.workspace = true
 mlkc-stdlib.workspace = true
 mlkc-syntax.workspace = true
 mlkc-typeck.workspace = true

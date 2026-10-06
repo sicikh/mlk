@@ -19,10 +19,9 @@
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
     ItemTree, LambdaParam, Literal, LocalDefId, LocalFunctionId, Name, Namespace, Pat, PatId,
-    PathAnchor, PathId, TypeRef, UnaryOp,
+    PathAnchor, PathId, Resolution, TypeRef, UnaryOp,
 };
 use mlkc_hir_ty::{CheckDeps, CheckedBody, INT_MAX, INT_MIN, Ty};
-use mlkc_resolve::Resolution;
 use mlkc_stdx::FxIndexMap;
 use rustc_hash::FxHashMap;
 
@@ -925,13 +924,13 @@ mod tests {
 
     use mlkc_hir_def::{
         Body, BodyEntityLoc, ClassLoc, EntityLoc, ItemKind, ItemLoc, ItemLocLike, ItemTree,
-        LocalDefId, ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, TypeVarId,
-        UseLoc,
+        LocalDefId, ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, Resolution,
+        Target, TypeVarId, UseLoc,
     };
     use mlkc_hir_ty::{Builtins, CheckDeps, Ty};
     use mlkc_lower::{lower_body, lower_module};
     use mlkc_parser::parse;
-    use mlkc_resolve::{Resolution, Target, closure};
+    use mlkc_resolve::closure;
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
@@ -1029,11 +1028,7 @@ mod tests {
             targets.insert(import(tree, name), target);
         }
 
-        Resolution::new(
-            Arc::new(ModuleScope::default()),
-            targets,
-            Arc::from(Vec::new()),
-        )
+        Resolution::new(Arc::new(ModuleScope::default()), targets)
     }
 
     /// The deps of a module of a test: an empty world, and the closure of the module's own

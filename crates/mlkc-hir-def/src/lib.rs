@@ -75,6 +75,8 @@
 //! - [`interface`] — what a module shows to the modules that read it.
 //! - [`module_index`] — which module of a project a path names.
 //! - [`closure`] — what a resolution read of the modules it walked.
+//! - [`resolution`] — what the names of a module denote, once the modules they name are read.
+//! - [`walk`] — the walk over the paths of a module, shared by the stages that read them.
 //! - [`body`] — the inside of one function.
 //! - [`body_source_map`] — where the nodes of a body are written, as the lowering read them.
 //! - [`def_map`] — what names denote, and the index of the whole project.
@@ -98,7 +100,9 @@ pub mod name;
 pub mod path;
 pub mod prelude;
 pub mod project_graph;
+pub mod resolution;
 pub mod type_ref;
+pub mod walk;
 
 pub use crate::{
     body::{
@@ -124,5 +128,7 @@ pub use crate::{
     path::{PathAnchor, PathData, PathId, PathRoot, PlainPath, PlainPathId},
     prelude::{Prelude, PreludeImport},
     project_graph::{ModuleLocator, ProjectData, ProjectGraph, ProjectId},
+    resolution::Resolution,
     type_ref::{TypeRef, TypeVarId},
+    walk::{ResolveError, Target, Walk},
 };

@@ -36,7 +36,7 @@ use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, BodyLoc, BodySourceMap, ClassLoc, EntityLoc, Expr, ExprId,
     ItemLocLike, ItemTree, LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId,
-    PathAnchor, PathData, UnaryOp,
+    PathAnchor, PathData, Resolution, UnaryOp, Walk,
 };
 use mlkc_hir_ty::{CheckDeps, CheckedBody, INT_MAX, INT_MIN, Ty};
 use mlkc_la_arena::ArenaMap;
@@ -45,7 +45,6 @@ use mlkc_mir::{
     FunctionLoc, LambdaId, LiftedId, LocalData, LocalId, Operand, Place, PrimOp, Rvalue, Stmt,
     StmtKind, Terminator, ValueData,
 };
-use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
 
 /// Lowers the checked body of an entity into the CFG form of MIR: the body of the entity, and
@@ -973,13 +972,13 @@ mod tests {
     use mlkc_diagnostics::Ice;
     use mlkc_hir_def::{
         BodyEntityLoc, ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name,
-        Prelude, ProjectGraph,
+        Prelude, ProjectGraph, Resolution,
     };
     use mlkc_hir_ty::{Builtins, CheckDeps};
     use mlkc_lower::{LoweredBody, lower_body as lower_hir, lower_module};
     use mlkc_mir::{CodeRef, LambdaId};
     use mlkc_parser::parse;
-    use mlkc_resolve::{Resolution, closure};
+    use mlkc_resolve::closure;
     use mlkc_syntax::ModuleRoot;
     use mlkc_typeck::{check_body, resolve_module_types};
     use mlkc_vfs::{FileId, RelPathBuf};
@@ -1013,11 +1012,7 @@ mod tests {
             class(&tree, "String"),
             class(&tree, "Bool"),
         );
-        let resolution = Resolution::new(
-            Arc::new(ModuleScope::default()),
-            BTreeMap::new(),
-            Arc::from(Vec::new()),
-        );
+        let resolution = Resolution::new(Arc::new(ModuleScope::default()), BTreeMap::new());
         let graph = Arc::new(ProjectGraph::default());
         let closure = closure::of(module, &tree, &graph, &BTreeMap::new(), &mut |_| None);
         let deps = CheckDeps::new(builtins)

@@ -13,12 +13,12 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
     Body, BodyEntityLoc, ClassLoc, Closure, EntityLoc, Interface, ItemLocLike, ItemTree, ModuleId,
-    ModuleIndex, Name, ProjectData, ProjectGraph, ProjectId,
+    ModuleIndex, Name, ProjectData, ProjectGraph, ProjectId, Resolution,
 };
 use mlkc_hir_ty::{Builtins, CheckDeps, ModuleTypes, Ty};
 use mlkc_lower::{lower_body, lower_module};
 use mlkc_parser::parse;
-use mlkc_resolve::{Resolution, ResolveDeps, closure, resolve_module};
+use mlkc_resolve::{ResolveDeps, closure, resolve_module};
 use mlkc_syntax::ModuleRoot;
 use mlkc_typeck::{TypeError, check_body, resolve_module_types};
 use mlkc_vfs::{FileId, RelPathBuf};
@@ -93,13 +93,15 @@ impl World {
     }
 
     /// The resolution of a module: what its names denote, and what its imports resolved to.
-    fn resolution(&self, module: ModuleId) -> Resolution {
+    fn resolution(&self, module: ModuleId) -> Arc<Resolution> {
         let deps = ResolveDeps {
             graph: Arc::clone(&self.graph),
             closure: self.closure(module),
         };
 
-        resolve_module(module, self.tree(module), &deps)
+        let resolved = resolve_module(module, self.tree(module), &deps);
+
+        Arc::clone(resolved.resolution())
     }
 
     /// The classes of the language, read off `std::core`.

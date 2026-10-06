@@ -11,10 +11,10 @@
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 
 use mlkc_hir_def::{
-    EntityData, EntityLoc, FunctionLoc, ItemTree, TypeRef, dump::TypePlace as DeclaredType,
+    EntityData, EntityLoc, FunctionLoc, ItemTree, Resolution, TypeRef,
+    dump::TypePlace as DeclaredType,
 };
 use mlkc_hir_ty::{CheckDeps, ModuleTypes, Ty};
-use mlkc_resolve::Resolution;
 
 use crate::{
     diagnostic::{TypeDiag, TypeError, TypePlace},
@@ -183,12 +183,12 @@ mod tests {
 
     use mlkc_hir_def::{
         ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name, Prelude,
-        ProjectGraph, ProjectId,
+        ProjectGraph, ProjectId, Resolution,
     };
     use mlkc_hir_ty::{Builtins, CheckDeps, Ty};
     use mlkc_lower::lower_module;
     use mlkc_parser::parse;
-    use mlkc_resolve::{Resolution, closure};
+    use mlkc_resolve::closure;
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
@@ -239,11 +239,7 @@ mod tests {
     fn world(tree: &ItemTree) -> (Resolution, CheckDeps) {
         let graph = Arc::new(ProjectGraph::default());
         let closure = closure::of(tree.module(), tree, &graph, &BTreeMap::new(), &mut |_| None);
-        let resolution = Resolution::new(
-            Arc::new(ModuleScope::default()),
-            BTreeMap::new(),
-            Arc::from(Vec::new()),
-        );
+        let resolution = Resolution::new(Arc::new(ModuleScope::default()), BTreeMap::new());
         let builtins = Builtins::new(
             class(tree, "Int"),
             class(tree, "Unit"),

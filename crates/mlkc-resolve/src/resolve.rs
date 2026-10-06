@@ -5,13 +5,11 @@ use std::{collections::BTreeMap, sync::Arc};
 use mlkc_hir_def::{
     Body, Closure, EntityData, EntityLoc, ItemLoc, ItemLocLike, ItemTree, LocalTarget, ModuleId,
     ModuleScope, Name, Namespace, PathAnchor, PathData, PerNs, PlainPathId, ProjectGraph,
-    ProjectId, TypeRef, UseData, UseLoc, Visibility, dump::TypePlace, path::PathSegmentData,
+    ProjectId, Resolution, ResolveError, Target, TypeRef, UseData, UseLoc, Visibility, Walk,
+    dump::TypePlace, path::PathSegmentData,
 };
 
-use crate::{
-    diagnostic::{ResolveDiag, ResolveError, ResolvePlace},
-    walk::{Target, Walk},
-};
+use crate::diagnostic::{ResolveDiag, ResolvePlace};
 
 /// What resolving a module reads of the rest of the project ([ADR-0009]).
 ///
@@ -61,53 +59,26 @@ pub fn hidden_name(
     })
 }
 
-/// What resolving a module produced: the names of the module, what each import denotes, and what
-/// the walk found wrong.
+/// What resolving a module produced: the resolution, and what the walk found wrong.
 ///
-/// The pass answers with the three parts ([`resolve_module`]); this is the three of them as one
+/// The pass answers with the two parts ([`resolve_module`]); this is the two of them as one
 /// value, which is what a driver keeps per module and compares with the one it held ([ADR-0008]).
-/// The imports are what a later stage that resolves a path of a body reads: a name an import
-/// brought in is either an entity or a place a path goes on from ([ADR-0017]).
+/// The resolution is a value of the HIR ([`Resolution`]); what the walk found is the pass's own,
+/// and only the driver reads it.
 ///
 /// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
-/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Resolution {
-    /// What each name of the module denotes: a declaration of it, or what an import resolved to.
-    scope: Arc<ModuleScope>,
-    /// What each import of the module resolved to, by the import.
-    imports: BTreeMap<UseLoc, Target>,
+pub struct ResolvedModule {
+    /// What each name of the module denotes, and what each import resolved to.
+    resolution: Arc<Resolution>,
     /// What the walk found, in the order of the module.
     diagnostics: Arc<[ResolveDiag]>,
 }
 
-impl Resolution {
-    /// A resolution of the scope a module resolved to, with what its walk found wrong.
-    pub fn new(
-        scope: Arc<ModuleScope>,
-        imports: BTreeMap<UseLoc, Target>,
-        diagnostics: Arc<[ResolveDiag]>,
-    ) -> Self {
-        Self {
-            scope,
-            imports,
-            diagnostics,
-        }
-    }
-
-    /// What each name of the module denotes.
-    pub fn scope(&self) -> &Arc<ModuleScope> {
-        &self.scope
-    }
-
-    /// What each import of the module resolved to, by the import.
-    ///
-    /// A name a body writes is anchored at the entry of the import table it came from, so a
-    /// stage that resolves the paths of a body reads what the import denotes here ([ADR-0017]).
-    ///
-    /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
-    pub fn imports(&self) -> &BTreeMap<UseLoc, Target> {
-        &self.imports
+impl ResolvedModule {
+    /// What the names of the module denote, and what each import resolved to.
+    pub fn resolution(&self) -> &Arc<Resolution> {
+        &self.resolution
     }
 
     /// What the walk found, in the order of the module.
@@ -124,7 +95,7 @@ impl Resolution {
 ///
 /// [ADR-0005]: ../../docs/adr/0005-compiler-pipeline.md
 /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
-pub fn resolve_module(module: ModuleId, tree: &ItemTree, deps: &ResolveDeps) -> Resolution {
+pub fn resolve_module(module: ModuleId, tree: &ItemTree, deps: &ResolveDeps) -> ResolvedModule {
     let mut walk = Walk::of(&deps.graph, &deps.closure);
     let mut resolver = Resolver::new(module, tree, &mut walk);
     resolver.run();
@@ -199,10 +170,13 @@ impl<'w, 'a> Resolver<'w, 'a> {
     }
 
     /// The resolution the walk produced.
-    fn into_resolution(self) -> Resolution {
+    fn into_resolution(self) -> ResolvedModule {
         let scope = Arc::new(self.scope());
 
-        Resolution::new(scope, self.imports, Arc::from(self.diagnostics))
+        ResolvedModule {
+            resolution: Arc::new(Resolution::new(scope, self.imports)),
+            diagnostics: Arc::from(self.diagnostics),
+        }
     }
 
     /// Walks the paths of one body, gathering what the walk reads ([`walk_check`]).
@@ -272,11 +246,11 @@ impl<'w, 'a> Resolver<'w, 'a> {
     fn gather_under(&mut self, target: &Target, segments: &[PathSegmentData]) {
         // Reaching an entity is the end of a walk: the names after it are the names of its
         // members, and the language has no members yet.
-        if target.ty.is_some() || target.value.is_some() {
+        if target.ty().is_some() || target.value().is_some() {
             return;
         }
 
-        let (Some((project, base)), Some(locator)) = (&target.place, &target.module) else {
+        let (Some((project, base)), Some(locator)) = (target.place(), target.module()) else {
             return;
         };
 
@@ -486,13 +460,13 @@ impl<'w, 'a> Resolver<'w, 'a> {
     ) {
         // Reaching an entity is the end of a walk: the names after it are the names of its
         // members, and the language has no members yet.
-        if target.ty.is_some() || target.value.is_some() {
+        if target.ty().is_some() || target.value().is_some() {
             return;
         }
 
         // What a path continues from is what a module or a prefix of module paths denotes, and
         // the names after it are read where it stands.
-        let (Some((project, base)), Some(locator)) = (&target.place, &target.module) else {
+        let (Some((project, base)), Some(locator)) = (target.place(), target.module()) else {
             return;
         };
 
@@ -577,19 +551,19 @@ impl<'w, 'a> Resolver<'w, 'a> {
 
 /// Fills what an import brings in, in the namespaces the module declares nothing in.
 fn fill(per_ns: &mut PerNs, target: &Target, visibility: Visibility) {
-    if let Some(entity) = &target.ty
+    if let Some(entity) = target.ty()
         && per_ns.ty.is_none()
     {
         per_ns.ty = Some((entity.clone(), visibility));
     }
 
-    if let Some(entity) = &target.value
+    if let Some(entity) = target.value()
         && per_ns.value.is_none()
     {
         per_ns.value = Some((entity.clone(), visibility));
     }
 
-    if let Some(module) = &target.module
+    if let Some(module) = target.module()
         && per_ns.module.is_none()
     {
         per_ns.module = Some((module.clone(), visibility));

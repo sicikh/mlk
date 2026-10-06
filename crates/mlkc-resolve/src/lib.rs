@@ -3,8 +3,8 @@
 //! The HIR of a module stops at the module boundary on purpose: a path that names an entity of
 //! another module is kept as the path the module wrote ([ADR-0010]). This crate is the stage
 //! that reads those paths: it resolves the import table of a module and the paths its surface
-//! writes, and answers with the scope of the module --- what each of its names denotes --- and
-//! what the walk found wrong ([ADR-0016]).
+//! writes, and answers with the [`ResolvedModule`] of it --- what each of its names denotes,
+//! what each import resolved to, and what the walk found wrong ([ADR-0016]).
 //!
 //! [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
@@ -30,7 +30,7 @@
 //! after the root are read inside what it denotes. A root of a path of the module's own surface
 //! is not read here: the lowering of the module is handed the projects it may name, and which
 //! project a root names is an anchor the path is born with ([ADR-0016]).
-
+//!
 //! A name a path ends at is what the module it lands in exports --- and when that is a re-export,
 //! the walk continues from the path the re-export wrote, read in the project of the module that
 //! wrote it. A chain that returns to where it started resolves to nothing, and is reported: the
@@ -38,11 +38,13 @@
 //!
 //! # A path written in a body
 //!
-//! The paths a [`Resolution`] is about are the paths of the *surface* of a module, and the pass
-//! itself never reads a body ([ADR-0004], [ADR-0016]). A path written in a *body* is read by
-//! [`Walk::entity_of`]: the anchor the lowering left, the imports the resolution resolved, and
-//! the names after them, walked the same way. The stages that own bodies are what ask --- the
-//! check, and the MIR lowering after it --- and what they make of the answer is theirs.
+//! The paths a [`Resolution`](mlkc_hir_def::Resolution) is about are the paths of the *surface*
+//! of a module, and the pass itself never reads a body ([ADR-0004], [ADR-0016]). A path written
+//! in a *body* is read by [`Walk::entity_of`](mlkc_hir_def::Walk::entity_of): the anchor the
+//! lowering left, the imports the resolution resolved, and the names after them, walked the same
+//! way. The stages that own bodies are what ask --- the check, and the MIR lowering after it ---
+//! and what they make of the answer is theirs. The walk is a value of the HIR
+//! ([`Walk`](mlkc_hir_def::Walk)), because those stages walk it without this crate.
 //!
 //! [ADR-0004]: ../../docs/adr/0004-module-system.md
 //! [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
@@ -51,10 +53,8 @@
 pub mod closure;
 mod diagnostic;
 mod resolve;
-mod walk;
 
 pub use crate::{
-    diagnostic::{ResolveDiag, ResolveError, ResolvePlace},
-    resolve::{Resolution, ResolveDeps, hidden_name, resolve_module},
-    walk::{Target, Walk},
+    diagnostic::{ResolveDiag, ResolvePlace},
+    resolve::{ResolveDeps, ResolvedModule, hidden_name, resolve_module},
 };

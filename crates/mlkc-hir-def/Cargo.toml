@@ -15,5 +15,10 @@ mlkc-text-size = { workspace = true }
 mlkc-vfs = { workspace = true }
 rustc-hash.workspace = true
 
+[dev-dependencies]
+mlkc-lower = { workspace = true }
+mlkc-parser = { workspace = true }
+mlkc-syntax = { workspace = true }
+
 [lints]
 workspace = true

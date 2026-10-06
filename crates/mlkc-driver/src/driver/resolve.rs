@@ -3,9 +3,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_diagnostics::Diagnostic;
-use mlkc_hir_def::{Interface, ModuleId, ModuleIndex, ProjectDefMap, ProjectId};
+use mlkc_hir_def::{
+    Interface, ModuleId, ModuleIndex, ProjectDefMap, ProjectId, Resolution, ResolveError,
+};
 use mlkc_resolve::{
-    Resolution, ResolveDeps, ResolveDiag, ResolveError, closure, hidden_name, resolve_module,
+    ResolveDeps, ResolveDiag, ResolvedModule, closure, hidden_name, resolve_module,
 };
 use mlkc_span::Span;
 
@@ -142,7 +144,7 @@ impl Driver {
     ///
     /// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
     /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
-    pub fn resolution(&mut self, module: ModuleId) -> Option<Arc<Resolution>> {
+    pub fn resolution(&mut self, module: ModuleId) -> Option<Arc<ResolvedModule>> {
         let lowered = self.lower(module.0)?;
         let graph = Arc::clone(&self.projects);
         let indexes = self.indexes_of(module);
@@ -216,8 +218,8 @@ impl Driver {
         let mut resolutions: BTreeMap<ModuleId, Arc<Resolution>> = BTreeMap::new();
 
         for module in modules {
-            if let Some(resolution) = self.resolution(module) {
-                resolutions.insert(module, resolution);
+            if let Some(resolved) = self.resolution(module) {
+                resolutions.insert(module, Arc::clone(resolved.resolution()));
             }
         }
 
@@ -286,12 +288,13 @@ impl Driver {
     /// an HIR that did not change is a value the driver already holds.
     pub(super) fn resolution_diagnostics(&mut self, module: ModuleId) -> Option<Arc<[Diagnostic]>> {
         let lowered = self.lower(module.0)?;
-        let resolution = self.resolution(module)?;
+        let resolved = self.resolution(module)?;
 
         let held = self.resolution_diagnostics.get(&module);
         let existed = held.is_some();
         let held = held.filter(|slot| {
-            Arc::ptr_eq(&slot.resolution, &resolution) && Arc::ptr_eq(&slot.lowered, &lowered)
+            Arc::ptr_eq(&slot.resolution, resolved.resolution())
+                && Arc::ptr_eq(&slot.lowered, &lowered)
         });
         let unit = Unit::Module(module);
 
@@ -321,9 +324,9 @@ impl Driver {
 
         let started = self.ticking();
         let mut looked = BTreeMap::new();
-        let mut rendered = Vec::with_capacity(resolution.diagnostics().len());
+        let mut rendered = Vec::with_capacity(resolved.diagnostics().len());
 
-        for diagnostic in resolution.diagnostics().iter() {
+        for diagnostic in resolved.diagnostics().iter() {
             rendered.push(self.rendered(diagnostic, module, &lowered, &mut looked));
         }
 
@@ -334,7 +337,7 @@ impl Driver {
 
         self.resolution_diagnostics
             .insert(module, ResolutionDiagnosticsSlot {
-                resolution,
+                resolution: Arc::clone(resolved.resolution()),
                 lowered,
                 looked,
                 value: value.clone(),
@@ -364,14 +367,14 @@ impl Driver {
         // A place the driver wrote no range for has nowhere to point at: what the resolution
         // found is still what a host is told about, and it is told without a place.
         let Some(range) = range else {
-            return Diagnostic::from_kind(diagnostic.error(), diagnostic.error().message());
+            return Diagnostic::from_kind(diagnostic, diagnostic.error().message());
         };
 
         let span = Span::new(file.0, range);
         let error = self.hidden(diagnostic.error(), looked);
 
         match error {
-            Some(hidden) => Diagnostic::from_kind(&hidden, hidden.message()).with_primary(span, ""),
+            Some(hidden) => diagnostic.with_error(hidden).to_diagnostic(span),
             None => diagnostic.to_diagnostic(span),
         }
     }

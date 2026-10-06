@@ -126,7 +126,7 @@ impl Driver {
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
     fn signatures(&mut self, module: ModuleId) -> Option<Signatures> {
         let lowered = self.lower(module.0)?;
-        let resolution = self.resolution(module)?;
+        let resolved = self.resolution(module)?;
         let builtins = self.builtins()?;
         let graph = Arc::clone(&self.projects);
         let indexes = self.indexes_of(module);
@@ -144,7 +144,7 @@ impl Driver {
 
         if let Some(slot) = held
             && Arc::ptr_eq(&slot.lowered, &lowered)
-            && Arc::ptr_eq(&slot.resolution, &resolution)
+            && Arc::ptr_eq(&slot.resolution, resolved.resolution())
             && slot.closure.reads_the_same_as(&closure)
         {
             self.stats.consulted(Pass::Signatures, &unit, true, true);
@@ -159,7 +159,8 @@ impl Driver {
         let deps = CheckDeps::new(builtins)
             .with_graph(graph)
             .with_closure(closure.clone());
-        let (value, diagnostics) = resolve_module_types(lowered.item_tree(), &resolution, &deps);
+        let (value, diagnostics) =
+            resolve_module_types(lowered.item_tree(), resolved.resolution(), &deps);
         let signatures = Signatures {
             value: Arc::new(value),
             diagnostics: Arc::from(diagnostics),
@@ -185,7 +186,7 @@ impl Driver {
 
         self.signatures.insert(module, SignaturesSlot {
             lowered,
-            resolution,
+            resolution: Arc::clone(resolved.resolution()),
             closure,
             signatures: signatures.clone(),
         });
@@ -226,7 +227,7 @@ impl Driver {
     /// ([`Driver::use_std`]).
     pub(super) fn check_inputs(&mut self, module: ModuleId) -> Option<CheckInputs> {
         let lowered = self.lower(module.0)?;
-        let resolution = self.resolution(module)?;
+        let resolved = self.resolution(module)?;
         let builtins = self.builtins()?;
         let graph = Arc::clone(&self.projects);
         let indexes = self.indexes_of(module);
@@ -263,7 +264,7 @@ impl Driver {
 
         Some(CheckInputs {
             lowered,
-            resolution,
+            resolution: Arc::clone(resolved.resolution()),
             closure,
             types,
             builtins,

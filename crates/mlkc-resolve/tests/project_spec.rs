@@ -62,7 +62,9 @@ pub(crate) fn run(fixture: &str) {
             .expect("a module of a fixture to resolve");
 
         snapshot.push_str("### Resolution\n\n```\n");
-        snapshot.push_str(&mlkc_hir_def::dump::resolution(resolution.scope()));
+        snapshot.push_str(&mlkc_hir_def::dump::resolution(
+            resolution.resolution().scope(),
+        ));
         snapshot.push_str("```\n\n");
     }
 

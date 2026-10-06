@@ -94,6 +94,10 @@ The code wins; the notes are here so that a plan is not written against a stale 
   Its `lower_body` signature places `CheckDeps` in `mlkc-typeck`
   and `BodySourceMap` in `mlkc-lower`;
   the two live in `mlkc-hir-ty` and `mlkc-hir-def`.
+- [0016](0016-inter-module-resolution.md) describes the per-module resolution as the scope and
+  the diagnostics of the walk together.
+  The code splits the two: `mlkc_hir_def::Resolution` holds the scope and what the imports
+  resolved to, and `mlkc_resolve::ResolvedModule` pairs it with the diagnostics.
 - [0015](0015-standard-library.md), [0016](0016-inter-module-resolution.md), and
   [0017](0017-resolved-types.md) were written before the back end existed.
   Their "later" statements about MIR, codegen, layouts, and naming are partly outdated;

@@ -1019,7 +1019,10 @@ version = "0.1.0"
 dependencies = [
  "mlkc-intern",
  "mlkc-la-arena",
+ "mlkc-lower",
+ "mlkc-parser",
  "mlkc-stdx",
+ "mlkc-syntax",
  "mlkc-text-size",
  "mlkc-vfs",
  "rustc-hash",

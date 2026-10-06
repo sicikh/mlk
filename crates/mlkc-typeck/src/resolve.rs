@@ -15,9 +15,11 @@
 //!
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 
-use mlkc_hir_def::{ClassLoc, EntityLoc, ModuleId, Namespace, PathAnchor, PathData, TypeRef};
+use mlkc_hir_def::{
+    ClassLoc, EntityLoc, ModuleId, Namespace, PathAnchor, PathData, Resolution, ResolveError,
+    TypeRef, Walk,
+};
 use mlkc_hir_ty::{CheckDeps, Ty};
-use mlkc_resolve::{Resolution, ResolveError, Walk};
 
 use crate::diagnostic::TypeError;
 

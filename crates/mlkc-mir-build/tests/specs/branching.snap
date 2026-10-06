@@ -1,0 +1,285 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun pick`
+
+CFG form:
+
+```
+fun pick (entry b0)
+  params: v0: Bool
+  b0:
+    l0(flag) = use v0
+    l2 = use l0
+    branch l2 -> b1, b2
+  b1:
+    l3 = const 1
+    l1 = use l3
+    goto b3
+  b2:
+    l4 = const 2
+    l1 = use l4
+    goto b3
+  b3:
+    return l1
+```
+
+SSA form:
+
+```
+fun pick (entry b0)
+  params: v0: Bool
+  b0:
+    branch v0 -> b1, b2
+  b1:
+    v2 = const 1
+    goto b3(v2)
+  b2:
+    v1 = const 2
+    goto b3(v1)
+  b3(v3):
+    return v3
+```
+
+`fun ordered`
+
+CFG form:
+
+```
+fun ordered (entry b0)
+  params: v0: Bool, v1: Bool
+  b0:
+    l0(low) = use v0
+    l1(high) = use v1
+    l3 = use l0
+    branch l3 -> b1, b2
+  b1:
+    l5 = const 1
+    l2 = use l5
+    goto b5
+  b2:
+    l4 = use l1
+    branch l4 -> b3, b4
+  b3:
+    l6 = const 2
+    l2 = use l6
+    goto b5
+  b4:
+    l7 = const 3
+    l2 = use l7
+    goto b5
+  b5:
+    return l2
+```
+
+SSA form:
+
+```
+fun ordered (entry b0)
+  params: v0: Bool, v1: Bool
+  b0:
+    branch v0 -> b1, b2
+  b1:
+    v4 = const 1
+    goto b5(v4)
+  b2:
+    branch v1 -> b3, b4
+  b3:
+    v3 = const 2
+    goto b5(v3)
+  b4:
+    v2 = const 3
+    goto b5(v2)
+  b5(v5):
+    return v5
+```
+
+`fun where_a_value_belongs`
+
+CFG form:
+
+```
+fun where_a_value_belongs (entry b0)
+  params: v0: Bool
+  b0:
+    l0(flag) = use v0
+    l3 = use l0
+    branch l3 -> b1, b2
+  b1:
+    l4 = const 1
+    l2 = use l4
+    goto b3
+  b2:
+    l5 = const 2
+    l2 = use l5
+    goto b3
+  b3:
+    l6 = const 3
+    l1 = prim int-add(l2, l6)
+    return l1
+```
+
+SSA form:
+
+```
+fun where_a_value_belongs (entry b0)
+  params: v0: Bool
+  b0:
+    branch v0 -> b1, b2
+  b1:
+    v2 = const 1
+    goto b3(v2)
+  b2:
+    v1 = const 2
+    goto b3(v1)
+  b3(v4):
+    v3 = const 3
+    v5 = prim int-add(v4, v3)
+    return v5
+```
+
+`fun through_a_let`
+
+CFG form:
+
+```
+fun through_a_let (entry b0)
+  params: v0: Bool
+  b0:
+    l0(flag) = use v0
+    l3 = use l0
+    branch l3 -> b1, b2
+  b1:
+    l4 = const 1
+    l2 = use l4
+    goto b3
+  b2:
+    l5 = const 2
+    l2 = use l5
+    goto b3
+  b3:
+    l6(carried) = use l2
+    l8 = use l6
+    l9 = const 3
+    l7 = prim int-add(l8, l9)
+    l1 = use l7
+    return l1
+```
+
+SSA form:
+
+```
+fun through_a_let (entry b0)
+  params: v0: Bool
+  b0:
+    branch v0 -> b1, b2
+  b1:
+    v2 = const 1
+    goto b3(v2)
+  b2:
+    v1 = const 2
+    goto b3(v1)
+  b3(v3):
+    v4 = const 3
+    v5 = prim int-add(v3, v4)
+    return v5
+```
+
+`fun log`
+
+CFG form:
+
+```
+fun log (entry b0)
+  params: v0: Bool
+  b0:
+    l0(flag) = use v0
+    l2 = use l0
+    branch l2 -> b1, b2
+  b1:
+    l4 = use l0
+    l3 = call fun log(l4)
+    l1 = use l3
+    goto b3
+  b2:
+    l1 = const unit
+    goto b3
+  b3:
+    return l1
+```
+
+SSA form:
+
+```
+fun log (entry b0)
+  params: v0: Bool
+  b0:
+    branch v0 -> b1, b2
+  b1:
+    v2 = call fun log(v0)
+    goto b3(v2)
+  b2:
+    v1 = const unit
+    goto b3(v1)
+  b3(v3):
+    return v3
+```
+
+`fun log_ordered`
+
+CFG form:
+
+```
+fun log_ordered (entry b0)
+  params: v0: Bool, v1: Bool
+  b0:
+    l0(low) = use v0
+    l1(high) = use v1
+    l3 = use l0
+    branch l3 -> b1, b2
+  b1:
+    l6 = use l0
+    l5 = call fun log(l6)
+    l2 = use l5
+    goto b5
+  b2:
+    l4 = use l1
+    branch l4 -> b3, b4
+  b3:
+    l8 = use l1
+    l7 = call fun log(l8)
+    l2 = use l7
+    goto b5
+  b4:
+    l2 = const unit
+    goto b5
+  b5:
+    return l2
+```
+
+SSA form:
+
+```
+fun log_ordered (entry b0)
+  params: v0: Bool, v1: Bool
+  b0:
+    branch v0 -> b1, b2
+  b1:
+    v4 = call fun log(v0)
+    goto b5(v4)
+  b2:
+    branch v1 -> b3, b4
+  b3:
+    v3 = call fun log(v1)
+    goto b5(v3)
+  b4:
+    v2 = const unit
+    goto b5(v2)
+  b5(v5):
+    return v5
+```

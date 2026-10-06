@@ -1,0 +1,172 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+`fun capturing`
+
+capturing:
+```
+lir (entry b0) ret (ref i31)
+  locals: 0: (ref #7), 1: (ref i31)
+  b0:
+    v0 = i32.const 40
+    v1 = ref.i31 v0
+    v2 = ref.func $1
+    v3(local 0) = struct.new #7(v2, v1)
+    v4 = i32.const 2
+    v5(local 1) = ref.i31 v4
+    v6 = struct.get #2.0 v3
+    v7 = call-ref #1 v6(v3, v5)
+    return v7
+```
+
+Structure:
+
+```
+  leaf b0
+  return v7
+```
+
+capturing::<mlkc@lambda-0>:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref #2), v1: (ref i31)
+  locals: 
+  b0:
+    v2 = ref.cast (ref #7) v0
+    v3 = struct.get #7.1 v2
+    v4 = i31.get_s v1
+    v5 = i31.get_s v3
+    v6 = i32.add v4, v5
+    v7 = ref.i31 v6
+    return v7
+```
+
+Structure:
+
+```
+  leaf b0
+  return v7
+```
+
+`fun nested`
+
+nested:
+```
+lir (entry b0) ret (ref i31)
+  locals: 0: (ref #8), 1: (ref i31), 2: (ref i31), 3: (ref #2)
+  b0:
+    v0 = i32.const 40
+    v1 = ref.i31 v0
+    v2 = ref.func $3
+    v3(local 0) = struct.new #8(v2, v1)
+    v4 = i32.const 1
+    v5(local 1) = ref.i31 v4
+    v6 = i32.const 1
+    v7(local 2) = ref.i31 v6
+    v8 = struct.get #4.0 v3
+    v9 = call-ref #3 v8(v3, v7)
+    v10(local 3) = ref.cast (ref #2) v9
+    v11 = struct.get #2.0 v10
+    v12 = call-ref #1 v11(v10, v5)
+    return v12
+```
+
+Structure:
+
+```
+  leaf b0
+  return v12
+```
+
+nested::<mlkc@lambda-0>:
+```
+lir (entry b0) ret eqref
+  params: v0: (ref #4), v1: (ref i31)
+  locals: 
+  b0:
+    v2 = ref.cast (ref #8) v0
+    v3 = struct.get #8.1 v2
+    v4 = ref.func $4
+    v5 = struct.new #9(v4, v1, v3)
+    return v5
+```
+
+Structure:
+
+```
+  leaf b0
+  return v5
+```
+
+nested::<mlkc@lambda-1>:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref #2), v1: (ref i31)
+  locals: 2: (ref #9), 3: (ref i31)
+  b0:
+    v2(local 2) = ref.cast (ref #9) v0
+    v3(local 3) = struct.get #9.1 v2
+    v4 = struct.get #9.2 v2
+    v5 = i31.get_s v3
+    v6 = i31.get_s v1
+    v7 = i32.add v5, v6
+    v8 = i31.get_s v4
+    v9 = i32.add v7, v8
+    v10 = ref.i31 v9
+    return v10
+```
+
+Structure:
+
+```
+  leaf b0
+  return v10
+```
+
+`fun generalized`
+
+generalized:
+```
+lir (entry b0) ret (ref i31)
+  locals: 0: (ref #6), 1: (ref i31), 2: (ref i31), 3: (ref i31)
+  b0:
+    v0 = ref.func $6
+    v1(local 0) = struct.new #6(v0)
+    v2 = i32.const 1
+    v3(local 1) = ref.i31 v2
+    v4 = struct.get #6.0 v1
+    v5 = call-ref #5 v4(v1, v3)
+    v6(local 2) = ref.cast (ref i31) v5
+    v7 = i32.const 42
+    v8(local 3) = ref.i31 v7
+    v9 = struct.get #6.0 v1
+    v10 = call-ref #5 v9(v1, v8)
+    v11 = ref.cast (ref i31) v10
+    return v11
+```
+
+Structure:
+
+```
+  leaf b0
+  return v11
+```
+
+generalized::<mlkc@lambda-0>:
+```
+lir (entry b0) ret eqref
+  params: v0: (ref #6), v1: eqref
+  locals: 
+  b0:
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```

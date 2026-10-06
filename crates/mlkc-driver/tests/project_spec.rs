@@ -1,26 +1,17 @@
-//! The harness of the project spec tests.
+//! The spec tests of a project: the diagnostics the driver reports for its modules.
 //!
-//! A fixture is a project, written one of two ways. A fixture that is a file holds its modules
-//! in the fixture format ([`mlkc_fixture`]): each module is headed by the place it stands at,
-//! `//- /main.mlk`, and what follows is its source. A fixture that is a directory holds a file
-//! per module, and the place of a module is the path of its file under the directory: the file
-//! `data/utils.mlk` is the module `project::data::utils` either way.
+//! Every fixture of the corpus has a test of its own, declared in `project_specs.rs`, and a
+//! snapshot next to it that holds what the driver reported about every module of it: the
+//! messages, their places, and the notes they carry.
 //!
-//! A fixture is compiled by a driver that holds the standard library, and the project depends on
-//! it, so the names of the language resolve.
+//! The dumps of the passes are not here: what a stage makes of a project is read by the suite
+//! of the crate that owns the stage, which drives the same corpus through this same driver.
+//! What is left to the driver is what it adds --- the diagnostics it renders for a host, and
+//! the check that the pipeline ran without an internal exception.
 //!
-//! The snapshot holds, for every module of the project, the surface it was lowered to, the scope
-//! it resolved to, the types its signatures and bodies were checked to, the MIR of every body
-//! the front end read clean, in both of its forms, the LIR it is lowered to and the structure of
-//! its control flow, and what the stages reported. A snapshot is
-//! part of changing how a project is read:
-//! `INSTA_UPDATE=always cargo test -p mlkc-driver` rewrites them, and the diff of the snapshots
-//! is what a review reads ([ADR-0006], [ADR-0016], [ADR-0017], [ADR-0019]).
-//!
-//! [ADR-0006]: ../../docs/adr/0006-snapshot-testing.md
-//! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
-//! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
-//! [ADR-0019]: ../../docs/adr/0019-mir.md
+//! A fixture is a file in the `mlkc-fixture` format or a directory of modules, and the corpus
+//! is shared by the suites of the pipeline ([`mlkc_fixture::projects_dir`]), so a project
+//! added there is asserted by every stage at once.
 
 // The file is a harness of the suite, and cargo compiles it as a test target of its own as
 // well: in that target nothing calls it, which is what the allowance is for. An `allow`
@@ -31,31 +22,18 @@
     reason = "the harness is a test target of its own, where nothing calls it"
 )]
 
-use std::{
-    fmt::Write as _,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fmt::Write as _;
 
-use mlkc_codegen_wasm::LoweredFunctions;
 use mlkc_diagnostics::Diagnostic;
 use mlkc_driver::{Diagnostics, Driver};
 use mlkc_fixture::Module;
 use mlkc_hir_def::{ModuleId, Name, ProjectData, ProjectId};
 use mlkc_vfs::VfsPath;
 
-/// The directory of the tests of this crate.
+/// The directory of the snapshots, relative to the file that asserts them.
 ///
-/// The fixtures are read from here rather than from the working directory of the test, so that
-/// a test does not depend on where it was started from.
-const TESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests");
-
-/// The directory of the fixtures, relative to [`TESTS_DIR`].
-///
-/// A snapshot is written next to the fixture it describes, and the path of a snapshot that
-/// insta resolves is relative to the file that asserts it --- here, `tests/project_spec.rs`.
-/// The path handed to insta is therefore spelled relative to the directory of the tests, while
-/// the fixtures themselves are read from [`TESTS_DIR`].
+/// A snapshot is written next to the file that asserts it, and the path handed to insta is
+/// relative to `tests/project_spec.rs`.
 pub(crate) const SPECS_DIR: &str = "specs";
 
 /// The name of the project every fixture is compiled as.
@@ -67,16 +45,9 @@ pub(crate) const SPECS_DIR: &str = "specs";
 /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 const PROJECT: &str = "app";
 
-/// The extension of a fixture that holds its own modules, and of a module of a directory.
-const MODULE_EXTENSION: &str = "mlk";
-
-/// Runs the fixture at `fixture`, a path relative to [`SPECS_DIR`], and checks it against its
-/// snapshot.
-///
-/// A fixture is a file that holds the modules of the project, or a directory that holds a file
-/// per module: see the module documentation.
+/// Runs the fixture at `fixture`, a project of the corpus, and checks it against its snapshot.
 pub(crate) fn run(fixture: &str) {
-    let modules = modules_of(fixture);
+    let modules = mlkc_fixture::read(fixture);
     let (mut driver, project) = project(&modules);
 
     let index = driver
@@ -92,126 +63,6 @@ pub(crate) fn run(fixture: &str) {
 
         writeln!(snapshot, "## `project::{path}`").expect("writing to a string to never fail");
         snapshot.push('\n');
-
-        let lowered = driver
-            .lower(module.0)
-            .expect("a module of a fixture to be lowered");
-
-        snapshot.push_str("### Item Tree\n\n```\n");
-        snapshot.push_str(&mlkc_hir_def::dump::item_tree(lowered.item_tree()));
-        snapshot.push_str("```\n\n");
-
-        // A checked body is read by the positions of its nodes, and the HIR dump is what says
-        // which node a position is: the ids of the two are the ids of one body.
-        snapshot.push_str("### Bodies\n\n");
-
-        if lowered.bodies().is_empty() {
-            snapshot.push_str("No bodies.\n\n");
-        } else {
-            for body in lowered.bodies() {
-                writeln!(snapshot, "`{:?}`", body.owner().item)
-                    .expect("writing to a string to never fail");
-                snapshot.push_str("\n```\n");
-                snapshot.push_str(&mlkc_hir_def::dump::body(body.owner(), &body.body().body));
-                snapshot.push_str("```\n\n");
-            }
-        }
-
-        let resolution = driver
-            .resolution(module)
-            .expect("a module of a fixture to resolve");
-
-        snapshot.push_str("### Resolution\n\n```\n");
-        snapshot.push_str(&mlkc_hir_def::dump::resolution(resolution.scope()));
-        snapshot.push_str("```\n\n");
-
-        // The types of the module are resolved from the signatures it writes, before any body
-        // is checked: the surface is what its readers read ([ADR-0017]).
-        //
-        // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
-        let types = driver
-            .module_types(module)
-            .expect("a module of a fixture to have its types resolved");
-
-        snapshot.push_str("### Type Surface\n\n```\n");
-        snapshot.push_str(&mlkc_hir_ty::dump::module_types(&types));
-        snapshot.push_str("```\n\n");
-
-        snapshot.push_str("### Checked Bodies\n\n");
-
-        if lowered.bodies().is_empty() {
-            snapshot.push_str("No bodies.\n\n");
-        } else {
-            for body in lowered.bodies() {
-                let checked = driver
-                    .check(body.owner())
-                    .expect("a body of a fixture to be checked");
-
-                writeln!(snapshot, "`{:?}`", body.owner().item)
-                    .expect("writing to a string to never fail");
-                snapshot.push_str("\n```\n");
-                snapshot.push_str(&mlkc_hir_ty::dump::checked_body(&checked));
-                snapshot.push_str("```\n\n");
-            }
-        }
-
-        // The MIR of a body is read in the form the stage left it in: the CFG form the lowering
-        // produces, and the SSA form the construction after it produces ([ADR-0019]).
-        //
-        // [ADR-0019]: ../../docs/adr/0019-mir.md
-        snapshot.push_str("### MIR\n\n");
-
-        if lowered.bodies().is_empty() {
-            snapshot.push_str("No bodies.\n\n");
-        } else {
-            for body in lowered.bodies() {
-                writeln!(snapshot, "`{:?}`", body.owner().item)
-                    .expect("writing to a string to never fail");
-                snapshot.push('\n');
-
-                // A body the front end or the check reported a mistake about is not lowered,
-                // and a host is told so by the diagnostics of the file ([ADR-0019]).
-                let Some(mir) = driver.mir(body.owner()) else {
-                    snapshot.push_str("Not lowered: the front end reported a mistake.\n\n");
-                    continue;
-                };
-
-                snapshot.push_str("CFG form:\n\n```\n");
-
-                for body in mir.iter() {
-                    snapshot.push_str(&mlkc_mir::dump::body(body));
-                }
-
-                snapshot.push_str("```\n\n");
-
-                let ssa = driver
-                    .mir_ssa(body.owner())
-                    .expect("a body that is lowered to have an SSA form");
-
-                snapshot.push_str("SSA form:\n\n```\n");
-
-                for body in ssa.iter() {
-                    snapshot.push_str(&mlkc_mir::dump::body(body));
-                }
-
-                snapshot.push_str("```\n\n");
-
-                // The LIR is what the WASM back end lowers the SSA form into: the target's own
-                // instructions, and where every value that needs storage lives ([ADR-0022]).
-                //
-                // [adr-0022]: ../../docs/adr/0022-wasm-lir.md
-                snapshot.push_str("LIR:\n\n");
-
-                match driver.lir(body.owner()) {
-                    Some(lir) => {
-                        write_lir(&mut snapshot, &lir);
-                    },
-                    None => {
-                        snapshot.push_str("Not lowered: the module of the body is not whole.\n\n");
-                    },
-                }
-            }
-        }
 
         snapshot.push_str("### Diagnostics\n\n");
 
@@ -234,53 +85,6 @@ pub(crate) fn run(fixture: &str) {
     }, {
         insta::assert_snapshot!(fixture, snapshot);
     });
-}
-
-/// The modules of a fixture, in the order they are read.
-///
-/// A fixture that is a file holds its modules in the fixture format; one that is a directory
-/// holds a file per module, and the place of a module is the path of its file under the
-/// directory.
-fn modules_of(fixture: &str) -> Vec<Module> {
-    let directory = fixtures_dir().join(fixture);
-
-    if directory.is_dir() {
-        let mut modules = Vec::new();
-        collect_modules(&directory, &directory, &mut modules);
-        modules.sort_by(|left, right| left.place.cmp(&right.place));
-
-        return modules;
-    }
-
-    let path = directory.with_extension(MODULE_EXTENSION);
-    let source = fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-
-    mlkc_fixture::modules(&source)
-}
-
-/// Writes the LIR of every function of one HIR body, flat, each under the header of what it is.
-fn write_lir(snapshot: &mut String, functions: &LoweredFunctions) {
-    for function in &functions.functions {
-        let _ = writeln!(snapshot, "{}:", function.name);
-
-        snapshot.push_str("```\n");
-        snapshot.push_str(&mlkc_lir_wasm::dump::body(&function.body));
-        snapshot.push_str("```\n\n");
-
-        // The structure is what the structuring pass makes of the control flow: the frames of the
-        // target around the blocks, or the dispatch form where the body has none.
-        snapshot.push_str("Structure:\n\n");
-
-        match &function.body.structure {
-            Some(structure) => {
-                snapshot.push_str("```\n");
-                snapshot.push_str(&mlkc_lir_wasm::dump::structure(structure));
-                snapshot.push_str("```\n\n");
-            },
-            None => snapshot.push_str("Dispatched: the control flow is not structured.\n\n"),
-        }
-    }
 }
 
 /// The driver a fixture is compiled by: the standard library, the project that depends on it,
@@ -364,69 +168,10 @@ fn diagnostic_line(diagnostic: &Diagnostic) -> String {
     line
 }
 
-/// The directory the fixtures live in.
-fn fixtures_dir() -> PathBuf {
-    Path::new(TESTS_DIR).join(SPECS_DIR)
-}
-
-/// The path of a fixture, given as a path relative to [`SPECS_DIR`].
-pub(crate) fn fixture_path(fixture: &str) -> PathBuf {
-    fixtures_dir().join(fixture)
-}
-
-/// The modules of a fixture that is a directory: the place of each file in the project, and its
-/// source.
+/// The projects the corpus holds, by the names the tests name them by.
 ///
-/// The place of a file is the path of it under the directory of the fixture, which is what the
-/// module is called by: the file `data/utils.mlk` is the module `project::data::utils`.
-fn collect_modules(root: &Path, directory: &Path, modules: &mut Vec<Module>) {
-    let entries = fs::read_dir(directory)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()));
-
-    for entry in entries {
-        let path = entry.expect("the entry to be readable").path();
-
-        if path.is_dir() {
-            collect_modules(root, &path, modules);
-        } else if path.extension() == Some(MODULE_EXTENSION.as_ref()) {
-            let place = path
-                .strip_prefix(root)
-                .expect("a file of a fixture to be under the fixture")
-                .to_str()
-                .expect("the place of a module to be UTF-8")
-                .replace('\\', "/");
-            let source = fs::read_to_string(&path)
-                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-
-            modules.push(Module {
-                place: format!("/{place}"),
-                source,
-            });
-        }
-    }
-}
-
-/// The fixtures the spec tests cover, as the paths the tests name them by, relative to
-/// [`SPECS_DIR`].
-///
-/// A fixture that is a directory is named by the directory, and one that is a file by the file
-/// without the extension of a module: the fixture `imports.mlk` and the fixture `imports/` are
-/// both named `imports`.
-pub(crate) fn fixtures() -> Vec<PathBuf> {
-    let mut fixtures = Vec::new();
-    let entries = fs::read_dir(fixtures_dir())
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", fixtures_dir().display()));
-
-    for entry in entries {
-        let path = entry.expect("the entry to be readable").path();
-
-        if path.is_dir() {
-            fixtures.push(path);
-        } else if path.extension() == Some(MODULE_EXTENSION.as_ref()) {
-            fixtures.push(path.with_extension(""));
-        }
-    }
-
-    fixtures.sort();
-    fixtures
+/// A project that is a directory is named by the directory, and one that is a file by the file
+/// without the extension of a module.
+pub(crate) fn fixtures() -> Vec<String> {
+    mlkc_fixture::projects()
 }

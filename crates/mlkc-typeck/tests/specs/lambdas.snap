@@ -1,0 +1,79 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun capturing: () -> Int
+  fun nested: () -> Int
+  fun generalized: () -> Int
+```
+
+### Checked Bodies
+
+`fun capturing`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: (Int) -> Int
+  expr #5: (Int) -> Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Int
+  expr #9: Int
+  pat #0: Int
+  pat #1: (Int) -> Int
+  pat #2: Int
+```
+
+`fun nested`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: (Int) -> Int
+  expr #7: (Int) -> ((Int) -> Int)
+  expr #8: (Int) -> ((Int) -> Int)
+  expr #9: Int
+  expr #10: (Int) -> Int
+  expr #11: Int
+  expr #12: Int
+  expr #13: Int
+  expr #14: Int
+  pat #0: Int
+  pat #1: (Int) -> ((Int) -> Int)
+  pat #2: Int
+  pat #3: Int
+```
+
+`fun generalized`
+
+```
+CHECKED BODY
+  expr #0: '0
+  expr #1: ('0) -> '0
+  expr #2: (Bool) -> Bool
+  expr #3: Bool
+  expr #4: Bool
+  expr #5: (Int) -> Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Int
+  expr #9: Int
+  pat #0: ('0) -> '0
+  pat #1: '0
+  pat #2: Bool
+```

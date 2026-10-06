@@ -1,0 +1,256 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun signed`
+
+CFG form:
+
+```
+fun signed (entry b0)
+  b0:
+    l3 = const 1
+    l2 = prim int-neg(l3)
+    l6 = const 2
+    l5 = use l6
+    l7 = const 3
+    l4 = prim int-mul(l5, l7)
+    l1 = prim int-add(l2, l4)
+    l9 = const 4
+    l10 = const 5
+    l8 = prim int-div(l9, l10)
+    l0 = prim int-sub(l1, l8)
+    return l0
+```
+
+SSA form:
+
+```
+fun signed (entry b0)
+  b0:
+    v0 = const 1
+    v1 = prim int-neg(v0)
+    v2 = const 2
+    v3 = const 3
+    v4 = prim int-mul(v2, v3)
+    v5 = prim int-add(v1, v4)
+    v6 = const 4
+    v7 = const 5
+    v8 = prim int-div(v6, v7)
+    v9 = prim int-sub(v5, v8)
+    return v9
+```
+
+`fun ordered`
+
+CFG form:
+
+```
+fun ordered (entry b0)
+  params: v0: Int, v1: Int
+  b0:
+    l0(left) = use v0
+    l1(right) = use v1
+    l6 = use l0
+    l7 = use l1
+    l5 = prim int-lt(l6, l7)
+    l9 = use l0
+    l10 = use l1
+    l8 = prim int-le(l9, l10)
+    l4 = prim bool-and(l5, l8)
+    l12 = use l0
+    l13 = use l1
+    l11 = prim int-gt(l12, l13)
+    l3 = prim bool-or(l4, l11)
+    l15 = use l0
+    l16 = use l1
+    l14 = prim int-ge(l15, l16)
+    l2 = prim bool-or(l3, l14)
+    return l2
+```
+
+SSA form:
+
+```
+fun ordered (entry b0)
+  params: v0: Int, v1: Int
+  b0:
+    v2 = prim int-lt(v0, v1)
+    v3 = prim int-le(v0, v1)
+    v4 = prim bool-and(v2, v3)
+    v5 = prim int-gt(v0, v1)
+    v6 = prim bool-or(v4, v5)
+    v7 = prim int-ge(v0, v1)
+    v8 = prim bool-or(v6, v7)
+    return v8
+```
+
+`fun different`
+
+CFG form:
+
+```
+fun different (entry b0)
+  params: v0: Int, v1: Int
+  b0:
+    l0(left) = use v0
+    l1(right) = use v1
+    l3 = use l0
+    l4 = use l1
+    l2 = prim int-ne(l3, l4)
+    return l2
+```
+
+SSA form:
+
+```
+fun different (entry b0)
+  params: v0: Int, v1: Int
+  b0:
+    v2 = prim int-ne(v0, v1)
+    return v2
+```
+
+`fun text`
+
+CFG form:
+
+```
+fun text (entry b0)
+  b0:
+    l0 = const "hello"
+    return l0
+```
+
+SSA form:
+
+```
+fun text (entry b0)
+  b0:
+    v0 = const "hello"
+    return v0
+```
+
+`fun truth`
+
+CFG form:
+
+```
+fun truth (entry b0)
+  b0:
+    l0 = const true
+    return l0
+```
+
+SSA form:
+
+```
+fun truth (entry b0)
+  b0:
+    v0 = const true
+    return v0
+```
+
+`fun untruth`
+
+CFG form:
+
+```
+fun untruth (entry b0)
+  b0:
+    l0 = const false
+    return l0
+```
+
+SSA form:
+
+```
+fun untruth (entry b0)
+  b0:
+    v0 = const false
+    return v0
+```
+
+`fun both`
+
+CFG form:
+
+```
+fun both (entry b0)
+  b0:
+    l1 = const true
+    l2 = const false
+    l0 = prim bool-and(l1, l2)
+    return l0
+```
+
+SSA form:
+
+```
+fun both (entry b0)
+  b0:
+    v0 = const true
+    v1 = const false
+    v2 = prim bool-and(v0, v1)
+    return v2
+```
+
+`fun call`
+
+CFG form:
+
+```
+fun call (entry b0)
+  b0:
+    l1 = const "hello"
+    l0 = call fun print(l1)
+    return l0
+```
+
+SSA form:
+
+```
+fun call (entry b0)
+  b0:
+    v0 = const "hello"
+    v1 = call fun print(v0)
+    return v1
+```
+
+`fun bound`
+
+CFG form:
+
+```
+fun bound (entry b0)
+  b0:
+    l2 = const 2
+    l3 = const 2
+    l1 = prim int-mul(l2, l3)
+    l4(twice) = use l1
+    l7 = use l4
+    l8 = const 1
+    l6 = prim int-add(l7, l8)
+    l9(sum) = use l6
+    l10 = use l9
+    l5 = use l10
+    l0 = use l5
+    return l0
+```
+
+SSA form:
+
+```
+fun bound (entry b0)
+  b0:
+    v0 = const 2
+    v1 = const 2
+    v2 = prim int-mul(v0, v1)
+    v3 = const 1
+    v4 = prim int-add(v2, v3)
+    return v4
+```

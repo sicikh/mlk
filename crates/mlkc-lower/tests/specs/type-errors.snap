@@ -1,0 +1,246 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  fun one  @2.0
+    visibility: private
+    ret: Unit -> use Unit
+  fun takes  @2.1
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun wrong-argument  @2.2
+    visibility: private
+    ret: Int -> use Int
+  fun wrong-arity  @2.3
+    visibility: private
+    ret: Int -> use Int
+  fun extra-argument  @2.4
+    visibility: private
+    ret: Int -> use Int
+  fun not-callable  @2.5
+    visibility: private
+    ret: Int -> use Int
+  fun applied  @2.6
+    visibility: private
+    param: Int[Bool -> use Bool] -> use Int
+    ret: Int[Bool -> use Bool] -> use Int
+  fun no-equality  @2.7
+    visibility: private
+    param: String -> use String
+    param: String -> use String
+    ret: Bool -> use Bool
+  fun condition-not-a-bool  @2.8
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun branch-of-another-type  @2.9
+    visibility: private
+    ret: Int -> use Int
+  fun arm-of-another-type  @2.10
+    visibility: private
+    param: Bool -> use Bool
+    ret: Unit -> use Unit
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun one`
+
+```
+BODY fun one in module #3
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+`fun takes`
+
+```
+BODY fun takes in module #3
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun wrong-argument`
+
+```
+BODY fun wrong-argument in module #3
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal "text"
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  takes -> fun takes
+```
+
+`fun wrong-arity`
+
+```
+BODY fun wrong-arity in module #3
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  takes -> fun takes
+```
+
+`fun extra-argument`
+
+```
+BODY fun extra-argument in module #3
+
+root expr#3
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  literal 2
+  expr#3  call expr#0 (expr#1, expr#2)
+paths
+  path#0  takes -> fun takes
+```
+
+`fun not-callable`
+
+```
+BODY fun not-callable in module #3
+
+root expr#3
+exprs
+  expr#0  literal 1
+  expr#1  path path#0
+  expr#2  call expr#1 ()
+  expr#3  let pat#0 = expr#0 in expr#2
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun applied`
+
+```
+BODY fun applied in module #3
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun no-equality`
+
+```
+BODY fun no-equality in module #3
+
+root expr#2
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 == expr#1
+pats
+  pat#0  bind left
+  pat#1  bind right
+paths
+  path#0  left -> binding pat#0
+  path#1  right -> binding pat#1
+```
+
+`fun condition-not-a-bool`
+
+```
+BODY fun condition-not-a-bool in module #3
+
+root expr#3
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  literal 2
+  expr#3  if expr#0 then expr#1 else expr#2
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun branch-of-another-type`
+
+```
+BODY fun branch-of-another-type in module #3
+
+root expr#5
+exprs
+  expr#0  literal 1
+  expr#1  literal 2
+  expr#2  binary expr#0 == expr#1
+  expr#3  literal 1
+  expr#4  literal "text"
+  expr#5  if expr#2 then expr#3 else expr#4
+```
+
+`fun arm-of-another-type`
+
+```
+BODY fun arm-of-another-type in module #3
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  if expr#0 then expr#1
+pats
+  pat#0  bind flag
+paths
+  path#0  flag -> binding pat#0
+```

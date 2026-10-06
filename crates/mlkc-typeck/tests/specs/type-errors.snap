@@ -1,0 +1,129 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun one: () -> Unit
+  fun takes: (Int) -> Int
+  fun wrong-argument: () -> Int
+  fun wrong-arity: () -> Int
+  fun extra-argument: () -> Int
+  fun not-callable: () -> Int
+  fun applied: (Int[Bool]) -> Int[Bool]
+  fun no-equality: (String, String) -> Bool
+  fun condition-not-a-bool: (Int) -> Int
+  fun branch-of-another-type: () -> Int
+  fun arm-of-another-type: (Bool) -> Unit
+```
+
+### Checked Bodies
+
+`fun one`
+
+```
+CHECKED BODY
+  expr #0: {error}
+```
+
+`fun takes`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Int
+```
+
+`fun wrong-argument`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: {error}
+  expr #2: Int
+```
+
+`fun wrong-arity`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+```
+
+`fun extra-argument`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+```
+
+`fun not-callable`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  pat #0: Int
+```
+
+`fun applied`
+
+```
+CHECKED BODY
+  expr #0: Int[Bool]
+  pat #0: Int[Bool]
+```
+
+`fun no-equality`
+
+```
+CHECKED BODY
+  expr #0: String
+  expr #1: String
+  expr #2: Bool
+  pat #0: String
+  pat #1: String
+```
+
+`fun condition-not-a-bool`
+
+```
+CHECKED BODY
+  expr #0: {error}
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  pat #0: Int
+```
+
+`fun branch-of-another-type`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  expr #3: Int
+  expr #4: {error}
+  expr #5: Int
+```
+
+`fun arm-of-another-type`
+
+```
+CHECKED BODY
+  expr #0: Bool
+  expr #1: {error}
+  expr #2: Unit
+  pat #0: Bool
+```

@@ -1,0 +1,307 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun direct`
+
+CFG form:
+
+```
+fun direct (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#0(l3)
+    l1 = use l2
+    return l1
+fun direct::double (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l3 = const 2
+    l1 = prim int-mul(l2, l3)
+    return l1
+```
+
+SSA form:
+
+```
+fun direct (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+fun direct::double (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 2
+    v2 = prim int-mul(v0, v1)
+    return v2
+```
+
+`fun mutual`
+
+CFG form:
+
+```
+fun mutual (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#1(l3)
+    l1 = use l2
+    return l1
+fun mutual::odd (entry b0)
+  params: v0: Int
+  b0:
+    l0(n) = use v0
+    l3 = use l0
+    l4 = const 0
+    l2 = prim int-eq(l3, l4)
+    branch l2 -> b1, b2
+  b1:
+    l5 = const false
+    l1 = use l5
+    goto b3
+  b2:
+    l8 = use l0
+    l9 = const 1
+    l7 = prim int-sub(l8, l9)
+    l6 = call fun#1(l7)
+    l1 = use l6
+    goto b3
+  b3:
+    return l1
+fun mutual::even (entry b0)
+  params: v0: Int
+  b0:
+    l0(n) = use v0
+    l3 = use l0
+    l4 = const 0
+    l2 = prim int-eq(l3, l4)
+    branch l2 -> b1, b2
+  b1:
+    l5 = const true
+    l1 = use l5
+    goto b3
+  b2:
+    l8 = use l0
+    l9 = const 1
+    l7 = prim int-sub(l8, l9)
+    l6 = call fun#0(l7)
+    l1 = use l6
+    goto b3
+  b3:
+    return l1
+```
+
+SSA form:
+
+```
+fun mutual (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#1(v0)
+    return v1
+fun mutual::odd (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 0
+    v2 = prim int-eq(v0, v1)
+    branch v2 -> b1, b2
+  b1:
+    v6 = const false
+    goto b3(v6)
+  b2:
+    v3 = const 1
+    v4 = prim int-sub(v0, v3)
+    v5 = call fun#1(v4)
+    goto b3(v5)
+  b3(v7):
+    return v7
+fun mutual::even (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 0
+    v2 = prim int-eq(v0, v1)
+    branch v2 -> b1, b2
+  b1:
+    v6 = const true
+    goto b3(v6)
+  b2:
+    v3 = const 1
+    v4 = prim int-sub(v0, v3)
+    v5 = call fun#0(v4)
+    goto b3(v5)
+  b3(v7):
+    return v7
+```
+
+`fun with_a_lambda`
+
+CFG form:
+
+```
+fun with_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#0(l3)
+    l1 = use l2
+    return l1
+fun with_a_lambda::apply (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = const 1
+    l3 = closure lambda#0 (l0)
+    l1 = call l3(l2)
+    return l1
+lambda #0: (Int) -> Int captures (x: Int) (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = capture #0
+    l1(y) = use v0
+    l3 = use l1
+    l4 = use l0
+    l2 = prim int-add(l3, l4)
+    return l2
+```
+
+SSA form:
+
+```
+fun with_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+fun with_a_lambda::apply (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 1
+    v2 = closure lambda#0 (v0)
+    v3 = call v2(v1)
+    return v3
+lambda #0: (Int) -> Int captures (x: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = prim int-add(v0, v1)
+    return v2
+```
+
+`fun from_a_lambda`
+
+CFG form:
+
+```
+fun from_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = closure lambda#0 ()
+    l4(apply) = use l3
+    l6 = use l0
+    l5 = call l4(l6)
+    l2 = use l5
+    l1 = use l2
+    return l1
+fun from_a_lambda::double (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l3 = const 2
+    l1 = prim int-mul(l2, l3)
+    return l1
+lambda #0: (Int) -> Int captures () (entry b0)
+  params: v0: Int
+  b0:
+    l0(y) = use v0
+    l2 = use l0
+    l1 = call fun#0(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun from_a_lambda (entry b0)
+  params: v0: Int
+  b0:
+    v1 = closure lambda#0 ()
+    v2 = call v1(v0)
+    return v2
+fun from_a_lambda::double (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 2
+    v2 = prim int-mul(v0, v1)
+    return v2
+lambda #0: (Int) -> Int captures () (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+```
+
+`fun nested_local`
+
+CFG form:
+
+```
+fun nested_local (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l3 = use l0
+    l2 = call fun#0(l3)
+    l1 = use l2
+    return l1
+fun nested_local::outer (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l3 = use l0
+    l2 = call fun#1(l3)
+    l1 = use l2
+    return l1
+fun nested_local::inner (entry b0)
+  params: v0: Int
+  b0:
+    l0(y) = use v0
+    l2 = use l0
+    l3 = const 1
+    l1 = prim int-add(l2, l3)
+    return l1
+```
+
+SSA form:
+
+```
+fun nested_local (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#0(v0)
+    return v1
+fun nested_local::outer (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun#1(v0)
+    return v1
+fun nested_local::inner (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 1
+    v2 = prim int-add(v0, v1)
+    return v2
+```

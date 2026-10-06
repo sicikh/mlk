@@ -1,0 +1,104 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  fun helper  @2.0
+    visibility: private
+  fun parameter  @2.1
+    visibility: private
+    param
+    ret: Int -> use Int
+  fun inferred  @2.2
+    visibility: private
+    param: _
+    ret: Int -> use Int
+  fun shown  @2.3
+    visibility: public
+    param: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun helper`
+
+```
+BODY fun helper in module #3
+
+root expr#0
+exprs
+  expr#0  literal 1
+```
+
+`fun parameter`
+
+```
+BODY fun parameter in module #3
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun inferred`
+
+```
+BODY fun inferred in module #3
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun shown`
+
+```
+BODY fun shown in module #3
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```

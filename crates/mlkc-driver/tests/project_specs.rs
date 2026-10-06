@@ -1,17 +1,16 @@
-//! The spec tests of a project: what its modules resolve to and check to, read as a snapshot.
+//! The spec tests of a project: the diagnostics the driver reports for its modules.
 //!
-//! Every fixture under [`project_spec::SPECS_DIR`] has a test of its own, declared below, and a
-//! snapshot next to it that holds what the driver made of the project: the surface of every
-//! module, the bodies it holds, the scope it resolved to, the types its signatures and bodies
-//! were checked to, and the diagnostics. The test names are the ones the review sees when a
-//! fixture changes, so they are spelled out instead of derived from the directory names.
+//! Every project of the corpus has a test of its own, declared below, and a snapshot next to
+//! it that holds what the driver reported about every module of it. The dumps of the passes
+//! live in the suites of the crates that own them: this suite is about the messages a host
+//! reads, and about the pipeline running to the end without an internal exception.
 //!
-//! A new fixture needs a line here: the tests read the directory of the fixtures as well,
-//! and fail when a fixture it holds has no test.
+//! The test names are the ones the review sees when a project changes, so they are spelled out
+//! instead of derived from the names of the corpus. A new project needs a line here --- and in
+//! the list of every suite of the pipeline --- and the suite fails when the corpus holds a
+//! project that no test covers.
 
 mod project_spec;
-
-use std::path::PathBuf;
 
 /// Declares a test per fixture, and the list of the fixtures they cover.
 macro_rules! project_specs {
@@ -78,27 +77,22 @@ project_specs! {
     locals: "locals",
 }
 
-/// A fixture without a test is a snapshot nobody looks at.
+/// A project of the corpus without a test is a snapshot nobody looks at.
 #[test]
 fn every_fixture_has_a_test() {
-    let mut covered: Vec<PathBuf> = FIXTURES
-        .iter()
-        .map(|fixture| project_spec::fixture_path(fixture))
-        .collect();
+    let mut covered: Vec<String> = FIXTURES.iter().map(|it| (*it).to_owned()).collect();
     covered.sort();
 
     let fixtures = project_spec::fixtures();
 
     assert!(
         !fixtures.is_empty(),
-        "no fixture was found under {}",
-        project_spec::SPECS_DIR
+        "no project was found in {}",
+        mlkc_fixture::projects_dir().display(),
     );
 
     assert_eq!(
-        fixtures,
-        covered,
-        "the fixtures under {} and the tests of this file disagree",
-        project_spec::SPECS_DIR
+        fixtures, covered,
+        "the projects of the corpus and the tests of this file disagree",
     );
 }

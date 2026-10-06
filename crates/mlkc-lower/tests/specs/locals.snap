@@ -1,0 +1,252 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  fun direct  @2.0
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun mutual  @2.1
+    visibility: private
+    param: Int -> use Int
+    ret: Bool -> use Bool
+  fun with_a_lambda  @2.2
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun from_a_lambda  @2.3
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun nested_local  @2.4
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun direct`
+
+```
+BODY fun direct in module #3
+
+root expr#6
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#0) in expr#5
+pats
+  pat#0  bind value
+  pat#1  bind x
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+`fun mutual`
+
+```
+BODY fun mutual in module #3
+
+root expr#23
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 0
+  expr#2  binary expr#0 == expr#1
+  expr#3  literal false
+  expr#4  path path#1
+  expr#5  path path#0
+  expr#6  literal 1
+  expr#7  binary expr#5 - expr#6
+  expr#8  call expr#4 (expr#7)
+  expr#9  if expr#2 then expr#3 else expr#8
+  expr#10  path path#2
+  expr#11  literal 0
+  expr#12  binary expr#10 == expr#11
+  expr#13  literal true
+  expr#14  path path#3
+  expr#15  path path#2
+  expr#16  literal 1
+  expr#17  binary expr#15 - expr#16
+  expr#18  call expr#14 (expr#17)
+  expr#19  if expr#12 then expr#13 else expr#18
+  expr#20  path path#1
+  expr#21  path path#4
+  expr#22  call expr#20 (expr#21)
+  expr#23  local (fun#0, fun#1) in expr#22
+pats
+  pat#0  bind value
+  pat#1  bind n
+  pat#2  bind n
+paths
+  path#0  n -> binding pat#1
+  path#1  even -> local fun#1
+  path#2  n -> binding pat#2
+  path#3  odd -> local fun#0
+  path#4  value -> binding pat#0
+functions
+  fun#0  odd  root expr#9
+    params pat#1
+    param: Int -> use Int
+    ret: Bool -> use Bool
+  fun#1  even  root expr#19
+    params pat#2
+    param: Int -> use Int
+    ret: Bool -> use Bool
+```
+
+`fun with_a_lambda`
+
+```
+BODY fun with_a_lambda in module #3
+
+root expr#9
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  binary expr#0 + expr#1
+  expr#3  lambda (pat#2: Int -> use Int) -> expr#2 captures (pat#1)
+  expr#4  literal 1
+  expr#5  call expr#3 (expr#4)
+  expr#6  path path#2
+  expr#7  path path#3
+  expr#8  call expr#6 (expr#7)
+  expr#9  local (fun#0) in expr#8
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind y
+paths
+  path#0  y -> binding pat#2
+  path#1  x -> binding pat#1
+  path#2  apply -> local fun#0
+  path#3  value -> binding pat#0
+functions
+  fun#0  apply  root expr#5
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+`fun from_a_lambda`
+
+```
+BODY fun from_a_lambda in module #3
+
+root expr#11
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 2
+  expr#2  binary expr#0 * expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  lambda (pat#3: Int -> use Int) -> expr#5 captures ()
+  expr#7  path path#3
+  expr#8  path path#4
+  expr#9  call expr#7 (expr#8)
+  expr#10  let pat#2 = expr#6 in expr#9
+  expr#11  local (fun#0) in expr#10
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind apply
+  pat#3  bind y
+paths
+  path#0  x -> binding pat#1
+  path#1  double -> local fun#0
+  path#2  y -> binding pat#3
+  path#3  apply -> binding pat#2
+  path#4  value -> binding pat#0
+functions
+  fun#0  double  root expr#2
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+```
+
+`fun nested_local`
+
+```
+BODY fun nested_local in module #3
+
+root expr#10
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+  expr#3  path path#1
+  expr#4  path path#2
+  expr#5  call expr#3 (expr#4)
+  expr#6  local (fun#1) in expr#5
+  expr#7  path path#3
+  expr#8  path path#4
+  expr#9  call expr#7 (expr#8)
+  expr#10  local (fun#0) in expr#9
+pats
+  pat#0  bind value
+  pat#1  bind x
+  pat#2  bind y
+paths
+  path#0  y -> binding pat#2
+  path#1  inner -> local fun#1
+  path#2  x -> binding pat#1
+  path#3  outer -> local fun#0
+  path#4  value -> binding pat#0
+functions
+  fun#0  outer  root expr#6
+    params pat#1
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun#1  inner  root expr#2
+    params pat#2
+    param: Int -> use Int
+    ret: Int -> use Int
+```

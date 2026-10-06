@@ -1,0 +1,31 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+No bodies.
+
+## `project::b`
+
+No bodies.
+
+## `project::main`
+
+`fun get`
+
+get:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```

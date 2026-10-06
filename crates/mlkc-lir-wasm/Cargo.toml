@@ -12,5 +12,13 @@ mlkc-intern.workspace = true
 mlkc-la-arena.workspace = true
 mlkc-span.workspace = true
 
+[dev-dependencies]
+insta.workspace = true
+mlkc-driver.workspace = true
+mlkc-fixture.workspace = true
+mlkc-hir-def.workspace = true
+mlkc-stdlib.workspace = true
+mlkc-vfs.workspace = true
+
 [lints]
 workspace = true

@@ -44,9 +44,13 @@ See `CheckDeps` in `crates/mlkc-hir-ty` and its use in
    name. Add a `Unit` if the pass runs per body, module, file, or project. The pass table of
    `docs/architecture/README.md` is held to `Pass` by a test of `xtask/glue`, so add its row in
    the same change.
-5. Never let a pipeline crate depend on `mlkc-driver`; the direction is driver → pipeline.
+5. Never let a pipeline crate's library depend on `mlkc-driver`; the direction is driver →
+   pipeline. Its spec suite reaches the driver through a dev-dependency: the pipeline suites
+   assert their own stage over the shared corpus of projects (the `snapshot-tests` skill).
 6. Test the pass directly: a snapshot test with a hand-built input, no driver and no file system
    (`docs/adr/0009-pass-contract.md`; the `snapshot-tests` skill). Snapshot invalid inputs too.
+   A pass that also produces a dump gets a project-level suite in its crate next to the direct
+   one, so a change to the stage shows its diff in the stage's crate.
 
 ## Checklist
 

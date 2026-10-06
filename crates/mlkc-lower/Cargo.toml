@@ -19,8 +19,11 @@ mlkc-vfs.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+mlkc-driver.workspace = true
+mlkc-fixture.workspace = true
 mlkc-parser.workspace = true
 mlkc-parser-core.workspace = true
+mlkc-stdlib.workspace = true
 
 [lints]
 workspace = true

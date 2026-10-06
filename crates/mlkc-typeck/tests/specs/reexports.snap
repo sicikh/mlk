@@ -1,0 +1,46 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### Type Surface
+
+```
+MODULE TYPES
+```
+
+### Checked Bodies
+
+No bodies.
+
+## `project::b`
+
+### Type Surface
+
+```
+MODULE TYPES
+```
+
+### Checked Bodies
+
+No bodies.
+
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun get: () -> Point
+```
+
+### Checked Bodies
+
+`fun get`
+
+```
+CHECKED BODY
+  expr #0: () -> Point
+  expr #1: Point
+```

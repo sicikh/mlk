@@ -19,6 +19,15 @@
 //!
 //! The place of a module is written the way a host pushes a file: `/main.mlk` is the module a
 //! project calls `main`, and `/data/utils.mlk` is the module `data::utils`.
+//!
+//! The projects the pipeline suites compile are the corpus under [`projects_dir`]: every suite
+//! asserts the stage it owns over each of them, so a project added there is read by every stage
+//! at once.
+
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// One module of a fixture: the place it stands at, and its source.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,6 +104,116 @@ const MARK: &str = "//-";
 
 /// What a comment starts with, which is what a fixture may open with.
 const COMMENT: &str = "//";
+
+/// The extension of a module of a project.
+const EXTENSION: &str = "mlk";
+
+/// The directory the projects the pipeline suites compile live in.
+///
+/// A project is a file in the format above, or a directory that holds one file per module.
+/// The corpus is read by every spec suite of the pipeline; see [`projects`] and [`read`].
+pub fn projects_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("projects")
+}
+
+/// The projects the corpus holds, in name order: the name of the file without the extension of
+/// a module, or the name of the directory that holds one file per module.
+///
+/// # Panics
+///
+/// Panics when the directory of the corpus is not readable: the projects ship with the crate,
+/// and a build that lost them is broken rather than one that has nothing to say.
+pub fn projects() -> Vec<String> {
+    let directory = projects_dir();
+    let mut projects = Vec::new();
+
+    let entries = fs::read_dir(&directory)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()));
+
+    for entry in entries {
+        let path = entry
+            .expect("a project of the corpus to be readable")
+            .path();
+
+        if path.is_dir() {
+            let name = path
+                .file_name()
+                .and_then(|it| it.to_str())
+                .expect("a project to be named");
+
+            projects.push(name.to_owned());
+        } else if path.extension() == Some(EXTENSION.as_ref()) {
+            let name = path
+                .file_stem()
+                .and_then(|it| it.to_str())
+                .expect("a project to be named");
+
+            projects.push(name.to_owned());
+        }
+    }
+
+    projects.sort();
+    projects
+}
+
+/// The modules of the project `name`: what its file writes, or the files under its directory,
+/// each named by the path of the file under the directory.
+///
+/// # Panics
+///
+/// Panics when the project cannot be read, or when a directory of one holds no module: a
+/// project of the corpus is what a test compiles, and a missing one fails the test that read it.
+pub fn read(name: &str) -> Vec<Module> {
+    let path = projects_dir().join(name);
+
+    if path.is_dir() {
+        let mut modules = Vec::new();
+
+        collect(&path, &path, &mut modules);
+        modules.sort_by(|left, right| left.place.cmp(&right.place));
+
+        assert!(!modules.is_empty(), "the project `{name}` to hold a module",);
+
+        return modules;
+    }
+
+    let path = path.with_extension(EXTENSION);
+    let source = fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+
+    modules(&source)
+}
+
+/// The modules of a project that is a directory: the place of each file under it, and its source.
+///
+/// The place of a file is the path of it under the directory of the project, which is what the
+/// module is called by: the file `data/utils.mlk` is the module `project::data::utils`.
+fn collect(root: &Path, directory: &Path, modules: &mut Vec<Module>) {
+    let entries = fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()));
+
+    for entry in entries {
+        let path = entry.expect("the entry to be readable").path();
+
+        if path.is_dir() {
+            collect(root, &path, modules);
+        } else if path.extension() == Some(EXTENSION.as_ref()) {
+            let place = path
+                .strip_prefix(root)
+                .expect("a file of a project to be under the project")
+                .to_str()
+                .expect("the place of a module to be UTF-8")
+                .replace('\\', "/");
+            let source = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+
+            modules.push(Module {
+                place: format!("/{place}"),
+                source,
+            });
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

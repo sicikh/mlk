@@ -17,6 +17,9 @@ mlkc-stdx.workspace = true
 rustc-hash.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
+mlkc-driver.workspace = true
+mlkc-fixture.workspace = true
 mlkc-lower.workspace = true
 mlkc-parser.workspace = true
 mlkc-stdlib.workspace = true

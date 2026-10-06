@@ -1,0 +1,121 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### Item Tree
+
+```
+MODULE #3 project::a
+
+ITEM TREE
+  use Point  @2.0
+    path: project::b::Point
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+No bodies.
+
+## `project::b`
+
+### Item Tree
+
+```
+MODULE #4 project::b
+
+ITEM TREE
+  type Point  @2.0
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+No bodies.
+
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #5 project::main
+
+ITEM TREE
+  use Point  @2.0
+    path: project::a::Point
+    visibility: private
+  fun get  @2.1
+    visibility: private
+    ret: Point -> use Point
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun get`
+
+```
+BODY fun get in module #5
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  get -> fun get
+```

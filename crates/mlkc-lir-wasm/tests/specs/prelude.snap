@@ -1,0 +1,41 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+`fun main`
+
+main:
+```
+lir (entry b0) ret (ref i31)
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
+`fun make`
+
+make:
+```
+lir (entry b0) ret (ref i31)
+  locals: 
+  b0:
+    v0 = call $1()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```

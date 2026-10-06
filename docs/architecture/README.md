@@ -91,7 +91,7 @@ so they are also the names to look for when something is slow.
 | [`mlkc-lir-wasm`](../../crates/mlkc-lir-wasm)             | The WASM LIR: the target's instructions in SSA form ([ADR-0022](../adr/0022-wasm-lir.md)).             |
 | [`mlkc-codegen-wasm`](../../crates/mlkc-codegen-wasm)     | The WASM back end: MIR to LIR, LIR to a module ([ADR-0020](../adr/0020-wasm-backend.md)).              |
 | [`mlkc-stdlib`](../../crates/mlkc-stdlib)                 | The standard library sources and the values that describe it.                                          |
-| [`mlkc-fixture`](../../crates/mlkc-fixture)               | The one-file project format the tests are written in.                                                  |
+| [`mlkc-fixture`](../../crates/mlkc-fixture)               | The one-file project format the tests are written in, and the corpus the suites compile.               |
 
 ### Infrastructure
 
@@ -215,10 +215,14 @@ so they are also the names to look for when something is slow.
 
 - The primary strategy is snapshot testing with insta
   ([ADR-0006](../adr/0006-snapshot-testing.md)).
-  Spec suites live next to their fixtures in `tests/specs` of
-  `mlkc-parser`, `mlkc-lower`, `mlkc-driver`, and `mlkc-codegen-wasm`;
+  Spec suites live in `tests/specs` of every crate that owns a stage:
+  `mlkc-parser`, `mlkc-lower`, `mlkc-resolve`, `mlkc-typeck`, `mlkc-mir-build`,
+  `mlkc-lir-wasm`, `mlkc-codegen-wasm`, and `mlkc-driver`;
   `*_specs.rs` enumerates the fixtures and fails when one has no test.
-- Fixtures use the one-file project format of `mlkc-fixture` (`//- /path.mlk` headers).
+- The projects the pipeline suites compile are one corpus,
+  `crates/mlkc-fixture/projects` (the one-file format, `//- /path.mlk` headers);
+  every suite asserts its own stage over every project of it,
+  and a pipeline crate reaches the driver through a _dev_-dependency to do so.
 - Small algorithmic units keep ordinary unit tests;
   invariants over arbitrary inputs are the place for property tests.
 - The interpreter is tested against MIR (`crates/mlkc-interp/tests/`),

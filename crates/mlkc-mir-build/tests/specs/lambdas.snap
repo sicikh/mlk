@@ -1,0 +1,160 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun capturing`
+
+CFG form:
+
+```
+fun capturing (entry b0)
+  b0:
+    l1 = const 40
+    l2(base) = use l1
+    l4 = closure lambda#0 (l2)
+    l5(add) = use l4
+    l7 = const 2
+    l6 = call l5(l7)
+    l3 = use l6
+    l0 = use l3
+    return l0
+lambda #0: (Int) -> Int captures (base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    l0(base) = capture #0
+    l1(x) = use v0
+    l3 = use l1
+    l4 = use l0
+    l2 = prim int-add(l3, l4)
+    return l2
+```
+
+SSA form:
+
+```
+fun capturing (entry b0)
+  b0:
+    v0 = const 40
+    v1 = closure lambda#0 (v0)
+    v2 = const 2
+    v3 = call v1(v2)
+    return v3
+lambda #0: (Int) -> Int captures (base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = prim int-add(v0, v1)
+    return v2
+```
+
+`fun nested`
+
+CFG form:
+
+```
+fun nested (entry b0)
+  b0:
+    l1 = const 40
+    l2(base) = use l1
+    l4 = closure lambda#0 (l2)
+    l5(add) = use l4
+    l7 = const 1
+    l9 = const 1
+    l8 = call l5(l9)
+    l6 = call l8(l7)
+    l3 = use l6
+    l0 = use l3
+    return l0
+lambda #0: (Int) -> ((Int) -> Int) captures (base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    l0(base) = capture #0
+    l1(x) = use v0
+    l2 = closure lambda#1 (l1, l0)
+    return l2
+lambda #1: (Int) -> Int captures (x: Int, base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = capture #0
+    l1(base) = capture #1
+    l2(y) = use v0
+    l5 = use l0
+    l6 = use l2
+    l4 = prim int-add(l5, l6)
+    l7 = use l1
+    l3 = prim int-add(l4, l7)
+    return l3
+```
+
+SSA form:
+
+```
+fun nested (entry b0)
+  b0:
+    v0 = const 40
+    v1 = closure lambda#0 (v0)
+    v2 = const 1
+    v3 = const 1
+    v4 = call v1(v3)
+    v5 = call v4(v2)
+    return v5
+lambda #0: (Int) -> ((Int) -> Int) captures (base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = closure lambda#1 (v0, v1)
+    return v2
+lambda #1: (Int) -> Int captures (x: Int, base: Int) (entry b0)
+  params: v0: Int
+  b0:
+    v1 = capture #0
+    v2 = capture #1
+    v3 = prim int-add(v1, v0)
+    v4 = prim int-add(v3, v2)
+    return v4
+```
+
+`fun generalized`
+
+CFG form:
+
+```
+fun generalized (entry b0)
+  b0:
+    l1 = closure lambda#0 ()
+    l2(id) = use l1
+    l5 = const true
+    l4 = call l2(l5)
+    l7 = const 42
+    l6 = call l2(l7)
+    l3 = use l6
+    l0 = use l3
+    return l0
+lambda #0: ('0) -> '0 captures () (entry b0)
+  params: v0: '0
+  b0:
+    l0(x) = use v0
+    l1 = use l0
+    return l1
+```
+
+SSA form:
+
+```
+fun generalized (entry b0)
+  b0:
+    v0 = closure lambda#0 ()
+    v1 = const true
+    v2 = call v0(v1)
+    v3 = const 42
+    v4 = call v0(v3)
+    return v4
+lambda #0: ('0) -> '0 captures () (entry b0)
+  params: v0: '0
+  b0:
+    return v0
+```

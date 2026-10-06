@@ -1,0 +1,128 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+### Item Tree
+
+```
+MODULE #3 project::data
+
+ITEM TREE
+  type Hidden  @2.0
+    visibility: private
+  type Point  @2.1
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+No bodies.
+
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #4 project::main
+
+ITEM TREE
+  use Hidden  @2.0
+    path: project::data::Hidden
+    visibility: private
+  use X  @2.1
+    path: project::missing::X
+    visibility: private
+  fun get  @2.2
+    visibility: private
+    ret: Nope -> unresolved
+  fun size  @2.3
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun wrong  @2.4
+    visibility: private
+    ret: size -> unresolved
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun get`
+
+```
+BODY fun get in module #4
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  get -> fun get
+```
+
+`fun size`
+
+```
+BODY fun size in module #4
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+paths
+  path#0  value -> binding pat#0
+```
+
+`fun wrong`
+
+```
+BODY fun wrong in module #4
+
+root expr#2
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  call expr#0 (expr#1)
+paths
+  path#0  size -> fun size
+```

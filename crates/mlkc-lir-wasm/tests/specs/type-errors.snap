@@ -1,0 +1,49 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+`fun one`
+
+Not lowered: the module of the body is not whole.
+
+`fun takes`
+
+Not lowered: the module of the body is not whole.
+
+`fun wrong-argument`
+
+Not lowered: the module of the body is not whole.
+
+`fun wrong-arity`
+
+Not lowered: the module of the body is not whole.
+
+`fun extra-argument`
+
+Not lowered: the module of the body is not whole.
+
+`fun not-callable`
+
+Not lowered: the module of the body is not whole.
+
+`fun applied`
+
+Not lowered: the module of the body is not whole.
+
+`fun no-equality`
+
+Not lowered: the module of the body is not whole.
+
+`fun condition-not-a-bool`
+
+Not lowered: the module of the body is not whole.
+
+`fun branch-of-another-type`
+
+Not lowered: the module of the body is not whole.
+
+`fun arm-of-another-type`
+
+Not lowered: the module of the body is not whole.

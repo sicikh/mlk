@@ -1,0 +1,87 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun one`
+
+Not lowered: the front end reported a mistake.
+
+`fun takes`
+
+CFG form:
+
+```
+fun takes (entry b0)
+  params: v0: Int
+  b0:
+    l0(value) = use v0
+    l1 = use l0
+    return l1
+```
+
+SSA form:
+
+```
+fun takes (entry b0)
+  params: v0: Int
+  b0:
+    return v0
+```
+
+`fun wrong-argument`
+
+Not lowered: the front end reported a mistake.
+
+`fun wrong-arity`
+
+Not lowered: the front end reported a mistake.
+
+`fun extra-argument`
+
+Not lowered: the front end reported a mistake.
+
+`fun not-callable`
+
+Not lowered: the front end reported a mistake.
+
+`fun applied`
+
+CFG form:
+
+```
+fun applied (entry b0)
+  params: v0: Int[Bool]
+  b0:
+    l0(value) = use v0
+    l1 = use l0
+    return l1
+```
+
+SSA form:
+
+```
+fun applied (entry b0)
+  params: v0: Int[Bool]
+  b0:
+    return v0
+```
+
+`fun no-equality`
+
+Not lowered: the front end reported a mistake.
+
+`fun condition-not-a-bool`
+
+Not lowered: the front end reported a mistake.
+
+`fun branch-of-another-type`
+
+Not lowered: the front end reported a mistake.
+
+`fun arm-of-another-type`
+
+Not lowered: the front end reported a mistake.

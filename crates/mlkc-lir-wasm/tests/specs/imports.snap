@@ -1,0 +1,85 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+`fun origin`
+
+origin:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
+## `project::data::utils`
+
+`fun make`
+
+make:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
+## `project::main`
+
+`fun handle`
+
+handle:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: eqref, v1: eqref
+  locals: 
+  b0:
+    v2 = i32.const 1
+    v3 = ref.i31 v2
+    return v3
+```
+
+Structure:
+
+```
+  leaf b0
+  return v3
+```
+
+`fun read`
+
+read:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: eqref
+  locals: 
+  b0:
+    v1 = i32.const 1
+    v2 = ref.i31 v1
+    return v2
+```
+
+Structure:
+
+```
+  leaf b0
+  return v2
+```

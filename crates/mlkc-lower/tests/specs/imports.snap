@@ -1,0 +1,175 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+### Item Tree
+
+```
+MODULE #3 project::data
+
+ITEM TREE
+  type Point  @2.0
+    visibility: public
+  fun origin  @2.1
+    visibility: public
+    ret: Point -> type Point
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun origin`
+
+```
+BODY fun origin in module #3
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  origin -> fun origin
+```
+
+## `project::data::utils`
+
+### Item Tree
+
+```
+MODULE #4 project::data::utils
+
+ITEM TREE
+  type Point  @2.0
+    visibility: public
+  fun make  @2.1
+    visibility: public
+    ret: Point -> type Point
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun make`
+
+```
+BODY fun make in module #4
+
+root expr#1
+exprs
+  expr#0  path path#0
+  expr#1  call expr#0 ()
+paths
+  path#0  make -> fun make
+```
+
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #5 project::main
+
+ITEM TREE
+  use data  @2.0
+    path: project::data
+    visibility: private
+  use Other  @2.1
+    path: project::data::utils::Point
+    alias: Other
+    visibility: private
+  fun handle  @2.2
+    visibility: private
+    param: data::Point -> use data
+    param: Other -> use Other
+    ret: Int -> use Int
+  fun read  @2.3
+    visibility: private
+    param: project::data::utils::Point -> the project
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun handle`
+
+```
+BODY fun handle in module #5
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  literal 1
+pats
+  pat#0  bind value
+  pat#1  bind other
+```
+
+`fun read`
+
+```
+BODY fun read in module #5
+
+root expr#0
+params
+  pat#0
+exprs
+  expr#0  literal 1
+pats
+  pat#0  bind value
+```

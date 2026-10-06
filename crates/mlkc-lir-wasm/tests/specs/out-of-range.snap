@@ -1,0 +1,9 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+`fun big`
+
+Not lowered: the module of the body is not whole.

@@ -1,0 +1,38 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+`fun hidden`
+
+hidden:
+```
+lir (entry b0) ret (ref i31)
+  locals: 
+  b0:
+    v0 = i32.const 1
+    v1 = ref.i31 v0
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+## `project::main`
+
+`fun call`
+
+Not lowered: the module of the body is not whole.
+
+`fun make`
+
+Not lowered: the module of the body is not whole.
+
+`fun gone`
+
+Not lowered: the module of the body is not whole.

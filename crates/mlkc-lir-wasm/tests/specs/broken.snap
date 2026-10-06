@@ -1,0 +1,65 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+No bodies.
+
+## `project::main`
+
+`fun get`
+
+get:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
+`fun size`
+
+size:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
+`fun wrong`
+
+wrong:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = i32.const 1
+    v1 = ref.i31 v0
+    v2 = call $1(v1)
+    return v2
+```
+
+Structure:
+
+```
+  leaf b0
+  return v2
+```

@@ -1072,9 +1072,15 @@ dependencies = [
 name = "mlkc-lir-wasm"
 version = "0.1.0"
 dependencies = [
+ "insta",
+ "mlkc-driver",
+ "mlkc-fixture",
+ "mlkc-hir-def",
  "mlkc-intern",
  "mlkc-la-arena",
  "mlkc-span",
+ "mlkc-stdlib",
+ "mlkc-vfs",
 ]
 
 [[package]]
@@ -1083,6 +1089,8 @@ version = "0.1.0"
 dependencies = [
  "insta",
  "mlkc-diagnostics",
+ "mlkc-driver",
+ "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-intern",
  "mlkc-la-arena",
@@ -1090,6 +1098,7 @@ dependencies = [
  "mlkc-parser-core",
  "mlkc-rowan",
  "mlkc-span",
+ "mlkc-stdlib",
  "mlkc-syntax",
  "mlkc-vfs",
 ]
@@ -1110,7 +1119,10 @@ dependencies = [
 name = "mlkc-mir-build"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "mlkc-diagnostics",
+ "mlkc-driver",
+ "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-la-arena",
@@ -1119,6 +1131,7 @@ dependencies = [
  "mlkc-parser",
  "mlkc-resolve",
  "mlkc-span",
+ "mlkc-stdlib",
  "mlkc-syntax",
  "mlkc-typeck",
  "mlkc-vfs",
@@ -1163,7 +1176,10 @@ dependencies = [
 name = "mlkc-resolve"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "mlkc-diagnostics",
+ "mlkc-driver",
+ "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-lower",
  "mlkc-parser",
@@ -1260,7 +1276,10 @@ dependencies = [
 name = "mlkc-typeck"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "mlkc-diagnostics",
+ "mlkc-driver",
+ "mlkc-fixture",
  "mlkc-hir-def",
  "mlkc-hir-ty",
  "mlkc-lower",

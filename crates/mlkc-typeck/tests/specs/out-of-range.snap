@@ -1,0 +1,21 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun big: () -> Int
+```
+
+### Checked Bodies
+
+`fun big`
+
+```
+CHECKED BODY
+  expr #0: Int
+```

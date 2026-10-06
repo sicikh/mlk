@@ -1,0 +1,39 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### MIR
+
+No bodies.
+
+## `project::b`
+
+### MIR
+
+No bodies.
+
+## `project::main`
+
+### MIR
+
+`fun get`
+
+CFG form:
+
+```
+fun get (entry b0)
+  b0:
+    l0 = call fun get()
+    return l0
+```
+
+SSA form:
+
+```
+fun get (entry b0)
+  b0:
+    v0 = call fun get()
+    return v0
+```

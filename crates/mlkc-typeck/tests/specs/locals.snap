@@ -1,0 +1,134 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun direct: (Int) -> Int
+  fun mutual: (Int) -> Bool
+  fun with_a_lambda: (Int) -> Int
+  fun from_a_lambda: (Int) -> Int
+  fun nested_local: (Int) -> Int
+```
+
+### Checked Bodies
+
+`fun direct`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  pat #0: Int
+  pat #1: Int
+  local fun#0: (Int) -> Int
+```
+
+`fun mutual`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  expr #3: Bool
+  expr #4: (Int) -> Bool
+  expr #5: Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Bool
+  expr #9: Bool
+  expr #10: Int
+  expr #11: Int
+  expr #12: Bool
+  expr #13: Bool
+  expr #14: (Int) -> Bool
+  expr #15: Int
+  expr #16: Int
+  expr #17: Int
+  expr #18: Bool
+  expr #19: Bool
+  expr #20: (Int) -> Bool
+  expr #21: Int
+  expr #22: Bool
+  expr #23: Bool
+  pat #0: Int
+  pat #1: Int
+  pat #2: Int
+  local fun#0: (Int) -> Bool
+  local fun#1: (Int) -> Bool
+```
+
+`fun with_a_lambda`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: (Int) -> Int
+  expr #7: Int
+  expr #8: Int
+  expr #9: Int
+  pat #0: Int
+  pat #1: Int
+  pat #2: Int
+  local fun#0: (Int) -> Int
+```
+
+`fun from_a_lambda`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: (Int) -> Int
+  expr #7: (Int) -> Int
+  expr #8: Int
+  expr #9: Int
+  expr #10: Int
+  expr #11: Int
+  pat #0: Int
+  pat #1: Int
+  pat #2: (Int) -> Int
+  pat #3: Int
+  local fun#0: (Int) -> Int
+```
+
+`fun nested_local`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: (Int) -> Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  expr #7: (Int) -> Int
+  expr #8: Int
+  expr #9: Int
+  expr #10: Int
+  pat #0: Int
+  pat #1: Int
+  pat #2: Int
+  local fun#0: (Int) -> Int
+  local fun#1: (Int) -> Int
+```

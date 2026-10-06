@@ -1,0 +1,129 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  fun capturing  @2.0
+    visibility: private
+    ret: Int -> use Int
+  fun nested  @2.1
+    visibility: private
+    ret: Int -> use Int
+  fun generalized  @2.2
+    visibility: private
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun capturing`
+
+```
+BODY fun capturing in module #3
+
+root expr#9
+exprs
+  expr#0  literal 40
+  expr#1  path path#0
+  expr#2  path path#1
+  expr#3  binary expr#1 + expr#2
+  expr#4  lambda (pat#2: Int -> use Int) -> expr#3 captures (pat#0)
+  expr#5  path path#2
+  expr#6  literal 2
+  expr#7  call expr#5 (expr#6)
+  expr#8  let pat#1 = expr#4 in expr#7
+  expr#9  let pat#0 = expr#0 in expr#8
+pats
+  pat#0  bind base
+  pat#1  bind add
+  pat#2  bind x
+paths
+  path#0  x -> binding pat#2
+  path#1  base -> binding pat#0
+  path#2  add -> binding pat#1
+```
+
+`fun nested`
+
+```
+BODY fun nested in module #3
+
+root expr#14
+exprs
+  expr#0  literal 40
+  expr#1  path path#0
+  expr#2  path path#1
+  expr#3  binary expr#1 + expr#2
+  expr#4  path path#2
+  expr#5  binary expr#3 + expr#4
+  expr#6  lambda (pat#3: Int -> use Int) -> expr#5 captures (pat#2, pat#0)
+  expr#7  lambda (pat#2: Int -> use Int) -> expr#6 captures (pat#0)
+  expr#8  path path#3
+  expr#9  literal 1
+  expr#10  call expr#8 (expr#9)
+  expr#11  literal 1
+  expr#12  call expr#10 (expr#11)
+  expr#13  let pat#1 = expr#7 in expr#12
+  expr#14  let pat#0 = expr#0 in expr#13
+pats
+  pat#0  bind base
+  pat#1  bind add
+  pat#2  bind x
+  pat#3  bind y
+paths
+  path#0  x -> binding pat#2
+  path#1  y -> binding pat#3
+  path#2  base -> binding pat#0
+  path#3  add -> binding pat#1
+```
+
+`fun generalized`
+
+```
+BODY fun generalized in module #3
+
+root expr#9
+exprs
+  expr#0  path path#0
+  expr#1  lambda (pat#1) -> expr#0 captures ()
+  expr#2  path path#1
+  expr#3  literal true
+  expr#4  call expr#2 (expr#3)
+  expr#5  path path#1
+  expr#6  literal 42
+  expr#7  call expr#5 (expr#6)
+  expr#8  let pat#2 = expr#4 in expr#7
+  expr#9  let pat#0 = expr#1 in expr#8
+pats
+  pat#0  bind id
+  pat#1  bind x
+  pat#2  _
+paths
+  path#0  x -> binding pat#1
+  path#1  id -> binding pat#0
+```

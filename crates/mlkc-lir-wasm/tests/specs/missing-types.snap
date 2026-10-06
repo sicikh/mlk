@@ -1,0 +1,80 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+`fun helper`
+
+helper:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = i32.const 1
+    v1 = ref.i31 v0
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+`fun parameter`
+
+parameter:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: eqref
+  locals: 
+  b0:
+    v1 = ref.cast (ref i31) v0
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+`fun inferred`
+
+inferred:
+```
+lir (entry b0) ret (ref i31)
+  params: v0: eqref
+  locals: 
+  b0:
+    v1 = ref.cast (ref i31) v0
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+`fun shown`
+
+shown:
+```
+lir (entry b0) ret eqref
+  params: v0: (ref i31)
+  locals: 
+  b0:
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```

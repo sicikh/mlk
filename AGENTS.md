@@ -204,7 +204,8 @@ When a task is big enough to split, split it and keep the pieces independent:
 ## Gotchas
 
 - `mlkc-driver` is the only crate that knows the passes;
-  pipeline crates never reach back into it.
+  a pipeline crate's _library_ never reaches back into it ---
+  its spec suite does, through a dev-dependency (the `snapshot-tests` skill).
 - `Symbol` from `mlkc-intern` compares and hashes by address:
   never let interning order affect an output.
 - The type checker is explicitly temporary ([ADR-0017](docs/adr/0017-resolved-types.md));

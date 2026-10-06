@@ -1,0 +1,31 @@
+---
+source: crates/mlkc-resolve/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Resolution
+
+```
+SCOPE
+  helper
+    value: fun helper in module #3 (private)
+  parameter
+    value: fun parameter in module #3 (private)
+  inferred
+    value: fun inferred in module #3 (private)
+  shown
+    value: fun shown in module #3 (public)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
+```

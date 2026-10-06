@@ -1,0 +1,57 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun hidden: () -> Int
+```
+
+### Checked Bodies
+
+`fun hidden`
+
+```
+CHECKED BODY
+  expr #0: Int
+```
+
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun call: () -> Int
+  fun make: () -> Point
+  fun gone: () -> Int
+```
+
+### Checked Bodies
+
+`fun call`
+
+```
+CHECKED BODY
+  expr #0: {error}
+  expr #1: Int
+```
+
+`fun make`
+
+```
+CHECKED BODY
+  expr #0: Point
+```
+
+`fun gone`
+
+```
+CHECKED BODY
+  expr #0: {error}
+  expr #1: Int
+```

@@ -1,0 +1,130 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun print: (String) -> Unit
+  fun signed: () -> Int
+  fun ordered: (Int, Int) -> Bool
+  fun different: (Int, Int) -> Bool
+  fun text: () -> String
+  fun truth: () -> Bool
+  fun untruth: () -> Bool
+  fun both: () -> Bool
+  fun call: () -> Unit
+  fun bound: () -> Int
+```
+
+### Checked Bodies
+
+`fun signed`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Int
+  expr #9: Int
+  expr #10: Int
+```
+
+`fun ordered`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  expr #3: Int
+  expr #4: Int
+  expr #5: Bool
+  expr #6: Bool
+  expr #7: Int
+  expr #8: Int
+  expr #9: Bool
+  expr #10: Bool
+  expr #11: Int
+  expr #12: Int
+  expr #13: Bool
+  expr #14: Bool
+  pat #0: Int
+  pat #1: Int
+```
+
+`fun different`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Bool
+  pat #0: Int
+  pat #1: Int
+```
+
+`fun text`
+
+```
+CHECKED BODY
+  expr #0: String
+```
+
+`fun truth`
+
+```
+CHECKED BODY
+  expr #0: Bool
+```
+
+`fun untruth`
+
+```
+CHECKED BODY
+  expr #0: Bool
+```
+
+`fun both`
+
+```
+CHECKED BODY
+  expr #0: Bool
+  expr #1: Bool
+  expr #2: Bool
+```
+
+`fun call`
+
+```
+CHECKED BODY
+  expr #0: (String) -> Unit
+  expr #1: String
+  expr #2: Unit
+```
+
+`fun bound`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: Int
+  expr #5: Int
+  expr #6: Int
+  expr #7: Int
+  expr #8: Int
+  pat #0: Int
+  pat #1: Int
+```

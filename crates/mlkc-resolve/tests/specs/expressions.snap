@@ -1,0 +1,43 @@
+---
+source: crates/mlkc-resolve/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Resolution
+
+```
+SCOPE
+  print
+    value: fun print in module #3 (private)
+  signed
+    value: fun signed in module #3 (private)
+  ordered
+    value: fun ordered in module #3 (private)
+  different
+    value: fun different in module #3 (private)
+  text
+    value: fun text in module #3 (private)
+  truth
+    value: fun truth in module #3 (private)
+  untruth
+    value: fun untruth in module #3 (private)
+  both
+    value: fun both in module #3 (private)
+  call
+    value: fun call in module #3 (private)
+  bound
+    value: fun bound in module #3 (private)
+  Int
+    ty: type Int in module #0 (private)
+  Unit
+    ty: type Unit in module #0 (private)
+  String
+    ty: type String in module #0 (private)
+  Bool
+    ty: type Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
+```

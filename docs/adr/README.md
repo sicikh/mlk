@@ -33,6 +33,7 @@ Then read the cluster of the area you are about to touch.
 | [0008](0008-compiler-driver.md)   | Drive the compiler from a host-agnostic pull-based cache  | accepted |
 | [0009](0009-pass-contract.md)     | Define the contract of a compiler pass                    | accepted |
 | [0027](0027-scheduled-reports.md) | Run coverage, mutation, and fuzzing as scheduled reports  | accepted |
+| [0028](0028-pass-spec-suites.md)  | Let every stage own its spec suite                        | accepted |
 
 ### Syntax and surface language
 

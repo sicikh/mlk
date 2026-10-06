@@ -1,0 +1,11 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun big`
+
+Not lowered: the front end reported a mistake.

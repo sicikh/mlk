@@ -1,0 +1,48 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun helper: () -> {error}
+  fun parameter: ({error}) -> Int
+  fun inferred: ({error}) -> Int
+  fun shown: (Int) -> {error}
+```
+
+### Checked Bodies
+
+`fun helper`
+
+```
+CHECKED BODY
+  expr #0: Int
+```
+
+`fun parameter`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: {error}
+```
+
+`fun inferred`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: {error}
+```
+
+`fun shown`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Int
+```

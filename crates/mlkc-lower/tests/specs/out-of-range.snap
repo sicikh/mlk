@@ -1,0 +1,46 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #3 project::main
+
+ITEM TREE
+  fun big  @2.0
+    visibility: private
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun big`
+
+```
+BODY fun big in module #3
+
+root expr#0
+exprs
+  expr#0  literal 1099511627776
+```

@@ -1,0 +1,53 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::data`
+
+### Type Surface
+
+```
+MODULE TYPES
+```
+
+### Checked Bodies
+
+No bodies.
+
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun get: () -> {error}
+  fun size: (Int) -> Int
+  fun wrong: () -> {error}
+```
+
+### Checked Bodies
+
+`fun get`
+
+```
+CHECKED BODY
+  expr #0: () -> {error}
+  expr #1: {error}
+```
+
+`fun size`
+
+```
+CHECKED BODY
+  expr #0: Int
+  pat #0: Int
+```
+
+`fun wrong`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+```

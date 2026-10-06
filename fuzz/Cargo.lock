@@ -269,6 +269,7 @@ dependencies = [
  "mlkc-intern",
  "mlkc-la-arena",
  "mlkc-stdx",
+ "mlkc-text-size",
  "mlkc-vfs",
  "rustc-hash",
 ]

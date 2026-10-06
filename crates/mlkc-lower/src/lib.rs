@@ -109,12 +109,12 @@ pub mod diagnostic;
 mod item;
 mod pat;
 mod path;
-mod source_map;
 mod syntax;
 mod ty;
 
 use std::fmt;
 
+use mlkc_hir_def::BodySourceMap;
 pub use mlkc_hir_def::{
     Body, BodyEntityLoc, ItemSyntaxLoc, ItemTree, ModuleId, Name, Prelude, ProjectId,
 };
@@ -124,7 +124,6 @@ use mlkc_vfs::RelPath;
 
 pub use crate::{
     diagnostic::{LoweringDiag, LoweringError},
-    source_map::BodySourceMap,
     syntax::syntax_at,
 };
 

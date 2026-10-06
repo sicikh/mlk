@@ -6,9 +6,9 @@
 //! against the names of the module.
 
 use mlkc_hir_def::{
-    Attributes, BinaryOp, BodyBuilder, Expr, ExprId, IfArm, ItemKind, ItemTree, LambdaParam,
-    Literal, LocalDefId, LocalFunctionData, Name, Namespace, Pat, PatId, PathAnchor, PathData,
-    UnaryOp,
+    Attributes, BinaryOp, BodyBuilder, BodySourceMap, Expr, ExprId, IfArm, ItemKind, ItemTree,
+    LambdaParam, Literal, LocalDefId, LocalFunctionData, Name, Namespace, Pat, PatId, PathAnchor,
+    PathData, UnaryOp,
 };
 use mlkc_intern::Interned;
 use mlkc_rowan::AstNode;
@@ -24,7 +24,6 @@ use mlkc_vfs::FileId;
 
 use crate::{
     LoweredBody, LoweringDiag, LoweringError, decl, pat, path,
-    source_map::BodySourceMap,
     syntax::{name, span},
     ty,
 };

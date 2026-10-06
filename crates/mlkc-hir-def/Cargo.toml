@@ -11,6 +11,7 @@ publish.workspace = true
 mlkc-intern = { workspace = true }
 mlkc-la-arena = { workspace = true }
 mlkc-stdx = { workspace = true }
+mlkc-text-size = { workspace = true }
 mlkc-vfs = { workspace = true }
 rustc-hash.workspace = true
 

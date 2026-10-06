@@ -76,6 +76,7 @@
 //! - [`module_index`] — which module of a project a path names.
 //! - [`closure`] — what a resolution read of the modules it walked.
 //! - [`body`] — the inside of one function.
+//! - [`body_source_map`] — where the nodes of a body are written, as the lowering read them.
 //! - [`def_map`] — what names denote, and the index of the whole project.
 //! - [`prelude`] — the imports a project gives every module.
 //! - [`project_graph`] — the name of a project, and what it depends on.
@@ -84,6 +85,7 @@
 mod macros;
 
 pub mod body;
+pub mod body_source_map;
 pub mod closure;
 pub mod def_map;
 pub mod dump;
@@ -103,6 +105,7 @@ pub use crate::{
         BinaryOp, Body, BodyBuilder, Expr, ExprId, IfArm, LambdaParam, Literal, LocalFunctionData,
         Pat, PatId, UnaryOp,
     },
+    body_source_map::BodySourceMap,
     closure::{Closure, Read},
     def_map::{LocalEntry, LocalScope, LocalTarget, ModuleScope, Namespace, PerNs, ProjectDefMap},
     id::{

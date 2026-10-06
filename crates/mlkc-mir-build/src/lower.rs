@@ -34,13 +34,12 @@ use std::sync::Arc;
 
 use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
-    BinaryOp, Body, BodyEntityLoc, BodyLoc, ClassLoc, EntityLoc, Expr, ExprId, ItemLocLike,
-    ItemTree, LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor,
-    PathData, UnaryOp,
+    BinaryOp, Body, BodyEntityLoc, BodyLoc, BodySourceMap, ClassLoc, EntityLoc, Expr, ExprId,
+    ItemLocLike, ItemTree, LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId,
+    PathAnchor, PathData, UnaryOp,
 };
 use mlkc_hir_ty::{CheckDeps, CheckedBody, INT_MAX, INT_MIN, Ty};
 use mlkc_la_arena::ArenaMap;
-use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
     Block, BlockId, BlockTarget, Bodies, Body as MirBody, BodyBuilder, Callee, CaptureData, Const,
     FunctionLoc, LambdaId, LiftedId, LocalData, LocalId, Operand, Place, PrimOp, Rvalue, Stmt,

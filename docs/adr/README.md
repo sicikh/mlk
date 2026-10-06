@@ -91,6 +91,9 @@ The code wins; the notes are here so that a plan is not written against a stale 
   still open in it: the AIR question (an explicit ANF stage or not) and Thin-LTO.
 - [0019](0019-mir.md) names `crates/mlkc-mir-opt`, which does not exist yet.
   The `mir-opt` stage is planned; `simplify-cfg` and the other `Body -> Body` passes have no crate.
+  Its `lower_body` signature places `CheckDeps` in `mlkc-typeck`
+  and `BodySourceMap` in `mlkc-lower`;
+  the two live in `mlkc-hir-ty` and `mlkc-hir-def`.
 - [0015](0015-standard-library.md), [0016](0016-inter-module-resolution.md), and
   [0017](0017-resolved-types.md) were written before the back end existed.
   Their "later" statements about MIR, codegen, layouts, and naming are partly outdated;

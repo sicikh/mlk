@@ -214,11 +214,32 @@ impl fmt::Display for Invalid {
 
 impl Body {
     /// Checks that the body holds the invariant of the CFG form.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error at the first break of a promise the CFG form makes:
+    /// an id that is not one of the body,
+    /// an edge whose arguments do not match the parameters of its target,
+    /// a capture read outside a lambda’s body or beyond the captures the lambda took,
+    /// a block with parameters,
+    /// a value defined twice or read with nothing defining it,
+    /// and a slot read where no path assigns it.
     pub fn validate_cfg(&self) -> Result<(), Invalid> {
         self.validate(Form::Cfg)
     }
 
     /// Checks that the body holds the invariant of the SSA form.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error at the first break of a promise the SSA form makes:
+    /// an id that is not one of the body,
+    /// an edge whose arguments do not match the parameters of its target,
+    /// a capture read outside a lambda’s body or beyond the captures the lambda took,
+    /// a slot held or read where the form has none,
+    /// a value defined twice or read with nothing defining it,
+    /// and a use that its definition does not dominate or that the definition follows in the
+    /// same block.
     pub fn validate_ssa(&self) -> Result<(), Invalid> {
         self.validate(Form::Ssa)
     }
@@ -227,6 +248,12 @@ impl Body {
     ///
     /// A capture may be read only where the body is a lambda's, and only one the lambda took:
     /// the captures of the body say which those are.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error at the first break of a promise of `form`:
+    /// the conditions are those of [`Self::validate_cfg`] for the CFG form
+    /// and those of [`Self::validate_ssa`] for the SSA form.
     ///
     /// [adr-0019]: ../../docs/adr/0019-mir.md
     pub fn validate(&self, form: Form) -> Result<(), Invalid> {

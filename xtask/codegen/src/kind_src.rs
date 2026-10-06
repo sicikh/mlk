@@ -9,7 +9,7 @@ pub struct KindsSrc<'a> {
     pub tokens: &'a [&'a str],
     /// Nodes of the CST. Usually you want to map these names from the `.ungram` file. For example:
     ///
-    /// HtmlAttribute -> HTML_ATTRIBUTE
-    /// HtmlBogus -> HTML_BOGUS
+    /// `HtmlAttribute` -> `HTML_ATTRIBUTE`
+    /// `HtmlBogus` -> `HTML_BOGUS`
     pub nodes: &'a [&'a str],
 }

@@ -134,6 +134,15 @@ Read the one that matches the task before starting:
   an enum's variants are named rather than glob-imported.
 - Every `unsafe` block and `unsafe impl` carries a `// SAFETY:` comment saying why it is sound;
   the generated code and the vendored `mlkc-rowan` say where the lint is expected away.
+- A public function returning `Result` names its failures in a `# Errors` section,
+  and one that may panic names the condition in a `# Panics` section;
+  identifiers, paths, and types are backticked in every comment.
+  The generated accessors of `mlkc-syntax` and the vendored crates expect the doc lints away,
+  because their contract is uniform or not ours to restate.
+- Only a host prints: `clippy::print_stdout` is denied, and the crates that print ---
+  `mlkc-cli` and the xtask tools --- carry the expectation that says so.
+- `unreachable_pub` keeps visibility honest; the generator crate and the vendored crates,
+  whose modules are their own API, expect it away at the crate root.
 
 ### The working tree
 

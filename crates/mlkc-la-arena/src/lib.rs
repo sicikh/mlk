@@ -612,6 +612,11 @@ impl<T> Arena<T> {
 
     /// Returns an iterator over the arena’s elements.
     ///
+    /// # Panics
+    ///
+    /// Panics if the arena holds more than `u32::MAX` elements, since an element’s index then
+    /// does not fit in the 32 bits an arena index holds.
+    ///
     /// ```
     /// let mut arena = mlkc_la_arena::Arena::new();
     /// let idx1 = arena.alloc(20);
@@ -635,6 +640,11 @@ impl<T> Arena<T> {
     }
 
     /// Returns an iterator over the arena’s mutable elements.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the arena holds more than `u32::MAX` elements, since an element’s index then
+    /// does not fit in the 32 bits an arena index holds.
     ///
     /// ```
     /// let mut arena = mlkc_la_arena::Arena::new();

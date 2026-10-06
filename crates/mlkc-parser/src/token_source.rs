@@ -37,7 +37,7 @@ pub(crate) struct TokenSource<'src> {
 
 impl<'src> TokenSource<'src> {
     /// Creates a token source over `source`, positioned at its first token.
-    pub fn from_str(source: &'src str) -> Self {
+    pub(crate) fn from_str(source: &'src str) -> Self {
         let lexer = BufferedLexer::new(Lexer::from_str(source));
         let mut token_source = Self {
             lexer,
@@ -51,10 +51,10 @@ impl<'src> TokenSource<'src> {
 
     /// The whole source text.
     ///
-    /// The text is borrowed from the caller of [TokenSource::from_str] and outlives the
+    /// The text is borrowed from the caller of [`TokenSource::from_str`] and outlives the
     /// token source, so the parser can hand it to the tree sink after the token source
     /// has been consumed.
-    pub fn text(&self) -> &'src str {
+    pub(crate) fn text(&self) -> &'src str {
         self.lexer.source()
     }
 
@@ -88,9 +88,9 @@ impl<'src> TokenSource<'src> {
         }
     }
 
-    /// Creates a checkpoint the tests can later return to with [Self::rewind].
+    /// Creates a checkpoint the tests can later return to with [`Self::rewind`].
     #[cfg(test)]
-    pub fn checkpoint(&self) -> Checkpoint {
+    pub(crate) fn checkpoint(&self) -> Checkpoint {
         Checkpoint {
             trivia_len: self.trivia_list.len() as u32,
             lexer_checkpoint: self.lexer.checkpoint(),
@@ -102,7 +102,7 @@ impl<'src> TokenSource<'src> {
     /// The trivia the parser collected since the checkpoint is dropped: it belongs
     /// to tokens the parser decided not to parse.
     #[cfg(test)]
-    pub fn rewind(&mut self, checkpoint: Checkpoint) {
+    pub(crate) fn rewind(&mut self, checkpoint: Checkpoint) {
         assert!(self.trivia_list.len() >= checkpoint.trivia_len as usize);
 
         self.trivia_list.truncate(checkpoint.trivia_len as usize);

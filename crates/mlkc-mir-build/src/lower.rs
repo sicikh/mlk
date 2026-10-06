@@ -65,6 +65,13 @@ use mlkc_typeck::CheckDeps;
 /// check, and the pass says so by stopping with an internal compiler exception --- it never
 /// manufactures a body out of a construct the language does not have.
 ///
+/// # Panics
+///
+/// Panics, as an internal compiler exception, if a node of the body is one the check accepted
+/// and this walk cannot lower --- a gap of the check;
+/// if the body declares a function in a `local` and holds no root for it;
+/// or if a lambda the lowering allocated was never written.
+///
 /// [adr-0019]: ../../docs/adr/0019-mir.md
 pub fn lower_body(
     owner: BodyEntityLoc,

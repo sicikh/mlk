@@ -225,6 +225,10 @@ impl AbsPath {
     }
 
     /// Equivalent of [`Utf8Path::join`] for `AbsPath`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if joining an absolute path yields a relative one, which joining cannot produce.
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> AbsPathBuf {
         Utf8Path::join(self.as_ref(), path).try_into().unwrap()
     }
@@ -246,6 +250,10 @@ impl AbsPath {
     }
 
     /// Equivalent of [`Utf8Path::to_path_buf`] for `AbsPath`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the copy is not absolute, which copying an absolute path cannot produce.
     pub fn to_path_buf(&self) -> AbsPathBuf {
         AbsPathBuf::try_from(self.0.to_path_buf()).unwrap()
     }
@@ -384,6 +392,10 @@ impl RelPath {
     }
 
     /// Equivalent of [`Utf8Path::to_path_buf`] for `RelPath`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the copy is not relative, which copying a relative path cannot produce.
     pub fn to_path_buf(&self) -> RelPathBuf {
         RelPathBuf::try_from(self.0.to_path_buf()).unwrap()
     }

@@ -30,6 +30,14 @@ pub trait Host {
     /// `print-int` of `std::runtime` sees the whole name and cannot confuse it with the
     /// `print-int` of another module.
     ///
+    /// # Errors
+    ///
+    /// Returns a [`Trap`] when the host cannot carry the call out:
+    /// a function it does not implement,
+    /// arguments it refuses,
+    /// or a fault of the function it runs.
+    /// The interpreter ends the run with the trap the host reports.
+    ///
     /// [adr-0021]: ../../docs/adr/0021-translation-units.md
     fn call(&mut self, function: &Extern, args: &[Value]) -> Result<Value, Trap>;
 }
@@ -130,6 +138,17 @@ impl std::error::Error for Trap {}
 ///
 /// The body is looked up in `program`, and a function the program does not write is asked of
 /// `host` ([`Host`]).
+///
+/// # Errors
+///
+/// Returns a [`Trap`] when the program stops:
+/// it divides by an immediate zero,
+/// reaches a terminator that is not meant to be reached,
+/// calls a function the program does not write and no host implements,
+/// or runs a construct the interpreter does not implement yet.
+/// A host that refuses a call of an extern function stops the run with its own trap,
+/// and an [`Trap::Uninitialized`] read means the body broke the invariant of MIR
+/// before the interpreter reached it.
 ///
 /// # Panics
 ///

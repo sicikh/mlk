@@ -185,6 +185,11 @@ impl FileSetConfigBuilder {
     }
 
     /// Build the `FileSetConfig`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the encoded roots are not sorted and free of duplicates, which the builder
+    /// guarantees by sorting and deduplicating them before the map is built.
     pub fn build(self) -> FileSetConfig {
         let n_file_sets = self.roots.len() + 1;
         let map = {

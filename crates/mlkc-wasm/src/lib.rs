@@ -125,6 +125,11 @@ impl WasmDriver {
     ///
     /// The name a host sees is `useStd`: wasm-bindgen keeps the Rust name otherwise,
     /// and the editor around this module is written in JavaScript.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the files of the library cannot cross into JavaScript as values;
+    /// recording the library itself cannot fail.
     #[wasm_bindgen(js_name = useStd)]
     pub fn use_std(&mut self) -> Result<JsValue, JsValue> {
         to_js(&self.register_library())
@@ -150,6 +155,11 @@ impl WasmDriver {
     /// a host to read what depends on them again.
     ///
     /// [adr-0025]: ../../docs/adr/0025-debug-information-formats.md
+    ///
+    /// # Errors
+    ///
+    /// Throws when `debug` is not `none`, `source-map`, `dwarf-lines`, or `dwarf-full`,
+    /// or when `opt` is not `none` or `full`.
     #[wasm_bindgen(js_name = setOptions)]
     pub fn set_options(&mut self, debug: &str, opt: &str) -> Result<bool, JsValue> {
         let debug = match debug {
@@ -225,8 +235,11 @@ impl WasmDriver {
     /// The tree is a value a host navigates, not text it re-parses:
     /// a node is its kind, its range and its children, a token is its kind, its range and its text.
     ///
-    /// Throws when the driver holds no text for the file:
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer or no text at `path`:
     /// an editor pushes the buffer before it asks about it.
+    /// Also throws when the tree cannot cross into JavaScript.
     pub fn cst(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.cst_of(path)?)
     }
@@ -235,6 +248,11 @@ impl WasmDriver {
     ///
     /// Its shape is the one the typed tree gives itself: a field of the compiler's AST is a key
     /// here, a list is an array, and a token is a node of the concrete tree.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer or no text at `path`,
+    /// and when the view cannot cross into JavaScript.
     pub fn ast(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.ast_of(path)?)
     }
@@ -244,6 +262,12 @@ impl WasmDriver {
     /// The lines are read the way a person reads the HIR --- the module and its items, and then
     /// a body per entity that owns one --- and each line says where the node it is about is
     /// written, which is what an editor marks the buffer by.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer at `path`;
+    /// a buffer it cannot lower answers `null` instead.
+    /// Also throws when the reading cannot cross into JavaScript.
     pub fn hir(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.hir_of(path)?)
     }
@@ -252,6 +276,12 @@ impl WasmDriver {
     ///
     /// The types are read where a person reads them: the type an entity of the module was
     /// resolved to, and the type every node of every body was checked to.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer at `path`;
+    /// a buffer it cannot check answers `null` instead.
+    /// Also throws when the types cannot cross into JavaScript.
     pub fn types(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.types_of(path)?)
     }
@@ -263,6 +293,12 @@ impl WasmDriver {
     /// statements of it, and the terminator it ends in --- and every line says where it was read
     /// from, which is what an editor marks the buffer by. A body whose check reported a mistake
     /// has no MIR, and is not among the bodies.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer at `path`;
+    /// a buffer it cannot lower answers `null` instead.
+    /// Also throws when the bodies cannot cross into JavaScript.
     pub fn mir(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.mir_of(path, Form::Cfg)?)
     }
@@ -271,6 +307,12 @@ impl WasmDriver {
     /// ([ADR-0019](../../docs/adr/0019-mir.md)).
     ///
     /// The name a host sees is `mirSsa`: wasm-bindgen keeps the Rust name otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer at `path`;
+    /// a buffer it cannot lower answers `null` instead.
+    /// Also throws when the bodies cannot cross into JavaScript.
     #[wasm_bindgen(js_name = mirSsa)]
     pub fn mir_ssa(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.mir_of(path, Form::Ssa)?)
@@ -283,6 +325,12 @@ impl WasmDriver {
     /// instructions of it, and the terminator it ends in --- and every line says where it was
     /// read from, which is what an editor marks the buffer by. The table of a body says where
     /// every value that needs storage lives, and which values are emitted where they are read.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer at `path`;
+    /// a buffer it cannot lower answers `null` instead.
+    /// Also throws when the bodies cannot cross into JavaScript.
     pub fn lir(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.lir_of(path)?)
     }
@@ -294,6 +342,14 @@ impl WasmDriver {
     /// person reads a module by. `null` when there is nothing to compile.
     ///
     /// [adr-0020]: ../../docs/adr/0020-wasm-backend.md
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer at `path`,
+    /// when its lines cannot be read,
+    /// or when the module does not print as text;
+    /// a buffer with nothing to compile answers `null` instead.
+    /// Also throws when the text cannot cross into JavaScript.
     pub fn wat(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.wat_of(path)?)
     }
@@ -311,6 +367,14 @@ impl WasmDriver {
     /// ([ADR-0021]).
     ///
     /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    ///
+    /// # Errors
+    ///
+    /// Throws when the program does not link:
+    /// a module of the project is not whole,
+    /// or a pass reported a bug.
+    /// The diagnostics of the buffers say what to fix.
+    /// Also throws when the manifest cannot cross into JavaScript.
     #[wasm_bindgen(js_name = run)]
     pub fn run(&mut self) -> Result<JsValue, JsValue> {
         to_js(&self.program_of()?)
@@ -323,6 +387,14 @@ impl WasmDriver {
     /// for this --- the editor, which packs every module of it into an archive.
     ///
     /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    ///
+    /// # Errors
+    ///
+    /// Throws when the program does not link:
+    /// a module of the project is not whole,
+    /// or a pass reported a bug.
+    /// The diagnostics of the buffers say what to fix.
+    /// Also throws when the manifest cannot cross into JavaScript.
     #[wasm_bindgen(js_name = build)]
     pub fn build(&mut self) -> Result<JsValue, JsValue> {
         to_js(&self.program_of()?)
@@ -332,6 +404,12 @@ impl WasmDriver {
     ///
     /// The diagnostics are what an editor marks the buffer with: the level, the kind, and the
     /// places they point at, each of them with the line and the column it sits at.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the driver holds no buffer or no text at `path`,
+    /// or when its lines cannot be read.
+    /// Also throws when the diagnostics cannot cross into JavaScript.
     pub fn diagnostics(&mut self, path: &str) -> Result<JsValue, JsValue> {
         to_js(&self.diagnostics_of(path)?)
     }
@@ -347,6 +425,10 @@ impl WasmDriver {
     /// is written.
     ///
     /// The name a host sees is `stats`: wasm-bindgen keeps the Rust name otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Throws when the counters cannot cross into JavaScript as values.
     #[wasm_bindgen(js_name = stats)]
     pub fn stats(&mut self) -> Result<JsValue, JsValue> {
         to_js(&Stats::of(&mut self.driver))
@@ -2079,7 +2161,7 @@ impl Diagnostic {
     ///
     /// The line and the column are counted from zero and in bytes,
     /// because that is what a byte offset turns into without reading the text again.
-    /// An editor that speaks another unit — CodeMirror counts UTF-16 code units —
+    /// An editor that speaks another unit — `CodeMirror` counts UTF-16 code units —
     /// converts the column of the line it already has.
     fn of(diagnostic: &mlkc_diagnostics::Diagnostic, index: &LineIndex) -> Self {
         Self::rendered(diagnostic, |span| {

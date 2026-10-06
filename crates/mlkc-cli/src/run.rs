@@ -107,6 +107,22 @@ fn carries_dwarf(bytes: &[u8]) -> bool {
 /// engine is configured; a build of such modules under `debug` says so, because a run that
 /// silently offers no breakpoint is a run a person cannot tell from one that broke nothing.
 ///
+/// # Panics
+///
+/// Panics if a module of the manifest is not among the compiled modules, which cannot happen
+/// because `run` compiles every module the manifest names;
+/// and, in a call of an extern, if zero is not a valid `i31` immediate, which it is.
+///
+/// # Errors
+///
+/// Returns an error if `path` is neither a directory of a build nor an archive of one,
+/// if a file the manifest names is missing or the manifest is not one of a build,
+/// if a module does not compile or instantiate,
+/// if a module exports no name the manifest lists for it,
+/// if an extern the manifest names is imported by no module,
+/// if the build declares no entry or names an entry no module exports,
+/// or if the build imports an extern this host does not implement.
+///
 /// [adr-0025]: ../docs/adr/0025-debug-information-formats.md
 pub fn run(path: &Path, debug: bool) -> anyhow::Result<Vec<String>> {
     let build = Build::read(path)?;

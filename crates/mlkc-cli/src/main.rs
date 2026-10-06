@@ -1,5 +1,11 @@
 //! The CLI of the compiler: what a person runs.
 
+// The binary of the CLI is a host: printing what a person asked for is what it is for.
+#![expect(
+    clippy::print_stdout,
+    reason = "the CLI host prints what a build wrote and the diagnostics it found"
+)]
+
 use std::{path::PathBuf, process::ExitCode};
 
 use bpaf::Bpaf;

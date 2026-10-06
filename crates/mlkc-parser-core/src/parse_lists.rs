@@ -37,11 +37,18 @@ pub trait ParseNodeList {
     /// Usually here you want to check the current token.
     fn is_at_list_end(&self, p: &mut Self::Parser<'_>) -> bool;
 
-    /// This method is used to recover the parser in case [Self::parse_element] returns [ParsedSyntax::Absent]
+    /// This method is used to recover the parser in case [`Self::parse_element`] returns [`ParsedSyntax::Absent`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the parser cannot be moved past the missing element:
+    /// it is at the end of the file,
+    /// it is already at a recovery point,
+    /// or it is speculatively parsing.
     fn recover(&mut self, p: &mut Self::Parser<'_>, parsed_element: ParsedSyntax)
     -> RecoveryResult;
 
-    /// It creates a [ParsedSyntax] that will contain the list
+    /// It creates a [`ParsedSyntax`] that will contain the list
     fn finish_list(&mut self, p: &mut Self::Parser<'_>, m: Marker) -> CompletedMarker {
         m.complete(p, Self::LIST_KIND)
     }
@@ -103,11 +110,18 @@ pub trait ParseSeparatedList {
     /// Usually here you want to check the current token.
     fn is_at_list_end(&self, p: &mut Self::Parser<'_>) -> bool;
 
-    /// This method is used to recover the parser in case [Self::parse_element] returns [ParsedSyntax::Absent]
+    /// This method is used to recover the parser in case [`Self::parse_element`] returns [`ParsedSyntax::Absent`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the parser cannot be moved past the missing element:
+    /// it is at the end of the file,
+    /// it is already at a recovery point,
+    /// or it is speculatively parsing.
     fn recover(&mut self, p: &mut Self::Parser<'_>, parsed_element: ParsedSyntax)
     -> RecoveryResult;
 
-    /// It creates a [ParsedSyntax] that will contain the list
+    /// It creates a [`ParsedSyntax`] that will contain the list
     /// Only called if the list isn't empty
     fn finish_list(&mut self, p: &mut Self::Parser<'_>, m: Marker) -> CompletedMarker {
         m.complete(p, Self::LIST_KIND)
@@ -118,7 +132,7 @@ pub trait ParseSeparatedList {
         true
     }
 
-    /// The [SyntaxKind] of the element that separates the elements of the list
+    /// The [`SyntaxKind`] of the element that separates the elements of the list
     fn separating_element_kind(&mut self) -> Self::Kind;
 
     /// `true` if the list allows for an optional trailing element
@@ -135,7 +149,7 @@ pub trait ParseSeparatedList {
         p.expect(self.separating_element_kind())
     }
 
-    /// Called when [Self::parse_element] returns [ParsedSyntax::Absent] and the parser is
+    /// Called when [`Self::parse_element`] returns [`ParsedSyntax::Absent`] and the parser is
     /// already positioned at the separating token.
     ///
     /// The default implementation does nothing because many separated lists allow sparse

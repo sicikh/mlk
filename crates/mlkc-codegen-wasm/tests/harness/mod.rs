@@ -19,6 +19,12 @@
     dead_code,
     reason = "the harness is shared by the test binaries of the suite, and no one of them uses all of it"
 )]
+// A harness is reached through `mod harness`, never from outside the test binary that includes
+// it, so the items it offers its tests are `pub` on purpose.
+#![allow(
+    unreachable_pub,
+    reason = "a harness is a module of a test binary, not a crate anything outside names"
+)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},

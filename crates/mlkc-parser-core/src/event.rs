@@ -7,7 +7,7 @@ use mlkc_rowan::{SyntaxKind, TextSize};
 use crate::{diagnostic::ParseDiagnostic, tree_sink::TreeSink};
 
 /// Events emitted by the Parser, these events are later
-/// made into a syntax tree with `process` into TreeSink.
+/// made into a syntax tree with `process` into `TreeSink`.
 #[derive(Debug, Clone)]
 pub enum Event<K: SyntaxKind> {
     /// This event signifies the start of the node.

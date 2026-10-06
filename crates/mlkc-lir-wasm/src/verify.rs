@@ -359,6 +359,16 @@ impl fmt::Display for Invalid {
 
 impl Body {
     /// Checks that the body holds the invariant of the LIR.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an id the body names is not one of its own:
+    /// an entry, an edge target, a value read, or a value defined wrong.
+    /// Also returns an error when a value is defined twice,
+    /// when nothing defines it on the way to a read of it,
+    /// when a use is not dominated by its definition or follows it in the same block,
+    /// and when the type of an edge, an instruction, or the return
+    /// is not the type its target, operand, or result requires.
     pub fn validate(&self) -> Result<(), Invalid> {
         self.check_ids()?;
         self.check_edges()?;
@@ -372,6 +382,12 @@ impl Body {
     /// checked is that every parameter has the local of the ABI, that every local a value was
     /// given exists and has the type of the value, and that the special locals of the dispatch
     /// form are locals of the body.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the allocation table does not cover every value,
+    /// when a value that needs a local has none or a local of another type,
+    /// and when the `pc` or `scratch` local of the dispatch form is not a local of the body.
     pub fn validate_locals(&self) -> Result<(), Invalid> {
         if self.locals.values.len() != self.values.len() {
             return Err(Invalid::NotAllocated);

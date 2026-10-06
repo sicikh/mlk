@@ -27,7 +27,7 @@ const CENTRAL: u32 = 0x0201_4B50;
 const END: [u8; 4] = [b'P', b'K', 0x05, 0x06];
 
 /// The files of a ZIP archive, held in memory.
-pub struct Archive {
+pub(crate) struct Archive {
     /// The archive itself: what a file of it is a piece of.
     bytes: Vec<u8>,
 
@@ -46,7 +46,7 @@ struct Entry {
 
 impl Archive {
     /// Reads the archive `bytes` are.
-    pub fn read(bytes: Vec<u8>) -> anyhow::Result<Archive> {
+    pub(crate) fn read(bytes: Vec<u8>) -> anyhow::Result<Archive> {
         let end = end_of(&bytes)?;
         let count = u16_at(&bytes, end + 10)?;
         let mut files = BTreeMap::new();
@@ -84,7 +84,7 @@ impl Archive {
     }
 
     /// The bytes of the file `name` of the archive.
-    pub fn file(&self, name: &str) -> anyhow::Result<&[u8]> {
+    pub(crate) fn file(&self, name: &str) -> anyhow::Result<&[u8]> {
         let entry = self
             .files
             .get(name)

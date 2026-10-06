@@ -70,6 +70,11 @@ impl FileId {
 
     const MAX: u32 = 0x7FFF_FFFF;
 
+    /// The inverse of [`FileId::index`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `raw` has its highest bit set, which is out of the range a `FileId` holds.
     #[inline]
     pub const fn from_raw(raw: u32) -> FileId {
         assert!(raw <= Self::MAX);
@@ -420,7 +425,7 @@ impl Vfs {
         mem::take(&mut self.changes)
     }
 
-    /// Provides a panic-less way to verify file_id validity.
+    /// Provides a panic-less way to verify `file_id` validity.
     ///
     /// Returns `true` if the file exists, whether or not its contents can be read:
     /// use [`file_text`](Vfs::file_text) to get the contents themselves.

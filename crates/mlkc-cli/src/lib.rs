@@ -7,6 +7,12 @@
 //!
 //! [`Driver`]: mlkc_driver::Driver
 
+// The CLI is a host: printing what a person asked for is what it is for.
+#![expect(
+    clippy::print_stdout,
+    reason = "the CLI host prints the trees, the diagnostics, and what a build wrote"
+)]
+
 pub mod parse;
 pub mod run;
 

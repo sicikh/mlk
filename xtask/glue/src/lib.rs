@@ -1,5 +1,11 @@
 //! Codegen tools mostly used to generate ast and syntax definitions. Adapted from rust analyzer's codegen
 
+// The xtask tools echo the commands they run and the files they write: that is their report.
+#![expect(
+    clippy::print_stdout,
+    reason = "the xtask tools report what they ran and what they wrote by printing it"
+)]
+
 pub mod glue;
 
 use std::{
@@ -19,6 +25,12 @@ pub enum Mode {
     Verify,
 }
 
+/// Returns the repository root, two levels above the manifest directory.
+///
+/// # Panics
+///
+/// Panics when the manifest directory has fewer than two ancestors,
+/// so the repository root is not two levels above it.
 pub fn project_root() -> PathBuf {
     Path::new(
         &env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_owned()),
@@ -29,6 +41,13 @@ pub fn project_root() -> PathBuf {
     .to_path_buf()
 }
 
+/// Formats the workspace with nightly `rustfmt`,
+/// in place for [`Mode::Overwrite`] and as a check for [`Mode::Verify`].
+///
+/// # Errors
+///
+/// Fails when [`ensure_rustfmt`] rejects the installed toolchain,
+/// or when the `cargo fmt` process exits with a failure.
 pub fn run_rustfmt(mode: Mode) -> Result<()> {
     let _dir = pushd(project_root());
     let _e = pushenv("RUSTUP_TOOLCHAIN", "nightly");
@@ -40,10 +59,20 @@ pub fn run_rustfmt(mode: Mode) -> Result<()> {
     Ok(())
 }
 
+/// Formats Rust source text and prepends the generated-file preamble.
+///
+/// # Errors
+///
+/// Fails under the conditions of [`reformat_without_preamble`].
 pub fn reformat(text: impl Display) -> Result<String> {
     reformat_without_preamble(text).map(prepend_generated_preamble)
 }
 
+/// Formats Rust source text and prepends a preamble naming the regenerating `command`.
+///
+/// # Errors
+///
+/// Fails under the conditions of [`reformat_without_preamble`].
 pub fn reformat_with_command(text: impl Display, command: impl Display) -> Result<String> {
     reformat_without_preamble(text).map(|formatted| {
         format!("//! This is a generated file. Don't modify it by hand! Run '{command}' to re-generate the file.\n\n{formatted}")
@@ -51,6 +80,12 @@ pub fn reformat_with_command(text: impl Display, command: impl Display) -> Resul
 }
 
 pub const PREAMBLE: &str = "Generated file, do not edit by hand, see `xtask/codegen`";
+/// Prepends the generated-file preamble to `content`.
+///
+/// # Panics
+///
+/// Panics when `content` already contains the preamble,
+/// which means the preamble was prepended twice.
 pub fn prepend_generated_preamble(content: impl Display) -> String {
     let content = content.to_string();
     assert!(
@@ -60,6 +95,13 @@ pub fn prepend_generated_preamble(content: impl Display) -> String {
     format!("//! {PREAMBLE}\n\n{content}")
 }
 
+/// Formats Rust source text with nightly `rustfmt`, without a preamble.
+///
+/// # Errors
+///
+/// Fails when [`ensure_rustfmt`] rejects the installed toolchain,
+/// or when the `rustfmt` process exits with a failure,
+/// as it does for text it cannot parse.
 pub fn reformat_without_preamble(text: impl Display) -> Result<String> {
     let _e = pushenv("RUSTUP_TOOLCHAIN", "nightly");
     ensure_rustfmt()?;
@@ -73,6 +115,15 @@ pub fn reformat_without_preamble(text: impl Display) -> Result<String> {
 
 static IS_RUSTFMT_CHECKED: OnceLock<()> = OnceLock::new();
 
+/// Checks that the `rustfmt` on `PATH` is a nightly build of at least version 1.8.0.
+///
+/// A successful check is remembered for the rest of the process.
+///
+/// # Errors
+///
+/// Fails when `rustfmt --version` cannot be run,
+/// when its output does not name a nightly toolchain,
+/// or when the version is older than 1.8.0.
 pub fn ensure_rustfmt() -> Result<()> {
     if IS_RUSTFMT_CHECKED.get().is_some() {
         return Ok(());

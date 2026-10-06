@@ -44,7 +44,7 @@ where
     depth_limit_exceeded: bool,
     errors: Vec<ParseDiagnostic>,
     inner: TreeBuilder<'a, L, Factory>,
-    /// Signal that the sink must generate an EOF token when its finishing. See [LosslessTreeSink::finish] for more details.
+    /// Signal that the sink must generate an EOF token when its finishing. See [`LosslessTreeSink::finish`] for more details.
     needs_eof: bool,
     trivia_pieces: Vec<TriviaPiece>,
 }
@@ -106,7 +106,7 @@ where
         }
     }
 
-    /// Reusing `NodeCache` between different [LosslessTreeSink]s saves memory.
+    /// Reusing `NodeCache` between different [`LosslessTreeSink`]s saves memory.
     /// It allows to structurally share underlying trees.
     pub fn with_cache(text: &'a str, trivia: &'a [Trivia], cache: &'a mut NodeCache) -> Self {
         Self {
@@ -125,7 +125,7 @@ where
 
     /// Finishes the tree and return the root node with possible parser errors.
     ///
-    /// If tree is finished without a [mlkc_rowan::SyntaxKind::EOF], one will be generated and all pending trivia
+    /// If tree is finished without a [`mlkc_rowan::SyntaxKind::EOF`], one will be generated and all pending trivia
     /// will be appended to its leading trivia.
     pub fn finish(self) -> (SyntaxNode<L>, Vec<ParseDiagnostic>) {
         (self.inner.finish(), self.errors)

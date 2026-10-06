@@ -154,16 +154,16 @@ pub trait Parser: Sized {
     type Kind: SyntaxKind;
     type Source: TokenSource<Kind = Self::Kind>;
 
-    /// Returns a reference to the [ParserContext].
+    /// Returns a reference to the [`ParserContext`].
     fn context(&self) -> &ParserContext<Self::Kind>;
 
-    /// Returns a mutable reference to the [ParserContext].
+    /// Returns a mutable reference to the [`ParserContext`].
     fn context_mut(&mut self) -> &mut ParserContext<Self::Kind>;
 
-    /// Returns a reference to the [`TokenSource``](TokenSource]
+    /// Returns a reference to the [`TokenSource`].
     fn source(&self) -> &Self::Source;
 
-    /// Returns a mutable reference to the [TokenSource].
+    /// Returns a mutable reference to the [`TokenSource`].
     fn source_mut(&mut self) -> &mut Self::Source;
 
     /// Returns `true` if the parser is trying to parse some syntax but only if it has no errors.
@@ -351,7 +351,7 @@ pub trait Parser: Sized {
     }
 
     /// Consumes the current token if `kind` matches and lexes the next token using the
-    /// specified `context.
+    /// specified `context`.
     fn bump_with_context(
         &mut self,
         kind: Self::Kind,
@@ -402,7 +402,7 @@ pub trait Parser: Sized {
         }
     }
 
-    /// Consume the next token if `kind` matches using the specified `context.
+    /// Consume the next token if `kind` matches using the specified `context`.
     fn eat_with_context(
         &mut self,
         kind: Self::Kind,
@@ -446,7 +446,7 @@ pub trait Parser: Sized {
         true
     }
 
-    /// Consume the next token if token set matches using the specified `context.
+    /// Consume the next token if token set matches using the specified `context`.
     ///
     /// Returns `true` if the token was consumed, `false` otherwise.
     fn eat_ts_with_context(
@@ -625,7 +625,7 @@ pub trait SyntaxFeature: Sized {
         !self.is_supported(p)
     }
 
-    /// Adds a diagnostic and changes the kind of the node to [SyntaxKind::to_bogus] if this feature isn't
+    /// Adds a diagnostic and changes the kind of the node to [`SyntaxKind::to_bogus`] if this feature isn't
     /// supported.
     ///
     /// Returns the parsed syntax.
@@ -652,7 +652,7 @@ pub trait SyntaxFeature: Sized {
         })
     }
 
-    /// Parses a syntax and adds a diagnostic and changes the kind of the node to [SyntaxKind::to_bogus] if this feature isn't
+    /// Parses a syntax and adds a diagnostic and changes the kind of the node to [`SyntaxKind::to_bogus`] if this feature isn't
     /// supported.
     ///
     /// Returns the parsed syntax.
@@ -703,7 +703,7 @@ pub trait SyntaxFeature: Sized {
         }
     }
 
-    /// Adds a diagnostic and changes the kind of the node to [SyntaxKind::to_bogus] if this feature is
+    /// Adds a diagnostic and changes the kind of the node to [`SyntaxKind::to_bogus`] if this feature is
     /// supported.
     ///
     /// Returns the parsed syntax.
@@ -736,7 +736,7 @@ pub trait SyntaxFeature: Sized {
 /// along with the list of diagnostics emitted by the parser while generating
 /// this entry.
 ///
-/// It can be dynamically downcast into a concrete [SyntaxNode] or [AstNode] of
+/// It can be dynamically downcast into a concrete [`SyntaxNode`] or [`AstNode`] of
 /// the corresponding language, generally through a language-specific capability
 #[derive(Clone, Debug)]
 pub struct NodeParse {
@@ -781,7 +781,7 @@ impl AnyParse {
 
     /// Retrieves the root node of the parsed syntax tree.
     ///
-    /// Returns `None` for [AnyParse::EmbeddedNode]
+    /// Returns `None` for [`AnyParse::EmbeddedNode`]
     pub fn into_language_root<N>(self) -> Option<N>
     where
         N: AstNode,
@@ -807,6 +807,12 @@ impl AnyParse {
         }
     }
 
+    /// Returns this parse's syntax tree as a node of language `L`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this parse is an [`AnyParse::EmbeddedNode`], whose tree carries a base offset:
+    /// call [`AnyParse::embedded_syntax`] to get it.
     pub fn syntax<L>(&self) -> SyntaxNode<L>
     where
         L: Language + 'static,
@@ -819,6 +825,12 @@ impl AnyParse {
         }
     }
 
+    /// Returns this parse's syntax tree as an offset-aware node of language `L`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this parse is an [`AnyParse::Node`], whose tree carries no base offset:
+    /// call [`AnyParse::syntax`] to get it.
     pub fn embedded_syntax<L>(self) -> SyntaxNodeWithOffset<L>
     where
         L: Language + 'static,
@@ -831,11 +843,12 @@ impl AnyParse {
         }
     }
 
-    /// Returns a [SendNode] that can be sent across threads
+    /// Returns a [`SendNode`] that can be sent across threads.
     ///
-    /// ## Panic
+    /// # Panics
     ///
-    /// It panics if this node is a [EmbeddedSendNode]
+    /// Panics if this parse is an [`AnyParse::EmbeddedNode`], whose root is an
+    /// [`EmbeddedSendNode`]: call [`AnyParse::unwrap_as_embedded_syntax_node`] instead.
     pub fn unwrap_as_send_node(&self) -> SendNode {
         if let Self::Node(node) = self {
             node.clone().into_root()
@@ -844,7 +857,7 @@ impl AnyParse {
         }
     }
 
-    /// Returns a [SendNode] that can be sent across threads
+    /// Returns a [`SendNode`] that can be sent across threads.
     pub fn as_send_node(&self) -> Option<SendNode> {
         if let Self::Node(node) = self {
             Some(node.clone().into_root())
@@ -853,11 +866,12 @@ impl AnyParse {
         }
     }
 
-    /// Returns an [EmbeddedSendNode] that can be sent across threads
+    /// Returns an [`EmbeddedSendNode`] that can be sent across threads.
     ///
-    /// ## Panic
+    /// # Panics
     ///
-    /// It panics if this node is a [NodeParse]
+    /// Panics if this parse is an [`AnyParse::Node`], whose root is a [`SendNode`]:
+    /// call [`AnyParse::unwrap_as_send_node`] instead.
     pub fn unwrap_as_embedded_syntax_node(&self) -> EmbeddedSendNode {
         if let Self::EmbeddedNode(node) = self {
             node.clone().into_root()
@@ -877,11 +891,12 @@ impl AnyParse {
         }
     }
 
-    /// Replaces the current [AnyParse::Node] with `new_root`
+    /// Replaces the current [`AnyParse::Node`] with `new_root`
     ///
-    /// ## Panic
+    /// # Panics
     ///
-    /// Panics if the current node is [AnyParse::EmbeddedNode]
+    /// Panics if the current node is an [`AnyParse::EmbeddedNode`]:
+    /// call [`AnyParse::set_new_embedded_root`] instead.
     pub fn set_new_root(&mut self, new_root: SendNode) {
         match self {
             Self::Node(node) => {
@@ -895,11 +910,12 @@ impl AnyParse {
         }
     }
 
-    /// Replaces the current [AnyParse::EmbeddedNode] with `new_root`
+    /// Replaces the current [`AnyParse::EmbeddedNode`] with `new_root`
     ///
-    /// ## Panic
+    /// # Panics
     ///
-    /// Panics if the current node is [AnyParse::Node]
+    /// Panics if the current node is an [`AnyParse::Node`]:
+    /// call [`AnyParse::set_new_root`] instead.
     pub fn set_new_embedded_root(&mut self, new_root: EmbeddedSendNode) {
         match self {
             Self::Node(_) => {
@@ -936,6 +952,12 @@ impl NodeParse {
         self.root
     }
 
+    /// Returns this parse's syntax tree as a node of language `L`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root node was parsed as a language other than `L`:
+    /// a parse names its language, so a mismatch is a conversion bug, not bad input.
     pub fn syntax<L>(&self) -> SyntaxNode<L>
     where
         L: Language + 'static,

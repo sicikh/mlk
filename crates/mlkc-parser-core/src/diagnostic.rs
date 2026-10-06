@@ -1,27 +1,27 @@
 //! Diagnostics emitted by the parser.
 //!
 //! The parser is deliberately file-agnostic: it only ever sees the text it was given and
-//! refers to that text with [TextRange]s. It does not know which file the text belongs to,
+//! refers to that text with [`TextRange`]s. It does not know which file the text belongs to,
 //! and it knows nothing about how diagnostics are classified or rendered.
 //!
-//! [ParseDiagnostic] therefore is a plain, self-contained value carrying exactly three
+//! [`ParseDiagnostic`] therefore is a plain, self-contained value carrying exactly three
 //! things:
 //!
-//! 1. a mandatory message and an optional [TextRange] of the offending code;
-//! 2. a list of [Advice]s — extra context ("details") and suggestions ("hints"), kept in
+//! 1. a mandatory message and an optional [`TextRange`] of the offending code;
+//! 2. a list of [`Advice`]s — extra context ("details") and suggestions ("hints"), kept in
 //!    the order they were added, because that is the order they are meant to be printed in;
 //! 3. the offset that has to be applied to advices added after a call to
-//!    [ParseDiagnostic::set_location_offset].
+//!    [`ParseDiagnostic::set_location_offset`].
 //!
-//! Every [ParseDiagnostic] is an error: the parser never warns.
+//! Every [`ParseDiagnostic`] is an error: the parser never warns.
 //!
 //! # Ranges, not spans
 //!
-//! Ranges are stored as [TextRange]s and not as [`Span`]s, even though a span is what a
+//! Ranges are stored as [`TextRange`]s and not as [`Span`]s, even though a span is what a
 //! consumer eventually needs. The parser has no file to attach to its ranges: the same
 //! parser is used for whole files, for fragments, and for embedded syntax. The file is
-//! attached later, at the boundary, by [ParseDiagnostic::to_diagnostic], which takes the
-//! [FileId] the ranges belong to as an argument.
+//! attached later, at the boundary, by [`ParseDiagnostic::to_diagnostic`], which takes the
+//! [`FileId`] the ranges belong to as an argument.
 
 use std::{cmp::Ordering, fmt::Display};
 
@@ -34,8 +34,8 @@ use crate::{EOF_STR, Parser, token_source::TokenSource};
 /// A diagnostic emitted by the parser.
 ///
 /// A parse diagnostic is structured in this way:
-/// 1. a mandatory message and an optional [TextRange];
-/// 2. a list of [Advice]s, useful to give more information and context around the error;
+/// 1. a mandatory message and an optional [`TextRange`];
+/// 2. a list of [`Advice`]s, useful to give more information and context around the error;
 /// 3. the location offset, which shifts the ranges of advices added later.
 ///
 /// These pieces of information **are printed in this exact order**.
@@ -49,14 +49,14 @@ pub struct ParseDiagnostic {
     pub message: String,
     /// Extra information and hints, in the order they were added.
     advices: Vec<Advice>,
-    /// Offset applied to the ranges of advices added after [ParseDiagnostic::set_location_offset].
+    /// Offset applied to the ranges of advices added after [`ParseDiagnostic::set_location_offset`].
     ///
     /// The ranges stored in this struct are always absolute: the offset is applied when an
     /// advice is added, never when it is read.
     advice_offset: TextSize,
 }
 
-/// Extra information attached to a [ParseDiagnostic].
+/// Extra information attached to a [`ParseDiagnostic`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Advice {
     /// Decides how the advice is rendered.
@@ -67,12 +67,12 @@ pub struct Advice {
     pub range: Option<TextRange>,
     /// Values that were expected instead of the one that was found.
     ///
-    /// Only meaningful for [AdviceKind::Hint], where they are printed as a list after the
+    /// Only meaningful for [`AdviceKind::Hint`], where they are printed as a list after the
     /// message.
     pub alternatives: Vec<String>,
 }
 
-/// The kind of an [Advice].
+/// The kind of an [`Advice`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AdviceKind {
     /// Points at another piece of code and explains how it relates to the error.
@@ -290,20 +290,20 @@ impl ParseDiagnostic {
         self.advices.push(advice);
     }
 
-    /// Converts this parser diagnostic into the compiler-wide [Diagnostic].
+    /// Converts this parser diagnostic into the compiler-wide [`Diagnostic`].
     ///
     /// The parser only knows the ranges of the text it was given, so the file those ranges
-    /// belong to has to be supplied by the caller: the driver knows the [FileId] of the file
+    /// belong to has to be supplied by the caller: the driver knows the [`FileId`] of the file
     /// from the VFS (or from the parse unit).
     ///
     /// The conversion is:
     ///
     /// - the [message](ParseDiagnostic::message) becomes the diagnostic message;
     /// - the primary range becomes a primary label;
-    /// - [AdviceKind::Detail] advices become secondary labels;
-    /// - [AdviceKind::Hint] advices become notes, with their alternatives printed as a list.
+    /// - [`AdviceKind::Detail`] advices become secondary labels;
+    /// - [`AdviceKind::Hint`] advices become notes, with their alternatives printed as a list.
     ///
-    /// A [Diagnostic] keeps labels and notes in separate lists, so the relative order of the
+    /// A [`Diagnostic`] keeps labels and notes in separate lists, so the relative order of the
     /// advices survives within each list, but not between them.
     #[must_use]
     pub fn to_diagnostic(&self, file: FileId) -> Diagnostic {
@@ -357,11 +357,11 @@ impl DiagKind for ParseDiagnostic {
     }
 }
 
-/// Converts a value produced by a parse rule into a [ParseDiagnostic].
+/// Converts a value produced by a parse rule into a [`ParseDiagnostic`].
 ///
 /// Some errors can only be materialized once the parser has been consulted (which token was
 /// found, where the file ends, etc.), so a parse rule returns one of these values and the
-/// [Parser] converts it when the error is reported.
+/// [`Parser`] converts it when the error is reported.
 pub trait ToDiagnostic<P>
 where
     P: Parser,
@@ -375,6 +375,12 @@ impl<P: Parser> ToDiagnostic<P> for ParseDiagnostic {
     }
 }
 
+/// Creates a diagnostic saying that `token` was expected.
+///
+/// # Panics
+///
+/// Panics if `token` is neither a keyword, a punctuation token, nor the `EOL` token,
+/// because only those kinds have a text representation.
 #[must_use]
 pub fn expected_token<K>(token: K) -> ExpectedToken
 where
@@ -387,6 +393,12 @@ where
     )
 }
 
+/// Creates a diagnostic saying that any of `tokens` was expected.
+///
+/// # Panics
+///
+/// Panics if any of `tokens` is neither a keyword, a punctuation token, nor the `EOL` token,
+/// because only those kinds have a text representation.
 #[must_use]
 pub fn expected_token_any<K: SyntaxKind>(tokens: &[K]) -> ExpectedTokens {
     use std::fmt::Write;

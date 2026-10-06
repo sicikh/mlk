@@ -81,8 +81,13 @@ impl<K: SyntaxKind> ParseRecoveryTokenSet<K> {
 
     /// Tries to recover by parsing all tokens into an `Bogus*` node until the parser finds any token
     /// specified in the recovery set, the EOF, or a line break (depending on configuration).
-    /// Returns `Ok(bogus_node)` if recovery was successful, and `Err(RecoveryError::Eof)` if the parser
-    /// is at the end of the file (before starting recovery).
+    /// Returns `Ok(bogus_node)` if recovery was successful.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecoveryError::Eof`] if the parser is at the end of the file,
+    /// [`RecoveryError::AlreadyRecovered`] if it is already at a recovery point,
+    /// and [`RecoveryError::RecoveryDisabled`] while it is speculatively parsing.
     pub fn recover<P>(&self, p: &mut P) -> RecoveryResult
     where
         P: Parser<Kind = K>,
@@ -131,8 +136,13 @@ pub trait ParseRecovery {
 
     /// Tries to recover by parsing all tokens into an `Bogus*` node until the parser finds any token
     /// specified in the recovery set, the EOF, or a line break (depending on configuration).
-    /// Returns `Ok(bogus_node)` if recovery was successful, and `Err(RecoveryError::Eof)` if the parser
-    /// is at the end of the file (before starting recovery).
+    /// Returns `Ok(bogus_node)` if recovery was successful.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecoveryError::Eof`] if the parser is at the end of the file,
+    /// [`RecoveryError::AlreadyRecovered`] if it is already at a recovery point,
+    /// and [`RecoveryError::RecoveryDisabled`] while it is speculatively parsing.
     fn recover(&self, p: &mut Self::Parser<'_>) -> RecoveryResult {
         if p.at(Self::Kind::EOF) {
             return Err(RecoveryError::Eof);

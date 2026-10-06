@@ -97,6 +97,11 @@ impl FunctionLoc {
     ///
     /// `root` is the name of the entity whose body declared the function, and `declared` is the
     /// name the function was declared under, for a function declared in a `local`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the function is declared in a `local` and `declared` is `None`, since such a
+    /// function is named under the name it was declared with.
     pub fn name(&self, root: &str, declared: Option<&Name>) -> String {
         match self {
             Self::Entity(_) => root.to_owned(),
@@ -152,6 +157,10 @@ pub struct Bodies {
 
 impl Bodies {
     /// The body of the entity itself.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the set holds no body, since the root is its first.
     pub fn root(&self) -> &Arc<Body> {
         self.bodies
             .first()

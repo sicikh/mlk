@@ -3,6 +3,12 @@
 //! This is taken from [rust-analyzer's text_edit crate](https://rust-analyzer.github.io/rust-analyzer/text_edit/index.html)
 
 #![deny(clippy::use_self)]
+// The comments keep the conventions of the crate this was taken from; the `doc-comments`
+// skill says the vendored crates are not restyled.
+#![expect(
+    clippy::doc_markdown,
+    reason = "the comments keep the conventions of the crate this was taken from"
+)]
 #![warn(
     rust_2018_idioms,
     unused_lifetimes,

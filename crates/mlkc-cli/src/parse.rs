@@ -10,6 +10,12 @@ use mlkc_span::TextRange;
 use mlkc_vfs::{FileId, VfsPath};
 
 /// Parses the file, prints what came of it, and tells whether it reported errors.
+///
+/// # Errors
+///
+/// Returns an error if the path cannot be made absolute or its bytes cannot be read,
+/// if the file has no id in the driver once it was pushed,
+/// or if the bytes of the file are not text.
 pub fn parse(file: &Path) -> anyhow::Result<bool> {
     let path = std::path::absolute(file)
         .with_context(|| format!("failed to resolve {}", file.display()))?;

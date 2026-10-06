@@ -10,7 +10,7 @@ use mlkc_rowan::AstNode;
     )
 )]
 use mlkc_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, *};
-pub fn attribute(
+pub(crate) fn attribute(
     hash_token: SyntaxToken,
     l_brack_token: SyntaxToken,
     name: Name,
@@ -23,19 +23,19 @@ pub fn attribute(
         Some(SyntaxElement::Token(r_brack_token)),
     ]))
 }
-pub fn bin_expr(lhs: Expr, operator_token_token: SyntaxToken, rhs: Expr) -> BinExpr {
+pub(crate) fn bin_expr(lhs: Expr, operator_token_token: SyntaxToken, rhs: Expr) -> BinExpr {
     BinExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BIN_EXPR, [
         Some(SyntaxElement::Node(lhs.into_syntax())),
         Some(SyntaxElement::Token(operator_token_token)),
         Some(SyntaxElement::Node(rhs.into_syntax())),
     ]))
 }
-pub fn bool_literal(value_token: SyntaxToken) -> BoolLiteral {
+pub(crate) fn bool_literal(value_token: SyntaxToken) -> BoolLiteral {
     BoolLiteral::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOOL_LITERAL, [Some(
         SyntaxElement::Token(value_token),
     )]))
 }
-pub fn call_expr(
+pub(crate) fn call_expr(
     function: Expr,
     l_paren_token: SyntaxToken,
     arguments: ArgumentList,
@@ -48,26 +48,26 @@ pub fn call_expr(
         Some(SyntaxElement::Token(r_paren_token)),
     ]))
 }
-pub fn else_branch(else_token: SyntaxToken, expr: Expr) -> ElseBranch {
+pub(crate) fn else_branch(else_token: SyntaxToken, expr: Expr) -> ElseBranch {
     ElseBranch::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::ELSE_BRANCH, [
         Some(SyntaxElement::Token(else_token)),
         Some(SyntaxElement::Node(expr.into_syntax())),
     ]))
 }
-pub fn field_expr(receiver: Expr, at_token: SyntaxToken, field: Name) -> FieldExpr {
+pub(crate) fn field_expr(receiver: Expr, at_token: SyntaxToken, field: Name) -> FieldExpr {
     FieldExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FIELD_EXPR, [
         Some(SyntaxElement::Node(receiver.into_syntax())),
         Some(SyntaxElement::Token(at_token)),
         Some(SyntaxElement::Node(field.into_syntax())),
     ]))
 }
-pub fn fun_body(eq_token: SyntaxToken, expr: Expr) -> FunBody {
+pub(crate) fn fun_body(eq_token: SyntaxToken, expr: Expr) -> FunBody {
     FunBody::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FUN_BODY, [
         Some(SyntaxElement::Token(eq_token)),
         Some(SyntaxElement::Node(expr.into_syntax())),
     ]))
 }
-pub fn fun_decl(
+pub(crate) fn fun_decl(
     attributes: AttributeList,
     fun_token: SyntaxToken,
     name: Name,
@@ -83,7 +83,7 @@ pub fn fun_decl(
         body: None,
     }
 }
-pub struct FunDeclBuilder {
+pub(crate) struct FunDeclBuilder {
     attributes: AttributeList,
     fun_token: SyntaxToken,
     name: Name,
@@ -93,22 +93,22 @@ pub struct FunDeclBuilder {
     body: Option<FunBody>,
 }
 impl FunDeclBuilder {
-    pub fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+    pub(crate) fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
         self.visibility_token = Some(visibility_token);
         self
     }
-    pub fn with_return_type_annotation(
+    pub(crate) fn with_return_type_annotation(
         mut self,
         return_type_annotation: FunReturnTypeAnnotation,
     ) -> Self {
         self.return_type_annotation = Some(return_type_annotation);
         self
     }
-    pub fn with_body(mut self, body: FunBody) -> Self {
+    pub(crate) fn with_body(mut self, body: FunBody) -> Self {
         self.body = Some(body);
         self
     }
-    pub fn build(self) -> FunDecl {
+    pub(crate) fn build(self) -> FunDecl {
         FunDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FUN_DECL, [
             Some(SyntaxElement::Node(self.attributes.into_syntax())),
             self.visibility_token
@@ -123,7 +123,7 @@ impl FunDeclBuilder {
         ]))
     }
 }
-pub fn fun_return_type_annotation(
+pub(crate) fn fun_return_type_annotation(
     colon_token: SyntaxToken,
     return_type: Type,
 ) -> FunReturnTypeAnnotation {
@@ -135,12 +135,12 @@ pub fn fun_return_type_annotation(
         ],
     ))
 }
-pub fn ident_pat(name: Name) -> IdentPat {
+pub(crate) fn ident_pat(name: Name) -> IdentPat {
     IdentPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::IDENT_PAT, [Some(
         SyntaxElement::Node(name.into_syntax()),
     )]))
 }
-pub fn if_arm(
+pub(crate) fn if_arm(
     elif_token: SyntaxToken,
     condition: Expr,
     then_token: SyntaxToken,
@@ -153,7 +153,7 @@ pub fn if_arm(
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
-pub fn if_expr(
+pub(crate) fn if_expr(
     if_token: SyntaxToken,
     condition: Expr,
     then_token: SyntaxToken,
@@ -169,7 +169,7 @@ pub fn if_expr(
         else_branch: None,
     }
 }
-pub struct IfExprBuilder {
+pub(crate) struct IfExprBuilder {
     if_token: SyntaxToken,
     condition: Expr,
     then_token: SyntaxToken,
@@ -178,11 +178,11 @@ pub struct IfExprBuilder {
     else_branch: Option<ElseBranch>,
 }
 impl IfExprBuilder {
-    pub fn with_else_branch(mut self, else_branch: ElseBranch) -> Self {
+    pub(crate) fn with_else_branch(mut self, else_branch: ElseBranch) -> Self {
         self.else_branch = Some(else_branch);
         self
     }
-    pub fn build(self) -> IfExpr {
+    pub(crate) fn build(self) -> IfExpr {
         IfExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::IF_EXPR, [
             Some(SyntaxElement::Token(self.if_token)),
             Some(SyntaxElement::Node(self.condition.into_syntax())),
@@ -194,17 +194,17 @@ impl IfExprBuilder {
         ]))
     }
 }
-pub fn infer_type(underscore_token: SyntaxToken) -> InferType {
+pub(crate) fn infer_type(underscore_token: SyntaxToken) -> InferType {
     InferType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::INFER_TYPE, [Some(
         SyntaxElement::Token(underscore_token),
     )]))
 }
-pub fn int_literal(value_token: SyntaxToken) -> IntLiteral {
+pub(crate) fn int_literal(value_token: SyntaxToken) -> IntLiteral {
     IntLiteral::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::INT_LITERAL, [Some(
         SyntaxElement::Token(value_token),
     )]))
 }
-pub fn lambda_expr(
+pub(crate) fn lambda_expr(
     fn_token: SyntaxToken,
     l_paren_token: SyntaxToken,
     parameters: LambdaParameterList,
@@ -221,7 +221,7 @@ pub fn lambda_expr(
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
-pub fn let_expr(
+pub(crate) fn let_expr(
     let_token: SyntaxToken,
     pat: Pat,
     eq_token: SyntaxToken,
@@ -238,7 +238,7 @@ pub fn let_expr(
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
-pub fn local_expr(
+pub(crate) fn local_expr(
     local_token: SyntaxToken,
     items: ModuleItemList,
     in_token: SyntaxToken,
@@ -251,7 +251,7 @@ pub fn local_expr(
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
-pub fn module_preamble(
+pub(crate) fn module_preamble(
     attributes: AttributeList,
     module_token: SyntaxToken,
     name: Path,
@@ -262,7 +262,7 @@ pub fn module_preamble(
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
-pub fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRootBuilder {
+pub(crate) fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRootBuilder {
     ModuleRootBuilder {
         items,
         eof_token,
@@ -270,22 +270,22 @@ pub fn module_root(items: ModuleItemList, eof_token: SyntaxToken) -> ModuleRootB
         preamble: None,
     }
 }
-pub struct ModuleRootBuilder {
+pub(crate) struct ModuleRootBuilder {
     items: ModuleItemList,
     eof_token: SyntaxToken,
     bom_token: Option<SyntaxToken>,
     preamble: Option<ModulePreamble>,
 }
 impl ModuleRootBuilder {
-    pub fn with_bom_token(mut self, bom_token: SyntaxToken) -> Self {
+    pub(crate) fn with_bom_token(mut self, bom_token: SyntaxToken) -> Self {
         self.bom_token = Some(bom_token);
         self
     }
-    pub fn with_preamble(mut self, preamble: ModulePreamble) -> Self {
+    pub(crate) fn with_preamble(mut self, preamble: ModulePreamble) -> Self {
         self.preamble = Some(preamble);
         self
     }
-    pub fn build(self) -> ModuleRoot {
+    pub(crate) fn build(self) -> ModuleRoot {
         ModuleRoot::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::MODULE_ROOT, [
             self.bom_token.map(|token| SyntaxElement::Token(token)),
             self.preamble
@@ -295,27 +295,27 @@ impl ModuleRootBuilder {
         ]))
     }
 }
-pub fn name(value_token: SyntaxToken) -> Name {
+pub(crate) fn name(value_token: SyntaxToken) -> Name {
     Name::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::NAME, [Some(
         SyntaxElement::Token(value_token),
     )]))
 }
-pub fn parameter(pat: Pat) -> ParameterBuilder {
+pub(crate) fn parameter(pat: Pat) -> ParameterBuilder {
     ParameterBuilder {
         pat,
         type_annotation: None,
     }
 }
-pub struct ParameterBuilder {
+pub(crate) struct ParameterBuilder {
     pat: Pat,
     type_annotation: Option<TypeAnnotation>,
 }
 impl ParameterBuilder {
-    pub fn with_type_annotation(mut self, type_annotation: TypeAnnotation) -> Self {
+    pub(crate) fn with_type_annotation(mut self, type_annotation: TypeAnnotation) -> Self {
         self.type_annotation = Some(type_annotation);
         self
     }
-    pub fn build(self) -> Parameter {
+    pub(crate) fn build(self) -> Parameter {
         Parameter::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PARAMETER, [
             Some(SyntaxElement::Node(self.pat.into_syntax())),
             self.type_annotation
@@ -323,7 +323,7 @@ impl ParameterBuilder {
         ]))
     }
 }
-pub fn parameters(
+pub(crate) fn parameters(
     l_paren_token: SyntaxToken,
     items: ParameterList,
     r_paren_token: SyntaxToken,
@@ -334,29 +334,33 @@ pub fn parameters(
         Some(SyntaxElement::Token(r_paren_token)),
     ]))
 }
-pub fn paren_expr(l_paren_token: SyntaxToken, expr: Expr, r_paren_token: SyntaxToken) -> ParenExpr {
+pub(crate) fn paren_expr(
+    l_paren_token: SyntaxToken,
+    expr: Expr,
+    r_paren_token: SyntaxToken,
+) -> ParenExpr {
     ParenExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PAREN_EXPR, [
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(expr.into_syntax())),
         Some(SyntaxElement::Token(r_paren_token)),
     ]))
 }
-pub fn path(segment: PathSegment) -> PathBuilder {
+pub(crate) fn path(segment: PathSegment) -> PathBuilder {
     PathBuilder {
         segment,
         qualifier: None,
     }
 }
-pub struct PathBuilder {
+pub(crate) struct PathBuilder {
     segment: PathSegment,
     qualifier: Option<PathQualifier>,
 }
 impl PathBuilder {
-    pub fn with_qualifier(mut self, qualifier: PathQualifier) -> Self {
+    pub(crate) fn with_qualifier(mut self, qualifier: PathQualifier) -> Self {
         self.qualifier = Some(qualifier);
         self
     }
-    pub fn build(self) -> Path {
+    pub(crate) fn build(self) -> Path {
         Path::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH, [
             self.qualifier
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
@@ -364,33 +368,33 @@ impl PathBuilder {
         ]))
     }
 }
-pub fn path_expr(path: Path) -> PathExpr {
+pub(crate) fn path_expr(path: Path) -> PathExpr {
     PathExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_EXPR, [Some(
         SyntaxElement::Node(path.into_syntax()),
     )]))
 }
-pub fn path_qualifier(path: Path, double_colon_token: SyntaxToken) -> PathQualifier {
+pub(crate) fn path_qualifier(path: Path, double_colon_token: SyntaxToken) -> PathQualifier {
     PathQualifier::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_QUALIFIER, [
         Some(SyntaxElement::Node(path.into_syntax())),
         Some(SyntaxElement::Token(double_colon_token)),
     ]))
 }
-pub fn path_segment(root: PathRoot) -> PathSegmentBuilder {
+pub(crate) fn path_segment(root: PathRoot) -> PathSegmentBuilder {
     PathSegmentBuilder {
         root,
         type_args: None,
     }
 }
-pub struct PathSegmentBuilder {
+pub(crate) struct PathSegmentBuilder {
     root: PathRoot,
     type_args: Option<TypeArgs>,
 }
 impl PathSegmentBuilder {
-    pub fn with_type_args(mut self, type_args: TypeArgs) -> Self {
+    pub(crate) fn with_type_args(mut self, type_args: TypeArgs) -> Self {
         self.type_args = Some(type_args);
         self
     }
-    pub fn build(self) -> PathSegment {
+    pub(crate) fn build(self) -> PathSegment {
         PathSegment::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_SEGMENT, [
             Some(SyntaxElement::Node(self.root.into_syntax())),
             self.type_args
@@ -398,40 +402,40 @@ impl PathSegmentBuilder {
         ]))
     }
 }
-pub fn path_type(path: Path) -> PathType {
+pub(crate) fn path_type(path: Path) -> PathType {
     PathType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PATH_TYPE, [Some(
         SyntaxElement::Node(path.into_syntax()),
     )]))
 }
-pub fn pipe_expr(lhs: Expr, pipe_token: SyntaxToken, step: Expr) -> PipeExpr {
+pub(crate) fn pipe_expr(lhs: Expr, pipe_token: SyntaxToken, step: Expr) -> PipeExpr {
     PipeExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PIPE_EXPR, [
         Some(SyntaxElement::Node(lhs.into_syntax())),
         Some(SyntaxElement::Token(pipe_token)),
         Some(SyntaxElement::Node(step.into_syntax())),
     ]))
 }
-pub fn placeholder_expr(underscore_token: SyntaxToken) -> PlaceholderExpr {
+pub(crate) fn placeholder_expr(underscore_token: SyntaxToken) -> PlaceholderExpr {
     PlaceholderExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PLACEHOLDER_EXPR, [
         Some(SyntaxElement::Token(underscore_token)),
     ]))
 }
-pub fn project(project_token: SyntaxToken) -> Project {
+pub(crate) fn project(project_token: SyntaxToken) -> Project {
     Project::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::PROJECT, [Some(
         SyntaxElement::Token(project_token),
     )]))
 }
-pub fn string_literal(value_token: SyntaxToken) -> StringLiteral {
+pub(crate) fn string_literal(value_token: SyntaxToken) -> StringLiteral {
     StringLiteral::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::STRING_LITERAL, [
         Some(SyntaxElement::Token(value_token)),
     ]))
 }
-pub fn type_annotation(colon_token: SyntaxToken, ty: Type) -> TypeAnnotation {
+pub(crate) fn type_annotation(colon_token: SyntaxToken, ty: Type) -> TypeAnnotation {
     TypeAnnotation::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_ANNOTATION, [
         Some(SyntaxElement::Token(colon_token)),
         Some(SyntaxElement::Node(ty.into_syntax())),
     ]))
 }
-pub fn type_args(
+pub(crate) fn type_args(
     l_brack_token: SyntaxToken,
     type_arg_list: TypeArgList,
     r_brack_token: SyntaxToken,
@@ -442,7 +446,7 @@ pub fn type_args(
         Some(SyntaxElement::Token(r_brack_token)),
     ]))
 }
-pub fn type_decl(
+pub(crate) fn type_decl(
     attributes: AttributeList,
     type_token: SyntaxToken,
     name: Name,
@@ -454,18 +458,18 @@ pub fn type_decl(
         visibility_token: None,
     }
 }
-pub struct TypeDeclBuilder {
+pub(crate) struct TypeDeclBuilder {
     attributes: AttributeList,
     type_token: SyntaxToken,
     name: Name,
     visibility_token: Option<SyntaxToken>,
 }
 impl TypeDeclBuilder {
-    pub fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+    pub(crate) fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
         self.visibility_token = Some(visibility_token);
         self
     }
-    pub fn build(self) -> TypeDecl {
+    pub(crate) fn build(self) -> TypeDecl {
         TypeDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_DECL, [
             Some(SyntaxElement::Node(self.attributes.into_syntax())),
             self.visibility_token
@@ -475,7 +479,7 @@ impl TypeDeclBuilder {
         ]))
     }
 }
-pub fn ufcs_call(
+pub(crate) fn ufcs_call(
     receiver: Expr,
     dot_token: SyntaxToken,
     callee: Path,
@@ -492,19 +496,19 @@ pub fn ufcs_call(
         Some(SyntaxElement::Token(r_paren_token)),
     ]))
 }
-pub fn unary_expr(operator_token_token: SyntaxToken, operand: Expr) -> UnaryExpr {
+pub(crate) fn unary_expr(operator_token_token: SyntaxToken, operand: Expr) -> UnaryExpr {
     UnaryExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::UNARY_EXPR, [
         Some(SyntaxElement::Token(operator_token_token)),
         Some(SyntaxElement::Node(operand.into_syntax())),
     ]))
 }
-pub fn use_alias(as_token: SyntaxToken, name: Name) -> UseAlias {
+pub(crate) fn use_alias(as_token: SyntaxToken, name: Name) -> UseAlias {
     UseAlias::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_ALIAS, [
         Some(SyntaxElement::Token(as_token)),
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
-pub fn use_decl(use_token: SyntaxToken, path: Path) -> UseDeclBuilder {
+pub(crate) fn use_decl(use_token: SyntaxToken, path: Path) -> UseDeclBuilder {
     UseDeclBuilder {
         use_token,
         path,
@@ -512,22 +516,22 @@ pub fn use_decl(use_token: SyntaxToken, path: Path) -> UseDeclBuilder {
         alias: None,
     }
 }
-pub struct UseDeclBuilder {
+pub(crate) struct UseDeclBuilder {
     use_token: SyntaxToken,
     path: Path,
     visibility_token: Option<SyntaxToken>,
     alias: Option<UseAlias>,
 }
 impl UseDeclBuilder {
-    pub fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+    pub(crate) fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
         self.visibility_token = Some(visibility_token);
         self
     }
-    pub fn with_alias(mut self, alias: UseAlias) -> Self {
+    pub(crate) fn with_alias(mut self, alias: UseAlias) -> Self {
         self.alias = Some(alias);
         self
     }
-    pub fn build(self) -> UseDecl {
+    pub(crate) fn build(self) -> UseDecl {
         UseDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_DECL, [
             self.visibility_token
                 .map(|token| SyntaxElement::Token(token)),
@@ -538,12 +542,12 @@ impl UseDeclBuilder {
         ]))
     }
 }
-pub fn wildcard_pat(underscore_token: SyntaxToken) -> WildcardPat {
+pub(crate) fn wildcard_pat(underscore_token: SyntaxToken) -> WildcardPat {
     WildcardPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::WILDCARD_PAT, [Some(
         SyntaxElement::Token(underscore_token),
     )]))
 }
-pub fn argument_list<I, S>(items: I, separators: S) -> ArgumentList
+pub(crate) fn argument_list<I, S>(items: I, separators: S) -> ArgumentList
 where
     I: IntoIterator<Item = Expr>,
     I::IntoIter: ExactSizeIterator,
@@ -564,7 +568,7 @@ where
         }),
     ))
 }
-pub fn attribute_list<I>(items: I) -> AttributeList
+pub(crate) fn attribute_list<I>(items: I) -> AttributeList
 where
     I: IntoIterator<Item = Attribute>,
     I::IntoIter: ExactSizeIterator,
@@ -576,7 +580,7 @@ where
             .map(|item| Some(item.into_syntax().into())),
     ))
 }
-pub fn if_arm_list<I>(items: I) -> IfArmList
+pub(crate) fn if_arm_list<I>(items: I) -> IfArmList
 where
     I: IntoIterator<Item = IfArm>,
     I::IntoIter: ExactSizeIterator,
@@ -588,7 +592,7 @@ where
             .map(|item| Some(item.into_syntax().into())),
     ))
 }
-pub fn lambda_parameter_list<I, S>(items: I, separators: S) -> LambdaParameterList
+pub(crate) fn lambda_parameter_list<I, S>(items: I, separators: S) -> LambdaParameterList
 where
     I: IntoIterator<Item = AnyParameter>,
     I::IntoIter: ExactSizeIterator,
@@ -609,7 +613,7 @@ where
         }),
     ))
 }
-pub fn module_item_list<I>(items: I) -> ModuleItemList
+pub(crate) fn module_item_list<I>(items: I) -> ModuleItemList
 where
     I: IntoIterator<Item = ModuleItem>,
     I::IntoIter: ExactSizeIterator,
@@ -621,7 +625,7 @@ where
             .map(|item| Some(item.into_syntax().into())),
     ))
 }
-pub fn parameter_list<I, S>(items: I, separators: S) -> ParameterList
+pub(crate) fn parameter_list<I, S>(items: I, separators: S) -> ParameterList
 where
     I: IntoIterator<Item = AnyParameter>,
     I::IntoIter: ExactSizeIterator,
@@ -642,7 +646,7 @@ where
         }),
     ))
 }
-pub fn type_arg_list<I, S>(items: I, separators: S) -> TypeArgList
+pub(crate) fn type_arg_list<I, S>(items: I, separators: S) -> TypeArgList
 where
     I: IntoIterator<Item = Type>,
     I::IntoIter: ExactSizeIterator,
@@ -663,42 +667,42 @@ where
         }),
     ))
 }
-pub fn bogus<I>(slots: I) -> Bogus
+pub(crate) fn bogus<I>(slots: I) -> Bogus
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
     Bogus::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS, slots))
 }
-pub fn bogus_decl<I>(slots: I) -> BogusDecl
+pub(crate) fn bogus_decl<I>(slots: I) -> BogusDecl
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
     BogusDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_DECL, slots))
 }
-pub fn bogus_expr<I>(slots: I) -> BogusExpr
+pub(crate) fn bogus_expr<I>(slots: I) -> BogusExpr
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
     BogusExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_EXPR, slots))
 }
-pub fn bogus_parameter<I>(slots: I) -> BogusParameter
+pub(crate) fn bogus_parameter<I>(slots: I) -> BogusParameter
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
     BogusParameter::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_PARAMETER, slots))
 }
-pub fn bogus_pat<I>(slots: I) -> BogusPat
+pub(crate) fn bogus_pat<I>(slots: I) -> BogusPat
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,
 {
     BogusPat::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_PAT, slots))
 }
-pub fn bogus_type<I>(slots: I) -> BogusType
+pub(crate) fn bogus_type<I>(slots: I) -> BogusType
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
     I::IntoIter: ExactSizeIterator,

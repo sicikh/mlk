@@ -369,6 +369,17 @@ impl<'a> Walk<'a> {
     /// it may write --- it calls its own project by the keyword --- and which names no project
     /// of the module.
     ///
+    /// # Errors
+    ///
+    /// Returns [`ResolveError::NoProject`] if the path is rooted at the keyword and `context`
+    /// is no project.
+    /// Returns [`ResolveError::UnknownProject`] if the root names a project the module may not
+    /// name --- one the graph does not hold, or the module's own.
+    /// Returns [`ResolveError::UnknownModule`] or [`ResolveError::UnknownName`] if the names
+    /// reach no module, or a module that does not export the name the path ends at.
+    /// Returns [`ResolveError::CyclicImport`] if a re-export chain returns to a name it already
+    /// follows.
+    ///
     /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     pub fn walk_plain(
         &mut self,
@@ -414,6 +425,13 @@ impl<'a> Walk<'a> {
     ///
     /// A path written with the keyword `project` or rooted at the name of a project is walked
     /// this way: the anchor the lowering gave the root already says which project it is.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolveError::UnknownModule`] or [`ResolveError::UnknownName`] if the names
+    /// reach no module, or a module that does not export the name the path ends at.
+    /// Returns [`ResolveError::CyclicImport`] if a re-export chain returns to a name it already
+    /// follows.
     pub fn walk_in(
         &mut self,
         project: &ProjectId,
@@ -428,6 +446,13 @@ impl<'a> Walk<'a> {
     ///
     /// The place a name denotes is where the names after it are read: a module holds names, and
     /// a prefix is what the modules under it stand on.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResolveError::UnknownModule`] or [`ResolveError::UnknownName`] if the names
+    /// reach no module, or a module that does not export the name the path ends at.
+    /// Returns [`ResolveError::CyclicImport`] if a re-export chain returns to a name it already
+    /// follows.
     pub fn walk_after(
         &mut self,
         project: &ProjectId,

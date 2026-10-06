@@ -7,10 +7,10 @@
 //!
 //! The language has a standard prelude ([`Prelude::standard`]), and a project may replace it
 //! with one of its own: `std` itself is compiled with a prelude that names its own modules,
-//! and a module that declares the prelude's names refuses the prelude as a whole ([`#[no-prelude]`]).
+//! and a module that declares the prelude's names refuses the prelude as a whole
+//! ([`#[no-prelude]`](crate::item_data::ModuleAttributes::no_prelude)).
 //!
 //! [adr-0011]: ../../docs/adr/0011-module-prelude.md
-//! [`#[no-prelude]`]: crate::item_data::ModuleAttributes::no_prelude
 
 use std::sync::OnceLock;
 

@@ -254,7 +254,7 @@ pub(crate) struct Lexer<'src> {
 }
 
 impl<'src> Lexer<'src> {
-    pub fn from_str(source: &'src str) -> Self {
+    pub(crate) fn from_str(source: &'src str) -> Self {
         Self {
             source,
             position: 0,

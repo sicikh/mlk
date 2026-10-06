@@ -13,10 +13,10 @@ use crate::{
 ///
 /// ## Parse Rule conventions
 ///
-/// * A parse rule must return [ParsedSyntax::Present] if it is able to parse a node or at least parts of it. For example,
-///   the `parse_for_statement` should return [ParsedSyntax::Present] for `for (` even tough many of the required children are missing
+/// * A parse rule must return [`ParsedSyntax::Present`] if it is able to parse a node or at least parts of it. For example,
+///   the `parse_for_statement` should return [`ParsedSyntax::Present`] for `for (` even tough many of the required children are missing
 ///   because it is still able to parse parts of the for statement.
-/// * A parse rule must return [ParsedSyntax::Absent] if the expected node isn't present in the source code.
+/// * A parse rule must return [`ParsedSyntax::Absent`] if the expected node isn't present in the source code.
 ///   In most cases, this means if the first expected token isn't present, for example,
 ///   if the `for` keyword isn't present when parsing a for statement.
 ///
@@ -24,11 +24,11 @@ use crate::{
 /// is when parsing an assignment target that has an optional default. The rule can recover even
 /// if the assignment target is missing as long as the cursor is then positioned at an `=` token.
 ///
-/// The rule must then return [ParsedSyntax::Present] with the partial parsed node.
-/// * A parse rule must not eat any tokens when it returns [ParsedSyntax::Absent]
-/// * A parse rule must not add any errors when it returns [ParsedSyntax::Absent]
+/// The rule must then return [`ParsedSyntax::Present`] with the partial parsed node.
+/// * A parse rule must not eat any tokens when it returns [`ParsedSyntax::Absent`]
+/// * A parse rule must not add any errors when it returns [`ParsedSyntax::Absent`]
 ///
-/// This is a custom enum over using `Option` because [ParsedSyntax::Absent] values must be handled by the caller.
+/// This is a custom enum over using `Option` because [`ParsedSyntax::Absent`] values must be handled by the caller.
 #[derive(Debug, PartialEq, Eq)]
 #[must_use = "this `ParsedSyntax` may be an `Absent` variant, which should be handled"]
 pub enum ParsedSyntax {
@@ -52,7 +52,7 @@ impl ParsedSyntax {
         }
     }
 
-    /// Calls `op` if the syntax is present and otherwise returns [ParsedSyntax::Absent]
+    /// Calls `op` if the syntax is present and otherwise returns [`ParsedSyntax::Absent`]
     #[inline]
     pub fn and_then<F>(self, op: F) -> Self
     where
@@ -64,7 +64,7 @@ impl ParsedSyntax {
         }
     }
 
-    /// Calls `op` if the syntax is absent and otherwise returns [ParsedSyntax::Present]
+    /// Calls `op` if the syntax is absent and otherwise returns [`ParsedSyntax::Present`]
     #[inline]
     pub fn or_else<F>(self, op: F) -> Self
     where
@@ -76,25 +76,25 @@ impl ParsedSyntax {
         }
     }
 
-    /// Returns `true` if the parsed syntax is [ParsedSyntax::Present]
+    /// Returns `true` if the parsed syntax is [`ParsedSyntax::Present`]
     #[inline]
     #[must_use]
     pub fn is_present(&self) -> bool {
         matches!(self, Present(_))
     }
 
-    /// Returns `true` if the parsed syntax is [ParsedSyntax::Absent]
+    /// Returns `true` if the parsed syntax is [`ParsedSyntax::Absent`]
     #[inline]
     #[must_use]
     pub fn is_absent(&self) -> bool {
         matches!(self, Absent)
     }
 
-    /// It returns the contained [ParsedSyntax::Present] value, consuming the `self` value
+    /// It returns the contained [`ParsedSyntax::Present`] value, consuming the `self` value
     ///
     /// # Panics
     ///
-    ///  Panics if the current syntax is [ParsedSyntax::Absent]
+    ///  Panics if the current syntax is [`ParsedSyntax::Absent`]
     #[inline]
     #[track_caller]
     pub fn unwrap(self) -> CompletedMarker {
@@ -106,7 +106,7 @@ impl ParsedSyntax {
         }
     }
 
-    /// Returns the contained [ParsedSyntax::Present] value or passed default
+    /// Returns the contained [`ParsedSyntax::Present`] value or passed default
     #[inline]
     pub fn unwrap_or(self, default: CompletedMarker) -> CompletedMarker {
         match self {
@@ -115,7 +115,7 @@ impl ParsedSyntax {
         }
     }
 
-    /// Returns the contained [ParsedSyntax::Present] value or computes it from a clojure.
+    /// Returns the contained [`ParsedSyntax::Present`] value or computes it from a closure.
     #[inline]
     pub fn unwrap_or_else<F>(self, default: F) -> CompletedMarker
     where
@@ -127,11 +127,11 @@ impl ParsedSyntax {
         }
     }
 
-    /// Returns the contained [ParsedSyntax::Present] value, consuming the self value.
+    /// Returns the contained [`ParsedSyntax::Present`] value, consuming the self value.
     ///
     /// # Panics
     ///
-    /// Panics if the value is an [ParsedSyntax::Absent] with a custom panic message provided by msg.
+    /// Panics if the value is an [`ParsedSyntax::Absent`] with a custom panic message provided by msg.
     #[inline]
     #[track_caller]
     pub fn expect(self, msg: &str) -> CompletedMarker {
@@ -141,8 +141,8 @@ impl ParsedSyntax {
         }
     }
 
-    /// Maps a [ParsedSyntax::Present] `ParsedSyntax` by applying a function to a contained [ParsedSyntax::Present] value,
-    /// leaving an [ParsedSyntax::Absent] value untouched.
+    /// Maps a [`ParsedSyntax::Present`] `ParsedSyntax` by applying a function to a contained [`ParsedSyntax::Present`] value,
+    /// leaving an [`ParsedSyntax::Absent`] value untouched.
     ///
     /// This function can be used to compose the results of two functions.
     pub fn map<F>(self, mapper: F) -> Self
@@ -245,11 +245,18 @@ impl ParsedSyntax {
     /// parser if the syntax is absent. The recovery...
     ///
     /// * eats all unexpected tokens into a `Bogus*` node until the parser reaches one
-    ///   of the "safe tokens" configured in the [ParseRecoveryTokenSet].
+    ///   of the "safe tokens" configured in the [`ParseRecoveryTokenSet`].
     /// * creates an error using the passed in error builder and adds it to the parsing diagnostics.
     ///
     /// The error recovery can fail if the parser is located at the EOF token or if the parser
-    /// is already at a valid position according to the [ParseRecoveryTokenSet].
+    /// is already at a valid position according to the [`ParseRecoveryTokenSet`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`RecoveryError`](crate::parse_recovery::RecoveryError) if the syntax is absent and the recovery fails:
+    /// the parser is at the end of the file,
+    /// it is already at a valid recovery position,
+    /// or it is speculatively parsing.
     pub fn or_recover_with_token_set<P, E>(
         self,
         p: &mut P,
@@ -284,11 +291,18 @@ impl ParsedSyntax {
     /// parser if the syntax is absent. The recovery...
     ///
     /// * eats all unexpected tokens into a `Bogus*` node until the parser reaches one
-    ///   of the "safe tokens" configured in the [ParseRecovery].
+    ///   of the "safe tokens" configured in the [`ParseRecovery`].
     /// * creates an error using the passed in error builder and adds it to the parsing diagnostics.
     ///
     /// The error recovery can fail if the parser is located at the EOF token or if the parser
-    /// is already at a valid position according to the [ParseRecovery].
+    /// is already at a valid position according to the [`ParseRecovery`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`RecoveryError`](crate::parse_recovery::RecoveryError) if the syntax is absent and the recovery fails:
+    /// the parser is at the end of the file,
+    /// it is already at a valid recovery position,
+    /// or it is speculatively parsing.
     pub fn or_recover<'source, P, E, R>(
         self,
         p: &mut P,

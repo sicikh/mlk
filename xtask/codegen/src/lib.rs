@@ -1,4 +1,16 @@
 //! Codegen tools for generating Syntax and AST definitions. Derived from Rust analyzer's codegen
+
+// The generator is a tool: the modules below are its own API, and the notes it prints are
+// the report a person reads after running it.
+#![expect(
+    unreachable_pub,
+    reason = "the generator is a tool whose modules are its own API; only its entry points are named"
+)]
+#![expect(
+    clippy::print_stdout,
+    reason = "the generator reports every file it updated by printing it"
+)]
+
 mod ast;
 mod generate_macros;
 mod generate_node_factory;
@@ -24,8 +36,17 @@ pub enum UpdateResult {
     Updated,
 }
 
-/// A helper to update file on disk if it has changed.
-/// With verify = false,
+/// Updates the file at `path` with `contents` when the file on disk differs from them.
+///
+/// In [`Mode::Verify`] a file that differs makes the call fail instead of being written;
+/// in [`Mode::Overwrite`] the file is written,
+/// creating the parent directories if they are missing.
+///
+/// # Errors
+///
+/// Fails when [`Mode::Verify`] is passed and the file does not hold `contents`,
+/// including when it does not exist or cannot be read,
+/// or when the parent directories cannot be created or the file cannot be written.
 pub fn update(path: &Path, contents: &str, mode: &Mode) -> Result<UpdateResult> {
     match fs2::read_to_string(path) {
         Ok(old_contents) if old_contents == contents => {

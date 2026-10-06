@@ -3,7 +3,7 @@
 //! A spec is a test that is written where the rule it covers lives:
 //!
 //! - next to the rule, as a comment holding the source of a module that parses cleanly,
-//!   see [inline_specs];
+//!   see [`inline_specs`];
 //! - under `specs`, as a fixture whose parse is compared with the snapshot written next to
 //!   it. A snapshot holds what a person reads when a rule changes: the source, the AST that
 //!   a reader of the tree sees, the tree the parser produced, and the diagnostics. The
@@ -39,12 +39,12 @@ use mlkc_syntax::{MODULE_ROOT, MlkLanguage, ModuleRoot};
 /// that a test does not depend on where it was started from.
 const TESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests");
 
-/// The directory of the fixtures, relative to [TESTS_DIR].
+/// The directory of the fixtures, relative to [`TESTS_DIR`].
 ///
 /// A snapshot is written next to the fixture it describes, and the path of a snapshot that
 /// insta resolves is relative to the file that asserts it — here, `tests/spec_test.rs`.
 /// The path handed to insta is therefore spelled relative to the directory of the tests,
-/// while the fixtures themselves are read from [TESTS_DIR].
+/// while the fixtures themselves are read from [`TESTS_DIR`].
 pub(crate) const SPECS_DIR: &str = "specs";
 
 /// What the parse of a fixture is expected to be.
@@ -59,7 +59,7 @@ pub(crate) enum Outcome {
     Invalid,
 }
 
-/// Runs the fixture at `fixture`, a path relative to [SPECS_DIR], and checks it against its
+/// Runs the fixture at `fixture`, a path relative to [`SPECS_DIR`], and checks it against its
 /// snapshot.
 pub(crate) fn run(fixture: &str) {
     let path = fixture_path(fixture);
@@ -95,7 +95,7 @@ fn fixtures_dir() -> PathBuf {
     Path::new(TESTS_DIR).join(SPECS_DIR)
 }
 
-/// The path of a fixture, given as a path relative to [SPECS_DIR].
+/// The path of a fixture, given as a path relative to [`SPECS_DIR`].
 pub(crate) fn fixture_path(fixture: &str) -> PathBuf {
     fixtures_dir().join(fixture)
 }
@@ -268,7 +268,7 @@ fn diagnostics(parsed: &AnyParse) -> String {
 /// The extension of a fixture. The snapshots live next to them and are not fixtures.
 const FIXTURE_EXTENSION: &str = "mlk";
 
-/// The fixtures the spec tests cover, as paths relative to [SPECS_DIR].
+/// The fixtures the spec tests cover, as paths relative to [`SPECS_DIR`].
 pub(crate) fn fixtures() -> Vec<PathBuf> {
     let mut fixtures = Vec::new();
     collect_fixtures(&fixtures_dir(), &mut fixtures);

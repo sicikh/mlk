@@ -44,7 +44,7 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
                     .unzip();
 
                 return quote! {
-                    pub fn #factory_name( #( #args ),* ) -> #type_name {
+                    pub(crate) fn #factory_name( #( #args ),* ) -> #type_name {
                         #type_name::unwrap_cast(SyntaxNode::new_detached(
                             #syntax_kind::#kind,
                             [#( #slots ),*],
@@ -79,7 +79,7 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
                     let field_init = quote! { #name: None };
 
                     let method = quote! {
-                        pub fn #method_name(mut self, #name: #type_name) -> Self {
+                        pub(crate) fn #method_name(mut self, #name: #type_name) -> Self {
                             self.#name = Some(#name);
                             self
                         }
@@ -113,21 +113,21 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
                 .collect();
 
             quote! {
-                pub fn #factory_name( #( #required_args ),* ) -> #builder_name {
+                pub(crate) fn #factory_name( #( #required_args ),* ) -> #builder_name {
                     #builder_name {
                         #( #required_fields, )*
                         #( #optional_inits, )*
                     }
                 }
 
-                pub struct #builder_name {
+                pub(crate) struct #builder_name {
                     #( #required_args, )*
                     #( #optional_fields, )*
                 }
 
                 impl #builder_name {
                     #( #optional_methods )*
-                    pub fn build(self) -> #type_name {
+                    pub(crate) fn build(self) -> #type_name {
                         #type_name::unwrap_cast(SyntaxNode::new_detached(
                             #syntax_kind::#kind,
                             [#( #slots ),*],
@@ -145,7 +145,7 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
 
         if list.separator.is_some() {
             quote! {
-                pub fn #factory_name<I, S>(items: I, separators: S) -> #list_name
+                pub(crate) fn #factory_name<I, S>(items: I, separators: S) -> #list_name
                 where
                     I: IntoIterator<Item = #item>,
                     I::IntoIter: ExactSizeIterator,
@@ -169,7 +169,7 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
             }
         } else {
             quote! {
-                pub fn #factory_name<I>(items: I) -> #list_name
+                pub(crate) fn #factory_name<I>(items: I) -> #list_name
                 where
                     I: IntoIterator<Item = #item>,
                     I::IntoIter: ExactSizeIterator,
@@ -191,7 +191,7 @@ pub fn generate_node_factory(ast: &AstSrc, language_kind: LanguageKind) -> Resul
         let factory_name = format_ident!("{}", Case::Snake.convert(name));
 
         quote! {
-            pub fn #factory_name<I>(slots: I) -> #bogus_name
+            pub(crate) fn #factory_name<I>(slots: I) -> #bogus_name
             where
                 I: IntoIterator<Item = Option<SyntaxElement>>,
                 I::IntoIter: ExactSizeIterator,

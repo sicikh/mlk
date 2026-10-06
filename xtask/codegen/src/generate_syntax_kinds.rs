@@ -189,7 +189,7 @@ pub fn generate_syntax_kinds(grammar: KindsSrc, language_kind: LanguageKind) -> 
 
         }
 
-        /// Utility macro for creating a SyntaxKind through simple macro syntax
+        /// Utility macro for creating a `SyntaxKind` through simple macro syntax
         #[macro_export]
         macro_rules! T {
             #([#punctuation_values] => { $crate::#syntax_kind::#punctuation };)*

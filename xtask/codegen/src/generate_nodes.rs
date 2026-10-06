@@ -193,11 +193,11 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
             let new_unchecked_constructor = if needs_dynamic_slots {
                 let slot_map_builder_impl = get_slot_map_builder_impl(node, language_kind);
                 quote! {
-                    /// Create an AstNode from a SyntaxNode without checking its kind
+                    /// Create an `AstNode` from a `SyntaxNode` without checking its kind
                     ///
                     /// # Safety
-                    /// This function must be guarded with a call to [AstNode::can_cast]
-                    /// or a match on [SyntaxNode::kind]
+                    /// This function must be guarded with a call to [`AstNode::can_cast`]
+                    /// or a match on [`SyntaxNode::kind`]
                     #[inline]
                     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
                         let slot_map = #name::build_slot_map(&syntax);
@@ -220,11 +220,11 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
                 }
             } else {
                 quote! {
-                    /// Create an AstNode from a SyntaxNode without checking its kind
+                    /// Create an `AstNode` from a `SyntaxNode` without checking its kind
                     ///
                     /// # Safety
-                    /// This function must be guarded with a call to [AstNode::can_cast]
-                    /// or a match on [SyntaxNode::kind]
+                    /// This function must be guarded with a call to [`AstNode::can_cast`]
+                    /// or a match on [`SyntaxNode::kind`]
                     #[inline]
                     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
                         Self { syntax }
@@ -706,11 +706,11 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
             }
 
             impl #ident {
-                /// Create an AstNode from a SyntaxNode without checking its kind
+                /// Create an `AstNode` from a `SyntaxNode` without checking its kind
                 ///
                 /// # Safety
-                /// This function must be guarded with a call to [AstNode::can_cast]
-                /// or a match on [SyntaxNode::kind]
+                /// This function must be guarded with a call to [`AstNode::can_cast`]
+                /// or a match on [`SyntaxNode::kind`]
                 #[inline]
                 pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
                     Self { syntax }
@@ -798,11 +798,11 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
 
         let node_impl = quote! {
             impl #list_name {
-                /// Create an AstNode from a SyntaxNode without checking its kind
+                /// Create an `AstNode` from a `SyntaxNode` without checking its kind
                 ///
                 /// # Safety
-                /// This function must be guarded with a call to [AstNode::can_cast]
-                /// or a match on [SyntaxNode::kind]
+                /// This function must be guarded with a call to [`AstNode::can_cast`]
+                /// or a match on [`SyntaxNode::kind`]
                 #[inline]
                 pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
                     Self { syntax_list: syntax.into_list() }
@@ -976,6 +976,13 @@ pub fn generate_nodes(ast: &AstSrc, language_kind: LanguageKind) -> Result<Strin
             clippy::undocumented_unsafe_blocks,
             reason = "every expansion of `map_syntax_node!` casts a node under a match on its kind"
         )]
+        // Every generated accessor returns the field it names or the error of a node that has
+        // none; the contract is one line of `SyntaxResult`, and repeating it on each accessor
+        // would be the same sentence a hundred times.
+        #![expect(
+            clippy::missing_errors_doc,
+            reason = "every generated accessor returns the field or the error that says the node has none"
+        )]
         // The wildcard lints do not run in test builds, where the lib is compiled again,
         // so the expectation holds only where they do run.
         #[cfg_attr(
@@ -1092,7 +1099,7 @@ pub(crate) fn token_kind_to_code(name: &str, language_kind: LanguageKind) -> Tok
     }
 }
 
-/// Return a function body that iterates over a SyntaxNode's children, comparing
+/// Return a function body that iterates over a `SyntaxNode`'s children, comparing
 /// each against the allowed kinds for that slot from the grammar, tracking each
 /// filled slot in a `slot_map` and returning that value once all of the children
 /// have been consumed.

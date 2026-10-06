@@ -293,26 +293,51 @@ pub struct OccupiedEntry<'a, IDX, V> {
 
 impl<'a, IDX, V> OccupiedEntry<'a, IDX, V> {
     /// Gets a reference to the value in the entry.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry is vacant, which cannot happen because an `OccupiedEntry` is only
+    /// made for an index the map holds a value at.
     pub fn get(&self) -> &V {
         self.slot.as_ref().expect("Occupied")
     }
 
     /// Gets a mutable reference to the value in the entry.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry is vacant, which cannot happen because an `OccupiedEntry` is only
+    /// made for an index the map holds a value at.
     pub fn get_mut(&mut self) -> &mut V {
         self.slot.as_mut().expect("Occupied")
     }
 
     /// Converts the entry into a mutable reference to its value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry is vacant, which cannot happen because an `OccupiedEntry` is only
+    /// made for an index the map holds a value at.
     pub fn into_mut(self) -> &'a mut V {
         self.slot.as_mut().expect("Occupied")
     }
 
     /// Sets the value of the entry with the `OccupiedEntry`’s key, and returns the entry’s old value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry is vacant, which cannot happen because an `OccupiedEntry` is only
+    /// made for an index the map holds a value at.
     pub fn insert(&mut self, value: V) -> V {
         self.slot.replace(value).expect("Occupied")
     }
 
     /// Takes the value of the entry out of the map, and returns it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entry is vacant, which cannot happen because an `OccupiedEntry` is only
+    /// made for an index the map holds a value at.
     pub fn remove(self) -> V {
         self.slot.take().expect("Occupied")
     }

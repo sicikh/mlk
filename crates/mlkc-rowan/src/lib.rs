@@ -10,11 +10,16 @@ future_incompatible,
 #![deny(unsafe_code)]
 #![deny(rustdoc::broken_intra_doc_links)]
 // The vendored crate keeps the shape it was taken with: its unsafe carries the invariants
-// of the upstream tree, and documenting every block here would fork it further.
+// of the upstream tree, its comments follow the style of the crate it came from, and writing
+// the panics and the errors of every upstream function again would fork it further.
 #![expect(
+    clippy::doc_markdown,
     clippy::map_unwrap_or,
     clippy::mem_forget,
-    clippy::undocumented_unsafe_blocks
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::undocumented_unsafe_blocks,
+    unreachable_pub
 )]
 
 #[doc(hidden)]

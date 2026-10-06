@@ -44,7 +44,7 @@ impl Marker {
 
     /// Finishes the syntax tree node and assigns `kind` to it,
     /// and mark the create a `CompletedMarker` for possible future
-    /// operation like `.precede()` to deal with forward_parent.
+    /// operation like `.precede()` to deal with `forward_parent`.
     pub fn complete<P>(mut self, p: &mut P, kind: P::Kind) -> CompletedMarker
     where
         P: Parser,
@@ -70,6 +70,12 @@ impl Marker {
 
     /// Abandons the syntax tree node. All its children
     /// are attached to its parent instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the marker does not name an open node in the parser's event list.
+    /// A marker returned by [`Parser::start`] names one until it is completed or abandoned;
+    /// rewinding the parser past it invalidates it.
     pub fn abandon<P>(mut self, p: &mut P)
     where
         P: Parser,
@@ -132,6 +138,11 @@ impl CompletedMarker {
     }
 
     /// Change the kind of node this marker represents
+    ///
+    /// # Panics
+    ///
+    /// Panics if the marker's start position does not name a start event in the parser's event list.
+    /// A marker the parser completed names one; rewinding the parser past it invalidates it.
     pub fn change_kind<P>(&mut self, p: &mut P, new_kind: P::Kind)
     where
         P: Parser,
@@ -194,7 +205,12 @@ impl CompletedMarker {
     /// `CompletedMarker(pos: 0, _)`.
     /// Append a new `START` events as `[START, FINISH, NEWSTART]`,
     /// then mark `NEWSTART` as `START`'s parent with saving its relative
-    /// distance to `NEWSTART` into forward_parent(=2 in this case);
+    /// distance to `NEWSTART` into `forward_parent` (=2 in this case);
+    ///
+    /// # Panics
+    ///
+    /// Panics if the marker no longer names an event before the parser's current event position.
+    /// A marker the parser completed names one; rewinding the parser past it invalidates it.
     pub fn precede<P>(self, p: &mut P) -> Marker
     where
         P: Parser,

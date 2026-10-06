@@ -38,11 +38,11 @@ pub fn generate_macros(ast: &AstSrc, language_kind: LanguageKind) -> Result<Stri
         .collect();
 
     let ast = quote! {
-        /// Reconstruct an AstNode from a SyntaxNode
+        /// Reconstruct an `AstNode` from a `SyntaxNode`
         ///
-        /// This macros performs a match over the [kind](mlkc_rowan::SyntaxNode::kind)
-        /// of the provided [mlkc_rowan::SyntaxNode] and constructs the appropriate
-        /// AstNode type for it, then execute the provided expression over it.
+        /// This macro performs a match over the [`kind`](mlkc_rowan::SyntaxNode::kind)
+        /// of the provided [`SyntaxNode`](mlkc_rowan::SyntaxNode) and constructs the appropriate
+        /// `AstNode` type for it, then executes the provided expression over it.
         ///
         /// # Examples
         ///

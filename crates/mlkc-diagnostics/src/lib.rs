@@ -25,7 +25,7 @@ pub use crate::{
     ice::Ice,
 };
 
-/// Conversion of a range-like value into an optional [TextRange].
+/// Conversion of a range-like value into an optional [`TextRange`].
 pub trait AsRange {
     /// Returns the range, or `None` if the value carries no location at all.
     fn as_range(&self) -> Option<TextRange>;

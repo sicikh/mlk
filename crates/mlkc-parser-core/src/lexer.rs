@@ -227,7 +227,7 @@ pub trait Lexer<'src> {
     }
 
     /// Check if the source starts with a Unicode BOM character. If it does,
-    /// consume it and return the UNICODE_BOM token kind.
+    /// consume it and return the `UNICODE_BOM` token kind.
     ///
     /// ## Safety
     /// Must be called at a valid UT8 char boundary (and realistically only at
@@ -360,17 +360,17 @@ impl LexContext for () {
     }
 }
 
-/// Wrapper around a [Lexer] that supports lookahead.
+/// Wrapper around a [`Lexer`] that supports lookahead.
 ///
-/// The underlying [Lexer] only supports inspecting the current token and lexing the next token.
+/// The underlying [`Lexer`] only supports inspecting the current token and lexing the next token.
 /// However, the current token is often not enough for the Parser to decide what the next node is,
 /// it often needs information about the next non-trivia tokens.
 ///
-/// The [BufferedLexer] adds support for lookahead by caching the lexed tokens and keeping track
+/// The [`BufferedLexer`] adds support for lookahead by caching the lexed tokens and keeping track
 /// of the current position (and what the `nth` token is). This means, that every token
 /// only gets lexed once except if the buffer cached some lookahead tokens and:
 ///
-/// * `next_token` is called with a context other than `LexContext::default.
+/// * `next_token` is called with a context other than `LexContext::default`.
 /// * the lexer gets rewinded to a previous position
 /// * re-lexing the current token changes the kind of the token. That means,
 ///   that any following token may turn out to be different as well, thus, it's necessary to clear the
@@ -378,21 +378,21 @@ impl LexContext for () {
 #[derive(Debug)]
 pub struct BufferedLexer<Kind, Lex> {
     /// Cache storing the lookahead tokens. That are, all tokens between the `current` token and
-    /// the "current" of the [Lexer]. This is because the [Lexer]'s current token points to the
+    /// the "current" of the [`Lexer`]. This is because the [`Lexer`]'s current token points to the
     /// furthest requested lookahead token.
     ///
-    /// For example for the following source `let a = 2;`. The `current` token of the inner [Lexer] and
-    /// of the [BufferedLexer] after one call to `next_token` is the `let` token. However, the `current`
-    /// token diverges if the [BufferedLexer] performs lookahead. Let's say you do a non trivia lookahead of 2 (`=` token).
-    /// Now, the [BufferedLexer] calls [Lexer::next_token] four times, moving the [Lexer]'s `current`
-    /// token to the `=`. However, the `current` of the [BufferedLexer] still points to the `let` token.
-    /// That's why the [BufferedLexer] stores the following information:
+    /// For example for the following source `let a = 2;`. The `current` token of the inner [`Lexer`] and
+    /// of the [`BufferedLexer`] after one call to `next_token` is the `let` token. However, the `current`
+    /// token diverges if the [`BufferedLexer`] performs lookahead. Let's say you do a non trivia lookahead of 2 (`=` token).
+    /// Now, the [`BufferedLexer`] calls [`Lexer::next_token`] four times, moving the [`Lexer`]'s `current`
+    /// token to the `=`. However, the `current` of the [`BufferedLexer`] still points to the `let` token.
+    /// That's why the [`BufferedLexer`] stores the following information:
     /// * `current`: `let` (information about the `current` token from the consumer perspective)
     /// * `all_checkpoints`: [WHITESPACE, IDENT: 'a', WHITESPACE, EQ]. The checkpoints that have been lexed to
     ///   answer the "non trivia lookahead 2" request but haven't been returned yet.
     /// * `non_trivia_checkpoints`: [IDENT: 'a', EQ]. The checkpoints that have been lexed to
     ///   answer the "non trivia lookahead 2" request but haven't been returned yet.
-    /// * [Lexer::current]: Points to `=`
+    /// * [`Lexer::current`]: Points to `=`
     lookahead: Lookahead<Kind>,
 
     /// Stores the information of the current token in case the `lexer` is at least one token ahead.
@@ -479,7 +479,7 @@ impl<K: SyntaxKind> Lookahead<K> {
 }
 
 impl<'l, Lex: Lexer<'l>> BufferedLexer<Lex::Kind, Lex> {
-    /// Creates a new [BufferedLexer] wrapping the passed in [Lexer].
+    /// Creates a new [`BufferedLexer`] wrapping the passed in [`Lexer`].
     pub fn new(lexer: Lex) -> Self {
         Self {
             inner: lexer,
@@ -712,6 +712,11 @@ impl<'l, Lex> BufferedLexer<Lex::Kind, Lex>
 where
     Lex: LexerWithCheckpoint<'l>,
 {
+    /// Returns the `n`th non-trivia token after the current one, or `None` if fewer than `n` remain.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n` is `0`; the first token after the current one is numbered `1`.
     #[inline(always)]
     pub fn nth_non_trivia(&mut self, n: usize) -> Option<LookaheadToken<Lex::Kind>> {
         assert_ne!(n, 0);

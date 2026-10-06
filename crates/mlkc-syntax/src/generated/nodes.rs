@@ -6,6 +6,10 @@
     clippy::undocumented_unsafe_blocks,
     reason = "every expansion of `map_syntax_node!` casts a node under a match on its kind"
 )]
+#![expect(
+    clippy::missing_errors_doc,
+    reason = "every generated accessor returns the field or the error that says the node has none"
+)]
 use std::fmt::{Debug, Formatter};
 
 use mlkc_rowan::{
@@ -38,11 +42,11 @@ pub struct Attribute {
     pub(crate) syntax: SyntaxNode,
 }
 impl Attribute {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -91,11 +95,11 @@ pub struct BinExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl BinExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -139,11 +143,11 @@ pub struct BoolLiteral {
     pub(crate) syntax: SyntaxNode,
 }
 impl BoolLiteral {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -177,11 +181,11 @@ pub struct CallExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl CallExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -230,11 +234,11 @@ pub struct ElseBranch {
     pub(crate) syntax: SyntaxNode,
 }
 impl ElseBranch {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -273,11 +277,11 @@ pub struct FieldExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl FieldExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -321,11 +325,11 @@ pub struct FunBody {
     pub(crate) syntax: SyntaxNode,
 }
 impl FunBody {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -364,11 +368,11 @@ pub struct FunDecl {
     pub(crate) syntax: SyntaxNode,
 }
 impl FunDecl {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -432,11 +436,11 @@ pub struct FunReturnTypeAnnotation {
     pub(crate) syntax: SyntaxNode,
 }
 impl FunReturnTypeAnnotation {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -475,11 +479,11 @@ pub struct IdentPat {
     pub(crate) syntax: SyntaxNode,
 }
 impl IdentPat {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -511,11 +515,11 @@ pub struct IfArm {
     pub(crate) syntax: SyntaxNode,
 }
 impl IfArm {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -564,11 +568,11 @@ pub struct IfExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl IfExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -627,11 +631,11 @@ pub struct InferType {
     pub(crate) syntax: SyntaxNode,
 }
 impl InferType {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -665,11 +669,11 @@ pub struct IntLiteral {
     pub(crate) syntax: SyntaxNode,
 }
 impl IntLiteral {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -703,11 +707,11 @@ pub struct LambdaExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl LambdaExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -766,11 +770,11 @@ pub struct LetExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl LetExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -829,11 +833,11 @@ pub struct LocalExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl LocalExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -882,11 +886,11 @@ pub struct ModulePreamble {
     pub(crate) syntax: SyntaxNode,
 }
 impl ModulePreamble {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -930,11 +934,11 @@ pub struct ModuleRoot {
     pub(crate) syntax: SyntaxNode,
 }
 impl ModuleRoot {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -983,11 +987,11 @@ pub struct Name {
     pub(crate) syntax: SyntaxNode,
 }
 impl Name {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1021,11 +1025,11 @@ pub struct Parameter {
     pub(crate) syntax: SyntaxNode,
 }
 impl Parameter {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1064,11 +1068,11 @@ pub struct Parameters {
     pub(crate) syntax: SyntaxNode,
 }
 impl Parameters {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1112,11 +1116,11 @@ pub struct ParenExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl ParenExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1160,11 +1164,11 @@ pub struct Path {
     pub(crate) syntax: SyntaxNode,
 }
 impl Path {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1203,11 +1207,11 @@ pub struct PathExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl PathExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1239,11 +1243,11 @@ pub struct PathQualifier {
     pub(crate) syntax: SyntaxNode,
 }
 impl PathQualifier {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1282,11 +1286,11 @@ pub struct PathSegment {
     pub(crate) syntax: SyntaxNode,
 }
 impl PathSegment {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1325,11 +1329,11 @@ pub struct PathType {
     pub(crate) syntax: SyntaxNode,
 }
 impl PathType {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1361,11 +1365,11 @@ pub struct PipeExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl PipeExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1409,11 +1413,11 @@ pub struct PlaceholderExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl PlaceholderExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1447,11 +1451,11 @@ pub struct Project {
     pub(crate) syntax: SyntaxNode,
 }
 impl Project {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1485,11 +1489,11 @@ pub struct StringLiteral {
     pub(crate) syntax: SyntaxNode,
 }
 impl StringLiteral {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1523,11 +1527,11 @@ pub struct TypeAnnotation {
     pub(crate) syntax: SyntaxNode,
 }
 impl TypeAnnotation {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1566,11 +1570,11 @@ pub struct TypeArgs {
     pub(crate) syntax: SyntaxNode,
 }
 impl TypeArgs {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1614,11 +1618,11 @@ pub struct TypeDecl {
     pub(crate) syntax: SyntaxNode,
 }
 impl TypeDecl {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1667,11 +1671,11 @@ pub struct UfcsCall {
     pub(crate) syntax: SyntaxNode,
 }
 impl UfcsCall {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1730,11 +1734,11 @@ pub struct UnaryExpr {
     pub(crate) syntax: SyntaxNode,
 }
 impl UnaryExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1773,11 +1777,11 @@ pub struct UseAlias {
     pub(crate) syntax: SyntaxNode,
 }
 impl UseAlias {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1816,11 +1820,11 @@ pub struct UseDecl {
     pub(crate) syntax: SyntaxNode,
 }
 impl UseDecl {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -1869,11 +1873,11 @@ pub struct WildcardPat {
     pub(crate) syntax: SyntaxNode,
 }
 impl WildcardPat {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5196,11 +5200,11 @@ impl Serialize for Bogus {
     }
 }
 impl Bogus {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5262,11 +5266,11 @@ impl Serialize for BogusDecl {
     }
 }
 impl BogusDecl {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5329,11 +5333,11 @@ impl Serialize for BogusExpr {
     }
 }
 impl BogusExpr {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5396,11 +5400,11 @@ impl Serialize for BogusParameter {
     }
 }
 impl BogusParameter {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5463,11 +5467,11 @@ impl Serialize for BogusPat {
     }
 }
 impl BogusPat {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5530,11 +5534,11 @@ impl Serialize for BogusType {
     }
 }
 impl BogusType {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self { syntax }
@@ -5587,11 +5591,11 @@ pub struct ArgumentList {
     syntax_list: SyntaxList,
 }
 impl ArgumentList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {
@@ -5668,11 +5672,11 @@ pub struct AttributeList {
     syntax_list: SyntaxList,
 }
 impl AttributeList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {
@@ -5749,11 +5753,11 @@ pub struct IfArmList {
     syntax_list: SyntaxList,
 }
 impl IfArmList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {
@@ -5830,11 +5834,11 @@ pub struct LambdaParameterList {
     syntax_list: SyntaxList,
 }
 impl LambdaParameterList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {
@@ -5911,11 +5915,11 @@ pub struct ModuleItemList {
     syntax_list: SyntaxList,
 }
 impl ModuleItemList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {
@@ -5992,11 +5996,11 @@ pub struct ParameterList {
     syntax_list: SyntaxList,
 }
 impl ParameterList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {
@@ -6073,11 +6077,11 @@ pub struct TypeArgList {
     syntax_list: SyntaxList,
 }
 impl TypeArgList {
-    #[doc = r" Create an AstNode from a SyntaxNode without checking its kind"]
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
     #[doc = r""]
     #[doc = r" # Safety"]
-    #[doc = r" This function must be guarded with a call to [AstNode::can_cast]"]
-    #[doc = r" or a match on [SyntaxNode::kind]"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
     #[inline]
     pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
         Self {

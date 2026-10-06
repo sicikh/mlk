@@ -1,10 +1,10 @@
 //! Generated file, do not edit by hand, see `xtask/codegen`
 
-#[doc = r" Reconstruct an AstNode from a SyntaxNode"]
+#[doc = r" Reconstruct an `AstNode` from a `SyntaxNode`"]
 #[doc = r""]
-#[doc = r" This macros performs a match over the [kind](mlkc_rowan::SyntaxNode::kind)"]
-#[doc = r" of the provided [mlkc_rowan::SyntaxNode] and constructs the appropriate"]
-#[doc = r" AstNode type for it, then execute the provided expression over it."]
+#[doc = r" This macro performs a match over the [`kind`](mlkc_rowan::SyntaxNode::kind)"]
+#[doc = r" of the provided [`SyntaxNode`](mlkc_rowan::SyntaxNode) and constructs the appropriate"]
+#[doc = r" `AstNode` type for it, then executes the provided expression over it."]
 #[doc = r""]
 #[doc = r" # Examples"]
 #[doc = r""]

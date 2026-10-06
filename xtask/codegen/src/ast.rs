@@ -1,4 +1,4 @@
-//! Generate SyntaxKind definitions as well as typed AST definitions for nodes and tokens.
+//! Generate `SyntaxKind` definitions as well as typed AST definitions for nodes and tokens.
 //! This is derived from biomejs/xtask/codegen
 
 use std::{
@@ -32,6 +32,17 @@ use crate::{
 // these node won't generate any code
 pub const SYNTAX_ELEMENT_TYPE: &str = "SyntaxElement";
 
+/// Generates the typed AST and syntax-kind definitions of every selected language.
+///
+/// Each language is generated in turn;
+/// an unknown language name is reported and skipped.
+///
+/// # Errors
+///
+/// Fails when a generator cannot format its output,
+/// when [`Mode::Verify`] is passed and a generated file is missing or does not match,
+/// or when the parent directories of a generated file cannot be created
+/// or the file cannot be written.
 pub fn generate_ast(mode: Mode, language_kind_list: Vec<String>) -> Result<()> {
     let codegen_language_kinds = if language_kind_list.is_empty() {
         ALL_LANGUAGE_KIND.clone().to_vec()
@@ -242,7 +253,7 @@ enum NodeRuleClassification {
     /// Union of the form `A = B | C`
     Union(Vec<String>),
 
-    /// Regular node containing tokens or sub nodes of the form `A = B 'c'
+    /// Regular node containing tokens or sub nodes of the form `A = B 'c'`
     Node,
 
     /// Node containing tokens or sub nodes where at least some of the children

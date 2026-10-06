@@ -27,7 +27,7 @@ pub(crate) enum CombinatorKind {
 }
 
 impl CombinatorKind {
-    pub fn new(value: &TokenKind) -> Self {
+    pub(crate) fn new(value: &TokenKind) -> Self {
         match value {
             TokenKind::Pipe => Self::Pipe,
             TokenKind::DoublePipe => Self::DoublePipe,

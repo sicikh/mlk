@@ -131,6 +131,11 @@ impl Driver {
     /// Returns the files the library is made of, in the order of [`mlkc_stdlib::modules`]:
     /// the path each was recorded at, and its source, which is what a host shows. The library is
     /// the compiler's rather than a person's, and nothing in it is a person's to write.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a file of the library has no id after it was pushed, which cannot happen
+    /// because pushing a file interns its path.
     pub fn use_std(&mut self) -> Vec<StdFile> {
         let files: Vec<StdFile> = mlkc_stdlib::modules()
             .iter()

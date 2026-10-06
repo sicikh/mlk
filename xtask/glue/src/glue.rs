@@ -16,21 +16,37 @@ pub mod fs2 {
 
     use anyhow::{Context, Result};
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot read the directory;
+    /// the error is the operating system's and carries `path`.
     pub fn read_dir<P: AsRef<Path>>(path: P) -> Result<fs::ReadDir> {
         let path = path.as_ref();
         fs::read_dir(path).with_context(|| format!("Failed to read {}", path.display()))
     }
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot read the file;
+    /// the error is the operating system's and carries `path`.
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
         let path = path.as_ref();
         fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))
     }
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot write the file;
+    /// the error is the operating system's and carries `path`.
     pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
         let path = path.as_ref();
         fs::write(path, contents).with_context(|| format!("Failed to write {}", path.display()))
     }
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot copy the file;
+    /// the error is the operating system's and carries `from` and `to`.
     pub fn copy<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64> {
         let from = from.as_ref();
         let to = to.as_ref();
@@ -38,16 +54,28 @@ pub mod fs2 {
             .with_context(|| format!("Failed to copy {} to {}", from.display(), to.display()))
     }
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot remove the file;
+    /// the error is the operating system's and carries `path`.
     pub fn remove_file<P: AsRef<Path>>(path: P) -> Result<()> {
         let path = path.as_ref();
         fs::remove_file(path).with_context(|| format!("Failed to remove file {}", path.display()))
     }
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot remove the directory tree;
+    /// the error is the operating system's and carries `path`.
     pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> Result<()> {
         let path = path.as_ref();
         fs::remove_dir_all(path).with_context(|| format!("Failed to remove dir {}", path.display()))
     }
 
+    /// # Errors
+    ///
+    /// Fails when the operating system cannot create the directory or its parents;
+    /// the error is the operating system's and carries `path`.
     pub fn create_dir_all<P: AsRef<Path>>(path: P) -> Result<()> {
         let path = path.as_ref();
         fs::create_dir_all(path).with_context(|| format!("Failed to create dir {}", path.display()))
@@ -98,6 +126,12 @@ impl Drop for Pushenv {
     }
 }
 
+/// Removes the file or directory tree at `path`, and does nothing if it does not exist.
+///
+/// # Errors
+///
+/// Fails when the path exists and the operating system cannot remove it;
+/// the error is the operating system's and carries `path`.
 pub fn rm_rf(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     if !path.exists() {
@@ -115,6 +149,13 @@ pub fn run_process(cmd: String, echo: bool, stdin: Option<&[u8]>) -> Result<Stri
     run_process_inner(&cmd, echo, stdin).with_context(|| format!("process `{cmd}` failed"))
 }
 
+/// Returns the current UTC date in ISO 8601, as printed by the `date` command.
+///
+/// # Errors
+///
+/// Fails when the `date` command cannot be started,
+/// when it exits unsuccessfully,
+/// or when its output is not UTF-8.
 pub fn date_iso() -> Result<String> {
     run!("date --iso --utc")
 }

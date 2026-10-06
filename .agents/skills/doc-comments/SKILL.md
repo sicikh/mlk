@@ -58,6 +58,9 @@ The contract does not belong scattered across inline comments — put it on the 
 - **Backticks for code**: identifiers, types, tokens, and paths.
   Link Rust items with intra-doc links where a reader benefits: ``[`Driver`]``,
   ``[`FileVersion`]``. Note that `mlkc-parser-core` denies broken intra-doc links.
+  The lints enforce both: `clippy::doc_markdown` asks for the backticks, and
+  `missing_errors_doc` and `missing_panics_doc` ask for the contract sections
+  on every public item that can fail or panic.
 - **A doc test is a promise.** Code blocks in `///` docs are compiled and run by
   `just test-doc` (and rustfmt formats them: `format_code_in_doc_comments`).
   Keep examples minimal and true, or mark them `ignore`/`text` when they are not Rust.

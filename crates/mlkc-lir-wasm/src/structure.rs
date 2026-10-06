@@ -98,6 +98,13 @@ pub enum Node {
 
 impl Body {
     /// Checks that the structure of the body says where every reachable block is emitted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the body has no structure,
+    /// when a block a path from the entry reaches is emitted by no leaf or by more than one,
+    /// when a leaf and the edge it stands for disagree about the arguments they pass,
+    /// and when a branch names a frame that is not around it or belongs to another block.
     pub fn validate_structure(&self) -> Result<(), Invalid> {
         let Some(structure) = &self.structure else {
             return Err(Invalid::NotStructured);

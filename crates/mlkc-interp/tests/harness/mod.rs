@@ -8,6 +8,13 @@
 //!
 //! [adr-0019]: ../../../docs/adr/0019-mir.md
 
+// A harness is reached through `mod harness`, never from outside the test binary that includes
+// it, so the items it offers its tests are `pub` on purpose.
+#![allow(
+    unreachable_pub,
+    reason = "a harness is a module of a test binary, not a crate anything outside names"
+)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_driver::Driver;

@@ -118,7 +118,7 @@ impl AbiType {
 /// representation; every other type is a word until the constructs that give it a shape are
 /// lowered. A function type is a word too: a closure is a reference, and what signature its
 /// code has is the refinement of the expression that made it ([`closure_shape_of_ty`]).
-pub fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
+pub(crate) fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
     let Ty::Class { class, args } = ty else {
         return Refinement::Word;
     };
@@ -139,7 +139,7 @@ pub fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
 }
 
 /// The ABI shape of a function type, if the type is one.
-pub fn closure_shape_of_ty(ty: &Ty, builtins: &Builtins) -> Option<FnShape> {
+pub(crate) fn closure_shape_of_ty(ty: &Ty, builtins: &Builtins) -> Option<FnShape> {
     let Ty::Fn { params, ret } = ty else {
         return None;
     };
@@ -154,7 +154,7 @@ pub fn closure_shape_of_ty(ty: &Ty, builtins: &Builtins) -> Option<FnShape> {
 }
 
 /// The refinement of a constant.
-pub fn of_const(constant: &Const) -> Refinement {
+pub(crate) fn of_const(constant: &Const) -> Refinement {
     match constant {
         Const::Int(_) => Refinement::Int,
         Const::Bool(_) => Refinement::Bool,
@@ -170,7 +170,7 @@ pub fn of_const(constant: &Const) -> Refinement {
 /// gives a boolean.
 ///
 /// [adr-0019]: ../../docs/adr/0019-mir.md
-pub fn of_prim(op: PrimOp) -> Refinement {
+pub(crate) fn of_prim(op: PrimOp) -> Refinement {
     match op {
         PrimOp::IntAdd | PrimOp::IntSub | PrimOp::IntMul | PrimOp::IntDiv | PrimOp::IntNeg => {
             Refinement::Int

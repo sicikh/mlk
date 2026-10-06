@@ -13,12 +13,12 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    EntityLoc, Interface, ItemKind, ItemLocLike, ItemTree, ModuleId, ModuleIndex, ModuleLocator,
-    ModuleScope, Name, Namespace, PathAnchor, PathRoot, PlainPath, PlainPathId, Prelude,
-    ProjectData, ProjectGraph, ProjectId, Visibility, dump::TypePlace,
+    Closure, EntityLoc, Interface, ItemKind, ItemLocLike, ItemTree, ModuleId, ModuleIndex,
+    ModuleLocator, ModuleScope, Name, Namespace, PathAnchor, PathRoot, PlainPath, PlainPathId,
+    Prelude, ProjectData, ProjectGraph, ProjectId, Read, Visibility, dump::TypePlace,
 };
 use mlkc_lower::lower_module;
-use mlkc_resolve::{Closure, Read, ResolveDeps, ResolveDiag, ResolveError, resolve_module};
+use mlkc_resolve::{ResolveDeps, ResolveDiag, ResolveError, closure, resolve_module};
 use mlkc_syntax::ModuleRoot;
 use mlkc_vfs::{FileId, RelPathBuf};
 
@@ -74,7 +74,7 @@ impl World {
     fn closure(&self, module: ModuleId) -> Closure {
         let interfaces = &self.interfaces;
 
-        Closure::of(
+        closure::of(
             module,
             self.tree(module),
             &self.graph,

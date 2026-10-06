@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use mlkc_diagnostics::Diagnostic;
 use mlkc_hir_def::{Interface, ModuleId, ModuleIndex, ProjectDefMap, ProjectId};
 use mlkc_resolve::{
-    Closure, Resolution, ResolveDeps, ResolveDiag, ResolveError, hidden_name, resolve_module,
+    Resolution, ResolveDeps, ResolveDiag, ResolveError, closure, hidden_name, resolve_module,
 };
 use mlkc_span::Span;
 
@@ -147,7 +147,7 @@ impl Driver {
         let graph = Arc::clone(&self.projects);
         let indexes = self.indexes_of(module);
 
-        let closure = Closure::of(
+        let closure = closure::of(
             module,
             lowered.item_tree(),
             &graph,

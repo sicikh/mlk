@@ -7,13 +7,11 @@ use mlkc_hir_def::{
     Body, BodyEntityLoc, ClassLoc, EntityData, EntityLoc, ItemLoc, ModuleId, Name, PathAnchor,
     ProjectId,
 };
-use mlkc_hir_ty::{CheckedBody, ModuleTypes};
-use mlkc_resolve::Closure;
+use mlkc_hir_ty::{Builtins, CheckDeps, CheckedBody, ModuleTypes};
+use mlkc_resolve::closure;
 use mlkc_span::Span;
 use mlkc_syntax::TextRange;
-use mlkc_typeck::{
-    Builtins, CheckDeps, TypeDiag, TypeError, TypePlace, check_body, resolve_module_types,
-};
+use mlkc_typeck::{TypeDiag, TypeError, TypePlace, check_body, resolve_module_types};
 
 use super::{
     CheckInputs, CheckSlot, Checked, Driver, Lowered, ModuleBody, Pass, Signatures, SignaturesSlot,
@@ -133,7 +131,7 @@ impl Driver {
         let graph = Arc::clone(&self.projects);
         let indexes = self.indexes_of(module);
 
-        let closure = Closure::of(
+        let closure = closure::of(
             module,
             lowered.item_tree(),
             &graph,
@@ -240,7 +238,7 @@ impl Driver {
             .iter()
             .map(|body| &body.body().body)
             .collect();
-        let closure = Closure::of_check(
+        let closure = closure::of_check(
             module,
             lowered.item_tree(),
             bodies,

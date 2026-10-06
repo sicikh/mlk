@@ -3,15 +3,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    EntityLoc, Export, Interface, ModuleId, ModuleIndex, ModuleLocator, Name, Namespace,
-    PathAnchor, PathData, PathRoot, PlainPath, PlainPathId, ProjectGraph, ProjectId,
+    Closure, EntityLoc, Export, Interface, ModuleId, ModuleIndex, ModuleLocator, Name, Namespace,
+    PathAnchor, PathData, PathRoot, PlainPath, PlainPathId, ProjectGraph, ProjectId, Read,
 };
 
-use crate::{
-    closure::{Closure, Read},
-    diagnostic::ResolveError,
-    resolve::Resolution,
-};
+use crate::{diagnostic::ResolveError, resolve::Resolution};
 
 /// What a path denotes, in the terms a scope is written in.
 ///
@@ -701,7 +697,7 @@ mod tests {
     use std::sync::Arc;
 
     use mlkc_hir_def::{
-        Attributes, ClassData, ClassLoc, EntityData, EntityLoc, ItemLoc, ItemLocLike,
+        Attributes, ClassData, ClassLoc, Closure, EntityData, EntityLoc, ItemLoc, ItemLocLike,
         ItemSyntaxLoc, ItemTreeBuilder, ModuleId, ModuleScope, Name, Pat, PathRoot, PlainPath,
         PlainPathId, Prelude, ProjectGraph, UseLoc, Visibility, path::PathSegmentData,
     };
@@ -711,7 +707,7 @@ mod tests {
     use mlkc_vfs::{FileId, RelPathBuf};
 
     use super::{Namespace, PathAnchor, PathData, ResolveError, Target, Walk};
-    use crate::{Closure, Resolution};
+    use crate::Resolution;
 
     /// The module the tests of the walk are written in.
     const MAIN: ModuleId = ModuleId(FileId::from_raw(0));

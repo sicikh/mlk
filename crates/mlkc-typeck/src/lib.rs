@@ -16,7 +16,8 @@
 //!   answers with a [`CheckedBody`](mlkc_hir_ty::CheckedBody).
 //!
 //! Both take the resolution of the module (what its names denote, and what each of its imports
-//! resolved to) and a [`CheckDeps`]: the projects, the closure of the modules the paths reach,
+//! resolved to) and a [`CheckDeps`](mlkc_hir_ty::CheckDeps): the projects, the closure of the
+//! modules the paths reach,
 //! the type surfaces of the modules the check reads, and the classes of the language. A path
 //! that names a module --- a module of the project, a module of another project, or a name a
 //! module re-exports --- is walked over that closure ([ADR-0016]), so a check of a body reads
@@ -47,10 +48,8 @@ mod engine;
 mod resolve;
 mod signatures;
 
-pub use mlkc_hir_ty::Builtins;
-
 pub use crate::{
-    check::{CheckDeps, check_body},
+    check::check_body,
     diagnostic::{TypeDiag, TypeError, TypePlace},
     signatures::resolve_module_types,
 };

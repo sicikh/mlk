@@ -3,13 +3,12 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    Body, EntityData, EntityLoc, ItemLoc, ItemLocLike, ItemTree, LocalTarget, ModuleId,
+    Body, Closure, EntityData, EntityLoc, ItemLoc, ItemLocLike, ItemTree, LocalTarget, ModuleId,
     ModuleScope, Name, Namespace, PathAnchor, PathData, PerNs, PlainPathId, ProjectGraph,
     ProjectId, TypeRef, UseData, UseLoc, Visibility, dump::TypePlace, path::PathSegmentData,
 };
 
 use crate::{
-    Closure,
     diagnostic::{ResolveDiag, ResolveError, ResolvePlace},
     walk::{Target, Walk},
 };

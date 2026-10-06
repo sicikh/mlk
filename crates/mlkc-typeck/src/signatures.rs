@@ -13,11 +13,10 @@
 use mlkc_hir_def::{
     EntityData, EntityLoc, FunctionLoc, ItemTree, TypeRef, dump::TypePlace as DeclaredType,
 };
-use mlkc_hir_ty::{ModuleTypes, Ty};
+use mlkc_hir_ty::{CheckDeps, ModuleTypes, Ty};
 use mlkc_resolve::Resolution;
 
 use crate::{
-    check::CheckDeps,
     diagnostic::{TypeDiag, TypeError, TypePlace},
     resolve::PathResolver,
 };
@@ -186,14 +185,14 @@ mod tests {
         ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name, Prelude,
         ProjectGraph, ProjectId,
     };
-    use mlkc_hir_ty::{Builtins, Ty};
+    use mlkc_hir_ty::{Builtins, CheckDeps, Ty};
     use mlkc_lower::lower_module;
     use mlkc_parser::parse;
-    use mlkc_resolve::{Closure, Resolution};
+    use mlkc_resolve::{Resolution, closure};
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::{CheckDeps, TypeError, resolve_module_types};
+    use super::{TypeError, resolve_module_types};
 
     /// The classes of the language, as a module of a test declares them.
     const CLASSES: &str = "#[builtin]\ntype Int\n\n#[builtin]\ntype Unit\n\n#[builtin]\ntype String\n\n#[builtin]\ntype Bool\n";
@@ -239,7 +238,7 @@ mod tests {
     /// and the closure is the one of its surface.
     fn world(tree: &ItemTree) -> (Resolution, CheckDeps) {
         let graph = Arc::new(ProjectGraph::default());
-        let closure = Closure::of(tree.module(), tree, &graph, &BTreeMap::new(), &mut |_| None);
+        let closure = closure::of(tree.module(), tree, &graph, &BTreeMap::new(), &mut |_| None);
         let resolution = Resolution::new(
             Arc::new(ModuleScope::default()),
             BTreeMap::new(),

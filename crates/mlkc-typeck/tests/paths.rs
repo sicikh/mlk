@@ -4,7 +4,7 @@
 //! The world is the one a driver holds, cut down to what the passes read: the standard library
 //! of the compiler ([mlkc-stdlib]) and a project `app` that depends on it. The check of a body
 //! is called directly, with the resolution and the deps a driver would have assembled --- the
-//! closure gathered over the surface of the module and over its bodies ([`Closure::of_check`]).
+//! closure gathered over the surface of the module and over its bodies ([`closure::of_check`]).
 //!
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
@@ -12,15 +12,15 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    Body, BodyEntityLoc, ClassLoc, EntityLoc, Interface, ItemLocLike, ItemTree, ModuleId,
+    Body, BodyEntityLoc, ClassLoc, Closure, EntityLoc, Interface, ItemLocLike, ItemTree, ModuleId,
     ModuleIndex, Name, ProjectData, ProjectGraph, ProjectId,
 };
-use mlkc_hir_ty::{ModuleTypes, Ty};
+use mlkc_hir_ty::{Builtins, CheckDeps, ModuleTypes, Ty};
 use mlkc_lower::{lower_body, lower_module};
 use mlkc_parser::parse;
-use mlkc_resolve::{Closure, Resolution, ResolveDeps, resolve_module};
+use mlkc_resolve::{Resolution, ResolveDeps, closure, resolve_module};
 use mlkc_syntax::ModuleRoot;
-use mlkc_typeck::{Builtins, CheckDeps, TypeError, check_body, resolve_module_types};
+use mlkc_typeck::{TypeError, check_body, resolve_module_types};
 use mlkc_vfs::{FileId, RelPathBuf};
 
 /// A world of modules: what a check of a body reads of the rest of the project.
@@ -68,7 +68,7 @@ impl World {
     fn closure(&self, module: ModuleId) -> Closure {
         let interfaces = &self.interfaces;
 
-        Closure::of(
+        closure::of(
             module,
             self.tree(module),
             &self.graph,
@@ -82,7 +82,7 @@ impl World {
         let interfaces = &self.interfaces;
         let bodies: Vec<&Body> = self.bodies[&module].iter().map(|(_, body)| body).collect();
 
-        Closure::of_check(
+        closure::of_check(
             module,
             self.tree(module),
             bodies.iter().copied(),

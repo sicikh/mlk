@@ -81,9 +81,9 @@ so they are also the names to look for when something is slow.
 | [`mlkc-syntax-factory`](../../crates/mlkc-syntax-factory) | The generated factory that builds syntax nodes.                                                        |
 | [`mlkc-rowan`](../../crates/mlkc-rowan)                   | The vendored lossless syntax tree library.                                                             |
 | [`mlkc-lower`](../../crates/mlkc-lower)                   | The lowering of MLK into the HIR; the only stage that knows syntactic sugar.                           |
-| [`mlkc-hir-def`](../../crates/mlkc-hir-def)               | The definitions of the high-level IR, and the module/def-map values.                                   |
+| [`mlkc-hir-def`](../../crates/mlkc-hir-def)               | The definitions of the high-level IR, the module/def-map values, and the closure a pass walks.         |
 | [`mlkc-resolve`](../../crates/mlkc-resolve)               | Global name resolution: what a module's paths denote, against the interfaces of the modules they name. |
-| [`mlkc-hir-ty`](../../crates/mlkc-hir-ty)                 | A resolved type, and what a check leaves behind.                                                       |
+| [`mlkc-hir-ty`](../../crates/mlkc-hir-ty)                 | A resolved type, what a check reads of the project, and what it leaves behind.                         |
 | [`mlkc-typeck`](../../crates/mlkc-typeck)                 | The temporary checker: one body at a time ([ADR-0017](../adr/0017-resolved-types.md)).                 |
 | [`mlkc-mir`](../../crates/mlkc-mir)                       | The middle IR: a uniform control-flow graph over words.                                                |
 | [`mlkc-mir-build`](../../crates/mlkc-mir-build)           | The construction of MIR and its SSA form.                                                              |

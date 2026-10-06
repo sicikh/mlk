@@ -10,8 +10,10 @@
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 //! [`TypeRef`]: mlkc_hir_def::TypeRef
 //!
-//! # What a check leaves behind
+//! # What a check reads and leaves behind
 //!
+//! - [`CheckDeps`] --- what a check reads of the rest of the project: the projects, the closure
+//!   the walk gathered, the surfaces the check reads, and the classes of the language;
 //! - [`Ty`] --- one type, a value of its own a driver can retain, compare, and serialize;
 //! - [`ModuleTypes`] --- the types of a module's entities, resolved from the signatures the
 //!   module writes, which is what its readers and its own bodies read;
@@ -23,10 +25,12 @@
 //! - [`builtins`] --- the classes the language itself declares.
 //! - [`module_types`] --- the type surface of a module.
 //! - [`checked`] --- the types of one checked body.
+//! - [`deps`] --- what a check reads of the rest of the project.
 //! - [`dump`] --- a reading of the values, for a person and for a diff.
 
 pub mod builtins;
 pub mod checked;
+pub mod deps;
 pub mod dump;
 pub mod module_types;
 pub mod ty;
@@ -34,6 +38,7 @@ pub mod ty;
 pub use crate::{
     builtins::Builtins,
     checked::CheckedBody,
+    deps::CheckDeps,
     module_types::ModuleTypes,
     ty::{INT_MAX, INT_MIN, Ty},
 };

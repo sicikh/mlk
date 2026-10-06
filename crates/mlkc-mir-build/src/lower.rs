@@ -38,7 +38,7 @@ use mlkc_hir_def::{
     ItemTree, LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId, PathAnchor,
     PathData, UnaryOp,
 };
-use mlkc_hir_ty::{CheckedBody, INT_MAX, INT_MIN, Ty};
+use mlkc_hir_ty::{CheckDeps, CheckedBody, INT_MAX, INT_MIN, Ty};
 use mlkc_la_arena::ArenaMap;
 use mlkc_lower::BodySourceMap;
 use mlkc_mir::{
@@ -48,7 +48,6 @@ use mlkc_mir::{
 };
 use mlkc_resolve::{Resolution, Walk};
 use mlkc_span::Span;
-use mlkc_typeck::CheckDeps;
 
 /// Lowers the checked body of an entity into the CFG form of MIR: the body of the entity, and
 /// every function it declares, each a body of its own.
@@ -977,12 +976,13 @@ mod tests {
         BodyEntityLoc, ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name,
         Prelude, ProjectGraph,
     };
+    use mlkc_hir_ty::{Builtins, CheckDeps};
     use mlkc_lower::{LoweredBody, lower_body as lower_hir, lower_module};
     use mlkc_mir::{CodeRef, LambdaId};
     use mlkc_parser::parse;
-    use mlkc_resolve::{Closure, Resolution};
+    use mlkc_resolve::{Resolution, closure};
     use mlkc_syntax::ModuleRoot;
-    use mlkc_typeck::{Builtins, CheckDeps, check_body, resolve_module_types};
+    use mlkc_typeck::{check_body, resolve_module_types};
     use mlkc_vfs::{FileId, RelPathBuf};
 
     use super::{Bodies, Callee, FunctionLoc, LiftedId, MirBody, Rvalue, StmtKind, lower_body};
@@ -1020,7 +1020,7 @@ mod tests {
             Arc::from(Vec::new()),
         );
         let graph = Arc::new(ProjectGraph::default());
-        let closure = Closure::of(module, &tree, &graph, &BTreeMap::new(), &mut |_| None);
+        let closure = closure::of(module, &tree, &graph, &BTreeMap::new(), &mut |_| None);
         let deps = CheckDeps::new(builtins)
             .with_graph(graph)
             .with_closure(closure);

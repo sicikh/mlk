@@ -74,6 +74,7 @@
 //! - [`item_tree`] — the surface of one module.
 //! - [`interface`] — what a module shows to the modules that read it.
 //! - [`module_index`] — which module of a project a path names.
+//! - [`closure`] — what a resolution read of the modules it walked.
 //! - [`body`] — the inside of one function.
 //! - [`def_map`] — what names denote, and the index of the whole project.
 //! - [`prelude`] — the imports a project gives every module.
@@ -83,6 +84,7 @@
 mod macros;
 
 pub mod body;
+pub mod closure;
 pub mod def_map;
 pub mod dump;
 pub mod id;
@@ -101,6 +103,7 @@ pub use crate::{
         BinaryOp, Body, BodyBuilder, Expr, ExprId, IfArm, LambdaParam, Literal, LocalFunctionData,
         Pat, PatId, UnaryOp,
     },
+    closure::{Closure, Read},
     def_map::{LocalEntry, LocalScope, LocalTarget, ModuleScope, Namespace, PerNs, ProjectDefMap},
     id::{
         BodyEntityLoc, BodyLoc, ClassLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind,

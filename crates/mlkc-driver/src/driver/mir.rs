@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use mlkc_hir_def::BodyEntityLoc;
+use mlkc_hir_ty::CheckDeps;
 use mlkc_mir::Bodies;
 use mlkc_mir_build::{construct_ssa, lower_body as lower_mir};
-use mlkc_typeck::CheckDeps;
 
 use super::{Driver, MirSlot, Pass, SsaSlot, Unit};
 

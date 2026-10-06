@@ -9,21 +9,20 @@
 //! functions it calls --- and the surfaces of the modules its paths name, which the driver
 //! assembles into a [`CheckDeps`] together with the closure of the check and the classes of the
 //! language. A path that names a module, a module of a project above all, is walked over that
-//! closure ([ADR-0016]); the classes of the language are handed in as [`Builtins`], and the
-//! check knows no primitive: `Int` and `String` are classes like any other.
+//! closure ([ADR-0016]); the classes of the language are handed in as
+//! [`Builtins`](mlkc_hir_ty::Builtins), and the check knows no primitive:
+//! `Int` and `String` are classes like any other.
 //!
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 
-use std::{collections::BTreeMap, sync::Arc};
-
 use mlkc_hir_def::{
     BinaryOp, Body, BodyEntityLoc, EntityLoc, Expr, ExprId, IfArm, ItemKind, ItemLoc, ItemLocLike,
-    ItemTree, LambdaParam, Literal, LocalDefId, LocalFunctionId, ModuleId, Name, Namespace, Pat,
-    PatId, PathAnchor, PathId, ProjectGraph, TypeRef, UnaryOp,
+    ItemTree, LambdaParam, Literal, LocalDefId, LocalFunctionId, Name, Namespace, Pat, PatId,
+    PathAnchor, PathId, TypeRef, UnaryOp,
 };
-use mlkc_hir_ty::{Builtins, CheckedBody, INT_MAX, INT_MIN, ModuleTypes, Ty};
-use mlkc_resolve::{Closure, Resolution};
+use mlkc_hir_ty::{CheckDeps, CheckedBody, INT_MAX, INT_MIN, Ty};
+use mlkc_resolve::Resolution;
 use mlkc_stdx::FxIndexMap;
 use rustc_hash::FxHashMap;
 
@@ -32,75 +31,6 @@ use crate::{
     engine::{Engine, InferTy, Scheme, UnifyError},
     resolve::PathResolver,
 };
-
-/// What checking a body reads of the rest of the project ([ADR-0009]).
-///
-/// The types are self-contained values, and the closure is the modules the check walks: the
-/// input says nothing about the arenas of the modules it names ([ADR-0010]).
-///
-/// [ADR-0009]: ../../docs/adr/0009-pass-contract.md
-/// [ADR-0010]: ../../docs/adr/0010-stable-entity-identity.md
-#[derive(Debug, Clone)]
-pub struct CheckDeps {
-    /// The projects, what each of them depends on, and the project of every module.
-    graph: Arc<ProjectGraph>,
-    /// The modules the check walks, and the interfaces of them.
-    closure: Closure,
-    /// The type surface of the module the body belongs to, and of the ones it names.
-    types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
-    /// The classes of the language.
-    builtins: Builtins,
-}
-
-impl CheckDeps {
-    /// Deps of a module that names nothing: no closure, and no surface of another module.
-    pub fn new(builtins: Builtins) -> Self {
-        Self {
-            graph: Arc::new(ProjectGraph::default()),
-            closure: Closure::default(),
-            types: BTreeMap::new(),
-            builtins,
-        }
-    }
-
-    /// With the projects of the check.
-    pub fn with_graph(mut self, graph: Arc<ProjectGraph>) -> Self {
-        self.graph = graph;
-        self
-    }
-
-    /// With the closure of the check: the modules its paths reach ([`Closure::of_check`]).
-    pub fn with_closure(mut self, closure: Closure) -> Self {
-        self.closure = closure;
-        self
-    }
-
-    /// With the type surface of one module.
-    pub fn with_types(mut self, module: ModuleId, types: Arc<ModuleTypes>) -> Self {
-        self.types.insert(module, types);
-        self
-    }
-
-    /// The projects of the check.
-    pub fn graph(&self) -> &ProjectGraph {
-        &self.graph
-    }
-
-    /// The closure of the check.
-    pub fn closure(&self) -> &Closure {
-        &self.closure
-    }
-
-    /// The type surface of a module, if the check was given one.
-    pub fn types(&self, module: ModuleId) -> Option<&Arc<ModuleTypes>> {
-        self.types.get(&module)
-    }
-
-    /// The classes of the language.
-    pub fn builtins(&self) -> &Builtins {
-        &self.builtins
-    }
-}
 
 /// Checks one body against the signatures its module wrote.
 ///
@@ -998,14 +928,14 @@ mod tests {
         LocalDefId, ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, TypeVarId,
         UseLoc,
     };
-    use mlkc_hir_ty::Ty;
+    use mlkc_hir_ty::{Builtins, CheckDeps, Ty};
     use mlkc_lower::{lower_body, lower_module};
     use mlkc_parser::parse;
-    use mlkc_resolve::{Closure, Resolution, Target};
+    use mlkc_resolve::{Resolution, Target, closure};
     use mlkc_syntax::ModuleRoot;
     use mlkc_vfs::{FileId, RelPathBuf};
 
-    use super::{Builtins, CheckDeps, Expr, TypeError, check_body};
+    use super::{Expr, TypeError, check_body};
     use crate::signatures::resolve_module_types;
 
     /// The classes of the language, as a module of a test declares them.
@@ -1110,7 +1040,7 @@ mod tests {
     /// surface.
     fn deps(module: ModuleId, tree: &ItemTree, builtins: Builtins) -> CheckDeps {
         let graph = Arc::new(ProjectGraph::default());
-        let closure = Closure::of(module, tree, &graph, &BTreeMap::new(), &mut |_| None);
+        let closure = closure::of(module, tree, &graph, &BTreeMap::new(), &mut |_| None);
 
         CheckDeps::new(builtins)
             .with_graph(graph)

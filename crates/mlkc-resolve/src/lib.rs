@@ -18,9 +18,9 @@
 //! resolution never reads the resolution of another module, which is what keeps the pull graph
 //! of a driver stratified ([ADR-0008]).
 //!
-//! Those two things, gathered as a value, are the [`Closure`] of a resolution: the driver
-//! assembles it by walking the module's paths once ([ADR-0009]), and the pass that follows
-//! walks the same paths over the value it was handed.
+//! Those two things, gathered as a value, are the [`Closure`](mlkc_hir_def::Closure) of a
+//! resolution: the driver assembles it by walking the module's paths once ([ADR-0009]),
+//! and the pass that follows walks the same paths over the value it was handed.
 //!
 //! # The walk
 //!
@@ -48,13 +48,12 @@
 //! [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
 //! [ADR-0009]: ../../docs/adr/0009-pass-contract.md
 
-mod closure;
+pub mod closure;
 mod diagnostic;
 mod resolve;
 mod walk;
 
 pub use crate::{
-    closure::{Closure, Read},
     diagnostic::{ResolveDiag, ResolveError, ResolvePlace},
     resolve::{Resolution, ResolveDeps, hidden_name, resolve_module},
     walk::{Target, Walk},

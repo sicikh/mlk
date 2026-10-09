@@ -255,11 +255,13 @@ Two properties of the walk are the reason the option was chosen.
   so the units of this level do not depend on each other,
   and the pull graph is stratified exactly as [ADR-0008][0008-compiler-driver.md] describes.
 - **A chain is walked, not iterated.**
-  Two modules may import each other's names, and a re-export chain may run through any number
-  of modules. Nothing has to be resolved for the chain to be followed:
-  it is a loop inside one pass, over values the input already holds.
-  A chain that comes back to where it started resolves to nothing,
-  and the cycle is a diagnostic of the module whose import closes it —
+  A re-export chain may run through any number of modules, but it must not close,
+  and two modules must not import each other's names:
+  the imports of a program form no cycle.
+  A cycle is a diagnostic of the module whose import closes it;
+  nothing has to be resolved for the chain to be followed —
+  it is a loop inside one pass, over values the input already holds —
+  and the cycle is a mistake of the source,
   not a state of the driver's table.
 
 The walk reads no further than the answer it needs:
@@ -424,7 +426,7 @@ Two costs of the mechanism are worth stating plainly.
   and interfaces of the modules it names.
 - The cost of an edit follows the edit and its direct readers, not the project.
 - There is no fixpoint, no cycle handling at the driver, and no state to converge:
-  a cyclic re-export is an error of one module, found by a loop inside one pass.
+  a cycle of imports is an error of one module, found by a loop inside one pass.
 - The language's own names resolve, including through a re-export:
   `Int` in a file of no project is a walk through the interface of the `prelude` module of `std`
   to the entity of its `core`.

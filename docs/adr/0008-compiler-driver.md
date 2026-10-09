@@ -400,8 +400,9 @@ the language forbids the constructs that would create them —
 modules resolve names locally, `impl`s live in a closed set of modules,
 and only interfaces are observable.
 A module cycle is therefore a non-event for the driver:
-two modules may import each other's names,
-because lowering one needs nothing from the other.
+the imports of a program form no cycle,
+and lowering one module needs nothing from the other,
+so a cycle is a mistake of the source and never a state the driver handles.
 
 Consequences:
 

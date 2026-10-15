@@ -42,7 +42,7 @@ use crate::{
         module::{parse_module_item, parse_type_annotation},
         parse_error::{
             expected_call_after_a_pipe, expected_declaration, expected_expr, expected_name,
-            expected_parameter, expected_path, expected_path_after_the_dot, expected_pattern,
+            expected_parameter, expected_path, expected_path_after_the_arrow, expected_pattern,
             expected_place, place_outside_a_step,
         },
         pat::{parse_pat, parse_pat_or_recover},
@@ -238,22 +238,22 @@ fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses an expression that may be applied to arguments and to the operators of a chain:
-/// `f(a, b)(c)`, `value.function(a)`, `input@field`.
+/// `f(a, b)(c)`, `value->function(a)`, `input.field`.
 // test mlk calls_take_arguments_and_are_applied_to_the_result
 // fun calls(): Int =
 //     f(g(1), h(2, 3))(4)
 //
 // test mlk a_value_may_be_passed_as_the_first_argument_of_a_call
 // fun passed(): Int =
-//     value.function(1, 2)
+//     value->function(1, 2)
 //
 // test mlk a_call_may_be_chained_to_another
 // fun chained(): Int =
-//     value.load().validate()
+//     value->load()->validate()
 //
-// test mlk a_field_is_read_with_an_at_sign
+// test mlk a_field_is_read_with_a_dot
 // fun field(): Int =
-//     input@field
+//     input.field
 fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
     let expr = parse_primary_expr(p);
 
@@ -264,12 +264,12 @@ fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
 /// receiver written before the callee, a field read.
 ///
 /// Every form is postfix: what stands before the operator is what it applies to, and the
-/// forms chain left to right, so `config.load().validate()` calls `validate` on the value of
-/// the call of `load`, and `config@server@port` reads a field of a field.
+/// forms chain left to right, so `config->load()->validate()` calls `validate` on the value of
+/// the call of `load`, and `config.server.port` reads a field of a field.
 ///
 /// A rule that reads a value of its own applies the chain itself: what is written after the
-/// step of a pipeline is written after the value the pipeline is, so a dot after a step is
-/// a dot called on what the step produced.
+/// step of a pipeline is written after the value the pipeline is, so an arrow after a step is
+/// an arrow called on what the step produced.
 fn parse_postfixes(p: &mut MlkParser, expr: ParsedSyntax) -> ParsedSyntax {
     let ParsedSyntax::Present(mut expr) = expr else {
         return ParsedSyntax::Absent;
@@ -283,32 +283,32 @@ fn parse_postfixes(p: &mut MlkParser, expr: ParsedSyntax) -> ParsedSyntax {
             parse_call_arguments(p);
 
             expr = m.complete(p, CALL_EXPR);
-        } else if p.at(T![.]) {
-            // A call with the receiver written before the callee: `value.function(a)` is
-            // `function(value, a)`. What stands after the dot is the callee the call means,
+        } else if p.at(T![->]) {
+            // A call with the receiver written before the callee: `value->function(a)` is
+            // `function(value, a)`. What stands after the arrow is the callee the call means,
             // which is a name or a path.
             let m = expr.precede(p);
 
-            let dot = p.cur_range();
-            p.bump(T![.]);
+            let arrow = p.cur_range();
+            p.bump(T![->]);
 
             if parse_path(p).is_present() {
                 parse_call_arguments(p);
             } else {
-                // The callee is not there, and the dot is what the mistake is reported at:
+                // The callee is not there, and the arrow is what the mistake is reported at:
                 // the token that stands where the callee belongs is very often the next
-                // declaration, and a reader who wrote `value.` is told about the dot. The
+                // declaration, and a reader who wrote `value->` is told about the arrow. The
                 // arguments are not asked for on top of that: the call is broken once.
-                p.error(expected_path_after_the_dot(dot));
+                p.error(expected_path_after_the_arrow(arrow));
                 parse_missing_arguments(p);
             }
 
             expr = m.complete(p, UFCS_CALL);
-        } else if p.at(T![@]) {
+        } else if p.at(T![.]) {
             // A field read: the value, and the name of the field.
             let m = expr.precede(p);
 
-            p.bump(T![@]);
+            p.bump(T![.]);
             parse_name(p).or_add_diagnostic(p, expected_name);
 
             expr = m.complete(p, FIELD_EXPR);
@@ -323,21 +323,21 @@ fn parse_postfixes(p: &mut MlkParser, expr: ParsedSyntax) -> ParsedSyntax {
 /// Parses the step of a pipeline: the call the value goes into, and the place it goes in.
 ///
 /// A step is a call: a callee, and an argument list with a `_` among its arguments. The callee
-/// is a name the module holds, a path, or --- a call written with the dot --- the callee of a
-/// call whose receiver is a name or a path as well: `input |> map.insert("k", _)` is a step of
-/// `insert`, with `map` and `"k"` before the value. The receiver is passed first, as the
-/// receiver of any call written with the dot is.
+/// is a name the module holds, a path, or --- a call written with the arrow --- the callee of
+/// a call whose receiver is a name or a path as well: `input |> map->insert("k", _)` is a step
+/// of `insert`, with `map` and `"k"` before the value. The receiver is passed first, as the
+/// receiver of any call written with the arrow is.
 ///
-/// A step is one call, and it ends with the argument list of it: a dot, another `|>`, or
-/// a binary operator written after the step is written after the value the pipeline is, and
-/// a call on the result of another call goes inside the arguments instead.
+/// A step is one call, and it ends with the argument list of it: a field, an arrow, another
+/// `|>`, or a binary operator written after the step is written after the value the pipeline
+/// is, and a call on the result of another call goes inside the arguments instead.
 // test mlk a_pipeline_passes_its_value_to_a_call
 // fun passed(): Int =
 //     input |> f(1, _)
 //
-// test mlk a_step_may_be_written_with_the_dot
+// test mlk a_step_may_be_written_with_the_arrow
 // fun inserted(): Int =
-//     input |> map.insert("k", _)
+//     input |> map->insert("k", _)
 fn parse_step(p: &mut MlkParser) -> ParsedSyntax {
     // What the step calls, or the receiver of the call it is written with.
     let receiver = parse_path_expr(p);
@@ -350,12 +350,12 @@ fn parse_step(p: &mut MlkParser) -> ParsedSyntax {
 
     let called = receiver.precede(p);
 
-    // A step written with the dot calls the callee after it, and passes the receiver first;
+    // A step written with the arrow calls the callee after it, and passes the receiver first;
     // any other step is the callee and the arguments of one call.
-    let with_the_dot = p.at(T![.]);
+    let with_the_arrow = p.at(T![->]);
 
-    if with_the_dot {
-        p.bump(T![.]);
+    if with_the_arrow {
+        p.bump(T![->]);
         parse_path(p).or_add_diagnostic(p, expected_path);
     }
 
@@ -364,7 +364,7 @@ fn parse_step(p: &mut MlkParser) -> ParsedSyntax {
     let arguments_written = p.at(T!['(']);
     let places = parse_step_arguments(p);
 
-    let kind = if with_the_dot { UFCS_CALL } else { CALL_EXPR };
+    let kind = if with_the_arrow { UFCS_CALL } else { CALL_EXPR };
     let step = called.complete(p, kind);
 
     // A step from which the place is missing has nowhere to put the value, and the call is
@@ -663,11 +663,11 @@ fn parse_let_expr(p: &mut MlkParser) -> ParsedSyntax {
 
 /// The tokens a broken parameter of a lambda is recovered at: what follows a pattern in the
 /// parameter list, which is the comma that separates the parameters, the `)` that ends the
-/// list, and the `->` that opens the body. The arrow belongs to the rule that reads it, so it
+/// list, and the `=>` that opens the body. The arrow belongs to the rule that reads it, so it
 /// ends the pattern rather than being read into it.
-const LAMBDA_PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![->], T![,], T![')']];
+const LAMBDA_PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![=>], T![,], T![')']];
 
-/// Parses a lambda: a function written where a value belongs, `fn(a, b) -> expr`.
+/// Parses a lambda: a function written where a value belongs, `fn(a, b) => expr`.
 ///
 /// The parameters are the parameters of a function declaration: patterns, and the types they
 /// take where the module writes them. The body is parsed with [`parse_expr`]: it extends as
@@ -675,19 +675,19 @@ const LAMBDA_PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![->], T
 /// and a lambda inside another expression ends where that expression ends.
 // test mlk a_lambda_is_a_function_written_where_a_value_belongs
 // fun added(value: Int): Int =
-//     fn(x) -> x + value
+//     fn(x) => x + value
 //
 // test mlk a_lambda_body_is_an_expression
 // fun bound(value: Int): Int =
-//     fn(x) -> let y = x + value in y
+//     fn(x) => let y = x + value in y
 //
 // test mlk a_lambda_may_take_parameters_and_be_applied_at_once
 // fun applied(value: Int): Int =
-//     (fn(x, y) -> x + y)(value, 1)
+//     (fn(x, y) => x + y)(value, 1)
 //
 // test mlk a_lambda_parameter_may_write_the_type_it_takes
 // fun annotated(value: Int): Int =
-//     fn(x: Int, y: Int) -> x + y + value
+//     fn(x: Int, y: Int) => x + y + value
 fn parse_lambda_expr(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(FN_KW) {
         return ParsedSyntax::Absent;
@@ -699,7 +699,7 @@ fn parse_lambda_expr(p: &mut MlkParser) -> ParsedSyntax {
     p.expect(T!['(']);
     LambdaParameterListParse.parse_list(p);
     p.expect(T![')']);
-    p.expect(T![->]);
+    p.expect(T![=>]);
     parse_expr(p).or_add_diagnostic(p, expected_expr);
 
     Present(m.complete(p, LAMBDA_EXPR))
@@ -744,7 +744,7 @@ impl ParseSeparatedList for LambdaParameterListParse {
 ///
 /// A lambda parameter is a pattern, as the parameter of a function declaration is: a lambda
 /// that ignores an argument writes the wildcard where one that uses it writes a name. What
-/// a broken parameter is recovered at is the `->` of the body as well as the comma and the `)`
+/// a broken parameter is recovered at is the `=>` of the body as well as the comma and the `)`
 /// of the list, so that the arrow is left for the rule that reads it rather than being read
 /// into the pattern.
 fn parse_lambda_parameter(p: &mut MlkParser) -> ParsedSyntax {

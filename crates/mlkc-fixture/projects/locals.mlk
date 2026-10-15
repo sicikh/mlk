@@ -18,12 +18,12 @@ fun mutual(value: Int): Bool =
     even(value)
 
 fun with_a_lambda(value: Int): Int =
-    local fun apply(x: Int): Int = (fn(y: Int) -> y + x)(1) in
+    local fun apply(x: Int): Int = (fn(y: Int) => y + x)(1) in
     apply(value)
 
 fun from_a_lambda(value: Int): Int =
     local fun double(x: Int): Int = x * 2 in
-    let apply = fn(y: Int) -> double(y) in
+    let apply = fn(y: Int) => double(y) in
     apply(value)
 
 fun nested_local(value: Int): Int =

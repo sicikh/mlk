@@ -10,22 +10,22 @@ expression: snapshot
 // list that is never closed.
 
 fun broken_parameter(): Int =
-    fn(1) -> 2
+    fn(1) => 2
 
 fun broken_annotated_parameter(): Int =
-    fn(1: Int) -> 2
+    fn(1: Int) => 2
 
 fun missing_parameter_type(): Int =
-    fn(x: ) -> x
+    fn(x: ) => x
 
 fun missing_arrow(): Int =
     fn(x) 1
 
 fun missing_body(): Int =
-    fn(x) ->
+    fn(x) =>
 
 fun unclosed_parameters(): Int =
-    fn(x -> 1
+    fn(x => 1
 
 ```
 
@@ -78,7 +78,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@261..263 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@263..266 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@263..266 "=>" [] [Whitespace(" ")],
                     body: IntLiteral {
                         value_token: INT_LITERAL@266..267 "2" [] [],
                     },
@@ -129,7 +129,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@322..324 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@324..327 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@324..327 "=>" [] [Whitespace(" ")],
                     body: IntLiteral {
                         value_token: INT_LITERAL@327..328 "2" [] [],
                     },
@@ -181,7 +181,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@376..378 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@378..381 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@378..381 "=>" [] [Whitespace(" ")],
                     body: PathExpr {
                         path: Path {
                             qualifier: missing (optional),
@@ -238,7 +238,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@419..421 ")" [] [Whitespace(" ")],
-                    arrow_token: missing (required),
+                    fat_arrow_token: missing (required),
                     body: IntLiteral {
                         value_token: INT_LITERAL@421..422 "1" [] [],
                     },
@@ -287,7 +287,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@458..460 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@460..462 "->" [] [],
+                    fat_arrow_token: FAT_ARROW@460..462 "=>" [] [],
                     body: missing (required),
                 },
             },
@@ -334,7 +334,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: missing (required),
-                    arrow_token: ARROW@506..509 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@506..509 "=>" [] [Whitespace(" ")],
                     body: IntLiteral {
                         value_token: INT_LITERAL@509..510 "1" [] [],
                     },
@@ -383,7 +383,7 @@ ModuleRoot {
                 0: INT_LITERAL@260..261 "1" [] []
               1: (empty)
           3: R_PAREN@261..263 ")" [] [Whitespace(" ")]
-          4: ARROW@263..266 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@263..266 "=>" [] [Whitespace(" ")]
           5: INT_LITERAL@266..267
             0: INT_LITERAL@266..267 "2" [] []
     1: FUN_DECL@267..328
@@ -418,7 +418,7 @@ ModuleRoot {
                 2: IDENT@319..322 "Int" [] []
               1: (empty)
           3: R_PAREN@322..324 ")" [] [Whitespace(" ")]
-          4: ARROW@324..327 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@324..327 "=>" [] [Whitespace(" ")]
           5: INT_LITERAL@327..328
             0: INT_LITERAL@327..328 "2" [] []
     2: FUN_DECL@328..382
@@ -454,7 +454,7 @@ ModuleRoot {
                 0: COLON@374..376 ":" [] [Whitespace(" ")]
                 1: (empty)
           3: R_PAREN@376..378 ")" [] [Whitespace(" ")]
-          4: ARROW@378..381 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@378..381 "=>" [] [Whitespace(" ")]
           5: PATH_EXPR@381..382
             0: PATH@381..382
               0: (empty)
@@ -527,7 +527,7 @@ ModuleRoot {
                   0: IDENT@457..458 "x" [] []
               1: (empty)
           3: R_PAREN@458..460 ")" [] [Whitespace(" ")]
-          4: ARROW@460..462 "->" [] []
+          4: FAT_ARROW@460..462 "=>" [] []
           5: (empty)
     5: FUN_DECL@462..510
       0: ATTRIBUTE_LIST@462..462
@@ -560,7 +560,7 @@ ModuleRoot {
                   0: IDENT@504..506 "x" [] [Whitespace(" ")]
               1: (empty)
           3: (empty)
-          4: ARROW@506..509 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@506..509 "=>" [] [Whitespace(" ")]
           5: INT_LITERAL@509..510
             0: INT_LITERAL@509..510 "1" [] []
   3: EOF@510..511 "" [Newline("\n")] []
@@ -575,9 +575,9 @@ ModuleRoot {
     Detail Some(316..322): Expected a pattern here.
 376..377: Expected a type but instead found ')'.
     Detail Some(376..377): Expected a type here.
-421..422: expected `->` but instead found `1`
+421..422: expected `=>` but instead found `1`
     Hint None: Remove 1
 464..467: Expected an expression but instead found 'fun'.
     Detail Some(464..467): Expected an expression here.
-506..508: expected `,` but instead found `->`
-    Hint None: Remove ->
+506..508: expected `,` but instead found `=>`
+    Hint None: Remove =>

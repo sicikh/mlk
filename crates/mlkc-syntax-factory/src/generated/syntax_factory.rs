@@ -244,7 +244,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.next_slot();
                 if let Some(element) = &current_element
-                    && element.kind() == T ! [@]
+                    && element.kind() == T ! [.]
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -550,7 +550,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.next_slot();
                 if let Some(element) = &current_element
-                    && element.kind() == T ! [->]
+                    && element.kind() == T ! [=>]
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -1114,7 +1114,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.next_slot();
                 if let Some(element) = &current_element
-                    && element.kind() == T ! [.]
+                    && element.kind() == T ! [->]
                 {
                     slots.mark_present();
                     current_element = elements.next();

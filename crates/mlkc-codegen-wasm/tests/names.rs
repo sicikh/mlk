@@ -15,7 +15,7 @@ use wasmparser::{BinaryReader, Name, NameSectionReader, Parser, Payload};
 
 /// A program with a lambda that declares a parameter of its own.
 const SOURCE: &str =
-    "//- /main.mlk\nfun main(): Int =\n    let add = fn(x: Int) -> x + 1 in\n    add(1)\n";
+    "//- /main.mlk\nfun main(): Int =\n    let add = fn(x: Int) => x + 1 in\n    add(1)\n";
 
 /// The names the `name` section holds: the name of every function by its index, and the name of
 /// every local by the index of its function and the place of the local.

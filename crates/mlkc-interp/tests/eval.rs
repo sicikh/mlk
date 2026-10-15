@@ -175,7 +175,7 @@ fn a_lambda_captures_and_is_called() {
         "\
 fun main(): Int =
     let base = 40 in
-    let add = fn(x: Int) -> x + base in
+    let add = fn(x: Int) => x + base in
     add(2)
 ",
     );
@@ -189,7 +189,7 @@ fn a_lambda_that_captures_nothing_is_called() {
     let program = program(
         "\
 fun main(): Int =
-    let double = fn(x: Int) -> x + x in
+    let double = fn(x: Int) => x + x in
     double(21)
 ",
     );
@@ -203,7 +203,7 @@ fn a_closure_is_one_value_called_more_than_once() {
         "\
 fun main(): Int =
     let base = 40 in
-    let add = fn(x: Int) -> x + base in
+    let add = fn(x: Int) => x + base in
     add(1) + add(2)
 ",
     );
@@ -216,7 +216,7 @@ fn a_generalized_lambda_is_called_at_two_types() {
     let program = program(
         "\
 fun main(): Int =
-    let id = fn(x) -> x in
+    let id = fn(x) => x in
     let _ = id(true) in
     id(42)
 ",
@@ -233,7 +233,7 @@ fn a_lambda_inside_a_lambda_captures_both_frames() {
         "\
 fun main(): Int =
     let base = 40 in
-    let add = fn(x: Int) -> fn(y: Int) -> x + y + base in
+    let add = fn(x: Int) => fn(y: Int) => x + y + base in
     add(1)(1)
 ",
     );
@@ -248,7 +248,7 @@ fn a_closure_that_two_branches_produce_joins() {
     let program = program(
         "\
 fun pick(flag: Bool, bonus: Int): Int =
-    let add = if flag then fn(x: Int) -> x + bonus else fn(x: Int) -> x + bonus + 1 in
+    let add = if flag then fn(x: Int) => x + bonus else fn(x: Int) => x + bonus + 1 in
     add(2)
 ",
     );

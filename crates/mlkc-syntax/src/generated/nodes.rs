@@ -342,14 +342,14 @@ impl FieldExpr {
     pub fn as_fields(&self) -> FieldExprFields {
         FieldExprFields {
             receiver: self.receiver(),
-            at_token: self.at_token(),
+            dot_token: self.dot_token(),
             field: self.field(),
         }
     }
     pub fn receiver(&self) -> SyntaxResult<Expr> {
         support::required_node(&self.syntax, 0usize)
     }
-    pub fn at_token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn dot_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 1usize)
     }
     pub fn field(&self) -> SyntaxResult<Name> {
@@ -370,7 +370,7 @@ impl Serialize for FieldExpr {
 #[derive(Serialize)]
 pub struct FieldExprFields {
     pub receiver: SyntaxResult<Expr>,
-    pub at_token: SyntaxResult<SyntaxToken>,
+    pub dot_token: SyntaxResult<SyntaxToken>,
     pub field: SyntaxResult<Name>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -775,7 +775,7 @@ impl LambdaExpr {
             l_paren_token: self.l_paren_token(),
             parameters: self.parameters(),
             r_paren_token: self.r_paren_token(),
-            arrow_token: self.arrow_token(),
+            fat_arrow_token: self.fat_arrow_token(),
             body: self.body(),
         }
     }
@@ -791,7 +791,7 @@ impl LambdaExpr {
     pub fn r_paren_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 3usize)
     }
-    pub fn arrow_token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn fat_arrow_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 4usize)
     }
     pub fn body(&self) -> SyntaxResult<Expr> {
@@ -815,7 +815,7 @@ pub struct LambdaExprFields {
     pub l_paren_token: SyntaxResult<SyntaxToken>,
     pub parameters: LambdaParameterList,
     pub r_paren_token: SyntaxResult<SyntaxToken>,
-    pub arrow_token: SyntaxResult<SyntaxToken>,
+    pub fat_arrow_token: SyntaxResult<SyntaxToken>,
     pub body: SyntaxResult<Expr>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -1683,7 +1683,7 @@ impl UfcsCall {
     pub fn as_fields(&self) -> UfcsCallFields {
         UfcsCallFields {
             receiver: self.receiver(),
-            dot_token: self.dot_token(),
+            arrow_token: self.arrow_token(),
             callee: self.callee(),
             l_paren_token: self.l_paren_token(),
             arguments: self.arguments(),
@@ -1693,7 +1693,7 @@ impl UfcsCall {
     pub fn receiver(&self) -> SyntaxResult<Expr> {
         support::required_node(&self.syntax, 0usize)
     }
-    pub fn dot_token(&self) -> SyntaxResult<SyntaxToken> {
+    pub fn arrow_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 1usize)
     }
     pub fn callee(&self) -> SyntaxResult<Path> {
@@ -1723,7 +1723,7 @@ impl Serialize for UfcsCall {
 #[derive(Serialize)]
 pub struct UfcsCallFields {
     pub receiver: SyntaxResult<Expr>,
-    pub dot_token: SyntaxResult<SyntaxToken>,
+    pub arrow_token: SyntaxResult<SyntaxToken>,
     pub callee: SyntaxResult<Path>,
     pub l_paren_token: SyntaxResult<SyntaxToken>,
     pub arguments: ArgumentList,
@@ -2601,7 +2601,7 @@ impl std::fmt::Debug for FieldExpr {
             DEPTH.set(current_depth + 1);
             f.debug_struct("FieldExpr")
                 .field("receiver", &support::DebugSyntaxResult(self.receiver()))
-                .field("at_token", &support::DebugSyntaxResult(self.at_token()))
+                .field("dot_token", &support::DebugSyntaxResult(self.dot_token()))
                 .field("field", &support::DebugSyntaxResult(self.field()))
                 .finish()
         } else {
@@ -3075,8 +3075,8 @@ impl std::fmt::Debug for LambdaExpr {
                     &support::DebugSyntaxResult(self.r_paren_token()),
                 )
                 .field(
-                    "arrow_token",
-                    &support::DebugSyntaxResult(self.arrow_token()),
+                    "fat_arrow_token",
+                    &support::DebugSyntaxResult(self.fat_arrow_token()),
                 )
                 .field("body", &support::DebugSyntaxResult(self.body()))
                 .finish()
@@ -4097,7 +4097,10 @@ impl std::fmt::Debug for UfcsCall {
             DEPTH.set(current_depth + 1);
             f.debug_struct("UfcsCall")
                 .field("receiver", &support::DebugSyntaxResult(self.receiver()))
-                .field("dot_token", &support::DebugSyntaxResult(self.dot_token()))
+                .field(
+                    "arrow_token",
+                    &support::DebugSyntaxResult(self.arrow_token()),
+                )
                 .field("callee", &support::DebugSyntaxResult(self.callee()))
                 .field(
                     "l_paren_token",

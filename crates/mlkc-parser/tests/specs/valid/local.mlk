@@ -58,4 +58,4 @@ fun bound(value: Int): Int =
     f(value)
 
 fun inside(value: Int): Int =
-    fn(x) -> local fun add(y: Int): Int = y + 1 in add(x)
+    fn(x) => local fun add(y: Int): Int = y + 1 in add(x)

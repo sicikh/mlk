@@ -65,7 +65,7 @@ fun bound(value: Int): Int =
     f(value)
 
 fun inside(value: Int): Int =
-    fn(x) -> local fun add(y: Int): Int = y + 1 in add(x)
+    fn(x) => local fun add(y: Int): Int = y + 1 in add(x)
 
 ```
 
@@ -1712,7 +1712,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@2366..2368 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@2368..2371 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@2368..2371 "=>" [] [Whitespace(" ")],
                     body: LocalExpr {
                         local_token: LOCAL_KW@2371..2377 "local" [] [Whitespace(" ")],
                         items: ModuleItemList [
@@ -2904,7 +2904,7 @@ ModuleRoot {
                   0: IDENT@2365..2366 "x" [] []
               1: (empty)
           3: R_PAREN@2366..2368 ")" [] [Whitespace(" ")]
-          4: ARROW@2368..2371 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@2368..2371 "=>" [] [Whitespace(" ")]
           5: LOCAL_EXPR@2371..2415
             0: LOCAL_KW@2371..2377 "local" [] [Whitespace(" ")]
             1: MODULE_ITEM_LIST@2377..2406

@@ -1,20 +1,28 @@
 // What a value may be followed by: a call, a call with the value passed as its first argument,
-// and a field read. A path is written with `::`, so a dot is never a way to name something.
+// and a field read. A path is written with `::`, so a field is read with a dot.
 
 fun calls(): Int =
     f(1)(2)
 
 fun passed(): Int =
-    value.function(1, 2)
+    value->function(1, 2)
 
 fun chained(): Int =
-    value.load().validate()
+    value->load()->validate()
 
 fun a_step_may_be_named_by_a_path(): Int =
-    value.input::Map::insert(1)
+    value->input::Map::insert(1)
 
 fun fields(): Int =
-    input@server@port
+    input.server.port
 
 fun a_field_of_a_call(): Int =
-    f(1)@field
+    f(1).field
+
+fun a_field_of_a_step(): Int =
+    config->load().state
+
+// A field is a value: what it holds is named with a dot, and a call written after it calls
+// what it holds.
+fun a_field_that_holds_a_function(): Int =
+    config.handler(1)

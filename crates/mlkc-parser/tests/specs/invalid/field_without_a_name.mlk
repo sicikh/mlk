@@ -1,0 +1,8 @@
+// A dot reads a field: the name after it belongs to the value before it, and a dot with nothing
+// after it has no field to read.
+//
+// The mistake is reported where the name belongs, and what is there of the field read is kept in
+// the tree around it.
+
+fun missing_a_field(): Int =
+    value.

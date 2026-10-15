@@ -105,9 +105,13 @@ spec_tests! {
     // read whole.
     project_not_a_root: "invalid/project_not_a_root.mlk",
 
-    // A dot that is not followed by a call: a step is a callee and an argument list, and what
-    // is written of it around the mistake is kept.
-    dot_without_a_call: "invalid/dot_without_a_call.mlk",
+    // An arrow that is not followed by a call: a step is a callee and an argument list, and
+    // what is written of it around the mistake is kept.
+    arrow_without_a_call: "invalid/arrow_without_a_call.mlk",
+
+    // A dot that is not followed by a field name: the name after the dot belongs to the value
+    // before it, and the field read around the mistake is kept.
+    field_without_a_name: "invalid/field_without_a_name.mlk",
 
     // What is wrong with a pipeline as syntax: a step that writes no place for the value,
     // a right side that is not a call, and a `_` written where no pipeline passes a value.

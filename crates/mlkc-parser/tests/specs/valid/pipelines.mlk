@@ -10,10 +10,10 @@ fun placed(): Int =
 fun twice(): Int =
     input |> f(_, _)
 
-// A step written with the dot is a call as any other is, and the receiver is passed first:
+// A step written with the arrow is a call as any other is, and the receiver is passed first:
 // this one passes `map`, `"k"` and the value.
 fun inserted(): Int =
-    input |> map.insert("k", _)
+    input |> map->insert("k", _)
 
 // The pipeline is the loosest operator: the sum is what the first step takes. What is written
 // after a step is written after the value the pipeline is, so `prepare` is called on what
@@ -21,8 +21,8 @@ fun inserted(): Int =
 fun chained(): Int =
     a + b
     |> make-data(_)
-    .prepare()
-    |> map.insert("k", _)
+    ->prepare()
+    |> map->insert("k", _)
 
 // A step is one call: a call on the result of another call goes inside the arguments.
 fun nested(): Int =
@@ -36,7 +36,7 @@ fun inner(): Int =
 // A field read is what may follow a pipeline as well: the name is read on the value the step
 // produced.
 fun field(): Int =
-    input |> f(_)@field
+    input |> f(_).field
 
 // A pipeline is an expression like any other: it is what a call passes where a value belongs.
 fun argument(): Int =

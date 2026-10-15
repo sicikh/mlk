@@ -1284,7 +1284,7 @@ mod tests {
     #[test]
     fn a_lambda_is_a_function_of_its_parameters() {
         let (id, ..) = ids();
-        let source = format!("{BUILTINS}\nfun main(value: Int): Int = (fn(x) -> x + value)(1)\n");
+        let source = format!("{BUILTINS}\nfun main(value: Int): Int = (fn(x) => x + value)(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1516,7 +1516,7 @@ mod tests {
     #[test]
     fn a_lambda_parameter_takes_the_type_it_writes() {
         let (id, ..) = ids();
-        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: Int) -> x)(1)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: Int) => x)(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1547,7 +1547,7 @@ mod tests {
     #[test]
     fn a_lambda_parameter_left_to_infer_is_inferred_from_the_body() {
         let (id, ..) = ids();
-        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: _) -> x + 1)(2)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: _) => x + 1)(2)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1574,7 +1574,7 @@ mod tests {
     fn a_lambda_bound_by_a_let_is_used_at_two_types() {
         let (id, ..) = ids();
         let source = format!(
-            "{BUILTINS}\nfun main(): Int =\n    let id = fn(x) -> x in\n    let _ = id(true) in\n    id(1)\n"
+            "{BUILTINS}\nfun main(): Int =\n    let id = fn(x) => x in\n    let _ = id(true) in\n    id(1)\n"
         );
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
@@ -1598,7 +1598,7 @@ mod tests {
     #[test]
     fn a_lambda_bound_by_a_let_reads_as_the_parameter_it_was_generalized_over() {
         let (id, ..) = ids();
-        let source = format!("{BUILTINS}\nfun main(): Int = let id = fn(x) -> x in id(1)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = let id = fn(x) => x in id(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1639,7 +1639,7 @@ mod tests {
     #[test]
     fn a_lambda_parameter_that_is_not_its_argument_is_reported() {
         let (id, ..) = ids();
-        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: Int) -> x)(true)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: Int) => x)(true)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1666,7 +1666,7 @@ mod tests {
     fn a_lambda_parameter_type_that_names_a_value_is_reported() {
         let (id, ..) = ids();
         let source =
-            format!("{BUILTINS}\nfun value(): Int = 1\nfun main(): Int = (fn(x: value) -> x)(1)\n");
+            format!("{BUILTINS}\nfun value(): Int = 1\nfun main(): Int = (fn(x: value) => x)(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));

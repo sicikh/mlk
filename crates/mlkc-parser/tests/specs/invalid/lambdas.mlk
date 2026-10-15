@@ -3,19 +3,19 @@
 // list that is never closed.
 
 fun broken_parameter(): Int =
-    fn(1) -> 2
+    fn(1) => 2
 
 fun broken_annotated_parameter(): Int =
-    fn(1: Int) -> 2
+    fn(1: Int) => 2
 
 fun missing_parameter_type(): Int =
-    fn(x: ) -> x
+    fn(x: ) => x
 
 fun missing_arrow(): Int =
     fn(x) 1
 
 fun missing_body(): Int =
-    fn(x) ->
+    fn(x) =>
 
 fun unclosed_parameters(): Int =
-    fn(x -> 1
+    fn(x => 1

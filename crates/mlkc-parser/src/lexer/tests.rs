@@ -170,6 +170,48 @@ fn dash_belongs_to_the_identifier_between_identifier_characters() {
 }
 
 #[test]
+fn a_dash_is_an_operator_outside_a_name() {
+    // The arrow is not swallowed by the name before it: a name does not end with a `-`,
+    // and `->` is the longest token that starts at the dash.
+    assert_lex! {
+        "x->f",
+        IDENT:1,
+        ARROW:2,
+        IDENT:1
+    }
+
+    assert_lex! {
+        "x-",
+        IDENT:1,
+        MINUS:1
+    }
+
+    // Two dashes in a row are two operators: neither is between two name characters.
+    assert_lex! {
+        "foo--bar",
+        IDENT:3,
+        MINUS:1,
+        MINUS:1,
+        IDENT:3
+    }
+
+    // A dash before a space, and a dash at the start of a token, are operators too.
+    assert_lex! {
+        "x- 1",
+        IDENT:1,
+        MINUS:1,
+        WHITESPACE:1,
+        INT_LITERAL:1
+    }
+
+    assert_lex! {
+        "-foo",
+        MINUS:1,
+        IDENT:3
+    }
+}
+
+#[test]
 fn underscore_is_not_an_identifier() {
     assert_lex! {
         "_",
@@ -258,9 +300,8 @@ fn keywords_are_not_identifiers() {
 #[test]
 fn punctuators() {
     assert_lex! {
-        "#@(),:.{}[];=",
+        "#(),:.{}[];=",
         HASH:1,
-        AT:1,
         L_PAREN:1,
         R_PAREN:1,
         COMMA:1,
@@ -277,6 +318,13 @@ fn punctuators() {
     assert_lex! {
         "->",
         ARROW:2
+    }
+
+    // The arrow of a lambda is read whole as well: an `=` and a `>` together are one token,
+    // because the longest match wins here as it does everywhere.
+    assert_lex! {
+        "=>",
+        FAT_ARROW:2
     }
 
     // A pipe is read whole as well, and a `|` alone is what the language does not have:
@@ -536,6 +584,13 @@ fn newline_and_whitespace_are_two_tokens() {
 
 #[test]
 fn errors() {
+    // `@` is not part of the language: a field is read with a dot, and an attribute is
+    // written `#[name]`.
+    assert_lex! {
+        "@",
+        ERROR_TOKEN:1
+    }
+
     assert_lex! {
         "$",
         ERROR_TOKEN:1

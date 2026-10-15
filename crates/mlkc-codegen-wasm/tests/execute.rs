@@ -128,7 +128,7 @@ fn a_lambda_captures_and_is_called() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
          let base = 40 in\n    \
-         let add = fn(x: Int) -> x + base in\n    \
+         let add = fn(x: Int) => x + base in\n    \
          add(2)\n",
     );
 
@@ -143,7 +143,7 @@ fn a_lambda_captures_and_is_called() {
 fn a_lambda_that_captures_nothing_is_called() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
-         let double = fn(x: Int) -> x + x in\n    \
+         let double = fn(x: Int) => x + x in\n    \
          double(21)\n",
     );
 
@@ -158,7 +158,7 @@ fn a_lambda_that_captures_nothing_is_called() {
 fn a_generalized_lambda_is_called_at_two_types() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
-         let id = fn(x) -> x in\n    \
+         let id = fn(x) => x in\n    \
          let _ = id(true) in\n    \
          id(42)\n",
     );
@@ -207,7 +207,7 @@ fn functions_declared_in_a_local_call_each_other() {
 fn a_lambda_written_in_a_local_is_lifted() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
-         local fun apply(x: Int): Int = (fn(y: Int) -> y + x)(1) in\n    \
+         local fun apply(x: Int): Int = (fn(y: Int) => y + x)(1) in\n    \
          apply(41)\n",
     );
 
@@ -223,7 +223,7 @@ fn a_lambda_calls_a_function_declared_in_a_local() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
          local fun double(x: Int): Int = x * 2 in\n    \
-         let apply = fn(y: Int) -> double(y) in\n    \
+         let apply = fn(y: Int) => double(y) in\n    \
          apply(21)\n",
     );
 
@@ -239,7 +239,7 @@ fn a_lambda_inside_a_lambda_captures_both_frames() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
          let base = 40 in\n    \
-         let add = fn(x: Int) -> fn(y: Int) -> x + y + base in\n    \
+         let add = fn(x: Int) => fn(y: Int) => x + y + base in\n    \
          add(1)(1)\n",
     );
 
@@ -255,7 +255,7 @@ fn a_closure_that_two_branches_produce_joins() {
     let compiled = harness::module(
         "pub fun main(): Int =\n    \
          let base = 40 in\n    \
-         let add = if true then fn(x: Int) -> x + base else fn(x: Int) -> x + base in\n    \
+         let add = if true then fn(x: Int) => x + base else fn(x: Int) => x + base in\n    \
          add(2)\n",
     );
 

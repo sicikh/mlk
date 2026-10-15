@@ -13,6 +13,15 @@
 //! - A lexical error is a token too: [`ERROR_TOKEN`]. It covers a single
 //!   character, so the parser can recover close to where the mistake is.
 //!
+//! # Names, the dash, and the arrow
+//!
+//! A name holds `-` only between name characters ([ADR-0029]): `println-int` is one name,
+//! while `x - 1` is a subtraction, `x-` is the name `x` and the operator, and `x->f()` is
+//! the name, the arrow, and a call. That is what lets a host read a step while it is typed:
+//! the text of `x-` never becomes a name no module wrote.
+//!
+//! [ADR-0029]: ../../docs/adr/0029-dash-in-names.md
+//!
 //! # Checkpoints
 //!
 //! The state of the lexer is a position in the source, not a borrowed DFA:
@@ -28,12 +37,12 @@ use mlkc_parser_core::{
 use mlkc_rowan::SyntaxKind as SyntaxKindTrait;
 use mlkc_syntax::{
     SyntaxKind::{
-        self, AND2, ARROW, AS_KW, AT, BANG_EQ, COLON, COLON_COLON, COMMA, COMMENT, DATA_KW, DOT,
-        ELIF_KW, ELSE_KW, EOF, EQ, EQ2, ERROR_TOKEN, FALSE_KW, FN_KW, FUN_KW, GT, GT_EQ, HASH,
-        IDENT, IF_KW, IN_KW, INT_LITERAL, L_BRACK, L_CURLY, L_PAREN, LET_KW, LOCAL_KW, LT, LT_EQ,
-        MINUS, MODULE_KW, MULTILINE_COMMENT, NEWLINE, OR2, PIPE, PLUS, PROJECT_KW, PUB_KW, R_BRACK,
-        R_CURLY, R_PAREN, SEMICOLON, SLASH, STAR, STRING_LITERAL, THEN_KW, TOMBSTONE, TRUE_KW,
-        UNDERSCORE, UNICODE_BOM, USE_KW, WHITESPACE,
+        self, AND2, ARROW, AS_KW, BANG_EQ, COLON, COLON_COLON, COMMA, COMMENT, DATA_KW, DOT,
+        ELIF_KW, ELSE_KW, EOF, EQ, EQ2, ERROR_TOKEN, FALSE_KW, FAT_ARROW, FN_KW, FUN_KW, GT, GT_EQ,
+        HASH, IDENT, IF_KW, IN_KW, INT_LITERAL, L_BRACK, L_CURLY, L_PAREN, LET_KW, LOCAL_KW, LT,
+        LT_EQ, MINUS, MODULE_KW, MULTILINE_COMMENT, NEWLINE, OR2, PIPE, PLUS, PROJECT_KW, PUB_KW,
+        R_BRACK, R_CURLY, R_PAREN, SEMICOLON, SLASH, STAR, STRING_LITERAL, THEN_KW, TOMBSTONE,
+        TRUE_KW, UNDERSCORE, UNICODE_BOM, USE_KW, WHITESPACE,
     },
     TextRange, TextSize,
 };
@@ -44,9 +53,9 @@ use mlkc_syntax::{
 /// over an identifier of the same length because a literal token has a higher
 /// priority than a regular expression.
 ///
-/// Identifiers may contain `-` between identifier characters, so `println-int`
-/// is a single name, while `x - 1` is a subtraction. The narrowest way to write
-/// this down is what makes `x-1` a name as well.
+/// Identifiers may contain `-` only between identifier characters, so `println-int`
+/// is a single name while `x - 1` is a subtraction, `x-` is a name and the operator,
+/// and `x->` is a name and the arrow.
 #[derive(Logos, Debug, Clone, Copy, PartialEq, Eq)]
 enum Tok {
     #[regex(r"[ \t]+")]
@@ -119,8 +128,6 @@ enum Tok {
     RCurly,
     #[token("#")]
     Hash,
-    #[token("@")]
-    At,
     #[token("(")]
     LParen,
     #[token(")")]
@@ -137,6 +144,10 @@ enum Tok {
     Semicolon,
     #[token("=")]
     Eq,
+    // The arrow of a lambda: `fn(x) => x`. The step of a chain writes its arrow as `->`,
+    // which is the token the longest match reads where a `-` is followed by a `>`.
+    #[token("=>")]
+    FatArrow,
     #[token("->")]
     Arrow,
     // `_` is a wildcard pattern, not a name: it wins over an identifier of the
@@ -208,7 +219,6 @@ impl Tok {
             Self::LCurly => L_CURLY,
             Self::RCurly => R_CURLY,
             Self::Hash => HASH,
-            Self::At => AT,
             Self::LParen => L_PAREN,
             Self::RParen => R_PAREN,
             Self::LBrack => L_BRACK,
@@ -217,6 +227,7 @@ impl Tok {
             Self::ColonColon => COLON_COLON,
             Self::Semicolon => SEMICOLON,
             Self::Eq => EQ,
+            Self::FatArrow => FAT_ARROW,
             Self::Arrow => ARROW,
             Self::Underscore => UNDERSCORE,
             Self::Plus => PLUS,

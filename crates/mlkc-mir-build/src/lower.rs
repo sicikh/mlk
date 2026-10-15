@@ -1083,7 +1083,7 @@ mod tests {
         let source = format!(
             "{BUILTINS}fun main(): Int = \
              let base = 40 in \
-             let add = fn(x: Int) -> x + base in \
+             let add = fn(x: Int) => x + base in \
              add(2)\n"
         );
         let (mir, ssa) = lower(&source);
@@ -1163,7 +1163,7 @@ mod tests {
         let source = format!(
             "{BUILTINS}fun main(): Int = \
              let base = 40 in \
-             let add = fn(x: Int) -> fn(y: Int) -> x + y + base in \
+             let add = fn(x: Int) => fn(y: Int) => x + y + base in \
              add(1)(1)\n"
         );
         let (mir, _) = lower(&source);
@@ -1493,7 +1493,7 @@ mod tests {
     #[test]
     fn a_lambda_written_in_a_function_declared_inside_a_body_is_a_body_of_the_owner() {
         let source = format!(
-            "{BUILTINS}fun main(): Int = local fun apply(): Int = (fn(x: Int) -> x)(1) in apply()\n"
+            "{BUILTINS}fun main(): Int = local fun apply(): Int = (fn(x: Int) => x)(1) in apply()\n"
         );
         let (mir, ssa) = lower(&source);
 

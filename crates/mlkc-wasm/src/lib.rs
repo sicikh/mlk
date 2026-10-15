@@ -2871,7 +2871,7 @@ mod tests {
     fn a_lambda_a_let_generalized_reads_as_the_parameter_and_not_as_a_mistake() {
         // The program an editor painted as a mistake: the type of the lambda is the parameter
         // the `let` generalized over, and no place of it is `{error}`.
-        const SOURCE: &str = "fun test(n: Int): Int = let id = fn(x) -> x in id(1)\n";
+        const SOURCE: &str = "fun test(n: Int): Int = let id = fn(x) => x in id(1)\n";
 
         let mut driver = WasmDriver::new();
         driver.register_library();
@@ -3098,7 +3098,7 @@ mod tests {
     fn a_lambda_crosses_the_boundary_as_a_body_of_its_own() {
         // A lambda is lifted into a function of the module, flat, and named under the entity that
         // wrote it; the expression that creates it is what its header points at.
-        const SOURCE: &str = "fun one(): Int =\n    let add = fn(x: Int) -> x + 1 in\n    add(1)\n\nfun two(): Int =\n    let add = fn(x: Int) -> fn(y: Int) -> x + y in\n    add(1)(2)\n";
+        const SOURCE: &str = "fun one(): Int =\n    let add = fn(x: Int) => x + 1 in\n    add(1)\n\nfun two(): Int =\n    let add = fn(x: Int) => fn(y: Int) => x + y in\n    add(1)(2)\n";
 
         let mut driver = WasmDriver::new();
         driver.register_library();
@@ -3128,7 +3128,7 @@ mod tests {
         // the editor to mark that code.
         let (from, to) = range(add);
 
-        assert_eq!(&SOURCE[from..to], "fn(x: Int) -> x + 1");
+        assert_eq!(&SOURCE[from..to], "fn(x: Int) => x + 1");
 
         // Every lambda is a body of the module of its own: the outer one comes first, because
         // the lowering meets it first, and the lambda it gives back follows it.
@@ -3140,11 +3140,11 @@ mod tests {
 
         let (from, to) = range(outer);
 
-        assert_eq!(&SOURCE[from..to], "fn(x: Int) -> fn(y: Int) -> x + y");
+        assert_eq!(&SOURCE[from..to], "fn(x: Int) => fn(y: Int) => x + y");
 
         let (from, to) = range(inner);
 
-        assert_eq!(&SOURCE[from..to], "fn(y: Int) -> x + y");
+        assert_eq!(&SOURCE[from..to], "fn(y: Int) => x + y");
 
         // The SSA form reads the same bodies flat, with every value defined once: a lambda body
         // is a body like any other.
@@ -3207,7 +3207,7 @@ mod tests {
 
     #[test]
     fn a_lifted_lambda_crosses_the_boundary_as_the_body_it_is() {
-        const SOURCE: &str = "fun main(): Int =\n    let add = fn(x: Int) -> fn(y: Int) -> x + y in\n    add(1)(2)\n";
+        const SOURCE: &str = "fun main(): Int =\n    let add = fn(x: Int) => fn(y: Int) => x + y in\n    add(1)(2)\n";
 
         let mut driver = WasmDriver::new();
         driver.register_library();

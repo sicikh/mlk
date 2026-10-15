@@ -7,10 +7,10 @@
 //- /main.mlk
 pub fun main(): Int =
     let base = 40 in
-    let add = fn(x: Int) -> x + base in
-    let double = fn(x: Int) -> x + x in
+    let add = fn(x: Int) => x + base in
+    let double = fn(x: Int) => x + x in
     add(2) + double(0)
 
 pub fun announce(): Unit =
-    let announce = fn(value: Int) -> print-int(value) in
+    let announce = fn(value: Int) => print-int(value) in
     announce(1)

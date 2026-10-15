@@ -1,0 +1,9 @@
+// An arrow is written with the call it makes: the callee after it, and the argument list after
+// the callee. What is there of the call is kept, and the mistake is what the parser reports.
+//
+// An arrow that has no callee is reported at the arrow: what stands where the callee belongs is
+// very often the next declaration, and a reader who wrote `value->` is told about the arrow
+// rather than about the `fun` that happens to follow it.
+
+fun missing_a_call(): Int =
+    value->

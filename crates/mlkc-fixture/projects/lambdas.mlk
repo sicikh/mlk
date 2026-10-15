@@ -8,15 +8,15 @@
 //- /main.mlk
 fun capturing(): Int =
     let base = 40 in
-    let add = fn(x: Int) -> x + base in
+    let add = fn(x: Int) => x + base in
     add(2)
 
 fun nested(): Int =
     let base = 40 in
-    let add = fn(x: Int) -> fn(y: Int) -> x + y + base in
+    let add = fn(x: Int) => fn(y: Int) => x + y + base in
     add(1)(1)
 
 fun generalized(): Int =
-    let id = fn(x) -> x in
+    let id = fn(x) => x in
     let _ = id(true) in
     id(42)

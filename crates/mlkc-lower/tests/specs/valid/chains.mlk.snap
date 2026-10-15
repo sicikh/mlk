@@ -5,8 +5,8 @@ expression: snapshot
 ## Input
 
 ```mlk
-// The split of the dot: a call with the value passed as its first argument, a field read, and
-// a path. What a chain is a chain of is known from the text alone.
+// The split of the operators: a call with the value passed as its first argument, a field read,
+// and a path. What a chain is a chain of is known from the text alone.
 
 #[builtin]
 data Int
@@ -36,7 +36,7 @@ fun start(config: Config): Int =
     config
 
 fun chained(config: Config): Int =
-    config.load().validate().start()
+    config->load()->validate()->start()
 
 fun insert(persons: Persons, name: Name, value: Data): Persons =
     persons
@@ -44,15 +44,15 @@ fun insert(persons: Persons, name: Name, value: Data): Persons =
 // The callee of a step may be a path: the path says which `insert` the step means, and the
 // receiver is passed as the first argument.
 fun add(persons: Persons, name: Name, value: Data): Persons =
-    persons.Map::insert(name, value)
+    persons->Map::insert(name, value)
 
 // A field read: the name is what the type of the value is read for, and the value may be the
 // result of a call.
 fun port(config: Config): Int =
-    config@server@port
+    config.server.port
 
 fun loaded_port(config: Config): Int =
-    config.load()@port
+    config->load().port
 
 ```
 

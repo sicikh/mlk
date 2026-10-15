@@ -84,7 +84,7 @@ pub enum Expr {
         /// The expression the binding is visible in.
         body: ExprId,
     },
-    /// A function written where a value belongs: `fn(a, b) -> expr`.
+    /// A function written where a value belongs: `fn(a, b) => expr`.
     ///
     /// What the lambda is is its parameters, its body, and the bindings of the enclosing body
     /// its body reads: a lambda is a value that carries the environment it cannot make itself,
@@ -761,7 +761,7 @@ mod tests {
 
     #[test]
     fn a_lambda_captures_the_bindings_of_the_enclosing_body_it_reads() {
-        // `fun f(x: Int): Int = fn(y) -> x + y + x`: the body reads the outer `x` twice and
+        // `fun f(x: Int): Int = fn(y) => x + y + x`: the body reads the outer `x` twice and
         // its own `y`, so what it captures is `x`, written once.
         let mut builder = BodyBuilder::new();
         let (x, x_expr) = binding(&mut builder, "x");
@@ -782,7 +782,7 @@ mod tests {
 
     #[test]
     fn a_binding_the_lambda_makes_is_not_captured() {
-        // `fn(y) -> x + (let x = 1 in x)`: the `let` shadows the outer `x`, and only the `x`
+        // `fn(y) => x + (let x = 1 in x)`: the `let` shadows the outer `x`, and only the `x`
         // written before it is captured.
         let mut builder = BodyBuilder::new();
         let (outer, outer_expr) = binding(&mut builder, "x");
@@ -804,7 +804,7 @@ mod tests {
 
     #[test]
     fn a_nested_lambda_is_a_value_and_not_a_body_of_the_outer_one() {
-        // `fn(x) -> fn(y) -> x + z`: the inner lambda captures the `x` of the outer one and
+        // `fn(x) => fn(y) => x + z`: the inner lambda captures the `x` of the outer one and
         // the `z` of the enclosing body; the outer one captures only `z`.
         let mut builder = BodyBuilder::new();
         let (x, x_expr) = binding(&mut builder, "x");

@@ -557,7 +557,7 @@ mod tests {
         let var = engine.fresh_var();
         engine.leave();
 
-        // The scheme of `fn(x) -> x`: the parameter is read in the parameters and in the
+        // The scheme of `fn(x) => x`: the parameter is read in the parameters and in the
         // result, and is one variable of the entity either way.
         let scheme = engine.generalize(&InferTy::Fn {
             params: vec![var.clone()],

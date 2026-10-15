@@ -97,7 +97,7 @@ const STRAY = "fun main(): Unit =\n    x\nabc\n";
  * and `as` are asked to be the colour of `fun` (see `src/lib/highlight.ts`).
  */
 const VISIBLE =
-    "use project::data::core as data\n\npub fun main(): Unit =\n    data.start()\n";
+    "use project::data::core as data\n\npub fun main(): Unit =\n    data->start()\n";
 
 /**
  * What is typed into a buffer to watch what a read costs: the same module twice, with the body
@@ -154,7 +154,7 @@ const UNIT =
  * the body that wrote it ([ADR-0019](../../docs/adr/0019-mir.md)).
  */
 const LAMBDA =
-    "fun main(): Int =\n    let add = fn(x: Int) -> fn(y: Int) -> x + y in\n    add(1)(2)\n";
+    "fun main(): Int =\n    let add = fn(x: Int) => fn(y: Int) => x + y in\n    add(1)(2)\n";
 
 /**
  * What a tab of the MIR reads: which form it shows, the bodies, and the lines of their blocks.

@@ -87,10 +87,10 @@ pub(crate) fn else_branch(else_token: SyntaxToken, expr: Expr) -> ElseBranch {
         Some(SyntaxElement::Node(expr.into_syntax())),
     ]))
 }
-pub(crate) fn field_expr(receiver: Expr, at_token: SyntaxToken, field: Name) -> FieldExpr {
+pub(crate) fn field_expr(receiver: Expr, dot_token: SyntaxToken, field: Name) -> FieldExpr {
     FieldExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::FIELD_EXPR, [
         Some(SyntaxElement::Node(receiver.into_syntax())),
-        Some(SyntaxElement::Token(at_token)),
+        Some(SyntaxElement::Token(dot_token)),
         Some(SyntaxElement::Node(field.into_syntax())),
     ]))
 }
@@ -242,7 +242,7 @@ pub(crate) fn lambda_expr(
     l_paren_token: SyntaxToken,
     parameters: LambdaParameterList,
     r_paren_token: SyntaxToken,
-    arrow_token: SyntaxToken,
+    fat_arrow_token: SyntaxToken,
     body: Expr,
 ) -> LambdaExpr {
     LambdaExpr::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::LAMBDA_EXPR, [
@@ -250,7 +250,7 @@ pub(crate) fn lambda_expr(
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(parameters.into_syntax())),
         Some(SyntaxElement::Token(r_paren_token)),
-        Some(SyntaxElement::Token(arrow_token)),
+        Some(SyntaxElement::Token(fat_arrow_token)),
         Some(SyntaxElement::Node(body.into_syntax())),
     ]))
 }
@@ -481,7 +481,7 @@ pub(crate) fn type_args(
 }
 pub(crate) fn ufcs_call(
     receiver: Expr,
-    dot_token: SyntaxToken,
+    arrow_token: SyntaxToken,
     callee: Path,
     l_paren_token: SyntaxToken,
     arguments: ArgumentList,
@@ -489,7 +489,7 @@ pub(crate) fn ufcs_call(
 ) -> UfcsCall {
     UfcsCall::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::UFCS_CALL, [
         Some(SyntaxElement::Node(receiver.into_syntax())),
-        Some(SyntaxElement::Token(dot_token)),
+        Some(SyntaxElement::Token(arrow_token)),
         Some(SyntaxElement::Node(callee.into_syntax())),
         Some(SyntaxElement::Token(l_paren_token)),
         Some(SyntaxElement::Node(arguments.into_syntax())),

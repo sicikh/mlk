@@ -6,50 +6,50 @@ expression: snapshot
 
 ```mlk
 // A lambda: a function written where a value belongs. `fn` opens it, the parameter list holds
-// the patterns the body binds, and the body is what stands after the `->`. The body extends as
+// the patterns the body binds, and the body is what stands after the `=>`. The body extends as
 // far as it can: what is written after it is written after the value the lambda is, so a lambda
 // ends where the expression it is written in ends.
 
 fun sampled(value: Int): Int =
-    fn(x) -> x + value
+    fn(x) => x + value
 
 // The parameter list may be empty, may ignore a value, and may bind several names.
 fun none(): Int =
-    fn() -> 42
+    fn() => 42
 
 fun ignored(): Int =
-    fn(_) -> 1
+    fn(_) => 1
 
 fun paired(left: Int, right: Int): Int =
-    fn(left, right) -> left + right
+    fn(left, right) => left + right
 
 // A parameter may write the type it takes, as the parameter of a function declaration may, and
 // the ones that write no type take what inference gives them.
 fun annotated(value: Int): Int =
-    fn(x: Int, y) -> x + y + value
+    fn(x: Int, y) => x + y + value
 
 // What a body may be is what any expression may be: a `let`, an `if`, and a pipeline are
 // written inside one the way they are written anywhere else.
 fun bound(value: Int): Int =
-    fn(x) ->
+    fn(x) =>
         let y = x + value in
         y
 
 fun chosen(flag: Bool): Int =
-    fn(x) ->
+    fn(x) =>
         if flag then x else 0
 
 fun piped(value: Int): Int =
-    fn(x) -> x |> consume(_, value)
+    fn(x) => x |> consume(_, value)
 
 // A lambda is a value: it stands where any other one stands, and a parenthesized one may be
 // applied at once, which is what the parentheses around a lambda are for.
 fun applied(value: Int): Int =
-    (fn(x, y) -> x + y)(value, 1)
+    (fn(x, y) => x + y)(value, 1)
 
 // A lambda inside a lambda, and a name the inner body reads from the outer parameters.
 fun nested(value: Int): Int =
-    fn(x) -> fn(y) -> x + y + value
+    fn(x) => fn(y) => x + y + value
 
 ```
 
@@ -124,7 +124,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@380..382 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@382..385 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@382..385 "=>" [] [Whitespace(" ")],
                     body: BinExpr {
                         lhs: PathExpr {
                             path: Path {
@@ -186,7 +186,7 @@ ModuleRoot {
                     l_paren_token: L_PAREN@504..505 "(" [] [],
                     parameters: LambdaParameterList [],
                     r_paren_token: R_PAREN@505..507 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@507..510 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@507..510 "=>" [] [Whitespace(" ")],
                     body: IntLiteral {
                         value_token: INT_LITERAL@510..512 "42" [] [],
                     },
@@ -233,7 +233,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@543..545 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@545..548 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@545..548 "=>" [] [Whitespace(" ")],
                     body: IntLiteral {
                         value_token: INT_LITERAL@548..549 "1" [] [],
                     },
@@ -335,7 +335,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@610..612 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@612..615 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@612..615 "=>" [] [Whitespace(" ")],
                     body: BinExpr {
                         lhs: PathExpr {
                             path: Path {
@@ -450,7 +450,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@837..839 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@839..842 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@839..842 "=>" [] [Whitespace(" ")],
                     body: BinExpr {
                         lhs: BinExpr {
                             lhs: PathExpr {
@@ -557,7 +557,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@1046..1048 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@1048..1050 "->" [] [],
+                    fat_arrow_token: FAT_ARROW@1048..1050 "=>" [] [],
                     body: LetExpr {
                         let_token: LET_KW@1050..1063 "let" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")],
                         pat: IdentPat {
@@ -671,7 +671,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@1129..1131 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@1131..1133 "->" [] [],
+                    fat_arrow_token: FAT_ARROW@1131..1133 "=>" [] [],
                     body: IfExpr {
                         if_token: IF_KW@1133..1145 "if" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")],
                         condition: PathExpr {
@@ -772,7 +772,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@1202..1204 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@1204..1207 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@1204..1207 "=>" [] [Whitespace(" ")],
                     body: PipeExpr {
                         lhs: PathExpr {
                             path: Path {
@@ -898,7 +898,7 @@ ModuleRoot {
                                 },
                             ],
                             r_paren_token: R_PAREN@1442..1444 ")" [] [Whitespace(" ")],
-                            arrow_token: ARROW@1444..1447 "->" [] [Whitespace(" ")],
+                            fat_arrow_token: FAT_ARROW@1444..1447 "=>" [] [Whitespace(" ")],
                             body: BinExpr {
                                 lhs: PathExpr {
                                     path: Path {
@@ -1013,7 +1013,7 @@ ModuleRoot {
                         },
                     ],
                     r_paren_token: R_PAREN@1591..1593 ")" [] [Whitespace(" ")],
-                    arrow_token: ARROW@1593..1596 "->" [] [Whitespace(" ")],
+                    fat_arrow_token: FAT_ARROW@1593..1596 "=>" [] [Whitespace(" ")],
                     body: LambdaExpr {
                         fn_token: FN_KW@1596..1598 "fn" [] [],
                         l_paren_token: L_PAREN@1598..1599 "(" [] [],
@@ -1028,7 +1028,7 @@ ModuleRoot {
                             },
                         ],
                         r_paren_token: R_PAREN@1600..1602 ")" [] [Whitespace(" ")],
-                        arrow_token: ARROW@1602..1605 "->" [] [Whitespace(" ")],
+                        fat_arrow_token: FAT_ARROW@1602..1605 "=>" [] [Whitespace(" ")],
                         body: BinExpr {
                             lhs: BinExpr {
                                 lhs: PathExpr {
@@ -1128,7 +1128,7 @@ ModuleRoot {
                   0: IDENT@379..380 "x" [] []
               1: (empty)
           3: R_PAREN@380..382 ")" [] [Whitespace(" ")]
-          4: ARROW@382..385 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@382..385 "=>" [] [Whitespace(" ")]
           5: BIN_EXPR@385..394
             0: PATH_EXPR@385..387
               0: PATH@385..387
@@ -1171,7 +1171,7 @@ ModuleRoot {
           1: L_PAREN@504..505 "(" [] []
           2: LAMBDA_PARAMETER_LIST@505..505
           3: R_PAREN@505..507 ")" [] [Whitespace(" ")]
-          4: ARROW@507..510 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@507..510 "=>" [] [Whitespace(" ")]
           5: INT_LITERAL@510..512
             0: INT_LITERAL@510..512 "42" [] []
     2: FUN_DECL@512..549
@@ -1204,7 +1204,7 @@ ModuleRoot {
                 0: UNDERSCORE@542..543 "_" [] []
               1: (empty)
           3: R_PAREN@543..545 ")" [] [Whitespace(" ")]
-          4: ARROW@545..548 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@545..548 "=>" [] [Whitespace(" ")]
           5: INT_LITERAL@548..549
             0: INT_LITERAL@548..549 "1" [] []
     3: FUN_DECL@549..627
@@ -1271,7 +1271,7 @@ ModuleRoot {
                   0: IDENT@605..610 "right" [] []
               1: (empty)
           3: R_PAREN@610..612 ")" [] [Whitespace(" ")]
-          4: ARROW@612..615 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@612..615 "=>" [] [Whitespace(" ")]
           5: BIN_EXPR@615..627
             0: PATH_EXPR@615..620
               0: PATH@615..620
@@ -1346,7 +1346,7 @@ ModuleRoot {
                   0: IDENT@836..837 "y" [] []
               1: (empty)
           3: R_PAREN@837..839 ")" [] [Whitespace(" ")]
-          4: ARROW@839..842 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@839..842 "=>" [] [Whitespace(" ")]
           5: BIN_EXPR@842..855
             0: BIN_EXPR@842..848
               0: PATH_EXPR@842..844
@@ -1416,7 +1416,7 @@ ModuleRoot {
                   0: IDENT@1045..1046 "x" [] []
               1: (empty)
           3: R_PAREN@1046..1048 ")" [] [Whitespace(" ")]
-          4: ARROW@1048..1050 "->" [] []
+          4: FAT_ARROW@1048..1050 "=>" [] []
           5: LET_EXPR@1050..1089
             0: LET_KW@1050..1063 "let" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")]
             1: IDENT_PAT@1063..1065
@@ -1491,7 +1491,7 @@ ModuleRoot {
                   0: IDENT@1128..1129 "x" [] []
               1: (empty)
           3: R_PAREN@1129..1131 ")" [] [Whitespace(" ")]
-          4: ARROW@1131..1133 "->" [] []
+          4: FAT_ARROW@1131..1133 "=>" [] []
           5: IF_EXPR@1133..1163
             0: IF_KW@1133..1145 "if" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")]
             1: PATH_EXPR@1145..1150
@@ -1558,7 +1558,7 @@ ModuleRoot {
                   0: IDENT@1201..1202 "x" [] []
               1: (empty)
           3: R_PAREN@1202..1204 ")" [] [Whitespace(" ")]
-          4: ARROW@1204..1207 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@1204..1207 "=>" [] [Whitespace(" ")]
           5: PIPE_EXPR@1207..1229
             0: PATH_EXPR@1207..1209
               0: PATH@1207..1209
@@ -1642,7 +1642,7 @@ ModuleRoot {
                       0: IDENT@1441..1442 "y" [] []
                   1: (empty)
               3: R_PAREN@1442..1444 ")" [] [Whitespace(" ")]
-              4: ARROW@1444..1447 "->" [] [Whitespace(" ")]
+              4: FAT_ARROW@1444..1447 "=>" [] [Whitespace(" ")]
               5: BIN_EXPR@1447..1452
                 0: PATH_EXPR@1447..1449
                   0: PATH@1447..1449
@@ -1717,7 +1717,7 @@ ModuleRoot {
                   0: IDENT@1590..1591 "x" [] []
               1: (empty)
           3: R_PAREN@1591..1593 ")" [] [Whitespace(" ")]
-          4: ARROW@1593..1596 "->" [] [Whitespace(" ")]
+          4: FAT_ARROW@1593..1596 "=>" [] [Whitespace(" ")]
           5: LAMBDA_EXPR@1596..1618
             0: FN_KW@1596..1598 "fn" [] []
             1: L_PAREN@1598..1599 "(" [] []
@@ -1728,7 +1728,7 @@ ModuleRoot {
                     0: IDENT@1599..1600 "y" [] []
                 1: (empty)
             3: R_PAREN@1600..1602 ")" [] [Whitespace(" ")]
-            4: ARROW@1602..1605 "->" [] [Whitespace(" ")]
+            4: FAT_ARROW@1602..1605 "=>" [] [Whitespace(" ")]
             5: BIN_EXPR@1605..1618
               0: BIN_EXPR@1605..1611
                 0: PATH_EXPR@1605..1607

@@ -33,8 +33,11 @@ The editor has its own grammar for highlighting.
 
 ## Rules of the surface
 
-- `@`, `.`, and `::` are three different things, not one dot
+- `.`, `->`, and `::` are three different things, not one dot:
+  a dot reads a field, an arrow calls with the value first, `::` qualifies
   (`docs/adr/0012-split-the-dot-operator.md`).
+- A lambda writes its arrow `=>`; a name never swallows the `-` of the step's `->`
+  (`docs/adr/0029-dash-in-names.md`).
 - `x |> f(a, _)` is sugar for `let v = x in f(a, v)`
   (`docs/adr/0013-pipeline-operator.md`).
 - The HIR gains no spelling variants: sugar stops at lowering

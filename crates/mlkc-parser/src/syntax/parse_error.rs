@@ -58,20 +58,21 @@ pub(crate) fn expected_type(p: &MlkParser, range: TextRange) -> ParseDiagnostic 
 }
 
 /// The parser expected a path, which is what a preamble, a type, and the callee of a call
-/// written with a dot are written with.
+/// written with an arrow are written with.
 pub(crate) fn expected_path(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("path", range, p)
 }
 
-/// The parser expected the callee of the call a dot makes, and the dot is what it reports on.
+/// The parser expected the callee of the call an arrow makes, and the arrow is what it
+/// reports on.
 ///
-/// The callee is what stands after the dot, and the token that stands where it belongs is
-/// very often the next declaration --- a body that ends with `value.` is followed by the `fun`
-/// of the one after it --- so what is said is that the dot has no callee, rather than that the
-/// token a reader would be pointed at is one the path cannot be made of.
-pub(crate) fn expected_path_after_the_dot(range: TextRange) -> ParseDiagnostic {
+/// The callee is what stands after the arrow, and the token that stands where it belongs is
+/// very often the next declaration --- a body that ends with `value->` is followed by the `fun`
+/// of the one after it --- so what is said is that the arrow has no callee, rather than that
+/// the token a reader would be pointed at is one the path cannot be made of.
+pub(crate) fn expected_path_after_the_arrow(range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new(
-        "Expected a path after the `.`: a dot is written with the call it makes.",
+        "Expected a path after the `->`: an arrow is written with the call it makes.",
         range,
     )
 }

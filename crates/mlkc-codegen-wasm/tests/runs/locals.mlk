@@ -19,12 +19,12 @@ fun mutual(value: Int): Int =
 // A lambda written in a function declared in a `local` is an entry of the arena of the body
 // that declares the function, and a lambda written in the body calls the function directly.
 fun through_a_lambda(value: Int): Int =
-    local fun apply(x: Int): Int = (fn(y: Int) -> y + x)(1) in
+    local fun apply(x: Int): Int = (fn(y: Int) => y + x)(1) in
     apply(value)
 
 fun from_a_lambda(value: Int): Int =
     local fun double(x: Int): Int = x * 2 in
-    let apply = fn(y: Int) -> double(y) in
+    let apply = fn(y: Int) => double(y) in
     apply(value)
 
 // A host function called from a function declared in a `local`.

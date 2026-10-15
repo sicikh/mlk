@@ -108,8 +108,8 @@ fn an_expression_the_lowering_made_up_is_written_nowhere() {
 }
 
 #[test]
-fn a_call_written_with_a_dot_reads_as_the_call_it_means() {
-    let source = "fun main(): Int =\n    value.function(1)\n";
+fn a_call_written_with_the_arrow_reads_as_the_call_it_means() {
+    let source = "fun main(): Int =\n    value->function(1)\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 
@@ -117,11 +117,11 @@ fn a_call_written_with_a_dot_reads_as_the_call_it_means() {
         panic!("a call is the root of the body");
     };
 
-    // The call is about the whole spelling, the callee is the name written after the dot,
+    // The call is about the whole spelling, the callee is the name written after the arrow,
     // and the receiver is the first argument, where it is written.
     assert_eq!(
         lowered.source_map.expr(body.root()),
-        Some(at(source, "value.function(1)")),
+        Some(at(source, "value->function(1)")),
     );
     assert_eq!(
         lowered.source_map.expr(*callee),
@@ -132,8 +132,8 @@ fn a_call_written_with_a_dot_reads_as_the_call_it_means() {
 }
 
 #[test]
-fn a_call_written_with_a_dot_may_be_named_by_a_path() {
-    let source = "fun main(): Int =\n    value.Map::insert(name)\n";
+fn a_call_written_with_the_arrow_may_be_named_by_a_path() {
+    let source = "fun main(): Int =\n    value->Map::insert(name)\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 
@@ -141,7 +141,7 @@ fn a_call_written_with_a_dot_may_be_named_by_a_path() {
         panic!("a call is the root of the body");
     };
 
-    // What a step is a step of is the path written after the dot, and the path is written
+    // What a step is a step of is the path written after the arrow, and the path is written
     // where it is: the receiver is passed before the arguments of the call.
     assert_eq!(
         lowered.source_map.expr(*callee),
@@ -153,7 +153,7 @@ fn a_call_written_with_a_dot_may_be_named_by_a_path() {
 
 #[test]
 fn a_field_read_is_where_the_field_is_written() {
-    let source = "fun main(): Int =\n    input@field\n";
+    let source = "fun main(): Int =\n    input.field\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 
@@ -164,7 +164,7 @@ fn a_field_read_is_where_the_field_is_written() {
     assert_eq!(field.as_str(), "field");
     assert_eq!(
         lowered.source_map.expr(body.root()),
-        Some(at(source, "input@field")),
+        Some(at(source, "input.field")),
     );
     assert_eq!(
         lowered.source_map.expr(*receiver),
@@ -223,8 +223,8 @@ fn a_pipeline_is_the_value_it_binds_and_the_call_it_is() {
 }
 
 #[test]
-fn a_step_written_with_the_dot_passes_its_receiver_first() {
-    let source = "fun main(): Int =\n    input |> map.insert(\"k\", _)\n";
+fn a_step_written_with_the_arrow_passes_its_receiver_first() {
+    let source = "fun main(): Int =\n    input |> map->insert(\"k\", _)\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 
@@ -234,7 +234,7 @@ fn a_step_written_with_the_dot_passes_its_receiver_first() {
 
     assert_eq!(
         lowered.source_map.expr(*step),
-        Some(at(source, "map.insert(\"k\", _)")),
+        Some(at(source, "map->insert(\"k\", _)")),
     );
 
     let Expr::Call { callee, args } = &body[*step] else {

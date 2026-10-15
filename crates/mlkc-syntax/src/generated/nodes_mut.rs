@@ -139,7 +139,7 @@ impl FieldExpr {
                 .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
         )
     }
-    pub fn with_at_token(self, element: SyntaxToken) -> Self {
+    pub fn with_dot_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(1usize..=1usize, once(Some(element.into()))),
@@ -337,7 +337,7 @@ impl LambdaExpr {
                 .splice_slots(3usize..=3usize, once(Some(element.into()))),
         )
     }
-    pub fn with_arrow_token(self, element: SyntaxToken) -> Self {
+    pub fn with_fat_arrow_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(4usize..=4usize, once(Some(element.into()))),
@@ -665,7 +665,7 @@ impl UfcsCall {
                 .splice_slots(0usize..=0usize, once(Some(element.into_syntax().into()))),
         )
     }
-    pub fn with_dot_token(self, element: SyntaxToken) -> Self {
+    pub fn with_arrow_token(self, element: SyntaxToken) -> Self {
         Self::unwrap_cast(
             self.syntax
                 .splice_slots(1usize..=1usize, once(Some(element.into()))),

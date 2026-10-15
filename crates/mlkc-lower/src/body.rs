@@ -190,7 +190,7 @@ impl BodyLowering<'_> {
 
     /// Lowers a path into the expression that names what the path names.
     ///
-    /// A path is what a value is named by, and the callee of a call written with a dot is
+    /// A path is what a value is named by, and the callee of a call written with an arrow is
     /// a path outside an expression: a caller that holds one reads it here, and is handed an
     /// expression written where the path is.
     fn path_of(&mut self, path: &PathSyntax) -> ExprId {
@@ -336,10 +336,11 @@ impl BodyLowering<'_> {
         self.builder.alloc_expr(Expr::Call { callee, args })
     }
 
-    /// Lowers a call written with the receiver before the callee: `receiver.function(a)`.
+    /// Lowers a call written with the receiver before the callee: `receiver->function(a)`.
     ///
     /// The spelling means the call `function(receiver, a)`: the receiver is the first
-    /// argument, and the callee is the path written after the dot. The dot is a spelling and
+    /// argument, and the callee is the path written after the arrow. The arrow is a spelling
+    /// and
     /// stops here — what the HIR holds is the call it means — while the receiver and the
     /// arguments keep the places they are written at.
     fn ufcs_call(&mut self, call: &UfcsCall) -> ExprId {

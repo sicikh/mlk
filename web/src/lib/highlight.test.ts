@@ -46,6 +46,20 @@ function wordAt(source: string, word: string) {
     return at;
 }
 
+/** The nodes the grammar could not place: what a tree shows as `⚠`. */
+function unexpectedNodes(source: string) {
+    const tree = mlkLanguage.parser.parse(source);
+    const found: string[] = [];
+
+    tree.iterate({
+        enter(node) {
+            if (node.name === "⚠") found.push(node.name);
+        },
+    });
+
+    return found;
+}
+
 describe("the colours of the language", () => {
     it("paints the keywords it reads out of names", () => {
         const source = `#[entry]\npub fun main() : Unit =\n    let x = 1 in\n    x\n`;
@@ -66,7 +80,7 @@ describe("the colours of the language", () => {
     });
 
     it("paints use and as, for an import renamed where it is written", () => {
-        const source = `use project::types::core as types\n\npub fun main() : Unit =\n    types.start()\n`;
+        const source = `use project::types::core as types\n\npub fun main() : Unit =\n    types->start()\n`;
 
         expect(tagsAt(source, source.indexOf("use"))).toContain(tags.keyword);
         expect(tagsAt(source, source.indexOf("as"))).toContain(tags.keyword);
@@ -123,16 +137,18 @@ describe("the colours of the language", () => {
 
     it("parses the program the editor opens with, without an error node", () => {
         const tree = mlkLanguage.parser.parse(STARTER);
-        const errors: string[] = [];
-
-        tree.iterate({
-            enter(node) {
-                if (node.name === "⚠") errors.push(node.name);
-            },
-        });
 
         expect(tree.topNode.name).toBe("ModuleRoot");
-        expect(errors).toEqual([]);
+        expect(unexpectedNodes(STARTER)).toEqual([]);
+    });
+
+    it("parses a field, a step, and a lambda written the way the language writes them", () => {
+        const source = `fun added(config: Config, value: Int) : Int =
+    let add = fn(x: Int) => x + value in
+    config.server->load(add(1)).port
+`;
+
+        expect(unexpectedNodes(source)).toEqual([]);
     });
 
     it("says which tokens a comment of the language is written with", () => {

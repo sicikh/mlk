@@ -17,7 +17,7 @@ fun a_place_outside_a_step(): Int =
     f(_)
 
 // The step is `f(_)`, and what is written after it is written after the value the pipeline is:
-// the place belongs to the step, and this `_` is written in the call of a value that is not
-// one.
+// the place belongs to the step, and this `_` is written in the call the arrow makes on the
+// value the step produced.
 fun a_place_after_the_step(): Int =
-    input |> f(_).g(_)
+    input |> f(_)->g(_)

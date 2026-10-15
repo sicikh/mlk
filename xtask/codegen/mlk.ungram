@@ -227,24 +227,24 @@ CallExpr =
     arguments: ArgumentList
     ')'
 
-// A call with the value written before the name it calls: `value.function(args)`.
+// A call with the value written before the name it calls: `value->function(args)`.
 //
 // The receiver is passed as the first argument of the call the spelling means:
-// `value.function(a)` is `function(value, a)`. What stands after the dot is the callee the
-// call means, which is a name or a path, and the call is written after it, so a dot is never
-// a way to name a function with its first argument left open.
+// `value->function(a)` is `function(value, a)`. What stands after the arrow is the callee the
+// call means, which is a name or a path, and the call is written after it, so an arrow is
+// never a way to name a function with its first argument left open.
 UfcsCall =
     receiver: Expr
-    '.'
+    '->'
     callee: Path
     '('
     arguments: ArgumentList
     ')'
 
-// A field read: the value, and the name of the field: `data@field`.
+// A field read: the value, and the name of the field: `data.field`.
 FieldExpr =
     receiver: Expr
-    '@'
+    '.'
     field: Name
 
 ArgumentList = (Expr (',' Expr)* ','?)
@@ -257,9 +257,9 @@ ArgumentList = (Expr (',' Expr)* ','?)
 // one direction.
 //
 // The step is a call, and it is one call: the callee is a name, a path, or a receiver
-// written with the dot, whose receiver is a name or a path as well. A step ends with the
-// argument list of its call: a dot, a `|>`, or a binary operator written after it is
-// written after the value the pipeline is.
+// written with the arrow, whose receiver is a name or a path as well. A step ends with the
+// argument list of its call: a field, an arrow, a `|>`, or a binary operator written after it
+// is written after the value the pipeline is.
 PipeExpr =
     lhs: Expr
     '|>'
@@ -284,7 +284,7 @@ LetExpr =
     'in'
     body: Expr
 
-// A lambda: a function written where a value belongs: `fn(a, b) -> expr`.
+// A lambda: a function written where a value belongs: `fn(a, b) => expr`.
 //
 // The parameters are the parameters of a function declaration: patterns, and the types they
 // take where the module writes them. They bind the body the way the parameters of a function
@@ -295,7 +295,7 @@ LambdaExpr =
     '('
     parameters: LambdaParameterList
     ')'
-    '->'
+    '=>'
     body: Expr
 
 LambdaParameterList = (AnyParameter (',' AnyParameter)*)

@@ -149,9 +149,9 @@ exactly one per module, chosen by the host
 Sugar stops at lowering
 ([ADR-0014](../adr/0014-syntactic-sugar.md)).
 
-**`@`, `.`, `::`** — the split of the old dot:
-`receiver@field` is a field read, `receiver.function(args)`
-is a call,
+**`.`, `->`, `::`** — the split of the old dot:
+`receiver.field` is a field read, `receiver->function(args)`
+is a call with the receiver passed first,
 `path::segment` names an entity
 ([ADR-0012](../adr/0012-split-the-dot-operator.md)).
 

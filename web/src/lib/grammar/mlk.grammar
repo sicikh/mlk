@@ -109,18 +109,18 @@ Expr { BinaryExpr | UnaryExpr | PostfixExpr }
 // as its first argument, and a field read. Each is postfix, and they chain left to right.
 //
 // The pipeline is what a value may be followed by as well, and what is written after it is
-// written after the value it is: a dot after a step calls the callee on what the step
+// written after the value it is: an arrow after a step calls the callee on what the step
 // produced, which is what reading the pipeline as one of the forms says.
 PostfixExpr { PrimaryExpr | CallExpr | UfcsCall | FieldExpr | PipeExpr }
 
 CallExpr { PostfixExpr !call "(" (Expr ("," Expr)* ","?)? ")" }
 
-// A call with the value written before the callee: `value.function(args)` is
-// `function(value, args)`. What stands after the dot is a name or a path.
-UfcsCall { PostfixExpr !call "." Path "(" (Expr ("," Expr)* ","?)? ")" }
+// A call with the value written before the callee: `value->function(args)` is
+// `function(value, args)`. What stands after the arrow is a name or a path.
+UfcsCall { PostfixExpr !call "->" Path "(" (Expr ("," Expr)* ","?)? ")" }
 
 // A field read: the value, and the name of the field.
-FieldExpr { PostfixExpr !call "@" Name }
+FieldExpr { PostfixExpr !call "." Name }
 
 // A sign in front of an expression, which binds tighter than any binary operator:
 // `-1 + 2` is `(-1) + 2`, and `-f(x)` is the negation of the call.
@@ -128,9 +128,9 @@ UnaryExpr { !call ("-" | "+") Expr }
 
 // A lambda: a function written where a value belongs. `fn` opens it, the parameter list holds
 // the patterns the body binds and the types they are written with, and the body is what stands
-// after the `->`; the body extends as far as it can, so what stands after it is written after
+// after the `=>`; the body extends as far as it can, so what stands after it is written after
 // the value the lambda is.
-LambdaExpr { kw<"fn"> LambdaParameters "->" Expr }
+LambdaExpr { kw<"fn"> LambdaParameters "=>" Expr }
 
 LambdaParameters { "(" (Parameter ("," Parameter)*)? ")" }
 
@@ -188,8 +188,8 @@ ParenExpr { "(" Expr ")" }
 PipeExpr { Expr !pipe "|>" Step }
 
 // What stands on the right of a `|>`: a call, whose callee is a path or a call written with
-// the dot, and among whose arguments a place is written.
-Step { PathExpr ("." Path)? "(" (Expr ("," Expr)* ","?)? ")" }
+// the arrow, and among whose arguments a place is written.
+Step { PathExpr ("->" Path)? "(" (Expr ("," Expr)* ","?)? ")" }
 
 Literal { IntLiteral | StringLiteral | BoolLiteral }
 
@@ -202,8 +202,8 @@ StringLiteral { string_literal }
 BoolLiteral { kw<"true"> | kw<"false"> }
 
 // A path written where a value belongs: a name, or a name of the project with the names
-// inside it after it. A path is what says that a dot is never a way to name something: the
-// dot is what a call with the value passed first is written with.
+// inside it after it. A path is what says that an arrow is never a way to name something: the
+// arrow is what a call with the value passed first is written with.
 PathExpr { Path }
 
 @tokens {

@@ -7,7 +7,7 @@
 
 The language says more than one thing for the same construct, and that is deliberate:
 `(e)` is `e`,
-`receiver.function(args)` is `function(receiver, args)` ([ADR-0012][0012-split-the-dot-operator.md]),
+`receiver->function(args)` is `function(receiver, args)` ([ADR-0012][0012-split-the-dot-operator.md]),
 the sequence `e1; e2` is `let _ = e1 in e2`,
 and the pipeline `x |> f(a, _)` is `let v = x in f(a, v)` ([ADR-0013][0013-pipeline-operator.md]).
 A form of this kind — a _spelling_ of a construct —
@@ -78,7 +78,7 @@ The spellings the language has decided:
 
 ```mlk
 (e)                   lowers to  e
-receiver.function(a)  lowers to  function(receiver, a)
+receiver->function(a) lowers to  function(receiver, a)
 e1; e2                lowers to  let _ = e1 in e2
 x |> f(a, _)          lowers to  let v = x in f(a, v)
 x |> f(_, _)          lowers to  let v = x in f(v, v)
@@ -88,7 +88,7 @@ This is what keeps the passes from growing.
 A spelling never makes a construct the language does not already have,
 so no pass learns a case for one:
 a sequence is a `let` with a wildcard pattern, and a `let` with a wildcard is written;
-a dot call is a call, and a call is written;
+an arrow call is a call, and a call is written;
 a pipeline is a `let` and a call, and both are written.
 
 The HIR grows no variant for a spelling.
@@ -111,11 +111,11 @@ The `;` and the expressions are written;
 the wildcard pattern is what the lowering makes up from nothing,
 and a node made up from nothing has no range.
 
-### The spelling of a call: `receiver.function(args)` means `function(receiver, args)`
+### The spelling of a call: `receiver->function(args)` means `function(receiver, args)`
 
 Decided by [ADR-0012][0012-split-the-dot-operator.md], and concrete here:
 
-- the callee is what is written after the dot — a name or a path ([ADR-0012][0012-split-the-dot-operator.md]) —
+- the callee is what is written after the arrow — a name or a path ([ADR-0012][0012-split-the-dot-operator.md]) —
   and its range is that piece of the text;
 - the receiver is the first argument, and its range is the receiver as written;
 - the arguments are read in the order they are written, after the receiver;
@@ -129,8 +129,8 @@ Decided by [ADR-0013][0013-pipeline-operator.md], and concrete here:
 
 - the step is a `let` the lowering makes up, and the call the step is;
 - the call is read as any call is:
-  a step written with the dot is read as the call it means ([ADR-0012][0012-split-the-dot-operator.md]),
-  so the callee of `data |> map.insert("k", _)` is `insert`,
+  a step written with the arrow is read as the call it means ([ADR-0012][0012-split-the-dot-operator.md]),
+  so the callee of `data |> map->insert("k", _)` is `insert`,
   with `map` and `"k"` before the value;
 - the left side is the expression the binding is bound to,
   and its range is what is written on the left;
@@ -170,13 +170,13 @@ and where that node stands among the parts of the meaning.
 
 The bar: a mistake about a spelling is reported the way a mistake about the construct it means would be,
 and no worse.
-A mistake about `receiver.function(a)` is the one a reader of `function(receiver, a)` would get,
+A mistake about `receiver->function(a)` is the one a reader of `function(receiver, a)` would get,
 and a mistake about `x |> f(a, _)` is the one a reader of `let v = x in f(a, v)` would get.
 
 What follows from the split:
 
 - what is wrong with a spelling _as syntax_ is the parser's mistake, and it points at the spelling:
-  a dot that is not followed by a call, a `;` with nothing after it,
+  an arrow that is not followed by a call, a `;` with nothing after it,
   a `_` outside the arguments of a call a pipeline applies;
 - what is wrong with its _meaning_ is a mistake of the stage that owns the meaning,
   and it points at the pieces of the spelling:
@@ -194,7 +194,7 @@ and what the reader reads under the label is the text they wrote.
 Nothing is lost by this:
 two spellings of one meaning are, by admission, spellings of the _same_ construct,
 so a mistake in one is a mistake in what both of them mean.
-A message that would have to say "after the dot" would be a message about syntax,
+A message that would have to say "after the arrow" would be a message about syntax,
 and syntax is the parser's.
 
 ### A host reads the spelling from the syntax and the meaning from the HIR
@@ -284,7 +284,7 @@ Points 1 and 2 are the whole of the code; the rest is what a reviewer of a spell
 - The lowering carries one case per spelling, by hand:
   a mistake in a rule is a mistake in what the spelling means wherever it is used.
 - A message counts what the meaning counts:
-  the arity of `receiver.function(a)` is the arity of `function(receiver, a)`,
+  the arity of `receiver->function(a)` is the arity of `function(receiver, a)`,
   the receiver among its arguments,
   and a pipeline passes the values the call it makes passes, the value among them.
   A count is the one the written construct would get,
@@ -309,7 +309,7 @@ Points 1 and 2 are the whole of the code; the rest is what a reviewer of a spell
 
 ### Every stage knows every spelling
 
-The HIR keeps a variant per spelling — `Seq` for a sequence, a node for a dot call —
+The HIR keeps a variant per spelling — `Seq` for a sequence, a node for an arrow call —
 and each pass handles each of them.
 
 - Good, because each pass can phrase its diagnostics about the exact spelling.

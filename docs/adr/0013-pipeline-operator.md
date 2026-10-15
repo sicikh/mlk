@@ -9,17 +9,16 @@ Uniform function call syntax passes a value into the first argument of a call ([
 and a chain of such calls is the common shape of an expression:
 
 ```mlk
-config.load().validate().start()
+config->load()->validate()->start()
 ```
 
-The dot is the spelling the language wants for a step.
-It is what a reader of almost any language already reads as a step,
-it is what says where the value goes by itself,
+The arrow is the spelling the language wants for a step.
+It is what says where the value goes by itself,
 and it is what a host completes after a value: the names of the module are the candidates.
 
 Some steps want the value in another argument.
 Merging a config into defaults is `merge(defaults, config)`,
-and the dot cannot write it: the dot always puts the value first.
+and the arrow cannot write it: the arrow always puts the value first.
 Written as calls, the step leaves the order the value flows in:
 
 ```mlk
@@ -35,8 +34,8 @@ with a written place for the value:
 ```mlk
 a + b
 |> make-data(_)
-.prepare()
-|> map.insert("key", _)
+->prepare()
+|> map->insert("key", _)
 ```
 
 The question: what stands on the right of `|>`, and what does the operator mean?
@@ -45,9 +44,9 @@ The question: what stands on the right of `|>`, and what does the operator mean?
 
 - A chain reads in the order the value flows: the left side is what runs first.
 - A step is a call, and a call is anchored where it is written ([ADR-0012][0012-split-the-dot-operator.md]).
-- The pipe is the fallback of the dot, not its rival:
-  the dot is the spelling of a step wherever it can write it,
-  and `|>` is for the steps the dot cannot write.
+- The pipe is the fallback of the arrow, not its rival:
+  the arrow is the spelling of a step wherever it can write it,
+  and `|>` is for the steps the arrow cannot write.
 - The value is used once, however many places it is written in.
 - What the operator does is decided by its shape and never by a type
   ([ADR-0012][0012-split-the-dot-operator.md], [against-query-based-compilers]).
@@ -55,7 +54,7 @@ The question: what stands on the right of `|>`, and what does the operator mean?
 
 ## Considered Options
 
-- **No pipeline** — a chain is written with the dot and with plain calls.
+- **No pipeline** — a chain is written with the arrow and with plain calls.
 - **A pipeline that always passes the first argument** — `x |> f(a)` is `f(x, a)`.
 - **A pipeline with a place for the value among the arguments** — `x |> f(a, _)` is `let v = x in f(a, v)`.
 - **A pipeline whose right side is an expression with places in it** — `x |> g(_ + 1)` is `let v = x in g(v + 1)`.
@@ -71,7 +70,7 @@ and where a step stays a call.
 ```mlk
 x |> f(_)                   <=> let v = x in f(v)
 x |> f(1, _)                <=> let v = x in f(1, v)
-data |> map.insert("k", _)  <=> let v = data in insert(map, "k", v)
+data |> map->insert("k", _)  <=> let v = data in insert(map, "k", v)
 expr |> f(_, _)             <=> let v = expr in f(v, v)
 ```
 
@@ -88,11 +87,11 @@ The right side of `|>` is a call with at least one `_` among its arguments:
   `x |> f(a)` is not a step;
 - a name or a path alone is not a step either:
   `x |> f` is not written, because the step it means — `f(x)` —
-  is what the dot writes as `x.f()`,
-  and it is the dot that a host completes after a value.
+  is what the arrow writes as `x->f()`,
+  and it is the arrow that a host completes after a value.
 
-`x |> f(_)` is a step, and it is the step `x.f()` in other words:
-the dot is the spelling to prefer, and a linter may later say so.
+`x |> f(_)` is a step, and it is the step `x->f()` in other words:
+the arrow is the spelling to prefer, and a linter may later say so.
 
 A place is a leaf of the expression grammar,
 and the parser reads a `_` only among the arguments of the call on the right of a `|>`;
@@ -104,17 +103,17 @@ A call: a callee, and an argument list with a place among the arguments.
 
 The callee is a name the module's scope holds ([ADR-0012][0012-split-the-dot-operator.md], [ADR-0011][0011-module-prelude.md]),
 or a path,
-and a call written with the dot is a call too:
-`data |> map.insert("key", _)` is a step of `insert`,
+and a call written with the arrow is a call too:
+`data |> map->insert("key", _)` is a step of `insert`,
 with `map` and `"key"` before the value.
-The receiver of a step's dot call is a name or a path,
+The receiver of a step's arrow call is a name or a path,
 so a step is one call:
 a call on the result of another call goes inside the arguments instead
 (`x |> g(f(1), _)`).
 
 A step ends with the argument list of its call.
-What is written after it — a dot, another `|>`, a binary operator — is written after the pipeline:
-`.prepare()` after a step is the dot called on the value the step produced.
+What is written after it — a dot, an arrow, another `|>`, a binary operator — is written after the pipeline:
+`->prepare()` after a step is the arrow called on the value the step produced.
 
 ### The shape
 
@@ -152,24 +151,24 @@ The call is about the whole step, and the left side is the expression the bindin
 - A step is a call, so a step is anchored where it is written,
   by the same rules as any other call ([ADR-0012][0012-split-the-dot-operator.md]).
 - The value reaches any argument of any call form without leaving the chain:
-  the dot covers the first argument, and the pipe covers the rest.
-- `x |> f(_)` and `x.f()` mean the same step:
-  the dot is the shorter spelling, and a linter may point a pipe at it.
+  the arrow covers the first argument, and the pipe covers the rest.
+- `x |> f(_)` and `x->f()` mean the same step:
+  the arrow is the shorter spelling, and a linter may point a pipe at it.
 - The operator adds no construct:
   the passes see a `let` and a call.
 
 ## Negative Consequences
 
 - The language has two chaining operators;
-  the pipe is for the steps the dot cannot write, and a reader has to know both.
+  the pipe is for the steps the arrow cannot write, and a reader has to know both.
 - A `_` is a leaf of the expression grammar that is valid in one place only,
   and the parser reports it everywhere else.
 - `x |> f(a)` looks like a step and is a mistake: a step needs a place.
 - Every step is a `let` in the HIR that no reader wrote:
   a reader of a dump sees a binding that is not in the text.
-- The receiver of a step's dot call is a name or a path,
+- The receiver of a step's arrow call is a name or a path,
   so a step is one call:
-  a call on the result of another call goes inside the arguments instead of before the dot.
+  a call on the result of another call goes inside the arguments instead of before the arrow.
 
 ## Pros and Cons of the Options
 
@@ -184,9 +183,9 @@ The call is about the whole step, and the left side is the expression the bindin
 
 `x |> f(a)` is `f(x, a)`, the thread-first of the Lisp family.
 
-- Good, because the operator is as simple as the dot, and no place syntax is needed.
+- Good, because the operator is as simple as the arrow, and no place syntax is needed.
 - Bad, because it fixes which argument the value takes,
-  which is the one thing the dot already fixes;
+  which is the one thing the arrow already fixes;
   a step that wants the value second has no spelling.
 - Bad, because `f(a)` written on the right means something other than `f(a)` written elsewhere,
   which is a reading a reader has to hold apart.
@@ -217,8 +216,8 @@ Chosen. Described above.
 - The mechanism that lowers the operator: [0014-syntactic-sugar.md].
 - A place anywhere other than the arguments of the step's call:
   that is the fourth option, and it is not admitted here.
-- Whether a linter exists that points `x |> f(_)` at `x.f()`:
-  the dot is the spelling to prefer, and the rule that says so is a linter's, not the compiler's.
+- Whether a linter exists that points `x |> f(_)` at `x->f()`:
+  the arrow is the spelling to prefer, and the rule that says so is a linter's, not the compiler's.
 
 ## Links
 

@@ -7,7 +7,7 @@
 
 The names of the standard library — `Int`, `Unit`, and the many that will follow —
 are declared in `std` and are used by almost every module of every project.
-Writing `use std.prelude.Int` in each of them is boilerplate,
+Writing `use std::prelude::Int` in each of them is boilerplate,
 and the language is expected to give those names to a module without the module asking,
 the way the standard preludes of other languages do.
 
@@ -15,10 +15,10 @@ Three facts make this less obvious than it looks.
 
 First, `std` is compiled by the same pipeline as everything else,
 and the prelude cannot apply to the modules of `std` that way:
-`std.prelude` is where the prelude's names are defined,
+`std::prelude` is where the prelude's names are defined,
 and it cannot import itself.
 The `std` project needs a prelude of its own, one that names its own modules
-(`use project.core.Int`), and it should not repeat that line in every module either.
+(`use project::core::Int`), and it should not repeat that line in every module either.
 
 Second, the incrementality model is built on the claim
 that a module's meaning is a function of the module's own text ([ADR-0004][0004-module-system.md], [ADR-0008][0008-compiler-driver.md]).
@@ -53,7 +53,7 @@ and what does it mean for a name the module declares itself?
 
 ## Considered Options
 
-- **Text before parsing** — prepend `use std.prelude.Int` to the file's text and parse that.
+- **Text before parsing** — prepend `use std::prelude::Int` to the file's text and parse that.
 - **CST nodes after parsing** — parse the module, then splice synthetic `use` items into the tree.
 - **A fallback table in name resolution** — the local scope keeps the prelude as a list of
   names to paths, and an unresolved name becomes an anchor that names that path.
@@ -71,9 +71,9 @@ what an interface already carries, and what a check already reads.
 ### The prelude is a list of imports, and lowering is what reads it
 
 A `Prelude` is an ordered list of imports, each a name and the path it is the name of.
-The language has a standard one — `use std.prelude.Int` and `use std.prelude.Unit` today,
+The language has a standard one — `use std::prelude::Int` and `use std::prelude::Unit` today,
 more later — and a project may replace it with its own,
-which is how `std` compiles with `use project.core.Int` and the like.
+which is how `std` compiles with `use project::core::Int` and the like.
 
 The prelude is an argument of `lower_module`:
 
@@ -87,7 +87,7 @@ The order is the whole of the shadowing rule:
 what a module declares or imports first is what its names denote ([ADR-0010][0010-stable-entity-identity.md]),
 so a prelude entry that finds a name already taken is not recorded and nothing is reported.
 A module that declares `data Int` keeps meaning its own `Int`;
-a module that writes `use std.core.Int` keeps meaning that import;
+a module that writes `use std::core::Int` keeps meaning that import;
 and in both cases the prelude's entry is quietly not what the name denotes.
 The prelude entity still exists in the item tree —
 a path that names it is anchored to its `UseLoc`, and a name has to exist to be named —
@@ -96,16 +96,16 @@ but the scope of the module does not hold it.
 A module refuses the prelude as a whole when its preamble carries the attribute:
 
 ```mlk
-@no-prelude
-module project.prelude
+#[no-prelude]
+module project::prelude
 
-pub use project.core.Int
-pub use project.core.Unit
+pub use project::core::Int
+pub use project::core::Unit
 ```
 
 The attribute is read from the preamble and recorded in the item tree,
 and lowering declares nothing when it is there.
-`@no-prelude` is the first attribute a module has of its own:
+`#[no-prelude]` is the first attribute a module has of its own:
 an attribute of a module that the language has no meaning for is a lowering mistake,
 as one written in front of a declaration is.
 A project-level refusal is what the prelude configuration already is:
@@ -177,7 +177,7 @@ because the loader that reads one is a stage the pipeline does not have.
 - The language's restrictions stay intact: the prelude is a named list, not a glob,
   and a module's meaning is still a function of its own text and the project's configuration.
 - The `std` case is the same mechanism seen from the other side:
-  a project prelude that names `project.core.Int`, and `@no-prelude` where it would be circular.
+  a project prelude that names `project::core::Int`, and `#[no-prelude]` where it would be circular.
 
 ### Negative Consequences
 

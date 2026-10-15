@@ -37,12 +37,13 @@ Then read the cluster of the area you are about to touch.
 
 ### Syntax and surface language
 
-| #                                      | Decision                                    | Status   |
-| -------------------------------------- | ------------------------------------------- | -------- |
-| [0002](0002-lossless-syntax-tree.md)   | Use a lossless syntax tree                  | accepted |
-| [0012](0012-split-the-dot-operator.md) | Split `.` into `@`, `.`, and `::`           | accepted |
-| [0013](0013-pipeline-operator.md)      | Pipeline operator `\|>`                     | accepted |
-| [0014](0014-syntactic-sugar.md)        | Lowering is the only stage that knows sugar | accepted |
+| #                                      | Decision                                           | Status   |
+| -------------------------------------- | -------------------------------------------------- | -------- |
+| [0002](0002-lossless-syntax-tree.md)   | Use a lossless syntax tree                         | accepted |
+| [0012](0012-split-the-dot-operator.md) | A field `.`, a uniform call `->`, a namespace `::` | accepted |
+| [0013](0013-pipeline-operator.md)      | Pipeline operator `\|>`                            | accepted |
+| [0014](0014-syntactic-sugar.md)        | Lowering is the only stage that knows sugar        | accepted |
+| [0029](0029-dash-in-names.md)          | `-` joins a name only between name characters      | accepted |
 
 ### Modules, identity, and incrementality
 
@@ -102,9 +103,6 @@ The code wins; the notes are here so that a plan is not written against a stale 
   [0017](0017-resolved-types.md) were written before the back end existed.
   Their "later" statements about MIR, codegen, layouts, and naming are partly outdated;
   treat them as history and check the code.
-- [0011](0011-module-prelude.md) uses the pre-[0012](0012-split-the-dot-operator.md) path syntax
-  (`use std.prelude.Int`); paths are written with `::` now.
-  Its statement that the prelude is not read from a manifest is still true.
 
 ## Adding a record
 

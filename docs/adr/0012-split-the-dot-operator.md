@@ -1,154 +1,216 @@
-# Split the `.` operator into field access, UFCS, and namespace access
+# Spell a field with `.`, a uniform call with `->`, and a namespace with `::`
 
 - Status: accepted
-- Date: 2026-09-27
+- Date: 2026-10-16
 
 ## Context and Problem Statement
 
-MLK has one `.`, and it does one thing:
-it qualifies a segment of a path, as in `project.data.start-app` and `std.core.Int`.
-Two more uses of the same character are expected of the language:
-reading a field, which would be `data.x`,
-and calling a function with a value as its first argument
-(UFCS — uniform function call syntax), which would be `value.function(args)`.
-The question is whether one character may keep meaning all three,
-or whether each meaning gets a spelling of its own.
+Three things a reader writes after a value look alike,
+and each of them is resolved by a stage of its own:
 
-The three uses are not three spellings of one operation.
-Each is resolved by a different stage,
-and each of those stages reads a different input:
+- `receiver.field` reads a field,
+  and the field is looked up in the type of the receiver:
+  a question type checking answers and name resolution cannot ([ADR-0005][0005-compiler-pipeline.md]);
+- `receiver->function(args)` calls a function with the receiver as its first argument,
+  where the callee is a name the module's scope holds or a path the tables of the project hold:
+  a question name resolution answers before any type is known
+  ([ADR-0010][0010-stable-entity-identity.md], [ADR-0011][0011-module-prelude.md]);
+- `path::segment` names an entity of a namespace,
+  which the import and export tables of the project hold ([ADR-0004][0004-module-system.md]).
 
-- a path is resolved against the import and export tables of the project
-  by the global pass ([ADR-0004][0004-module-system.md], [ADR-0005][0005-compiler-pipeline.md]);
-- a field is read from the type of the receiver,
-  which type checking has and name resolution does not;
-- a call with the receiver as its first argument anchors at the name or the path written before the dot,
-  which name resolution reads — the module's own scope for a name, the tables of the project for a path —
-  before any type is known ([ADR-0010][0010-stable-entity-identity.md], [ADR-0011][0011-module-prelude.md]).
-
-Overloading one character with all three
-makes the meaning of `value.name` a question about types and global tables
-rather than about the text, with a cost at every stage:
+One character for all three would make the meaning of `value.name`
+a question about types and global tables rather than about the text,
+with a cost at every stage:
 
 - the parser must commit to a node kind at parse time ([ADR-0002][0002-lossless-syntax-tree.md]),
   and no kind fits: a path segment, a field access, and a call with an implicit argument
   have different children.
-  Either the tree keeps one shape and is rewritten once the world is known
-  — and then the tree is no longer a function of the text,
-  which is what the identity of a parse is ([ADR-0007][0007-vfs-file-state.md], [ADR-0008][0008-compiler-driver.md]) —
+  Either the tree keeps one shape and is rewritten once the world is known ---
+  and then it is no longer a function of the text,
+  which is what the identity of a parse is ([ADR-0007][0007-vfs-file-state.md], [ADR-0008][0008-compiler-driver.md]) ---
   or every consumer learns to re-discriminate a node the parser could not name.
-- name resolution cannot anchor what the dot applies to,
-  although the HIR it produces is where anchors live ([ADR-0005][0005-compiler-pipeline.md], [ADR-0010][0010-stable-entity-identity.md]):
+- name resolution cannot anchor what the character applies to,
+  although the HIR it produces is where anchors live ([ADR-0010][0010-stable-entity-identity.md]):
   whether there is anything to anchor at all is decided by the receiver's type,
   which is an input of type checking and not of resolution.
 - the first stage that could decide is type checking ([ADR-0005][0005-compiler-pipeline.md]),
   so no stage owns the construct,
-  and a typo after the dot is reported by whichever stage happens to have the information
+  and a typo after the character is reported by whichever stage happens to have the information
   rather than by the stage that owns the syntax.
-- completion after a bare dot cannot know what to offer:
+- completion after a bare character cannot know what to offer:
   the fields of the receiver's type, or the names and the paths an anchor may be written as.
 
 This is the class of design the module system of [ADR-0004][0004-module-system.md] exists to rule out:
-**language features (and errors) are syntax driven and not type driven** [against-query-based-compilers].
+**language features (and errors) are syntax driven and not type driven** ([against-query-based-compilers]).
 A construct whose meaning is decided by the output of later stages
 forces every consumer to wait for those stages,
 and makes an edit anywhere a possible change of meaning everywhere.
+
+The language splits the three, one construct and one sigil each,
+and this record decides the spelling of each.
+It found two of the spellings the wrong way round.
+
+**The field got the sigil nobody knows.**
+`.field` is the spelling of a selection in the languages around MLK,
+and `@` is not a field sigil anywhere:
+in other languages the character marks attributes and annotations,
+and every reader learns `data@x` once.
+The operation a reader reaches for first should not be the one that has to be learned.
+
+**The call got the spelling of a selection.**
+`receiver.function(args)` is how the languages around MLK spell a method call,
+and a method call it is not:
+the callee is a name of the module's scope --- or a path ---
+and the receiver is only its first argument.
+The spelling promises a search in the receiver's type, and no search happens.
+A reader who knows those languages has to unlearn what a dot means
+at the one place where MLK borrows their shape.
+
+**The arrow spells the step, and the dot spells the selection.**
+What a chain of calls is made of is not a selection but a flow:
+a value goes into a call, and what the call produced goes into the next one.
+`x->f(args)` reads as exactly that --- send `x` into `f` ---
+and the arrow has a precedent of its own:
+`->` is the threading arrow of Clojure,
+and `p->f(args)` of the C family is a call written after the value it applies to.
+The dot is left where every reader expects the selection.
+
+**The spellings this record replaces.**
+They stood here as the other way round:
+a field was read with `@` (`receiver@field`),
+and a call was written `receiver.function(args)`.
+This note is all that remains of them,
+and no record, plan, or code is read against the old spellings.
+
+The question: which sigil reads a field,
+and which sigil calls a function with the value as its first argument?
 
 ## Decision Drivers
 
 - The shape of a construct must decide what it is and which stage owns it ([against-query-based-compilers]).
 - A stage reads an input that is fixed before it runs ([ADR-0009][0009-pass-contract.md]);
   a stage that must know a type to classify a name is the global pass in disguise.
-- A `.`-chain is the common shape of an expression,
-  and every step of it must be anchored by what the text writes — a name or a path —
-  and never by the type of what stands before the dot.
-- An error must be reportable by the stage that owns the syntax:
-  a mistake after `@`, after `.`, and after `::` are three different mistakes,
-  found by three different stages.
-- Completion must know at each operator what kind of thing it offers:
-  a field, a name or a path, or an entity of a namespace.
 - One character, one meaning:
-  a sigil that carries two meanings puts the burden of telling them apart
-  on the reader of the code and on the resolution of every occurrence.
+  the character decides what a construct is, and no reader and no rule has to hold two meanings apart.
+- The familiar meaning of a `.` --- the name after it belongs to the value before it ---
+  belongs on the operation that is a selection from a value.
+- The chaining operator is marked as a call, and every call in a chain is anchored
+  by what the text writes --- a name, or a path the tables hold ---
+  and never by the type of the receiver
+  ([ADR-0010][0010-stable-entity-identity.md], [ADR-0011][0011-module-prelude.md], [against-query-based-compilers]).
+- The operators that pass a value through calls read as one family:
+  `->` sends the value as the first argument, `|>` sends it where the `_` is written
+  ([ADR-0013][0013-pipeline-operator.md]).
+- The surface stays typeable:
+  a host reads `x->f(args)` token by token while it is written,
+  and the `-` of that prefix must not become part of a name ([ADR-0029][0029-dash-in-names.md]).
+- Precedent: `x.field` is a selection in every language MLK's readers know,
+  `p->f(args)` is a call applied to the value, and `=>` is the arrow of a lambda
+  in most of the languages around MLK.
 
 ## Considered Options
 
-- **One `.` for all three uses** — fields, calls, and namespaces.
-- **Two uses of `.`** — `value.field` and `value.function(args)`, with `::` for namespaces.
-- **Three operators, `.` for calls** — `@` reads a field, `.` calls, `::` qualifies.
-- **Three operators, `.` for fields** — the assignment that keeps the familiar meaning of `.`.
+- **The spellings that stood here before** ---
+  `@` reads a field, `.` calls, `::` qualifies.
+- **Two uses of `.`** --- `value.field` and `value.function(args)`, with `::` for namespaces.
+- **Three operators, `.` for fields and `->` for calls** ---
+  `x.field` reads a field, `x->f(args)` means `f(x, args)`, `::` qualifies.
+- **Three operators, `.` for fields and `@` for calls** ---
+  the same split with the call on `@`.
+- **One `.` for all three uses** --- fields, calls, and namespaces.
 
 ## Decision Outcome
 
-Chosen option: "Three operators, `.` for calls",
-because it is the only split in which every operator has exactly one meaning,
-and because the operator that chains a value through a sequence of steps
-is the one whose steps are found by the name or the path the text writes.
+Chosen option: "Three operators, `.` for fields and `->` for calls",
+because it is the split in which every operation is found where a reader looks for it:
+the selection is on the dot every language spells a selection with,
+the call is on an arrow that marks a call and a flow,
+and the two operators a chain is made of --- `->` and `|>` --- are one family of arrows.
 
-### A field is read with `@`: `receiver@field`
+### A field is read with `.`: `receiver.field`
 
 A field access is a receiver expression and a field name:
 
 ```mlk
 fun port(config: Config): Int =
-    config@server@port
+    config.server.port
 ```
 
 The name is looked up in the type of the receiver,
 which makes a field access a checking question:
 the checker owns the construct,
 and it is the one construct of the three
-that cannot begin to be answered without the type of what stands before the sigil.
+that cannot begin to be answered without the type of what stands before the dot.
 
-The receiver is any expression, and the result is a value.
-A field access is postfix and chains left to right:
-`config@server@port` is the field `port` of the field `server` of `config`,
-and in `config@server.load()` the call applies to the field access before it.
+The receiver is any expression, the result is a value, and a field access is postfix:
+`config.server.port` is the field `port` of the field `server` of `config`,
+and in `config->load().state` the dot reads a field of what the step produced.
+A path is read as a path before the dot, so `project::data.field` reads
+the field of the entity the path denotes.
 
-### A call is written with `.`: `receiver.function(args)` means `function(receiver, args)`
+A field is a value, and so is what it holds:
 
-The dot passes the receiver as the first argument of a call:
-`receiver.function(arg₁, …, argₙ)` is `function(receiver, arg₁, …, argₙ)`,
+```mlk
+fun arrive(config: Config, request: Request): Response =
+    config.handler(request)
+```
+
+`config.handler` names what the field holds, and the call written after it
+calls that function with `request`.
+The sigil says which of the two is written:
+a field read is the dot, and the call of what it holds is the argument list after it,
+while the call that passes the receiver first is the arrow.
+
+The dot is also where a host completes the fields of the receiver's type.
+That list is a type question, and it is a question a reader expects the dot to ask:
+every dot-completion a reader of the languages around MLK has used
+offers the members of what stands before it.
+
+### A uniform call is written with `->`: `receiver->function(args)`
+
+The arrow passes the receiver as the first argument of a call:
+`receiver->function(arg₁, …, argₙ)` is `function(receiver, arg₁, …, argₙ)`,
 where `function` is a name or a path.
 
 ```mlk
 fun start(config: Config): State =
-    config.load().validate().start()
+    config->load()->validate()->start()
 ```
 
 Two properties make the operator resolvable where it is written:
 
 - the callee is what the text writes:
   a name is what the module's scope resolves ([ADR-0010][0010-stable-entity-identity.md], [ADR-0011][0011-module-prelude.md]),
-  and a path reaches a function that a plain name would not name —
-  another module's, or one whose name the module means something else by.
+  and a path reaches a function that a plain name would not name ---
+  another module's, or one whose name the module means something else by;
 - the callee is resolved where it is written, and never by the type of the receiver:
-  name resolution anchors `load` and `validate` in the example above before any type is known,
+  name resolution anchors `load`, `validate`, and `start` in the example above
+  before any type is known,
   a name by the module's scope and a path by the tables it walks.
 
 A path is what a step costs when a name is not enough:
 
 ```mlk
 fun add(persons: Persons, name: Name, data: Data): Persons =
-    persons.Map::insert(name, data)
+    persons->Map::insert(name, data)
 ```
 
-`persons.Map::insert(name, data)` is `Map::insert(persons, name, data)`:
+`persons->Map::insert(name, data)` is `Map::insert(persons, name, data)`:
 the path says which `insert` the step means,
 and the words are the price of an anchor the text decides.
 
 This is not method resolution in the sense of the languages around MLK:
-the dot does not search a candidate set by the receiver's type,
+the arrow does not search a candidate set by the receiver's type,
 and no impl decides what the callee is.
-The dot substitutes the receiver into a call the text names,
+The arrow substitutes the receiver into a call the text names,
 and what the call means once its callee is known is the business of checking,
-exactly as for `function(receiver, args)` written without a dot.
+exactly as for `function(receiver, args)` written without an arrow.
 
-A dot is always written together with a call:
-a dot and a callee with nothing after them are not an expression,
+An arrow is always written together with a call:
+`value->` and `value->function` are not expressions,
 and the parser reports it.
 The operator is a call with the receiver written before the callee,
-and there is no spelling for a function with its first argument left open.
+and there is still no spelling for a function with its first argument left open.
 
 ### A name in a namespace is reached with `::`: `project::data::utils`
 
@@ -171,15 +233,10 @@ which is the project the module is written in ([ADR-0004][0004-module-system.md]
 A path is resolved by the tables of the project and not by the scope of the module:
 every segment is an entity of a namespace,
 and the tables that hold the entity are the project's, not the module's.
-A path written after a dot is a path like any other:
-what the dot adds is the receiver, and not another way to resolve a name.
+A path written after an arrow is a path like any other:
+what the arrow adds is the receiver, and not another way to resolve a name.
 
-Earlier records spell paths with the dot; the separator is what changes here,
-not the decisions they record.
-
-### Attributes are written `#[name]`
-
-`@` reads a field now, so the attributes move off it:
+### Attributes keep `#[name]`, and `@` leaves the language
 
 ```mlk
 #[builtin]
@@ -189,188 +246,197 @@ data Int
 module project::prelude
 ```
 
-An attribute is one name in brackets,
-and a declaration may carry several, each in its own brackets.
-Nothing else about attributes changes:
-they are the same names, read by the same stages ([ADR-0010][0010-stable-entity-identity.md], [ADR-0011][0011-module-prelude.md]).
+The spellings that stood here before moved attributes off `@` because `@` read a field.
+The reason is gone, and the spelling stays:
+`#[name]` has a precedent of its own, the stages that read an attribute are untouched,
+and re-spelling every attribute of every module would buy nothing this record needs.
+The decision of [ADR-0011][0011-module-prelude.md] about `#[no-prelude]` is untouched with it.
 
-The brackets are also what a list of types is written with —
-`Map[Int, String]` today, and in time the parameters of a generic declaration —
-so the two lists can stand in one declaration:
+`@` no longer spells anything:
+a `@` in source is an error of the lexer,
+and the character is free if a later decision wants it.
+
+### The chain, and the pipe
+
+The steps of a chain are the arrow calls, and [ADR-0013][0013-pipeline-operator.md] is untouched:
+when the value belongs in an argument that is not the first,
+the pipe writes a place for it among the arguments:
 
 ```mlk
-#[inline] fun id[T](x: T) -> T = x
+config
+    ->load()                    // load(config)
+    |> merge(defaults, _)       // merge(defaults, load(config))
+    ->validate()                // validate(merge(defaults, load(config)))
+    |> write("out.toml", _)     // write("out.toml", validate(merge(...)))
 ```
 
-They are told apart by the `#` and by the place:
-an attribute list stands in front of a declaration,
-and a list of types follows a name.
-The coincidence is visual, and it is tolerated.
-The attribute of [ADR-0011][0011-module-prelude.md] is spelled `#[no-prelude]` from now on;
-that record's decision is untouched.
+What stands after a step is written after the value the pipeline is,
+so the `->validate()` of the third line applies to what the pipe produced.
+A step written on the value may use the arrow as well:
+`input |> map->insert("key", _)` is a step of `insert`,
+with `map` and `"key"` before the value,
+which the spellings that stood here before wrote `input |> map.insert("key", _)`.
 
-### What each stage owns after the split
+The two operators read as one family:
+`->` sends the value as the first argument,
+and `|>` sends it where the `_` is written.
+Both are arrows, and both pass a value into a call the text names.
 
-| Written                   | Means                      | Owned by        | Reads                              |
-| ------------------------- | -------------------------- | --------------- | ---------------------------------- |
-| `receiver@field`          | a field of a type          | type checking   | the receiver's type                |
-| `receiver.function(args)` | `function(receiver, args)` | name resolution | the scope, or the tables of a path |
-| `path::segment`           | an entity of a namespace   | the global pass | the import and export tables       |
+### The lambda arrow becomes `=>`
+
+```mlk
+fun added(value: Int): Int =
+    fn(x) => x + value
+```
+
+`->` is the arrow of a step now, and a second meaning for it
+is the class of design this record and the split exist to remove.
+The lambda takes the arrow the languages around MLK write a lambda with,
+and the rest of the rule does not change:
+the parameters between the parentheses, the body an expression, `fn() => 1`.
+
+### What each stage owns
+
+| Written                    | Means                      | Owned by        | Reads                              |
+| -------------------------- | -------------------------- | --------------- | ---------------------------------- |
+| `receiver.field`           | a field of a type          | type checking   | the receiver's type                |
+| `receiver->function(args)` | `function(receiver, args)` | name resolution | the scope, or the tables of a path |
+| `path::segment`            | an entity of a namespace   | the global pass | the import and export tables       |
 
 The parser classifies all three by shape alone,
 and no stage after it has to reinterpret a construct of another.
 
-### Decisions this record does not make
+### What this record does not decide
 
-The pipeline operator `|>` is a later development, decided by [ADR-0013][0013-pipeline-operator.md]:
-UFCS passes a value into the first argument,
-and a value that belongs in another argument is written with a place for it.
-Chains mix both operators:
-
-```mlk
-config
-    .load()                     // load(config)
-    |> merge(defaults, _)       // merge(defaults, load(config))
-    .validate()                 // validate(merge(defaults, load(config)))
-    |> write("out.toml", _)     // write("out.toml", validate(merge(...)))
-```
-
-Each callee in that chain is a name or a path the text writes,
-anchored where it is written and never by a type —
-a property the split is what makes possible.
-
-The mechanism of syntactic sugar is a record of its own ([ADR-0014][0014-syntactic-sugar.md]):
-where a spelling like `receiver.function(args)` stops being its own construct
-and becomes the call it means,
-and how diagnostics and source maps keep the spelling the reader wrote.
+- How a number with a fractional part will be written beside a field read:
+  the language has no float literal today,
+  and it is the dot of a field that such a rule has to sit beside.
+- Whether a linter exists that points `x |> f(_)` at `x->f()`:
+  the arrow is the spelling to prefer, and the rule that says so is a linter's, not the compiler's.
 
 ### Positive Consequences
 
-- The parser gives every construct a node of its own by shape alone,
-  and no stage after it reinterprets what it read ([ADR-0002][0002-lossless-syntax-tree.md]).
-- Every call in a `.`-chain is anchored where it is written:
-  in `config.load().validate()`, both `load` and `validate` are names of the module's scope,
-  so what the chain is a chain of is known from the text alone,
-  and no step of it waits for a type.
-  A step whose callee is a path is anchored by the entities the path names,
-  which is the wait every path has ([ADR-0005][0005-compiler-pipeline.md]).
+- `.` means what it means in the languages around MLK:
+  a field read is spelled the way every reader expects to read a selection,
+  and no reader has to learn `@` first.
+- The shapes a chain is made of are told apart by their sigils:
+  `x.field` is a value, `x.field(args)` calls what the field holds,
+  and `x->function(args)` is the uniform call.
+  The pair of parentheses is no longer what decides between a call of a field
+  and a call with the receiver first.
+- Every arrow call is anchored where it is written,
+  so a chain of steps waits for no type ---
+  the property the split exists for,
+  carried by the operator whose shape is a call.
+- A function a value holds can be named and called:
+  the dot names it, and the argument list calls it.
+- Completion after `->` is text-only --- the names of the module and the paths ---
+  and completion after `.` is the fields of a type, which is where a type question belongs.
 - Each error is owned by one stage:
-  the parser reports a dot that is not followed by a call,
+  the parser reports an arrow or a dot that is not followed by what belongs there,
   local resolution reports a name that is not in scope,
   the checker reports a field the type does not have,
   and the global pass reports an entity a namespace does not hold.
-- Completion after an operator has one kind of candidate:
-  the fields of a type after `@`,
-  the names of the module's scope after `.`,
-  the entities of a namespace after `::`.
-- An edit in another module changes what this module's text is checked against
-  — which is what an interface is for ([ADR-0008][0008-compiler-driver.md], [ADR-0010][0010-stable-entity-identity.md]) —
-  but not what its constructs are:
-  a field access stays a field access, a call stays a call, and a path stays a path.
+- The two arrows read as one family, and a chain of steps reads in the direction the value flows.
+- The attributes keep the spelling they have, so the standard library and the specs
+  do not have to be touched for them.
 
 ### Negative Consequences
 
-- Every path in every module changes its separator,
-  so every module, spec, and snapshot of the repository is rewritten.
-  The change is mechanical, and it touches a great many files at once.
-- The attribute syntax changes with it:
-  the grammar, the parser's lookahead before a declaration, and lowering.
-  Every attribute in the standard library and in the specs is respelled.
-- A two-segment path with a call — `data.start-app(1)` — parses as a call of `start-app`
-  with `data` as its first argument,
-  so old text of that shape does not fail to parse:
-  where a value of the same name is in scope, it silently means something else.
-- `.` is not a way to read a field, and `value.function` is not a way to name a function:
-  there is no method reference and no `value.field` fallback,
-  so a reader who knows other languages meets an error where the habit writes `.`.
-- `@` has no precedent as a field sigil:
-  in other languages the character marks attributes and annotations,
-  and every reader learns `data@x` once.
-- A callee that a plain name does not name costs a path, and a path is long:
-  `persons.Map::insert(name, data)` is more words than a language
-  that finds a method by the type of its receiver would need;
-  the words are what an anchor the text decides costs.
-- An attribute list and a list of types share the brackets,
-  so a declaration that carries both takes a second look.
+- Every step of every chain is respelled, and so is every lambda:
+  the change is mechanical, and it touches every module, spec, and snapshot of the repository.
+- `->` resembles the member call of the C family while it is not one:
+  the callee is a free name, found by the text, and a reader may still look for a method.
+- The dot is now the type-dependent operator:
+  a host can offer the fields of a receiver only once its type is known,
+  and a chain of field reads is a chain that waits for types.
+  What a reader gets in exchange is that the type-dependent sigil
+  is not the one the language chains with.
+- `@` leaves the language:
+  a reader who learned the previous spelling gets a diagnostic where a field read used to be.
+- The lambda arrow and the step arrow differ by one character, `=>` against `->`,
+  and a reader has to keep them apart.
 
 ## Pros and Cons of the Options
 
-### One `.` for all three uses
+### The spellings that stood here before
 
-Fields, calls, and namespaces on one character, as Rust and its relatives do.
+`@` reads a field, `.` calls, `::` qualifies.
 
-- Good, because the surface stays small,
-  and the character is the one every reader knows.
-- Bad, because the meaning of `value.name` is decided by types and by global tables,
-  not by the text, so no stage can own the construct:
-  the parser cannot choose a node,
-  local resolution cannot anchor a name,
-  and the first stage that could decide is the checker.
-- Bad, because the IDE can say nothing about a dot —
-  neither the candidates nor the error —
-  before resolution and checking have run over the project.
-- Bad, because an edit to a foreign type can change what a construct here denotes,
-  not only whether it is correct.
+- Good, because every operator has one meaning and one stage that owns it.
+- Good, because the chaining operator is anchored by the text,
+  so a chain of calls waits for no type.
+- Bad, because the selection from a value --- the operation every reader reaches for first ---
+  is spelled with a sigil no language uses for it, and every reader learns `@` once.
+- Bad, because a call that is not a member is spelled like a member call,
+  and the reader is promised a search that never happens.
+- Bad, because a dot is never a value:
+  `value.field` is an error, so the operation every reader spells with a dot
+  has no dot at all.
 
 ### Two uses of `.`
 
 `value.field` and `value.function(args)`, with `::` for namespaces.
 
 - Good, because it is the assignment most readers know from the languages around MLK.
-- Good, because the part of the overload that reaches the whole project
-  is the part that is split off.
-- Bad, because the character keeps two meanings,
-  told apart by what follows it: a name is a field, a name with a call is a call.
-  Every rule, every diagnostic, and every completion needs both.
-- Bad, because completion after a bare dot cannot know which list to build,
-  the fields of the receiver's type or the names in scope, and must offer a union.
-- Bad for a language with first-class functions:
-  a call of a field and a call of a function whose first argument is the receiver
-  would differ by a pair of parentheses — `(value.field)()` against `value.field()` —
-  and would mean entirely different things.
+- Bad, because the character keeps two meanings told apart by what follows it,
+  and every rule, diagnostic, and completion needs both.
+- Bad, because what `value.name` is --- a field read or a call ---
+  is decided by the parenthesis that follows the name and not by the sigil.
+- Bad, because completion after a bare dot must offer a union of the fields and the names in scope.
 
-### Three operators, `.` for calls
+### Three operators, `.` for fields and `->` for calls
 
 Chosen. Described above.
 
-- Good, because every operator has one meaning and one stage that owns it.
-- Good, because the chaining operator is the one whose steps are anchored by the text —
-  a name the scope holds, or a path the tables hold —
-  so a chain of calls waits for no type.
-- Good, because the operation that cannot begin without a type — a field read —
-  is marked with a sigil of its own,
-  and a reader sees which steps of an expression need types and which need only what the text writes.
-- Bad, because the language has three sigils where it had one,
-  and one of them, `@`, is new as a field access.
-- Bad, because every path and every attribute is respelled.
+- Good, because each operation is spelled where a reader looks for it:
+  the selection on the dot, the call on an arrow that marks a call and a flow.
+- Good, because the sigil, not a pair of parentheses, tells a field from a step:
+  `x.field`, `x.field(args)`, and `x->function(args)` are three shapes with three meanings.
+- Good, because the arrow is anchored by the text and not by the receiver's type,
+  so a chain of steps still waits for no type.
+- Good, because the two arrows of the language --- `->` and `|>` --- are one family of flows.
+- Good, because a field is a value, so what a value holds can be named, passed, and called.
+- Bad, because two sigils sit where a reader of other languages expects one,
+  and which of them a chain is written with has to be learned.
+- Bad, because every chain and every lambda of every module is respelled.
 
-### Three operators, `.` for fields
+### Three operators, `.` for fields and `@` for calls
 
-`.` reads a field, `::` qualifies a namespace,
-and the spare sigil, `@`, is the call: `value.x` and `value@f(args)`.
+`.` reads a field, `::` qualifies a namespace, and `@` calls: `value.x` and `value@f(args)`.
 
-- Good, because `.field` keeps the meaning it has in almost every language,
-  so the most familiar spelling stays on the most familiar operation.
-- Bad, because it puts the one operation that cannot be found without a type
-  on the operator that chains:
-  a chain would be a chain of field reads, `a.x.y`,
-  and every call in it would leave the dot for an unfamiliar sigil.
-- Bad, because the language is built around passing a value through a sequence of functions,
-  and that shape would be the one spelled with a sigil no reader has seen,
-  while a selection from a value would keep the dot.
+- Good, because `.field` keeps the meaning it has in almost every language.
+- Bad, because the call --- the shape a chain is made of, and the common shape of the language ---
+  is the one that would carry the sigil no reader has seen as a call.
+- Bad, because a chain of steps would be a chain of `@`, `x@f(a)@g(b)`,
+  which neither reads as a call nor marks a flow.
+- Bad, because a reader would have to learn two unfamiliar things at once:
+  what the sigil means, and that chains are written with it.
+
+### One `.` for all three uses
+
+Fields, calls, and namespaces on one character, as Rust and its relatives do.
+
+- Good, because the surface stays small, and the character is the one every reader knows.
+- Bad, because the meaning of `value.name` is decided by types and by global tables,
+  not by the text, so no stage can own the construct.
+- Bad, because the IDE can say nothing about a dot ---
+  neither the candidates nor the error ---
+  before resolution and checking have run over the project.
 
 ## Links
 
-- The principle: Against Query Based Compilers: <https://matklad.github.io/2026/02/25/against-query-based-compilers.html>
+- The other operator a chain is written with: [0013-pipeline-operator.md]
+- What a spelling is, and where it stops: [0014-syntactic-sugar.md]
+- How a `-` is read while `x->f(args)` is typed: [0029-dash-in-names.md]
 - Module rules and incrementality: [0004-module-system.md]
 - The pipeline and its stages: [0005-compiler-pipeline.md]
-- The operator a chain gets for the other arguments: [0013-pipeline-operator.md]
-- What a spelling is, and where it stops: [0014-syntactic-sugar.md]
-- Static tree structure per node kind: [0002-lossless-syntax-tree.md]
 - What a pass may read: [0009-pass-contract.md]
 - Entities, names, and anchors: [0010-stable-entity-identity.md]
 - The prelude's names in scope: [0011-module-prelude.md]
-- Implementation: [mlkc-parser], [mlkc-lower], [mlkc-hir-def]
+- Static tree structure per node kind: [0002-lossless-syntax-tree.md]
+- The principle: Against Query Based Compilers: <https://matklad.github.io/2026/02/25/against-query-based-compilers.html>
+- Implementation: [mlkc-syntax], [mlkc-parser], [mlkc-lower], and the editor's [grammar]
 
 [0002-lossless-syntax-tree.md]: 0002-lossless-syntax-tree.md
 [0004-module-system.md]: 0004-module-system.md
@@ -382,7 +448,9 @@ and the spare sigil, `@`, is the call: `value.x` and `value@f(args)`.
 [0011-module-prelude.md]: 0011-module-prelude.md
 [0013-pipeline-operator.md]: 0013-pipeline-operator.md
 [0014-syntactic-sugar.md]: 0014-syntactic-sugar.md
+[0029-dash-in-names.md]: 0029-dash-in-names.md
 [against-query-based-compilers]: https://matklad.github.io/2026/02/25/against-query-based-compilers.html
+[mlkc-syntax]: ../../crates/mlkc-syntax
 [mlkc-parser]: ../../crates/mlkc-parser
 [mlkc-lower]: ../../crates/mlkc-lower
-[mlkc-hir-def]: ../../crates/mlkc-hir-def
+[grammar]: ../../web/src/lib/grammar/mlk.grammar

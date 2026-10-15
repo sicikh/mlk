@@ -1,5 +1,5 @@
-// What a module takes from the rest of the project: the name of a module, the name of a module
-// that stands under a prefix of module paths, and a path rooted at the project.
+// What a module takes from the rest of the project: the names of a tree, the names one path
+// brings in, and a path rooted at the project.
 
 //- /types.mlk
 // The module `project::types`: it declares a data type of its own, and modules stand under its
@@ -20,9 +20,10 @@ pub fun make(): Point =
     make()
 
 //- /main.mlk
-use project::types
+// The two names are taken by one tree: `self` is the module `project::types` itself, and the
+// name after it is read inside that module.
 
-use project::types::utils::Point as Other
+use project::{types::{self, utils::Point as Other}}
 
 fun handle(value: types::Point, other: Other): Int =
     1

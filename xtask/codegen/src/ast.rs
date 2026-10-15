@@ -688,7 +688,8 @@ mod tests {
             "BogusExpr",
             "BogusParameter",
             "BogusPat",
-            "BogusType"
+            "BogusType",
+            "BogusUseGroupItem"
         ]);
 
         let parameter_list = &ast.lists["ParameterList"];

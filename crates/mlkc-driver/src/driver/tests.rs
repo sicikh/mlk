@@ -1230,7 +1230,8 @@ fn what_a_resolution_found_travels_with_the_diagnostics_of_the_file() {
     let label = diagnostic.labels.first().expect("a label");
 
     // A resolution reports a place in the HIR, and the driver turns it into the span of the
-    // text the place is written at.
+    // text the place is written at: the tree that names what the module takes is what the label
+    // covers, and the `use` in front of it is not.
     assert_eq!(diagnostic.category, Category::Resolver);
     assert_eq!(diagnostic.code, "04");
     assert_eq!(
@@ -1239,7 +1240,7 @@ fn what_a_resolution_found_travels_with_the_diagnostics_of_the_file() {
     );
     assert_eq!(
         covered(SOURCE, Some(label.span.range)),
-        Some("use project::types::Nope")
+        Some("project::types::Nope")
     );
 }
 

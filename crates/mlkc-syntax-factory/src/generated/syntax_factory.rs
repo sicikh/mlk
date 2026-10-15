@@ -23,9 +23,8 @@ impl SyntaxFactoryTrait for SyntaxFactory {
         children: ParsedChildren<Self::Kind>,
     ) -> RawSyntaxNode<Self::Kind> {
         match kind {
-            BOGUS | BOGUS_DECL | BOGUS_EXPR | BOGUS_PARAMETER | BOGUS_PAT | BOGUS_TYPE => {
-                RawSyntaxNode::new(kind, children.into_iter().map(Some))
-            },
+            BOGUS | BOGUS_DECL | BOGUS_EXPR | BOGUS_PARAMETER | BOGUS_PAT | BOGUS_TYPE
+            | BOGUS_USE_GROUP_ITEM => RawSyntaxNode::new(kind, children.into_iter().map(Some)),
             ADT_DECL => {
                 let mut elements = (&children).into_iter();
                 let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
@@ -1210,7 +1209,7 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             USE_DECL => {
                 let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
+                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
                 let mut current_element = elements.next();
                 if let Some(element) = &current_element
                     && element.kind() == T![pub]
@@ -1227,7 +1226,63 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.next_slot();
                 if let Some(element) = &current_element
-                    && Path::can_cast(element.kind())
+                    && UseTree::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(USE_DECL.to_bogus(), children.into_iter().map(Some));
+                }
+                slots.into_node(USE_DECL, children)
+            },
+            USE_GROUP => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T ! [::]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T!['{']
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && UseGroupItemList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T!['}']
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(
+                        USE_GROUP.to_bogus(),
+                        children.into_iter().map(Some),
+                    );
+                }
+                slots.into_node(USE_GROUP, children)
+            },
+            USE_SELF => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<2usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && element.kind() == T![self]
                 {
                     slots.mark_present();
                     current_element = elements.next();
@@ -1241,9 +1296,39 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                 }
                 slots.next_slot();
                 if current_element.is_some() {
-                    return RawSyntaxNode::new(USE_DECL.to_bogus(), children.into_iter().map(Some));
+                    return RawSyntaxNode::new(USE_SELF.to_bogus(), children.into_iter().map(Some));
                 }
-                slots.into_node(USE_DECL, children)
+                slots.into_node(USE_SELF, children)
+            },
+            USE_TREE => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<3usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && Path::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && UseGroup::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && UseAlias::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(USE_TREE.to_bogus(), children.into_iter().map(Some));
+                }
+                slots.into_node(USE_TREE, children)
             },
             WILDCARD_PAT => {
                 let mut elements = (&children).into_iter();
@@ -1290,6 +1375,15 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             },
             TYPE_ARG_LIST => {
                 Self::make_separated_list_syntax(kind, children, Type::can_cast, T ! [,], true)
+            },
+            USE_GROUP_ITEM_LIST => {
+                Self::make_separated_list_syntax(
+                    kind,
+                    children,
+                    UseGroupItem::can_cast,
+                    T ! [,],
+                    false,
+                )
             },
             _ => unreachable!("Is {:?} a token?", kind),
         }

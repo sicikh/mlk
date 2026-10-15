@@ -55,63 +55,69 @@ ModuleRoot {
         UseDecl {
             visibility_token: missing (optional),
             use_token: USE_KW@164..170 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
-            path: Path {
-                qualifier: PathQualifier {
-                    path: Path {
-                        qualifier: missing (optional),
-                        segment: PathSegment {
-                            root: Project {
-                                project_token: PROJECT_KW@170..177 "project" [] [],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                root: Project {
+                                    project_token: PROJECT_KW@170..177 "project" [] [],
+                                },
+                                type_args: missing (optional),
                             },
-                            type_args: missing (optional),
                         },
+                        double_colon_token: COLON_COLON@177..179 "::" [] [],
                     },
-                    double_colon_token: COLON_COLON@177..179 "::" [] [],
-                },
-                segment: PathSegment {
-                    root: Name {
-                        value_token: IDENT@179..184 "types" [] [],
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@179..184 "types" [] [],
+                        },
+                        type_args: missing (optional),
                     },
-                    type_args: missing (optional),
                 },
+                group: missing (optional),
+                alias: missing (optional),
             },
-            alias: missing (optional),
         },
         UseDecl {
             visibility_token: missing (optional),
             use_token: USE_KW@184..190 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
-            path: Path {
-                qualifier: PathQualifier {
-                    path: Path {
-                        qualifier: PathQualifier {
-                            path: Path {
-                                qualifier: missing (optional),
-                                segment: PathSegment {
-                                    root: Project {
-                                        project_token: PROJECT_KW@190..197 "project" [] [],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: PathQualifier {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Project {
+                                            project_token: PROJECT_KW@190..197 "project" [] [],
+                                        },
+                                        type_args: missing (optional),
                                     },
-                                    type_args: missing (optional),
                                 },
+                                double_colon_token: COLON_COLON@197..199 "::" [] [],
                             },
-                            double_colon_token: COLON_COLON@197..199 "::" [] [],
-                        },
-                        segment: PathSegment {
-                            root: Name {
-                                value_token: IDENT@199..203 "core" [] [],
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@199..203 "core" [] [],
+                                },
+                                type_args: missing (optional),
                             },
-                            type_args: missing (optional),
                         },
+                        double_colon_token: COLON_COLON@203..205 "::" [] [],
                     },
-                    double_colon_token: COLON_COLON@203..205 "::" [] [],
-                },
-                segment: PathSegment {
-                    root: Name {
-                        value_token: IDENT@205..208 "Int" [] [],
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@205..208 "Int" [] [],
+                        },
+                        type_args: missing (optional),
                     },
-                    type_args: missing (optional),
                 },
+                group: missing (optional),
+                alias: missing (optional),
             },
-            alias: missing (optional),
         },
         FunDecl {
             attributes: AttributeList [],
@@ -300,44 +306,48 @@ ModuleRoot {
     0: USE_DECL@164..184
       0: (empty)
       1: USE_KW@164..170 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: PATH@170..184
-        0: PATH_QUALIFIER@170..179
-          0: PATH@170..177
-            0: (empty)
-            1: PATH_SEGMENT@170..177
-              0: PROJECT@170..177
-                0: PROJECT_KW@170..177 "project" [] []
-              1: (empty)
-          1: COLON_COLON@177..179 "::" [] []
-        1: PATH_SEGMENT@179..184
-          0: NAME@179..184
-            0: IDENT@179..184 "types" [] []
-          1: (empty)
-      3: (empty)
+      2: USE_TREE@170..184
+        0: PATH@170..184
+          0: PATH_QUALIFIER@170..179
+            0: PATH@170..177
+              0: (empty)
+              1: PATH_SEGMENT@170..177
+                0: PROJECT@170..177
+                  0: PROJECT_KW@170..177 "project" [] []
+                1: (empty)
+            1: COLON_COLON@177..179 "::" [] []
+          1: PATH_SEGMENT@179..184
+            0: NAME@179..184
+              0: IDENT@179..184 "types" [] []
+            1: (empty)
+        1: (empty)
+        2: (empty)
     1: USE_DECL@184..208
       0: (empty)
       1: USE_KW@184..190 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: PATH@190..208
-        0: PATH_QUALIFIER@190..205
-          0: PATH@190..203
-            0: PATH_QUALIFIER@190..199
-              0: PATH@190..197
-                0: (empty)
-                1: PATH_SEGMENT@190..197
-                  0: PROJECT@190..197
-                    0: PROJECT_KW@190..197 "project" [] []
-                  1: (empty)
-              1: COLON_COLON@197..199 "::" [] []
-            1: PATH_SEGMENT@199..203
-              0: NAME@199..203
-                0: IDENT@199..203 "core" [] []
-              1: (empty)
-          1: COLON_COLON@203..205 "::" [] []
-        1: PATH_SEGMENT@205..208
-          0: NAME@205..208
-            0: IDENT@205..208 "Int" [] []
-          1: (empty)
-      3: (empty)
+      2: USE_TREE@190..208
+        0: PATH@190..208
+          0: PATH_QUALIFIER@190..205
+            0: PATH@190..203
+              0: PATH_QUALIFIER@190..199
+                0: PATH@190..197
+                  0: (empty)
+                  1: PATH_SEGMENT@190..197
+                    0: PROJECT@190..197
+                      0: PROJECT_KW@190..197 "project" [] []
+                    1: (empty)
+                1: COLON_COLON@197..199 "::" [] []
+              1: PATH_SEGMENT@199..203
+                0: NAME@199..203
+                  0: IDENT@199..203 "core" [] []
+                1: (empty)
+            1: COLON_COLON@203..205 "::" [] []
+          1: PATH_SEGMENT@205..208
+            0: NAME@205..208
+              0: IDENT@205..208 "Int" [] []
+            1: (empty)
+        1: (empty)
+        2: (empty)
     2: FUN_DECL@208..261
       0: ATTRIBUTE_LIST@208..208
       1: (empty)

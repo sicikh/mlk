@@ -7,8 +7,8 @@ expression: snapshot
 ### Diagnostics
 
 lowering[15]: the name `Nope` is not a name of this module, and names no project  @64..68
-resolver[08]: the module `project::types` holds the name `Hidden` and does not show it  @0..26
-resolver[03]: the project `app` holds no module `missing`  @28..51
+resolver[08]: the module `project::types` holds the name `Hidden` and does not show it  @4..26
+resolver[03]: the project `app` holds no module `missing`  @32..51
 resolver[07]: the name `size` is a value of this module, and a type belongs here  @134..138
 
 ## `project::types`

@@ -41,7 +41,7 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
     ],
     keywords: &[
         "as", "data", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
-        "project", "pub", "then", "true", "use",
+        "project", "pub", "self", "then", "true", "use",
     ],
     literals: &["INT_LITERAL", "STRING_LITERAL"],
     tokens: &[
@@ -70,6 +70,11 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "ADT_DECL",
         "FUN_DECL",
         "USE_DECL",
+        "USE_TREE",
+        "USE_GROUP",
+        "USE_GROUP_ITEM_LIST",
+        "USE_GROUP_ITEM",
+        "USE_SELF",
         "USE_ALIAS",
         "FUN_RETURN_TYPE_ANNOTATION",
         "FUN_BODY",
@@ -112,6 +117,7 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "BOGUS_PARAMETER",
         "BOGUS_PAT",
         "BOGUS_TYPE",
+        "BOGUS_USE_GROUP_ITEM",
     ],
 };
 

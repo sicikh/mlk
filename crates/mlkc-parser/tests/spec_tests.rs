@@ -67,6 +67,10 @@ spec_tests! {
     // expression.
     project_paths: "valid/project_paths.mlk",
 
+    // An import of a tree: the names a path brings in, the name each is brought in under, and
+    // the keyword `self` for the path itself.
+    import_trees: "valid/import_trees.mlk",
+
     // What a value may be followed by: a call, a call with the value passed as the first
     // argument, a field read, and a chain of them.
     chains: "valid/chains.mlk",
@@ -145,6 +149,10 @@ spec_tests! {
     // What is wrong with a `local` as syntax: an item that is not a declaration, an item whose
     // body the parser could not read, and the `in` that ends the list that is not written.
     broken_local: "invalid/local.mlk",
+
+    // What is wrong with an import as syntax: a name a group is brought in under, and the
+    // keyword `self` written outside the group it belongs to.
+    broken_import_trees: "invalid/import_trees.mlk",
 }
 
 /// A fixture without a test is a snapshot nobody looks at.

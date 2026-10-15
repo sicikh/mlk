@@ -26,10 +26,10 @@ fun main(): Int =
 MODULE #0 project::main
 
 ITEM TREE
-  use core  @2.0
+  use core  @2.0.2
     path: std::core
     visibility: private
-  use Map  @2.1
+  use Map  @2.1.2
     path: project::types::Map
     visibility: private
   fun main  @2.2

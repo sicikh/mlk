@@ -46,6 +46,7 @@ Then read the cluster of the area you are about to touch.
 | [0029](0029-dash-in-names.md)          | `-` joins a name only between name characters      | accepted |
 | [0030](0030-primes-in-names.md)        | A name may hold a prime `'`                        | accepted |
 | [0031](0031-unicode-names.md)          | A name may hold the letters of any alphabet        | accepted |
+| [0032](0032-import-trees.md)           | Import trees, with `self` for the path             | accepted |
 
 ### Modules, identity, and incrementality
 

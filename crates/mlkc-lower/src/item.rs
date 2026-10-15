@@ -6,7 +6,10 @@ use mlkc_hir_def::{
     Name, PathRoot, PlainPath, PlainPathId, Prelude, ProjectId, UseData, UseLoc, Visibility,
 };
 use mlkc_rowan::AstNode;
-use mlkc_syntax::{AdtDecl, AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, UseDecl};
+use mlkc_syntax::{
+    AdtDecl, AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, UseDecl, UseGroupItem,
+    UseTree,
+};
 use mlkc_vfs::{FileId, RelPath};
 
 use crate::{
@@ -543,33 +546,111 @@ impl ItemLowering<'_> {
         }
     }
 
-    /// Declares one import: what it brings in, and the name it is brought in under.
+    /// Declares what one import brings in, name by name.
     fn import(&mut self, decl: &UseDecl, position: ItemSyntaxLoc) {
-        // An import of nothing: a path the parser could not read is what the parse reported,
+        // An import of nothing: a tree the parser could not read is what the parse reported,
         // and there is no name for the import to bring in.
-        let Ok(path) = decl.path() else {
+        let Ok(tree) = decl.tree() else {
             return;
         };
 
-        let plain = path::plain(&path);
+        let visibility = decl::visibility(decl.visibility_token());
+
+        self.use_tree(
+            &tree,
+            None,
+            visibility,
+            syntax::child_position(&position, tree.syntax()),
+        );
+    }
+
+    /// Declares what one node of an import tree brings in.
+    ///
+    /// `prefix` is the path the node is read inside: the path written before the group the node
+    /// stands in, or `None` for the tree an import is written as, which writes the whole path
+    /// itself.
+    fn use_tree(
+        &mut self,
+        tree: &UseTree,
+        prefix: Option<&PlainPath>,
+        visibility: Visibility,
+        position: ItemSyntaxLoc,
+    ) {
+        // A path the parser could not read is what the parse reported, and there is no name
+        // for the import to bring in.
+        let Ok(path) = tree.path() else {
+            return;
+        };
+
         self.plain_path(&path);
 
-        // The name an import brings in is the name it is renamed to, and the last segment of
-        // the path when it is not renamed: `use a.b.C as D` brings in `D`, and `use a.b.C`
+        let written = path::plain(&path);
+        let taken_from = match prefix {
+            None => written,
+            Some(prefix) => path::appended(prefix, &written),
+        };
+
+        // A tree that holds a group brings in nothing itself: what it is written as is the
+        // path the names inside it are read inside.
+        let Some(group) = tree.group() else {
+            let alias = tree.alias().map(|alias| syntax::name(alias.name()));
+
+            self.declare_import(&taken_from, alias, tree.syntax(), position, visibility);
+            return;
+        };
+
+        let group_position = syntax::child_position(&position, group.syntax());
+        let items = group.items().syntax().clone();
+        let items_position = syntax::child_position(&group_position, &items);
+
+        for node in items.children() {
+            let position = syntax::child_position(&items_position, &node);
+
+            // A name of the group the parser could not read is what the parse reported, and
+            // the names around it are read as if it were not there.
+            match UseGroupItem::cast(node) {
+                Some(UseGroupItem::UseSelf(item)) => {
+                    let alias = item.alias().map(|alias| syntax::name(alias.name()));
+
+                    // What `self` names is the path the group is written after, which is the
+                    // path the node the group belongs to took its names from.
+                    self.declare_import(&taken_from, alias, item.syntax(), position, visibility);
+                },
+                Some(UseGroupItem::UseTree(tree)) => {
+                    self.use_tree(&tree, Some(&taken_from), visibility, position)
+                },
+                Some(UseGroupItem::BogusUseGroupItem(_)) | None => {},
+            }
+        }
+    }
+
+    /// Declares one name an import brings in.
+    ///
+    /// The name it brings in is what it is brought in under, and the last name of the path when
+    /// it is brought in under none.
+    fn declare_import(
+        &mut self,
+        path: &PlainPath,
+        alias: Option<Name>,
+        node: &SyntaxNode,
+        position: ItemSyntaxLoc,
+        visibility: Visibility,
+    ) {
+        // What an import brings in is the name it is renamed to, and the last segment of
+        // the path when it is not renamed: `use a::b::C as D` brings in `D`, and `use a::b::C`
         // brings in `C`.
-        let alias = decl.alias().map(|alias| syntax::name(alias.name()));
         let name = alias
             .clone()
-            .or_else(|| plain.last().cloned())
+            .or_else(|| path.last().cloned())
             .unwrap_or_else(Name::missing);
 
         let data = EntityData::Use(UseData {
-            path: PlainPathId::new(plain),
+            path: PlainPathId::new(path.clone()),
             alias,
-            visibility: decl::visibility(decl.visibility_token()),
+            visibility,
         });
 
-        self.entity(decl.syntax(), position, Some(name), data);
+        self.entity(node, position, Some(name), data);
     }
 
     /// Reads the attributes a declaration writes in front of itself.

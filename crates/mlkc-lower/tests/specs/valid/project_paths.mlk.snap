@@ -29,10 +29,10 @@ fun handle(value: project::types::Handle): Int =
 MODULE #0 project::app
 
 ITEM TREE
-  use types  @2.0
+  use types  @2.0.2
     path: project::types
     visibility: private
-  use Int  @2.1
+  use Int  @2.1.2
     path: project::core::Int
     visibility: private
   fun start  @2.2

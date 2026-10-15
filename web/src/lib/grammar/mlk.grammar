@@ -76,9 +76,24 @@ FunBody { "=" Expr }
 
 AdtDecl { Visibility? kw<"data"> Name }
 
-// An import: a path of the project, under the name it is brought in as, which is the last
-// segment of the path or what it is renamed to.
-UseDecl { Visibility? kw<"use"> Path UseAlias? }
+// An import: a tree of names the module takes from the paths of the project.
+//
+// What follows a path is what is taken from it, one name after another: `a::b::c` takes `c`
+// from `b` inside `a`, and a group takes several names at once, `a::{b, c}`. The keyword
+// `self` is the path the group it stands in is written after.
+//
+// A name and a group are written after one `::`, which is why the two are one choice here:
+// whether the path a `::` continues is longer or a group is what follows it is read after the
+// `::`, and the grammar of the editor has to read it as it is typed.
+UseDecl { Visibility? kw<"use"> UseTree }
+
+UseTree { PathSegment ("::" (PathSegment | UseGroup))* UseAlias? }
+
+UseGroup { "{" (UseGroupItem ("," UseGroupItem)*)? "}" }
+
+UseGroupItem { UseSelf | UseTree }
+
+UseSelf { kw<"self"> UseAlias? }
 
 UseAlias { kw<"as"> Name }
 

@@ -1,0 +1,12 @@
+// What an import tree rejects: a name the group is brought in under, which renames nothing,
+// and the keyword `self` written where a name of a path belongs. What follows the two
+// mistakes is a module of the language all the same.
+
+module project::app
+
+use std::{core} as core
+
+use std::core::self
+
+fun main(): Int =
+    1

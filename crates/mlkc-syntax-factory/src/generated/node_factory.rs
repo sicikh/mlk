@@ -508,27 +508,21 @@ pub(crate) fn use_alias(as_token: SyntaxToken, name: Name) -> UseAlias {
         Some(SyntaxElement::Node(name.into_syntax())),
     ]))
 }
-pub(crate) fn use_decl(use_token: SyntaxToken, path: Path) -> UseDeclBuilder {
+pub(crate) fn use_decl(use_token: SyntaxToken, tree: UseTree) -> UseDeclBuilder {
     UseDeclBuilder {
         use_token,
-        path,
+        tree,
         visibility_token: None,
-        alias: None,
     }
 }
 pub(crate) struct UseDeclBuilder {
     use_token: SyntaxToken,
-    path: Path,
+    tree: UseTree,
     visibility_token: Option<SyntaxToken>,
-    alias: Option<UseAlias>,
 }
 impl UseDeclBuilder {
     pub(crate) fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
         self.visibility_token = Some(visibility_token);
-        self
-    }
-    pub(crate) fn with_alias(mut self, alias: UseAlias) -> Self {
-        self.alias = Some(alias);
         self
     }
     pub(crate) fn build(self) -> UseDecl {
@@ -536,7 +530,72 @@ impl UseDeclBuilder {
             self.visibility_token
                 .map(|token| SyntaxElement::Token(token)),
             Some(SyntaxElement::Token(self.use_token)),
+            Some(SyntaxElement::Node(self.tree.into_syntax())),
+        ]))
+    }
+}
+pub(crate) fn use_group(
+    double_colon_token: SyntaxToken,
+    l_curly_token: SyntaxToken,
+    items: UseGroupItemList,
+    r_curly_token: SyntaxToken,
+) -> UseGroup {
+    UseGroup::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_GROUP, [
+        Some(SyntaxElement::Token(double_colon_token)),
+        Some(SyntaxElement::Token(l_curly_token)),
+        Some(SyntaxElement::Node(items.into_syntax())),
+        Some(SyntaxElement::Token(r_curly_token)),
+    ]))
+}
+pub(crate) fn use_self(self_token: SyntaxToken) -> UseSelfBuilder {
+    UseSelfBuilder {
+        self_token,
+        alias: None,
+    }
+}
+pub(crate) struct UseSelfBuilder {
+    self_token: SyntaxToken,
+    alias: Option<UseAlias>,
+}
+impl UseSelfBuilder {
+    pub(crate) fn with_alias(mut self, alias: UseAlias) -> Self {
+        self.alias = Some(alias);
+        self
+    }
+    pub(crate) fn build(self) -> UseSelf {
+        UseSelf::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_SELF, [
+            Some(SyntaxElement::Token(self.self_token)),
+            self.alias
+                .map(|token| SyntaxElement::Node(token.into_syntax())),
+        ]))
+    }
+}
+pub(crate) fn use_tree(path: Path) -> UseTreeBuilder {
+    UseTreeBuilder {
+        path,
+        group: None,
+        alias: None,
+    }
+}
+pub(crate) struct UseTreeBuilder {
+    path: Path,
+    group: Option<UseGroup>,
+    alias: Option<UseAlias>,
+}
+impl UseTreeBuilder {
+    pub(crate) fn with_group(mut self, group: UseGroup) -> Self {
+        self.group = Some(group);
+        self
+    }
+    pub(crate) fn with_alias(mut self, alias: UseAlias) -> Self {
+        self.alias = Some(alias);
+        self
+    }
+    pub(crate) fn build(self) -> UseTree {
+        UseTree::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::USE_TREE, [
             Some(SyntaxElement::Node(self.path.into_syntax())),
+            self.group
+                .map(|token| SyntaxElement::Node(token.into_syntax())),
             self.alias
                 .map(|token| SyntaxElement::Node(token.into_syntax())),
         ]))
@@ -667,6 +726,27 @@ where
         }),
     ))
 }
+pub(crate) fn use_group_item_list<I, S>(items: I, separators: S) -> UseGroupItemList
+where
+    I: IntoIterator<Item = UseGroupItem>,
+    I::IntoIter: ExactSizeIterator,
+    S: IntoIterator<Item = SyntaxToken>,
+    S::IntoIter: ExactSizeIterator,
+{
+    let mut items = items.into_iter();
+    let mut separators = separators.into_iter();
+    let length = items.len() + separators.len();
+    UseGroupItemList::unwrap_cast(SyntaxNode::new_detached(
+        SyntaxKind::USE_GROUP_ITEM_LIST,
+        (0..length).map(|index| {
+            if index % 2 == 0 {
+                Some(items.next()?.into_syntax().into())
+            } else {
+                Some(separators.next()?.into())
+            }
+        }),
+    ))
+}
 pub(crate) fn bogus<I>(slots: I) -> Bogus
 where
     I: IntoIterator<Item = Option<SyntaxElement>>,
@@ -708,4 +788,14 @@ where
     I::IntoIter: ExactSizeIterator,
 {
     BogusType::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::BOGUS_TYPE, slots))
+}
+pub(crate) fn bogus_use_group_item<I>(slots: I) -> BogusUseGroupItem
+where
+    I: IntoIterator<Item = Option<SyntaxElement>>,
+    I::IntoIter: ExactSizeIterator,
+{
+    BogusUseGroupItem::unwrap_cast(SyntaxNode::new_detached(
+        SyntaxKind::BOGUS_USE_GROUP_ITEM,
+        slots,
+    ))
 }

@@ -75,6 +75,10 @@ spec_tests! {
     // the name of a module of the project.
     imports: "valid/imports.mlk",
 
+    // An import written as a tree: the names one path brings in, the name each of them is
+    // brought in under, and the keyword `self` for the path itself.
+    import_trees: "valid/import_trees.mlk",
+
     // A path rooted at the project: the keyword a module names its own project by, in the
     // preamble, in an import, in a type and in an expression.
     project_paths: "valid/project_paths.mlk",
@@ -171,6 +175,10 @@ spec_tests! {
     // A name an import brings in is a name the module declares: the declaration is what the
     // name means, and the import is told about wherever either of them is written.
     import_of_declared_name: "invalid/import_of_declared_name.mlk",
+
+    // A name one tree brings in twice, and a name of it that the module declares: one name is
+    // one thing, and each node of a tree is an import of its own.
+    import_trees_that_say_a_name_twice: "invalid/import_trees.mlk",
 
     // A public function whose signature is not complete: what a caller of it depends on is the
     // surface of the module.

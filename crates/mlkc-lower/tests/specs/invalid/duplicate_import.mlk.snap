@@ -20,10 +20,10 @@ use std::core::Int
 MODULE #0 project::duplicate_import
 
 ITEM TREE
-  use Int  @2.0
+  use Int  @2.0.2
     path: std::core::Int
     visibility: private
-  use Int#1  @2.1
+  use Int#1  @2.1.2
     path: std::core::Int
     visibility: private
   use Int#2  prelude
@@ -52,7 +52,7 @@ No bodies.
 
 ## Lowering Diagnostics
 
-149..167: `use Int` is declared more than once in this module
+153..167: `use Int` is declared more than once in this module
 
 ## Parse Diagnostics
 

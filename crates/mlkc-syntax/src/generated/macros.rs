@@ -174,6 +174,18 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::UseDecl::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::USE_GROUP => {
+                        let $pattern = unsafe { $crate::UseGroup::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::USE_SELF => {
+                        let $pattern = unsafe { $crate::UseSelf::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::USE_TREE => {
+                        let $pattern = unsafe { $crate::UseTree::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::WILDCARD_PAT => {
                         let $pattern = unsafe { $crate::WildcardPat::new_unchecked(node) };
                         $body
@@ -202,6 +214,10 @@ macro_rules! map_syntax_node {
                         let $pattern = unsafe { $crate::BogusType::new_unchecked(node) };
                         $body
                     },
+                    $crate::SyntaxKind::BOGUS_USE_GROUP_ITEM => {
+                        let $pattern = unsafe { $crate::BogusUseGroupItem::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::ARGUMENT_LIST => {
                         let $pattern = unsafe { $crate::ArgumentList::new_unchecked(node) };
                         $body
@@ -228,6 +244,10 @@ macro_rules! map_syntax_node {
                     },
                     $crate::SyntaxKind::TYPE_ARG_LIST => {
                         let $pattern = unsafe { $crate::TypeArgList::new_unchecked(node) };
+                        $body
+                    },
+                    $crate::SyntaxKind::USE_GROUP_ITEM_LIST => {
+                        let $pattern = unsafe { $crate::UseGroupItemList::new_unchecked(node) };
                         $body
                     },
                     _ => unreachable!(),

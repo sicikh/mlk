@@ -42,6 +42,7 @@ BogusExpr = SyntaxElement*
 BogusParameter = SyntaxElement*
 BogusPat = SyntaxElement*
 BogusType = SyntaxElement*
+BogusUseGroupItem = SyntaxElement*
 
 Name = value: 'ident'
 
@@ -163,15 +164,64 @@ TypeAnnotation =
 //           Imports          //
 //****************************//
 
-// An import: a name the module takes from another path of the project. The name it brings in
-// is the last segment of the path, or the name it is renamed to.
+// An import: what a module takes from another place in the project, and the name it is
+// brought in under.
+//
+// What an import brings in is written as a tree: a path of the project, the names taken from
+// it, and the name each of them is brought in under.
+//
+//     use std::core::Int
+//     use std::core::Int as Integer
+//     use std::{collections::{Map, Set}, prelude::{self, Int, String}}
+//
+// A group is how several names are taken from one path at once: what stands between its braces
+// is read inside the path before it, and a name may take names from inside itself in turn. The
+// keyword `self` is the path the group is written after, which is what the example above takes
+// beside the names inside it: it brings in `std::prelude`, and `std::prelude::Int` and
+// `std::prelude::String` with it.
 //
 // An import carries no attributes: what an import is, is what it brings in and how far it is
 // visible.
 UseDecl =
     visibility: 'pub'?
     'use'
+    tree: UseTree
+
+// One node of an import tree: a path of the project, the names taken from it, and the name
+// the node is brought in under.
+//
+//     std::core::Int             -- the name `Int` inside `std::core`
+//     std::core::Int as Integer  -- the same name, under another one
+//     std::core::{Int, Float}    -- the name `Int` and the name `Float` inside `std::core`
+//
+// A node written inside a group is read inside the path the group is written after, which is
+// what `std::{core::Int}` means: every path of a tree names something inside the one before
+// it. A node with a group brings in nothing itself: what it is written as is the path the
+// names inside the group are taken from.
+UseTree =
     path: Path
+    group: UseGroup?
+    alias: UseAlias?
+
+// The names an import tree takes from the path before it: `use std::{core, mem}`.
+UseGroup =
+    '::'
+    '{'
+    items: UseGroupItemList
+    '}'
+
+UseGroupItemList = (UseGroupItem (',' UseGroupItem)*)
+
+UseGroupItem =
+    UseSelf
+    | UseTree
+    | BogusUseGroupItem
+
+// The keyword `self`: the name the path before the group ends at, which is a name the group
+// takes like any other. `use std::prelude::{self, Int}` brings in `std::prelude` itself, and
+// the `Int` inside it.
+UseSelf =
+    'self'
     alias: UseAlias?
 
 UseAlias =

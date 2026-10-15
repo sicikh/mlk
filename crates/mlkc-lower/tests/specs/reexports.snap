@@ -10,7 +10,7 @@ expression: snapshot
 MODULE #3 project::a
 
 ITEM TREE
-  use Point  @2.0
+  use Point  @2.0.2
     path: project::b::Point
     visibility: public
   use Int  prelude
@@ -79,7 +79,7 @@ No bodies.
 MODULE #5 project::main
 
 ITEM TREE
-  use Point  @2.0
+  use Point  @2.0.2
     path: project::a::Point
     visibility: private
   fun get  @2.1

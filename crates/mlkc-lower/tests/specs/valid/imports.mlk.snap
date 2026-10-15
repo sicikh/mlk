@@ -39,17 +39,17 @@ fun start(): Int =
 MODULE #0 project::app
 
 ITEM TREE
-  use Int  @2.0
+  use Int  @2.0.2
     path: std::core::Int
     visibility: private
-  use IO  @2.1
+  use IO  @2.1.2
     path: std::core::io
     alias: IO
     visibility: public
-  use types  @2.2
+  use types  @2.2.2
     path: project::types
     visibility: private
-  use start-app  @2.3
+  use start-app  @2.3.2
     path: project::types::start-app
     visibility: private
   fun main  @2.4

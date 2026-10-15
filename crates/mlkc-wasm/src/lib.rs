@@ -2675,8 +2675,9 @@ mod tests {
         assert_eq!(covered(source, &param["range"]), "Int");
         assert_eq!(
             covered(source, &param["resolves"]),
-            "use std::core::Int",
-            "a type a signature writes marks what its name comes from"
+            "std::core::Int",
+            "a type a signature writes marks what its name comes from: the tree that names it, \
+             and not the `use` in front of it"
         );
 
         // The two types are written at two places of the same declaration, and each line
@@ -2713,8 +2714,9 @@ mod tests {
         assert_eq!(covered(source, &path["range"]), "Int");
         assert_eq!(
             covered(source, &path["resolves"]),
-            "use std::core::Int",
-            "a name an import brought in leads to the import"
+            "std::core::Int",
+            "a name an import brought in leads to the import: the tree that names it, and not \
+             the `use` in front of it"
         );
     }
 

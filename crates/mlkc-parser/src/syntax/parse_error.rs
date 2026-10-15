@@ -5,7 +5,7 @@
 //! depend on what the parser found (the token, or the end of the file).
 
 use mlkc_parser_core::{Parser, diagnostic::ParseDiagnostic};
-use mlkc_rowan::TextRange;
+use mlkc_rowan::{TextLen, TextRange};
 
 use crate::parser::MlkParser;
 
@@ -31,6 +31,54 @@ pub(crate) fn project_where_a_name_belongs(p: &MlkParser, range: TextRange) -> P
         format!(
             "Expected a name but instead found '{}': the keyword `project` roots a path, and a \
          name belongs after a `::`.",
+            p.text(range)
+        ),
+        range,
+    )
+}
+
+/// The parser found the keyword `self` where a name of an import belongs.
+///
+/// What `self` names is the path the group it is written in takes names from, so it is written
+/// among the names of that group: `use std::prelude::{self}` takes `std::prelude` itself, and
+/// the keyword is a name of no path.
+pub(crate) fn self_where_a_name_belongs(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        format!(
+            "Expected a name but instead found '{}': what `self` names is the path the group it \
+         is written in takes names from, and it is written inside the group, as in \
+         `use std::prelude::{{self}}`.",
+            p.text(range)
+        ),
+        range,
+    )
+}
+
+/// The parser expected a name an import takes from a path, or the keyword `self` for the path
+/// itself.
+pub(crate) fn expected_import_name(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
+    let expected = "a name or `self`";
+
+    let message = if p.source().text().text_len() <= range.start() {
+        format!("Expected {expected} but instead found the end of the file.")
+    } else {
+        format!("Expected {expected} but instead found '{}'.", p.text(range))
+    };
+
+    ParseDiagnostic::new(message, range)
+}
+
+/// The parser found the name an import tree is brought in under written after the names a
+/// group takes from a path.
+///
+/// What is brought in under a name is one name, and a group is where several are written at
+/// once: `use a::{b} as c` renames nothing, and what a reader writes is `use a::{b as c}`.
+pub(crate) fn alias_after_a_group(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
+    ParseDiagnostic::new(
+        format!(
+            "Expected the end of the import but instead found '{}': what is brought in under a \
+         name is one name, and the names a group takes are renamed where each is written, as \
+         in `use a::{{b as c}}`.",
             p.text(range)
         ),
         range,

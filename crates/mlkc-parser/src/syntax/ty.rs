@@ -23,7 +23,9 @@ use crate::{
     parser::MlkParser,
     syntax::{
         auxiliary::parse_name,
-        parse_error::{expected_name, expected_type, project_where_a_name_belongs},
+        parse_error::{
+            expected_name, expected_type, project_where_a_name_belongs, self_where_a_name_belongs,
+        },
     },
 };
 
@@ -75,7 +77,26 @@ fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
 // fun rooted(): Int =
 //     project::types::start-app(1)
 pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
-    let segment = parse_path_segment(p, true);
+    parse_path_with(p, true, false)
+}
+
+/// Parses the path an import is written as, up to the `::` that opens the names taken from it.
+///
+/// An import reads its names from a path, and the `::` that opens a group is not a qualifier:
+/// `std::core::{Map}` is the path `std::core` and a group, so the path ends where the group
+/// begins, and the `::` is the group's own.
+///
+/// `root` says whether the path may be rooted at the project keyword, which is what the path
+/// an import begins with may be: a path written inside a group is read inside the path before
+/// it, and the keyword there is a mistake the segment parser reports.
+pub(crate) fn parse_use_path(p: &mut MlkParser, root: bool) -> ParsedSyntax {
+    parse_path_with(p, root, true)
+}
+
+/// Parses a path, with the two things a caller may have a say about: whether its first
+/// segment may be the project keyword, and whether it ends where a group of an import begins.
+fn parse_path_with(p: &mut MlkParser, root: bool, until_group: bool) -> ParsedSyntax {
+    let segment = parse_path_segment(p, root);
 
     if segment.is_absent() {
         return ParsedSyntax::Absent;
@@ -84,7 +105,7 @@ pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
     // A single segment is a path already.
     let mut path = segment.map(|segment| segment.precede(p).complete(p, PATH));
 
-    while p.at(T![::]) {
+    while p.at(T![::]) && !(until_group && p.nth_at(1, T!['{'])) {
         let qualifier = path.precede(p);
 
         p.bump(T![::]);
@@ -93,7 +114,18 @@ pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
         // The segment that follows the `::` is the segment of the new path, not a child of
         // the qualifier: the qualifier is closed before it is parsed.
         let m = qualifier.precede(p);
-        parse_path_segment(p, false).or_add_diagnostic(p, expected_name);
+        let segment = parse_path_segment(p, false);
+
+        // `self` is a keyword of the imports, and what it names is the path the group it is
+        // written in takes names from: written after a `::`, it is a name a path cannot hold,
+        // and the reader is told where it belongs.
+        if until_group && segment.is_absent() && p.at(T![self]) {
+            let diagnostic = self_where_a_name_belongs(p, p.cur_range());
+            p.error(diagnostic);
+        } else {
+            segment.or_add_diagnostic(p, expected_name);
+        }
+
         path = Present(m.complete(p, PATH));
     }
 

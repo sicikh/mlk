@@ -1833,8 +1833,7 @@ impl UseDecl {
         UseDeclFields {
             visibility_token: self.visibility_token(),
             use_token: self.use_token(),
-            path: self.path(),
-            alias: self.alias(),
+            tree: self.tree(),
         }
     }
     pub fn visibility_token(&self) -> Option<SyntaxToken> {
@@ -1843,11 +1842,8 @@ impl UseDecl {
     pub fn use_token(&self) -> SyntaxResult<SyntaxToken> {
         support::required_token(&self.syntax, 1usize)
     }
-    pub fn path(&self) -> SyntaxResult<Path> {
+    pub fn tree(&self) -> SyntaxResult<UseTree> {
         support::required_node(&self.syntax, 2usize)
-    }
-    pub fn alias(&self) -> Option<UseAlias> {
-        support::node(&self.syntax, 3usize)
     }
 }
 impl Serialize for UseDecl {
@@ -1865,7 +1861,150 @@ impl Serialize for UseDecl {
 pub struct UseDeclFields {
     pub visibility_token: Option<SyntaxToken>,
     pub use_token: SyntaxResult<SyntaxToken>,
+    pub tree: SyntaxResult<UseTree>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct UseGroup {
+    pub(crate) syntax: SyntaxNode,
+}
+impl UseGroup {
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> UseGroupFields {
+        UseGroupFields {
+            double_colon_token: self.double_colon_token(),
+            l_curly_token: self.l_curly_token(),
+            items: self.items(),
+            r_curly_token: self.r_curly_token(),
+        }
+    }
+    pub fn double_colon_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn l_curly_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 1usize)
+    }
+    pub fn items(&self) -> UseGroupItemList {
+        support::list(&self.syntax, 2usize)
+    }
+    pub fn r_curly_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 3usize)
+    }
+}
+impl Serialize for UseGroup {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UseGroup")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct UseGroupFields {
+    pub double_colon_token: SyntaxResult<SyntaxToken>,
+    pub l_curly_token: SyntaxResult<SyntaxToken>,
+    pub items: UseGroupItemList,
+    pub r_curly_token: SyntaxResult<SyntaxToken>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct UseSelf {
+    pub(crate) syntax: SyntaxNode,
+}
+impl UseSelf {
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> UseSelfFields {
+        UseSelfFields {
+            self_token: self.self_token(),
+            alias: self.alias(),
+        }
+    }
+    pub fn self_token(&self) -> SyntaxResult<SyntaxToken> {
+        support::required_token(&self.syntax, 0usize)
+    }
+    pub fn alias(&self) -> Option<UseAlias> {
+        support::node(&self.syntax, 1usize)
+    }
+}
+impl Serialize for UseSelf {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UseSelf")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct UseSelfFields {
+    pub self_token: SyntaxResult<SyntaxToken>,
+    pub alias: Option<UseAlias>,
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct UseTree {
+    pub(crate) syntax: SyntaxNode,
+}
+impl UseTree {
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn as_fields(&self) -> UseTreeFields {
+        UseTreeFields {
+            path: self.path(),
+            group: self.group(),
+            alias: self.alias(),
+        }
+    }
+    pub fn path(&self) -> SyntaxResult<Path> {
+        support::required_node(&self.syntax, 0usize)
+    }
+    pub fn group(&self) -> Option<UseGroup> {
+        support::node(&self.syntax, 1usize)
+    }
+    pub fn alias(&self) -> Option<UseAlias> {
+        support::node(&self.syntax, 2usize)
+    }
+}
+impl Serialize for UseTree {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UseTree")?;
+        state.serialize_entry("fields", &self.as_fields())?;
+        state.end()
+    }
+}
+#[derive(Serialize)]
+pub struct UseTreeFields {
     pub path: SyntaxResult<Path>,
+    pub group: Option<UseGroup>,
     pub alias: Option<UseAlias>,
 }
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -2256,6 +2395,44 @@ impl Type {
     pub fn as_path_type(&self) -> Option<&PathType> {
         match &self {
             Self::PathType(item) => Some(item),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum UseGroupItem {
+    BogusUseGroupItem(BogusUseGroupItem),
+    UseSelf(UseSelf),
+    UseTree(UseTree),
+}
+impl Serialize for UseGroupItem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::BogusUseGroupItem(it) => it.serialize(serializer),
+            Self::UseSelf(it) => it.serialize(serializer),
+            Self::UseTree(it) => it.serialize(serializer),
+        }
+    }
+}
+impl UseGroupItem {
+    pub fn as_bogus_use_group_item(&self) -> Option<&BogusUseGroupItem> {
+        match &self {
+            Self::BogusUseGroupItem(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_use_self(&self) -> Option<&UseSelf> {
+        match &self {
+            Self::UseSelf(item) => Some(item),
+            _ => None,
+        }
+    }
+    pub fn as_use_tree(&self) -> Option<&UseTree> {
+        match &self {
+            Self::UseTree(item) => Some(item),
             _ => None,
         }
     }
@@ -4261,8 +4438,7 @@ impl std::fmt::Debug for UseDecl {
                     &support::DebugOptionalElement(self.visibility_token()),
                 )
                 .field("use_token", &support::DebugSyntaxResult(self.use_token()))
-                .field("path", &support::DebugSyntaxResult(self.path()))
-                .field("alias", &support::DebugOptionalElement(self.alias()))
+                .field("tree", &support::DebugSyntaxResult(self.tree()))
                 .finish()
         } else {
             f.debug_struct("UseDecl").finish()
@@ -4278,6 +4454,162 @@ impl From<UseDecl> for SyntaxNode {
 }
 impl From<UseDecl> for SyntaxElement {
     fn from(n: UseDecl) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for UseGroup {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(USE_GROUP as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == USE_GROUP
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for UseGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("UseGroup")
+                .field(
+                    "double_colon_token",
+                    &support::DebugSyntaxResult(self.double_colon_token()),
+                )
+                .field(
+                    "l_curly_token",
+                    &support::DebugSyntaxResult(self.l_curly_token()),
+                )
+                .field("items", &self.items())
+                .field(
+                    "r_curly_token",
+                    &support::DebugSyntaxResult(self.r_curly_token()),
+                )
+                .finish()
+        } else {
+            f.debug_struct("UseGroup").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<UseGroup> for SyntaxNode {
+    fn from(n: UseGroup) -> Self {
+        n.syntax
+    }
+}
+impl From<UseGroup> for SyntaxElement {
+    fn from(n: UseGroup) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for UseSelf {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(USE_SELF as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == USE_SELF
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for UseSelf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("UseSelf")
+                .field("self_token", &support::DebugSyntaxResult(self.self_token()))
+                .field("alias", &support::DebugOptionalElement(self.alias()))
+                .finish()
+        } else {
+            f.debug_struct("UseSelf").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<UseSelf> for SyntaxNode {
+    fn from(n: UseSelf) -> Self {
+        n.syntax
+    }
+}
+impl From<UseSelf> for SyntaxElement {
+    fn from(n: UseSelf) -> Self {
+        n.syntax.into()
+    }
+}
+impl AstNode for UseTree {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(USE_TREE as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == USE_TREE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for UseTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        thread_local! { static DEPTH : std :: cell :: Cell < u8 > = const { std :: cell :: Cell :: new (0) } };
+        let current_depth = DEPTH.get();
+        let result = if current_depth < 16 {
+            DEPTH.set(current_depth + 1);
+            f.debug_struct("UseTree")
+                .field("path", &support::DebugSyntaxResult(self.path()))
+                .field("group", &support::DebugOptionalElement(self.group()))
+                .field("alias", &support::DebugOptionalElement(self.alias()))
+                .finish()
+        } else {
+            f.debug_struct("UseTree").finish()
+        };
+        DEPTH.set(current_depth);
+        result
+    }
+}
+impl From<UseTree> for SyntaxNode {
+    fn from(n: UseTree) -> Self {
+        n.syntax
+    }
+}
+impl From<UseTree> for SyntaxElement {
+    fn from(n: UseTree) -> Self {
         n.syntax.into()
     }
 }
@@ -4952,6 +5284,77 @@ impl From<Type> for SyntaxElement {
         node.into()
     }
 }
+impl From<BogusUseGroupItem> for UseGroupItem {
+    fn from(node: BogusUseGroupItem) -> Self {
+        Self::BogusUseGroupItem(node)
+    }
+}
+impl From<UseSelf> for UseGroupItem {
+    fn from(node: UseSelf) -> Self {
+        Self::UseSelf(node)
+    }
+}
+impl From<UseTree> for UseGroupItem {
+    fn from(node: UseTree) -> Self {
+        Self::UseTree(node)
+    }
+}
+impl AstNode for UseGroupItem {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> = BogusUseGroupItem::KIND_SET
+        .union(UseSelf::KIND_SET)
+        .union(UseTree::KIND_SET);
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(kind, BOGUS_USE_GROUP_ITEM | USE_SELF | USE_TREE)
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        let res = match syntax.kind() {
+            BOGUS_USE_GROUP_ITEM => Self::BogusUseGroupItem(BogusUseGroupItem { syntax }),
+            USE_SELF => Self::UseSelf(UseSelf { syntax }),
+            USE_TREE => Self::UseTree(UseTree { syntax }),
+            _ => return None,
+        };
+        Some(res)
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::BogusUseGroupItem(it) => it.syntax(),
+            Self::UseSelf(it) => it.syntax(),
+            Self::UseTree(it) => it.syntax(),
+        }
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        match self {
+            Self::BogusUseGroupItem(it) => it.into_syntax(),
+            Self::UseSelf(it) => it.into_syntax(),
+            Self::UseTree(it) => it.into_syntax(),
+        }
+    }
+}
+impl std::fmt::Debug for UseGroupItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BogusUseGroupItem(it) => std::fmt::Debug::fmt(it, f),
+            Self::UseSelf(it) => std::fmt::Debug::fmt(it, f),
+            Self::UseTree(it) => std::fmt::Debug::fmt(it, f),
+        }
+    }
+}
+impl From<UseGroupItem> for SyntaxNode {
+    fn from(n: UseGroupItem) -> Self {
+        match n {
+            UseGroupItem::BogusUseGroupItem(it) => it.into_syntax(),
+            UseGroupItem::UseSelf(it) => it.into_syntax(),
+            UseGroupItem::UseTree(it) => it.into_syntax(),
+        }
+    }
+}
+impl From<UseGroupItem> for SyntaxElement {
+    fn from(n: UseGroupItem) -> Self {
+        let node: SyntaxNode = n.into();
+        node.into()
+    }
+}
 impl std::fmt::Display for AnyParameter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
@@ -4983,6 +5386,11 @@ impl std::fmt::Display for PathRoot {
     }
 }
 impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UseGroupItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }
@@ -5178,6 +5586,21 @@ impl std::fmt::Display for UseAlias {
     }
 }
 impl std::fmt::Display for UseDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UseGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UseSelf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.syntax(), f)
+    }
+}
+impl std::fmt::Display for UseTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.syntax(), f)
     }
@@ -5588,7 +6011,74 @@ impl From<BogusType> for SyntaxElement {
         n.syntax.into()
     }
 }
-mlkc_rowan::declare_node_union! { pub AnyBogusNode = Bogus | BogusDecl | BogusExpr | BogusParameter | BogusPat | BogusType }
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct BogusUseGroupItem {
+    syntax: SyntaxNode,
+}
+impl Serialize for BogusUseGroupItem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "BogusUseGroupItem")?;
+        state.serialize_entry("items", &self.items().collect::<Vec<_>>())?;
+        state.end()
+    }
+}
+impl BogusUseGroupItem {
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
+    #[inline]
+    pub const unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self { syntax }
+    }
+    pub fn items(&self) -> SyntaxElementChildren {
+        support::elements(&self.syntax)
+    }
+}
+impl AstNode for BogusUseGroupItem {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(BOGUS_USE_GROUP_ITEM as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == BOGUS_USE_GROUP_ITEM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax
+    }
+}
+impl std::fmt::Debug for BogusUseGroupItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BogusUseGroupItem")
+            .field("items", &DebugSyntaxElementChildren(self.items()))
+            .finish()
+    }
+}
+impl From<BogusUseGroupItem> for SyntaxNode {
+    fn from(n: BogusUseGroupItem) -> Self {
+        n.syntax
+    }
+}
+impl From<BogusUseGroupItem> for SyntaxElement {
+    fn from(n: BogusUseGroupItem) -> Self {
+        n.syntax.into()
+    }
+}
+mlkc_rowan::declare_node_union! { pub AnyBogusNode = Bogus | BogusDecl | BogusExpr | BogusParameter | BogusPat | BogusType | BogusUseGroupItem }
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ArgumentList {
     syntax_list: SyntaxList,
@@ -6152,6 +6642,87 @@ impl IntoIterator for TypeArgList {
 impl IntoIterator for &TypeArgList {
     type Item = SyntaxResult<Type>;
     type IntoIter = AstSeparatedListNodesIterator<Language, Type>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct UseGroupItemList {
+    syntax_list: SyntaxList,
+}
+impl UseGroupItemList {
+    #[doc = r" Create an `AstNode` from a `SyntaxNode` without checking its kind"]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r" This function must be guarded with a call to [`AstNode::can_cast`]"]
+    #[doc = r" or a match on [`SyntaxNode::kind`]"]
+    #[inline]
+    pub unsafe fn new_unchecked(syntax: SyntaxNode) -> Self {
+        Self {
+            syntax_list: syntax.into_list(),
+        }
+    }
+}
+impl AstNode for UseGroupItemList {
+    type Language = Language;
+    const KIND_SET: SyntaxKindSet<Language> =
+        SyntaxKindSet::from_raw(RawSyntaxKind(USE_GROUP_ITEM_LIST as u16));
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == USE_GROUP_ITEM_LIST
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self {
+                syntax_list: syntax.into_list(),
+            })
+        } else {
+            None
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        self.syntax_list.node()
+    }
+    fn into_syntax(self) -> SyntaxNode {
+        self.syntax_list.into_node()
+    }
+}
+impl Serialize for UseGroupItemList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        state.serialize_entry("kind", "UseGroupItemList")?;
+        state.serialize_entry("items", &self.iter().collect::<Vec<_>>())?;
+        state.end()
+    }
+}
+impl AstSeparatedList for UseGroupItemList {
+    type Language = Language;
+    type Node = UseGroupItem;
+    fn syntax_list(&self) -> &SyntaxList {
+        &self.syntax_list
+    }
+    fn into_syntax_list(self) -> SyntaxList {
+        self.syntax_list
+    }
+}
+impl Debug for UseGroupItemList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("UseGroupItemList ")?;
+        f.debug_list().entries(self.elements()).finish()
+    }
+}
+impl IntoIterator for UseGroupItemList {
+    type Item = SyntaxResult<UseGroupItem>;
+    type IntoIter = AstSeparatedListNodesIterator<Language, UseGroupItem>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+impl IntoIterator for &UseGroupItemList {
+    type Item = SyntaxResult<UseGroupItem>;
+    type IntoIter = AstSeparatedListNodesIterator<Language, UseGroupItem>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }

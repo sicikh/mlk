@@ -10,19 +10,19 @@ expression: snapshot
 MODULE #5 project::main
 
 ITEM TREE
-  use types  @2.0
+  use types  @2.0.2.1.2.0.1.2.0
     path: project::types
     visibility: private
-  use Other  @2.1
+  use Other  @2.0.2.1.2.0.1.2.2
     path: project::types::utils::Point
     alias: Other
     visibility: private
-  fun handle  @2.2
+  fun handle  @2.1
     visibility: private
     param: types::Point -> use types
     param: Other -> use Other
     ret: Int -> use Int
-  fun read  @2.3
+  fun read  @2.2
     visibility: private
     param: project::types::utils::Point -> the project
     ret: Int -> use Int

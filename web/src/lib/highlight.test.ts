@@ -86,6 +86,13 @@ describe("the colours of the language", () => {
         expect(tagsAt(source, source.indexOf("as"))).toContain(tags.keyword);
     });
 
+    it("paints the keyword a group takes the path itself with", () => {
+        const source = `use std::{collections::{Map, Set}, prelude::{self, Int}}\n`;
+
+        expect(tagsAt(source, wordAt(source, "self"))).toContain(tags.keyword);
+        expect(tagsAt(source, wordAt(source, "use"))).toContain(tags.keyword);
+    });
+
     it("paints a type where a type belongs, and the path it is written as", () => {
         const source = `fun main(x: core::Int) : Unit = 0\n`;
 

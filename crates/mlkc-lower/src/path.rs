@@ -163,6 +163,27 @@ pub(crate) fn plain(path: &Path) -> PlainPath {
     PlainPath::from_root(root(path), segments.into_iter().skip(1))
 }
 
+/// The path a name of a group is read inside: the path written before the group, continued by
+/// the path the name is written as.
+///
+/// What a node of an import tree names is read inside the path before it: what
+/// `use std::{core::Int}` takes is the name `std::core::Int`. The names of the joined path are
+/// therefore the names of the prefix, the name the node is rooted at, and the names after it.
+/// The one thing a node is not read inside is the project keyword: it names the project itself,
+/// which the parser reports where no path can hold it, and what such a node contributes is its
+/// names.
+pub(crate) fn appended(prefix: &PlainPath, path: &PlainPath) -> PlainPath {
+    PlainPath::from_root(
+        prefix.root().clone(),
+        prefix
+            .segments()
+            .iter()
+            .chain(path.root().name())
+            .chain(path.segments())
+            .cloned(),
+    )
+}
+
 /// The type arguments written at a path, if it carries any.
 ///
 /// A path that names something of the project is a path of names: an argument written at a

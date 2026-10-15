@@ -1,0 +1,276 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// What an import tree rejects: a name the group is brought in under, which renames nothing,
+// and the keyword `self` written where a name of a path belongs. What follows the two
+// mistakes is a module of the language all the same.
+
+module project::app
+
+use std::{core} as core
+
+use std::core::self
+
+fun main(): Int =
+    1
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: ModulePreamble {
+        attributes: AttributeList [],
+        module_token: MODULE_KW@0..242 "module" [Comments("// What an import tre ..."), Newline("\n"), Comments("// and the keyword `s ..."), Newline("\n"), Comments("// mistakes is a modu ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+        name: Path {
+            qualifier: PathQualifier {
+                path: Path {
+                    qualifier: missing (optional),
+                    segment: PathSegment {
+                        root: Project {
+                            project_token: PROJECT_KW@242..249 "project" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                double_colon_token: COLON_COLON@249..251 "::" [] [],
+            },
+            segment: PathSegment {
+                root: Name {
+                    value_token: IDENT@251..254 "app" [] [],
+                },
+                type_args: missing (optional),
+            },
+        },
+    },
+    items: ModuleItemList [
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@254..260 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: missing (optional),
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@260..263 "std" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: UseGroup {
+                    double_colon_token: COLON_COLON@263..265 "::" [] [],
+                    l_curly_token: L_CURLY@265..266 "{" [] [],
+                    items: UseGroupItemList [
+                        UseTree {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    root: Name {
+                                        value_token: IDENT@266..270 "core" [] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
+                            },
+                            group: missing (optional),
+                            alias: missing (optional),
+                        },
+                    ],
+                    r_curly_token: R_CURLY@270..272 "}" [] [Whitespace(" ")],
+                },
+                alias: UseAlias {
+                    as_token: AS_KW@272..275 "as" [] [Whitespace(" ")],
+                    name: Name {
+                        value_token: IDENT@275..279 "core" [] [],
+                    },
+                },
+            },
+        },
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@279..285 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: PathQualifier {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@285..288 "std" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                                double_colon_token: COLON_COLON@288..290 "::" [] [],
+                            },
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@290..294 "core" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                        double_colon_token: COLON_COLON@294..296 "::" [] [],
+                    },
+                    segment: missing (required),
+                },
+                group: missing (optional),
+                alias: missing (optional),
+            },
+        },
+        BogusDecl {
+            items: [
+                SELF_KW@296..300 "self" [] [],
+            ],
+        },
+        FunDecl {
+            attributes: AttributeList [],
+            visibility_token: missing (optional),
+            fun_token: FUN_KW@300..306 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            name: Name {
+                value_token: IDENT@306..310 "main" [] [],
+            },
+            parameters: Parameters {
+                l_paren_token: L_PAREN@310..311 "(" [] [],
+                items: ParameterList [],
+                r_paren_token: R_PAREN@311..312 ")" [] [],
+            },
+            return_type_annotation: FunReturnTypeAnnotation {
+                colon_token: COLON@312..314 ":" [] [Whitespace(" ")],
+                return_type: PathType {
+                    path: Path {
+                        qualifier: missing (optional),
+                        segment: PathSegment {
+                            root: Name {
+                                value_token: IDENT@314..318 "Int" [] [Whitespace(" ")],
+                            },
+                            type_args: missing (optional),
+                        },
+                    },
+                },
+            },
+            body: FunBody {
+                eq_token: EQ@318..319 "=" [] [],
+                expr: IntLiteral {
+                    value_token: INT_LITERAL@319..325 "1" [Newline("\n"), Whitespace("    ")] [],
+                },
+            },
+        },
+    ],
+    eof_token: EOF@325..326 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..326
+  0: (empty)
+  1: MODULE_PREAMBLE@0..254
+    0: ATTRIBUTE_LIST@0..0
+    1: MODULE_KW@0..242 "module" [Comments("// What an import tre ..."), Newline("\n"), Comments("// and the keyword `s ..."), Newline("\n"), Comments("// mistakes is a modu ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+    2: PATH@242..254
+      0: PATH_QUALIFIER@242..251
+        0: PATH@242..249
+          0: (empty)
+          1: PATH_SEGMENT@242..249
+            0: PROJECT@242..249
+              0: PROJECT_KW@242..249 "project" [] []
+            1: (empty)
+        1: COLON_COLON@249..251 "::" [] []
+      1: PATH_SEGMENT@251..254
+        0: NAME@251..254
+          0: IDENT@251..254 "app" [] []
+        1: (empty)
+  2: MODULE_ITEM_LIST@254..325
+    0: USE_DECL@254..279
+      0: (empty)
+      1: USE_KW@254..260 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@260..279
+        0: PATH@260..263
+          0: (empty)
+          1: PATH_SEGMENT@260..263
+            0: NAME@260..263
+              0: IDENT@260..263 "std" [] []
+            1: (empty)
+        1: USE_GROUP@263..272
+          0: COLON_COLON@263..265 "::" [] []
+          1: L_CURLY@265..266 "{" [] []
+          2: USE_GROUP_ITEM_LIST@266..270
+            0: USE_TREE@266..270
+              0: PATH@266..270
+                0: (empty)
+                1: PATH_SEGMENT@266..270
+                  0: NAME@266..270
+                    0: IDENT@266..270 "core" [] []
+                  1: (empty)
+              1: (empty)
+              2: (empty)
+          3: R_CURLY@270..272 "}" [] [Whitespace(" ")]
+        2: USE_ALIAS@272..279
+          0: AS_KW@272..275 "as" [] [Whitespace(" ")]
+          1: NAME@275..279
+            0: IDENT@275..279 "core" [] []
+    1: USE_DECL@279..296
+      0: (empty)
+      1: USE_KW@279..285 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@285..296
+        0: PATH@285..296
+          0: PATH_QUALIFIER@285..296
+            0: PATH@285..294
+              0: PATH_QUALIFIER@285..290
+                0: PATH@285..288
+                  0: (empty)
+                  1: PATH_SEGMENT@285..288
+                    0: NAME@285..288
+                      0: IDENT@285..288 "std" [] []
+                    1: (empty)
+                1: COLON_COLON@288..290 "::" [] []
+              1: PATH_SEGMENT@290..294
+                0: NAME@290..294
+                  0: IDENT@290..294 "core" [] []
+                1: (empty)
+            1: COLON_COLON@294..296 "::" [] []
+          1: (empty)
+        1: (empty)
+        2: (empty)
+    2: BOGUS_DECL@296..300
+      0: SELF_KW@296..300 "self" [] []
+    3: FUN_DECL@300..325
+      0: ATTRIBUTE_LIST@300..300
+      1: (empty)
+      2: FUN_KW@300..306 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@306..310
+        0: IDENT@306..310 "main" [] []
+      4: PARAMETERS@310..312
+        0: L_PAREN@310..311 "(" [] []
+        1: PARAMETER_LIST@311..311
+        2: R_PAREN@311..312 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@312..318
+        0: COLON@312..314 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@314..318
+          0: PATH@314..318
+            0: (empty)
+            1: PATH_SEGMENT@314..318
+              0: NAME@314..318
+                0: IDENT@314..318 "Int" [] [Whitespace(" ")]
+              1: (empty)
+      6: FUN_BODY@318..325
+        0: EQ@318..319 "=" [] []
+        1: INT_LITERAL@319..325
+          0: INT_LITERAL@319..325 "1" [Newline("\n"), Whitespace("    ")] []
+  3: EOF@325..326 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+272..274: Expected the end of the import but instead found 'as': what is brought in under a name is one name, and the names a group takes are renamed where each is written, as in `use a::{b as c}`.
+296..300: Expected a name but instead found 'self': what `self` names is the path the group it is written in takes names from, and it is written inside the group, as in `use std::prelude::{self}`.

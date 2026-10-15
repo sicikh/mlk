@@ -58,7 +58,7 @@ fun qualified_call(): Int =
 MODULE #0 project::expressions
 
 ITEM TREE
-  use types  @2.0
+  use types  @2.0.2
     path: project::types
     visibility: private
   data Int  @2.1

@@ -1,0 +1,9 @@
+// What an import tree says twice: the names a module takes are names of the module, and a
+// name is one thing, whether two nodes of one tree write it or a declaration of the module
+// stands beside it.
+
+module project::app
+
+use std::{core::{Int, Int}, prelude::String}
+
+data String

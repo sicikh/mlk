@@ -45,6 +45,16 @@ pub(crate) fn item_position(list: &SyntaxNode, item: &SyntaxNode) -> ItemSyntaxL
     position
 }
 
+/// The position of a node inside the node a position stands at.
+///
+/// A position names a child of the module root by its slot, and a node written deeper than the
+/// item it stands in --- a name of an import tree --- is reached the same way: a walk back from
+/// a position ([`syntax_at`]) descends into each child the position names, to the very node the
+/// position was read from.
+pub(crate) fn child_position(position: &ItemSyntaxLoc, child: &SyntaxNode) -> ItemSyntaxLoc {
+    position.child(slot_of(child))
+}
+
 /// Where a node is in the file it was read from, without the trivia around it.
 pub(crate) fn span(file: FileId, node: &SyntaxNode) -> Span {
     Span::new(file, node.text_trimmed_range())

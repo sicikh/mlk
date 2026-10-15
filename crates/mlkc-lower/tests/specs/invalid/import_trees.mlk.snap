@@ -1,0 +1,68 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// What an import tree says twice: the names a module takes are names of the module, and a
+// name is one thing, whether two nodes of one tree write it or a declaration of the module
+// stands beside it.
+
+module project::app
+
+use std::{core::{Int, Int}, prelude::String}
+
+data String
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::app
+
+ITEM TREE
+  use Int  @2.0.2.1.2.0.1.2.0
+    path: std::core::Int
+    visibility: private
+  use Int#1  @2.0.2.1.2.0.1.2.2
+    path: std::core::Int
+    visibility: private
+  use String  @2.0.2.1.2.2
+    path: std::prelude::String
+    visibility: private
+  data String  @2.1
+    visibility: private
+  use Int#2  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String#1  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+No bodies.
+
+## Lowering Diagnostics
+
+248..251: `use Int` is declared more than once in this module
+254..269: the name `String` is imported and declared in this module as `data String`: a use of it means the declaration
+
+## Parse Diagnostics
+
+No diagnostics.

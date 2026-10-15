@@ -3,15 +3,15 @@
 use mlkc_parser_core::{
     parse_lists::{ParseNodeList, ParseSeparatedList},
     parse_recovery::{ParseRecoveryTokenSet, RecoveryResult},
-    parsed_syntax::ParsedSyntax::Present,
+    parsed_syntax::ParsedSyntax::{self, Present},
     prelude::*,
 };
 use mlkc_syntax::{
     SyntaxKind::{
-        self, ADT_DECL, BOGUS_DECL, BOGUS_PARAMETER, DATA_KW, FUN_BODY, FUN_DECL, FUN_KW,
-        FUN_RETURN_TYPE_ANNOTATION, HASH, IDENT, L_BRACK, MODULE_ITEM_LIST, MODULE_KW,
-        MODULE_PREAMBLE, MODULE_ROOT, PARAMETER, PARAMETER_LIST, PARAMETERS, R_BRACK,
-        TYPE_ANNOTATION, USE_ALIAS, USE_DECL,
+        self, ADT_DECL, BOGUS_DECL, BOGUS_PARAMETER, BOGUS_USE_GROUP_ITEM, DATA_KW, FUN_BODY,
+        FUN_DECL, FUN_KW, FUN_RETURN_TYPE_ANNOTATION, HASH, IDENT, L_BRACK, MODULE_ITEM_LIST,
+        MODULE_KW, MODULE_PREAMBLE, MODULE_ROOT, PARAMETER, PARAMETER_LIST, PARAMETERS, R_BRACK,
+        TYPE_ANNOTATION, USE_ALIAS, USE_DECL, USE_GROUP, USE_GROUP_ITEM_LIST, USE_SELF, USE_TREE,
     },
     T,
 };
@@ -23,11 +23,11 @@ use crate::{
         auxiliary::parse_name,
         expr::parse_expr,
         parse_error::{
-            expected_declaration, expected_expr, expected_name, expected_parameter,
-            expected_parameters, expected_path, expected_type,
+            alias_after_a_group, expected_declaration, expected_expr, expected_import_name,
+            expected_name, expected_parameter, expected_parameters, expected_path, expected_type,
         },
         pat::parse_pat_or_recover,
-        ty::{parse_path, parse_type},
+        ty::{parse_path, parse_type, parse_use_path},
     },
 };
 
@@ -39,6 +39,10 @@ const MODULE_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
 /// The tokens a broken parameter is recovered at: the end of the parameter it was written
 /// in, or the end of the list it belongs to.
 const PARAMETER_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![,], T![')']];
+
+/// The tokens a broken name of a group is recovered at: the end of the name it was written
+/// in, or the end of the group it belongs to.
+const USE_GROUP_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![T![,], T!['}']];
 
 /// Parses the root of the tree: the byte order mark if the file has one, the preamble of the
 /// module, the items of the module, and the end of the file.
@@ -166,7 +170,7 @@ fn is_at_use(p: &mut MlkParser) -> bool {
     p.at(T![use]) || (p.at(T![pub]) && p.nth_at(1, T![use]))
 }
 
-/// Parses an import: a path of the project, and the name it is brought in under.
+/// Parses an import: a tree of names the module takes from the project.
 // test mlk an_import_brings_a_name_in
 // use std::core::Int
 //
@@ -175,6 +179,9 @@ fn is_at_use(p: &mut MlkParser) -> bool {
 //
 // test mlk an_import_may_be_public
 // pub use std::core::Int
+//
+// test mlk an_import_takes_the_names_of_a_group_from_the_path_before_it
+// use std::{core::{Int, Float}, prelude::{self, String}}
 fn parse_use_decl(p: &mut MlkParser) -> ParsedSyntax {
     if !is_at_use(p) {
         return ParsedSyntax::Absent;
@@ -184,13 +191,115 @@ fn parse_use_decl(p: &mut MlkParser) -> ParsedSyntax {
 
     parse_visibility(p);
     p.expect(T![use]);
-    parse_path(p).or_add_diagnostic(p, expected_path);
-    parse_use_alias(p).ok();
+    parse_use_tree(p, true).or_add_diagnostic(p, expected_path);
 
     Present(m.complete(p, USE_DECL))
 }
 
-/// Parses the name an import is renamed to: `as name`.
+/// Parses one node of an import tree: the path it is written as, the names it takes from that
+/// path, and the name it is brought in under.
+///
+/// `root` says whether the path may be rooted at the project keyword, which is what the path
+/// an import begins with may be: a name inside a group is read inside the path before it, and
+/// the keyword there is a mistake ([`parse_use_path`]).
+fn parse_use_tree(p: &mut MlkParser, root: bool) -> ParsedSyntax {
+    let path = parse_use_path(p, root);
+
+    if path.is_absent() {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = path.precede(p);
+    let group = parse_use_group(p);
+
+    // What a tree brings in under a name is one name, and the names of a group are written
+    // inside it: `use a::{b} as c` renames nothing, and the tokens stay where they are written.
+    if group.is_present() && p.at(T![as]) {
+        let diagnostic = alias_after_a_group(p, p.cur_range());
+        p.error(diagnostic);
+    }
+
+    parse_use_alias(p).ok();
+
+    Present(m.complete(p, USE_TREE))
+}
+
+/// Parses the names an import tree takes from the path before it: `::{Map, Set}`.
+fn parse_use_group(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T![::]) || !p.nth_at(1, T!['{']) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T![::]);
+    p.bump(T!['{']);
+    UseGroupItemListParse.parse_list(p);
+    p.expect(T!['}']);
+
+    Present(m.complete(p, USE_GROUP))
+}
+
+/// The names a group takes from the path it is written after.
+///
+/// The list may be empty: a group that takes nothing is written `use a::{}`, which is the same
+/// as writing nothing at all, and which the language reads as written.
+struct UseGroupItemListParse;
+
+impl ParseSeparatedList for UseGroupItemListParse {
+    type Kind = SyntaxKind;
+    type Parser<'source> = MlkParser<'source>;
+
+    const LIST_KIND: SyntaxKind = USE_GROUP_ITEM_LIST;
+
+    fn parse_element(&mut self, p: &mut MlkParser) -> ParsedSyntax {
+        parse_use_group_item(p)
+    }
+
+    fn is_at_list_end(&self, p: &mut MlkParser) -> bool {
+        p.at(T!['}'])
+    }
+
+    fn recover(&mut self, p: &mut MlkParser, parsed_element: ParsedSyntax) -> RecoveryResult {
+        parsed_element.or_recover_with_token_set(
+            p,
+            &ParseRecoveryTokenSet::new(BOGUS_USE_GROUP_ITEM, USE_GROUP_RECOVERY_SET),
+            expected_import_name,
+        )
+    }
+
+    fn separating_element_kind(&mut self) -> SyntaxKind {
+        T![,]
+    }
+}
+
+/// Parses one name a group takes: a tree of its own, or the keyword `self` for the path the
+/// group is written after.
+fn parse_use_group_item(p: &mut MlkParser) -> ParsedSyntax {
+    if p.at(T![self]) {
+        return parse_use_self(p);
+    }
+
+    parse_use_tree(p, false)
+}
+
+/// Parses the keyword `self`: the path the group it is written in is written after.
+// test mlk a_group_may_take_the_path_it_is_written_after
+// use std::prelude::{self, Int}
+fn parse_use_self(p: &mut MlkParser) -> ParsedSyntax {
+    if !p.at(T![self]) {
+        return ParsedSyntax::Absent;
+    }
+
+    let m = p.start();
+
+    p.bump(T![self]);
+    parse_use_alias(p).ok();
+
+    Present(m.complete(p, USE_SELF))
+}
+
+/// Parses the name an import tree is brought in under: `as name`.
 fn parse_use_alias(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(T![as]) {
         return ParsedSyntax::Absent;

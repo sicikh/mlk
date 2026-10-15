@@ -10,7 +10,7 @@ expression: snapshot
 MODULE #4 project::main
 
 ITEM TREE
-  use μ  @2.0
+  use μ  @2.0.2
     path: project::греческий::μ
     visibility: private
   fun f  @2.1

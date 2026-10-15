@@ -1,0 +1,634 @@
+---
+source: crates/mlkc-parser/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// An import: a path of the project, the names taken from it, and the name each of them is
+// brought in under. A group is how several names are taken from one path at once, and what
+// stands inside a group is read inside the path before it.
+
+module project::app
+
+use std::core::Int
+
+use std::core::Int as Integer
+
+use std::{collections::{Map, Set}, prelude::{self, Int, String}}
+
+use std::core::{self as core}
+
+pub use project::types::{self, Handle}
+
+// An import that takes nothing: the group of it is empty, and the path brings in no name.
+use project::{}
+
+```
+
+## AST
+
+```
+ModuleRoot {
+    bom_token: missing (optional),
+    preamble: ModulePreamble {
+        attributes: AttributeList [],
+        module_token: MODULE_KW@0..251 "module" [Comments("// An import: a path  ..."), Newline("\n"), Comments("// brought in under.  ..."), Newline("\n"), Comments("// stands inside a gr ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")],
+        name: Path {
+            qualifier: PathQualifier {
+                path: Path {
+                    qualifier: missing (optional),
+                    segment: PathSegment {
+                        root: Project {
+                            project_token: PROJECT_KW@251..258 "project" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                double_colon_token: COLON_COLON@258..260 "::" [] [],
+            },
+            segment: PathSegment {
+                root: Name {
+                    value_token: IDENT@260..263 "app" [] [],
+                },
+                type_args: missing (optional),
+            },
+        },
+    },
+    items: ModuleItemList [
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@263..269 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: PathQualifier {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@269..272 "std" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                                double_colon_token: COLON_COLON@272..274 "::" [] [],
+                            },
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@274..278 "core" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                        double_colon_token: COLON_COLON@278..280 "::" [] [],
+                    },
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@280..283 "Int" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: missing (optional),
+                alias: missing (optional),
+            },
+        },
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@283..289 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: PathQualifier {
+                                path: Path {
+                                    qualifier: missing (optional),
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@289..292 "std" [] [],
+                                        },
+                                        type_args: missing (optional),
+                                    },
+                                },
+                                double_colon_token: COLON_COLON@292..294 "::" [] [],
+                            },
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@294..298 "core" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                        double_colon_token: COLON_COLON@298..300 "::" [] [],
+                    },
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@300..304 "Int" [] [Whitespace(" ")],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: missing (optional),
+                alias: UseAlias {
+                    as_token: AS_KW@304..307 "as" [] [Whitespace(" ")],
+                    name: Name {
+                        value_token: IDENT@307..314 "Integer" [] [],
+                    },
+                },
+            },
+        },
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@314..320 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: missing (optional),
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@320..323 "std" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: UseGroup {
+                    double_colon_token: COLON_COLON@323..325 "::" [] [],
+                    l_curly_token: L_CURLY@325..326 "{" [] [],
+                    items: UseGroupItemList [
+                        UseTree {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    root: Name {
+                                        value_token: IDENT@326..337 "collections" [] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
+                            },
+                            group: UseGroup {
+                                double_colon_token: COLON_COLON@337..339 "::" [] [],
+                                l_curly_token: L_CURLY@339..340 "{" [] [],
+                                items: UseGroupItemList [
+                                    UseTree {
+                                        path: Path {
+                                            qualifier: missing (optional),
+                                            segment: PathSegment {
+                                                root: Name {
+                                                    value_token: IDENT@340..343 "Map" [] [],
+                                                },
+                                                type_args: missing (optional),
+                                            },
+                                        },
+                                        group: missing (optional),
+                                        alias: missing (optional),
+                                    },
+                                    COMMA@343..345 "," [] [Whitespace(" ")],
+                                    UseTree {
+                                        path: Path {
+                                            qualifier: missing (optional),
+                                            segment: PathSegment {
+                                                root: Name {
+                                                    value_token: IDENT@345..348 "Set" [] [],
+                                                },
+                                                type_args: missing (optional),
+                                            },
+                                        },
+                                        group: missing (optional),
+                                        alias: missing (optional),
+                                    },
+                                ],
+                                r_curly_token: R_CURLY@348..349 "}" [] [],
+                            },
+                            alias: missing (optional),
+                        },
+                        COMMA@349..351 "," [] [Whitespace(" ")],
+                        UseTree {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    root: Name {
+                                        value_token: IDENT@351..358 "prelude" [] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
+                            },
+                            group: UseGroup {
+                                double_colon_token: COLON_COLON@358..360 "::" [] [],
+                                l_curly_token: L_CURLY@360..361 "{" [] [],
+                                items: UseGroupItemList [
+                                    UseSelf {
+                                        self_token: SELF_KW@361..365 "self" [] [],
+                                        alias: missing (optional),
+                                    },
+                                    COMMA@365..367 "," [] [Whitespace(" ")],
+                                    UseTree {
+                                        path: Path {
+                                            qualifier: missing (optional),
+                                            segment: PathSegment {
+                                                root: Name {
+                                                    value_token: IDENT@367..370 "Int" [] [],
+                                                },
+                                                type_args: missing (optional),
+                                            },
+                                        },
+                                        group: missing (optional),
+                                        alias: missing (optional),
+                                    },
+                                    COMMA@370..372 "," [] [Whitespace(" ")],
+                                    UseTree {
+                                        path: Path {
+                                            qualifier: missing (optional),
+                                            segment: PathSegment {
+                                                root: Name {
+                                                    value_token: IDENT@372..378 "String" [] [],
+                                                },
+                                                type_args: missing (optional),
+                                            },
+                                        },
+                                        group: missing (optional),
+                                        alias: missing (optional),
+                                    },
+                                ],
+                                r_curly_token: R_CURLY@378..379 "}" [] [],
+                            },
+                            alias: missing (optional),
+                        },
+                    ],
+                    r_curly_token: R_CURLY@379..380 "}" [] [],
+                },
+                alias: missing (optional),
+            },
+        },
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@380..386 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                root: Name {
+                                    value_token: IDENT@386..389 "std" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                        double_colon_token: COLON_COLON@389..391 "::" [] [],
+                    },
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@391..395 "core" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: UseGroup {
+                    double_colon_token: COLON_COLON@395..397 "::" [] [],
+                    l_curly_token: L_CURLY@397..398 "{" [] [],
+                    items: UseGroupItemList [
+                        UseSelf {
+                            self_token: SELF_KW@398..403 "self" [] [Whitespace(" ")],
+                            alias: UseAlias {
+                                as_token: AS_KW@403..406 "as" [] [Whitespace(" ")],
+                                name: Name {
+                                    value_token: IDENT@406..410 "core" [] [],
+                                },
+                            },
+                        },
+                    ],
+                    r_curly_token: R_CURLY@410..411 "}" [] [],
+                },
+                alias: missing (optional),
+            },
+        },
+        UseDecl {
+            visibility_token: PUB_KW@411..417 "pub" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            use_token: USE_KW@417..421 "use" [] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: PathQualifier {
+                        path: Path {
+                            qualifier: missing (optional),
+                            segment: PathSegment {
+                                root: Project {
+                                    project_token: PROJECT_KW@421..428 "project" [] [],
+                                },
+                                type_args: missing (optional),
+                            },
+                        },
+                        double_colon_token: COLON_COLON@428..430 "::" [] [],
+                    },
+                    segment: PathSegment {
+                        root: Name {
+                            value_token: IDENT@430..435 "types" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: UseGroup {
+                    double_colon_token: COLON_COLON@435..437 "::" [] [],
+                    l_curly_token: L_CURLY@437..438 "{" [] [],
+                    items: UseGroupItemList [
+                        UseSelf {
+                            self_token: SELF_KW@438..442 "self" [] [],
+                            alias: missing (optional),
+                        },
+                        COMMA@442..444 "," [] [Whitespace(" ")],
+                        UseTree {
+                            path: Path {
+                                qualifier: missing (optional),
+                                segment: PathSegment {
+                                    root: Name {
+                                        value_token: IDENT@444..450 "Handle" [] [],
+                                    },
+                                    type_args: missing (optional),
+                                },
+                            },
+                            group: missing (optional),
+                            alias: missing (optional),
+                        },
+                    ],
+                    r_curly_token: R_CURLY@450..451 "}" [] [],
+                },
+                alias: missing (optional),
+            },
+        },
+        UseDecl {
+            visibility_token: missing (optional),
+            use_token: USE_KW@451..548 "use" [Newline("\n"), Newline("\n"), Comments("// An import that tak ..."), Newline("\n")] [Whitespace(" ")],
+            tree: UseTree {
+                path: Path {
+                    qualifier: missing (optional),
+                    segment: PathSegment {
+                        root: Project {
+                            project_token: PROJECT_KW@548..555 "project" [] [],
+                        },
+                        type_args: missing (optional),
+                    },
+                },
+                group: UseGroup {
+                    double_colon_token: COLON_COLON@555..557 "::" [] [],
+                    l_curly_token: L_CURLY@557..558 "{" [] [],
+                    items: UseGroupItemList [],
+                    r_curly_token: R_CURLY@558..559 "}" [] [],
+                },
+                alias: missing (optional),
+            },
+        },
+    ],
+    eof_token: EOF@559..560 "" [Newline("\n")] [],
+}
+```
+
+## CST
+
+```
+0: MODULE_ROOT@0..560
+  0: (empty)
+  1: MODULE_PREAMBLE@0..263
+    0: ATTRIBUTE_LIST@0..0
+    1: MODULE_KW@0..251 "module" [Comments("// An import: a path  ..."), Newline("\n"), Comments("// brought in under.  ..."), Newline("\n"), Comments("// stands inside a gr ..."), Newline("\n"), Newline("\n")] [Whitespace(" ")]
+    2: PATH@251..263
+      0: PATH_QUALIFIER@251..260
+        0: PATH@251..258
+          0: (empty)
+          1: PATH_SEGMENT@251..258
+            0: PROJECT@251..258
+              0: PROJECT_KW@251..258 "project" [] []
+            1: (empty)
+        1: COLON_COLON@258..260 "::" [] []
+      1: PATH_SEGMENT@260..263
+        0: NAME@260..263
+          0: IDENT@260..263 "app" [] []
+        1: (empty)
+  2: MODULE_ITEM_LIST@263..559
+    0: USE_DECL@263..283
+      0: (empty)
+      1: USE_KW@263..269 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@269..283
+        0: PATH@269..283
+          0: PATH_QUALIFIER@269..280
+            0: PATH@269..278
+              0: PATH_QUALIFIER@269..274
+                0: PATH@269..272
+                  0: (empty)
+                  1: PATH_SEGMENT@269..272
+                    0: NAME@269..272
+                      0: IDENT@269..272 "std" [] []
+                    1: (empty)
+                1: COLON_COLON@272..274 "::" [] []
+              1: PATH_SEGMENT@274..278
+                0: NAME@274..278
+                  0: IDENT@274..278 "core" [] []
+                1: (empty)
+            1: COLON_COLON@278..280 "::" [] []
+          1: PATH_SEGMENT@280..283
+            0: NAME@280..283
+              0: IDENT@280..283 "Int" [] []
+            1: (empty)
+        1: (empty)
+        2: (empty)
+    1: USE_DECL@283..314
+      0: (empty)
+      1: USE_KW@283..289 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@289..314
+        0: PATH@289..304
+          0: PATH_QUALIFIER@289..300
+            0: PATH@289..298
+              0: PATH_QUALIFIER@289..294
+                0: PATH@289..292
+                  0: (empty)
+                  1: PATH_SEGMENT@289..292
+                    0: NAME@289..292
+                      0: IDENT@289..292 "std" [] []
+                    1: (empty)
+                1: COLON_COLON@292..294 "::" [] []
+              1: PATH_SEGMENT@294..298
+                0: NAME@294..298
+                  0: IDENT@294..298 "core" [] []
+                1: (empty)
+            1: COLON_COLON@298..300 "::" [] []
+          1: PATH_SEGMENT@300..304
+            0: NAME@300..304
+              0: IDENT@300..304 "Int" [] [Whitespace(" ")]
+            1: (empty)
+        1: (empty)
+        2: USE_ALIAS@304..314
+          0: AS_KW@304..307 "as" [] [Whitespace(" ")]
+          1: NAME@307..314
+            0: IDENT@307..314 "Integer" [] []
+    2: USE_DECL@314..380
+      0: (empty)
+      1: USE_KW@314..320 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@320..380
+        0: PATH@320..323
+          0: (empty)
+          1: PATH_SEGMENT@320..323
+            0: NAME@320..323
+              0: IDENT@320..323 "std" [] []
+            1: (empty)
+        1: USE_GROUP@323..380
+          0: COLON_COLON@323..325 "::" [] []
+          1: L_CURLY@325..326 "{" [] []
+          2: USE_GROUP_ITEM_LIST@326..379
+            0: USE_TREE@326..349
+              0: PATH@326..337
+                0: (empty)
+                1: PATH_SEGMENT@326..337
+                  0: NAME@326..337
+                    0: IDENT@326..337 "collections" [] []
+                  1: (empty)
+              1: USE_GROUP@337..349
+                0: COLON_COLON@337..339 "::" [] []
+                1: L_CURLY@339..340 "{" [] []
+                2: USE_GROUP_ITEM_LIST@340..348
+                  0: USE_TREE@340..343
+                    0: PATH@340..343
+                      0: (empty)
+                      1: PATH_SEGMENT@340..343
+                        0: NAME@340..343
+                          0: IDENT@340..343 "Map" [] []
+                        1: (empty)
+                    1: (empty)
+                    2: (empty)
+                  1: COMMA@343..345 "," [] [Whitespace(" ")]
+                  2: USE_TREE@345..348
+                    0: PATH@345..348
+                      0: (empty)
+                      1: PATH_SEGMENT@345..348
+                        0: NAME@345..348
+                          0: IDENT@345..348 "Set" [] []
+                        1: (empty)
+                    1: (empty)
+                    2: (empty)
+                3: R_CURLY@348..349 "}" [] []
+              2: (empty)
+            1: COMMA@349..351 "," [] [Whitespace(" ")]
+            2: USE_TREE@351..379
+              0: PATH@351..358
+                0: (empty)
+                1: PATH_SEGMENT@351..358
+                  0: NAME@351..358
+                    0: IDENT@351..358 "prelude" [] []
+                  1: (empty)
+              1: USE_GROUP@358..379
+                0: COLON_COLON@358..360 "::" [] []
+                1: L_CURLY@360..361 "{" [] []
+                2: USE_GROUP_ITEM_LIST@361..378
+                  0: USE_SELF@361..365
+                    0: SELF_KW@361..365 "self" [] []
+                    1: (empty)
+                  1: COMMA@365..367 "," [] [Whitespace(" ")]
+                  2: USE_TREE@367..370
+                    0: PATH@367..370
+                      0: (empty)
+                      1: PATH_SEGMENT@367..370
+                        0: NAME@367..370
+                          0: IDENT@367..370 "Int" [] []
+                        1: (empty)
+                    1: (empty)
+                    2: (empty)
+                  3: COMMA@370..372 "," [] [Whitespace(" ")]
+                  4: USE_TREE@372..378
+                    0: PATH@372..378
+                      0: (empty)
+                      1: PATH_SEGMENT@372..378
+                        0: NAME@372..378
+                          0: IDENT@372..378 "String" [] []
+                        1: (empty)
+                    1: (empty)
+                    2: (empty)
+                3: R_CURLY@378..379 "}" [] []
+              2: (empty)
+          3: R_CURLY@379..380 "}" [] []
+        2: (empty)
+    3: USE_DECL@380..411
+      0: (empty)
+      1: USE_KW@380..386 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@386..411
+        0: PATH@386..395
+          0: PATH_QUALIFIER@386..391
+            0: PATH@386..389
+              0: (empty)
+              1: PATH_SEGMENT@386..389
+                0: NAME@386..389
+                  0: IDENT@386..389 "std" [] []
+                1: (empty)
+            1: COLON_COLON@389..391 "::" [] []
+          1: PATH_SEGMENT@391..395
+            0: NAME@391..395
+              0: IDENT@391..395 "core" [] []
+            1: (empty)
+        1: USE_GROUP@395..411
+          0: COLON_COLON@395..397 "::" [] []
+          1: L_CURLY@397..398 "{" [] []
+          2: USE_GROUP_ITEM_LIST@398..410
+            0: USE_SELF@398..410
+              0: SELF_KW@398..403 "self" [] [Whitespace(" ")]
+              1: USE_ALIAS@403..410
+                0: AS_KW@403..406 "as" [] [Whitespace(" ")]
+                1: NAME@406..410
+                  0: IDENT@406..410 "core" [] []
+          3: R_CURLY@410..411 "}" [] []
+        2: (empty)
+    4: USE_DECL@411..451
+      0: PUB_KW@411..417 "pub" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      1: USE_KW@417..421 "use" [] [Whitespace(" ")]
+      2: USE_TREE@421..451
+        0: PATH@421..435
+          0: PATH_QUALIFIER@421..430
+            0: PATH@421..428
+              0: (empty)
+              1: PATH_SEGMENT@421..428
+                0: PROJECT@421..428
+                  0: PROJECT_KW@421..428 "project" [] []
+                1: (empty)
+            1: COLON_COLON@428..430 "::" [] []
+          1: PATH_SEGMENT@430..435
+            0: NAME@430..435
+              0: IDENT@430..435 "types" [] []
+            1: (empty)
+        1: USE_GROUP@435..451
+          0: COLON_COLON@435..437 "::" [] []
+          1: L_CURLY@437..438 "{" [] []
+          2: USE_GROUP_ITEM_LIST@438..450
+            0: USE_SELF@438..442
+              0: SELF_KW@438..442 "self" [] []
+              1: (empty)
+            1: COMMA@442..444 "," [] [Whitespace(" ")]
+            2: USE_TREE@444..450
+              0: PATH@444..450
+                0: (empty)
+                1: PATH_SEGMENT@444..450
+                  0: NAME@444..450
+                    0: IDENT@444..450 "Handle" [] []
+                  1: (empty)
+              1: (empty)
+              2: (empty)
+          3: R_CURLY@450..451 "}" [] []
+        2: (empty)
+    5: USE_DECL@451..559
+      0: (empty)
+      1: USE_KW@451..548 "use" [Newline("\n"), Newline("\n"), Comments("// An import that tak ..."), Newline("\n")] [Whitespace(" ")]
+      2: USE_TREE@548..559
+        0: PATH@548..555
+          0: (empty)
+          1: PATH_SEGMENT@548..555
+            0: PROJECT@548..555
+              0: PROJECT_KW@548..555 "project" [] []
+            1: (empty)
+        1: USE_GROUP@555..559
+          0: COLON_COLON@555..557 "::" [] []
+          1: L_CURLY@557..558 "{" [] []
+          2: USE_GROUP_ITEM_LIST@558..558
+          3: R_CURLY@558..559 "}" [] []
+        2: (empty)
+  3: EOF@559..560 "" [Newline("\n")] []
+
+```
+
+## Diagnostics
+
+No diagnostics.

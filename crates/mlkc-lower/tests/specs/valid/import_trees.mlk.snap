@@ -1,0 +1,144 @@
+---
+source: crates/mlkc-lower/tests/spec_test.rs
+expression: snapshot
+---
+## Input
+
+```mlk
+// An import tree: the names a module takes from one path, each of them with the name it is
+// brought in under. A group reads its names inside the path before it, and the keyword `self`
+// takes the path itself.
+
+module project::app
+
+use std::{core::{Int as Integer, Bool}, prelude::{self, String}}
+
+use project::types::{self, utils::Point}
+
+pub use project::types::Map as Map-of-types
+
+fun main(size: Integer, flag: Bool): Integer =
+    size
+
+fun handle(value: types::Point, point: Point, map: Map-of-types): String =
+    text
+
+fun text(): String =
+    ""
+
+```
+
+## Item Tree
+
+```
+MODULE #0 project::app
+
+ITEM TREE
+  use Integer  @2.0.2.1.2.0.1.2.0
+    path: std::core::Int
+    alias: Integer
+    visibility: private
+  use Bool  @2.0.2.1.2.0.1.2.2
+    path: std::core::Bool
+    visibility: private
+  use prelude  @2.0.2.1.2.2.1.2.0
+    path: std::prelude
+    visibility: private
+  use String  @2.0.2.1.2.2.1.2.2
+    path: std::prelude::String
+    visibility: private
+  use types  @2.1.2.1.2.0
+    path: project::types
+    visibility: private
+  use Point  @2.1.2.1.2.2
+    path: project::types::utils::Point
+    visibility: private
+  use Map-of-types  @2.2.2
+    path: project::types::Map
+    alias: Map-of-types
+    visibility: public
+  fun main  @2.3
+    visibility: private
+    param: Integer -> use Integer
+    param: Bool -> use Bool
+    ret: Integer -> use Integer
+  fun handle  @2.4
+    visibility: private
+    param: types::Point -> use types
+    param: Point -> use Point
+    param: Map-of-types -> use Map-of-types
+    ret: String -> use String
+  fun text  @2.5
+    visibility: private
+    ret: String -> use String
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String#1  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool#1  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+## Bodies
+
+```
+BODY fun main in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind size
+  pat#1  bind flag
+paths
+  path#0  size -> binding pat#0
+```
+
+```
+BODY fun handle in module #0
+
+root expr#0
+params
+  pat#0
+  pat#1
+  pat#2
+exprs
+  expr#0  path path#0
+pats
+  pat#0  bind value
+  pat#1  bind point
+  pat#2  bind map
+paths
+  path#0  text -> fun text
+```
+
+```
+BODY fun text in module #0
+
+root expr#0
+exprs
+  expr#0  literal ""
+```
+
+## Lowering Diagnostics
+
+No diagnostics.
+
+## Parse Diagnostics
+
+No diagnostics.

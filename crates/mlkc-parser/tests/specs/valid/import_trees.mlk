@@ -1,0 +1,18 @@
+// An import: a path of the project, the names taken from it, and the name each of them is
+// brought in under. A group is how several names are taken from one path at once, and what
+// stands inside a group is read inside the path before it.
+
+module project::app
+
+use std::core::Int
+
+use std::core::Int as Integer
+
+use std::{collections::{Map, Set}, prelude::{self, Int, String}}
+
+use std::core::{self as core}
+
+pub use project::types::{self, Handle}
+
+// An import that takes nothing: the group of it is empty, and the path brings in no name.
+use project::{}

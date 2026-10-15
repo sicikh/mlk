@@ -10,10 +10,10 @@ expression: snapshot
 MODULE #4 project::main
 
 ITEM TREE
-  use Hidden  @2.0
+  use Hidden  @2.0.2
     path: project::types::Hidden
     visibility: private
-  use X  @2.1
+  use X  @2.1.2
     path: project::missing::X
     visibility: private
   fun get  @2.2

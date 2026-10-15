@@ -10,7 +10,7 @@ expression: snapshot
 MODULE #4 project::main
 
 ITEM TREE
-  use Point  @2.0
+  use Point  @2.0.2
     path: project::types::Point
     visibility: private
   fun call  @2.1

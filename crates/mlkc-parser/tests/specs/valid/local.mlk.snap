@@ -536,41 +536,44 @@ ModuleRoot {
                         UseDecl {
                             visibility_token: missing (optional),
                             use_token: USE_KW@940..953 "use" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")],
-                            path: Path {
-                                qualifier: PathQualifier {
-                                    path: Path {
-                                        qualifier: PathQualifier {
-                                            path: Path {
-                                                qualifier: missing (optional),
-                                                segment: PathSegment {
-                                                    root: Name {
-                                                        value_token: IDENT@953..956 "std" [] [],
+                            tree: UseTree {
+                                path: Path {
+                                    qualifier: PathQualifier {
+                                        path: Path {
+                                            qualifier: PathQualifier {
+                                                path: Path {
+                                                    qualifier: missing (optional),
+                                                    segment: PathSegment {
+                                                        root: Name {
+                                                            value_token: IDENT@953..956 "std" [] [],
+                                                        },
+                                                        type_args: missing (optional),
                                                     },
-                                                    type_args: missing (optional),
                                                 },
+                                                double_colon_token: COLON_COLON@956..958 "::" [] [],
                                             },
-                                            double_colon_token: COLON_COLON@956..958 "::" [] [],
-                                        },
-                                        segment: PathSegment {
-                                            root: Name {
-                                                value_token: IDENT@958..962 "core" [] [],
+                                            segment: PathSegment {
+                                                root: Name {
+                                                    value_token: IDENT@958..962 "core" [] [],
+                                                },
+                                                type_args: missing (optional),
                                             },
-                                            type_args: missing (optional),
                                         },
+                                        double_colon_token: COLON_COLON@962..964 "::" [] [],
                                     },
-                                    double_colon_token: COLON_COLON@962..964 "::" [] [],
-                                },
-                                segment: PathSegment {
-                                    root: Name {
-                                        value_token: IDENT@964..968 "Int" [] [Whitespace(" ")],
+                                    segment: PathSegment {
+                                        root: Name {
+                                            value_token: IDENT@964..968 "Int" [] [Whitespace(" ")],
+                                        },
+                                        type_args: missing (optional),
                                     },
-                                    type_args: missing (optional),
                                 },
-                            },
-                            alias: UseAlias {
-                                as_token: AS_KW@968..971 "as" [] [Whitespace(" ")],
-                                name: Name {
-                                    value_token: IDENT@971..978 "Integer" [] [],
+                                group: missing (optional),
+                                alias: UseAlias {
+                                    as_token: AS_KW@968..971 "as" [] [Whitespace(" ")],
+                                    name: Name {
+                                        value_token: IDENT@971..978 "Integer" [] [],
+                                    },
                                 },
                             },
                         },
@@ -2135,30 +2138,32 @@ ModuleRoot {
             1: USE_DECL@940..978
               0: (empty)
               1: USE_KW@940..953 "use" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")]
-              2: PATH@953..968
-                0: PATH_QUALIFIER@953..964
-                  0: PATH@953..962
-                    0: PATH_QUALIFIER@953..958
-                      0: PATH@953..956
-                        0: (empty)
-                        1: PATH_SEGMENT@953..956
-                          0: NAME@953..956
-                            0: IDENT@953..956 "std" [] []
-                          1: (empty)
-                      1: COLON_COLON@956..958 "::" [] []
-                    1: PATH_SEGMENT@958..962
-                      0: NAME@958..962
-                        0: IDENT@958..962 "core" [] []
-                      1: (empty)
-                  1: COLON_COLON@962..964 "::" [] []
-                1: PATH_SEGMENT@964..968
-                  0: NAME@964..968
-                    0: IDENT@964..968 "Int" [] [Whitespace(" ")]
-                  1: (empty)
-              3: USE_ALIAS@968..978
-                0: AS_KW@968..971 "as" [] [Whitespace(" ")]
-                1: NAME@971..978
-                  0: IDENT@971..978 "Integer" [] []
+              2: USE_TREE@953..978
+                0: PATH@953..968
+                  0: PATH_QUALIFIER@953..964
+                    0: PATH@953..962
+                      0: PATH_QUALIFIER@953..958
+                        0: PATH@953..956
+                          0: (empty)
+                          1: PATH_SEGMENT@953..956
+                            0: NAME@953..956
+                              0: IDENT@953..956 "std" [] []
+                            1: (empty)
+                        1: COLON_COLON@956..958 "::" [] []
+                      1: PATH_SEGMENT@958..962
+                        0: NAME@958..962
+                          0: IDENT@958..962 "core" [] []
+                        1: (empty)
+                    1: COLON_COLON@962..964 "::" [] []
+                  1: PATH_SEGMENT@964..968
+                    0: NAME@964..968
+                      0: IDENT@964..968 "Int" [] [Whitespace(" ")]
+                    1: (empty)
+                1: (empty)
+                2: USE_ALIAS@968..978
+                  0: AS_KW@968..971 "as" [] [Whitespace(" ")]
+                  1: NAME@971..978
+                    0: IDENT@971..978 "Integer" [] []
             2: FUN_DECL@978..1018
               0: ATTRIBUTE_LIST@978..978
               1: (empty)

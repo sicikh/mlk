@@ -25,14 +25,14 @@ use std::geometry::Point
 MODULE #0 project::import_of_declared_name
 
 ITEM TREE
-  use Handle  @2.0
+  use Handle  @2.0.2
     path: std::core::Handle
     visibility: private
   data Handle  @2.1
     visibility: private
   data Point  @2.2
     visibility: private
-  use Point  @2.3
+  use Point  @2.3.2
     path: std::geometry::Point
     visibility: private
   use Int  prelude
@@ -61,8 +61,8 @@ No bodies.
 
 ## Lowering Diagnostics
 
-248..269: the name `Handle` is imported and declared in this module as `data Handle`: a use of it means the declaration
-296..320: the name `Point` is imported and declared in this module as `data Point`: a use of it means the declaration
+252..269: the name `Handle` is imported and declared in this module as `data Handle`: a use of it means the declaration
+300..320: the name `Point` is imported and declared in this module as `data Point`: a use of it means the declaration
 
 ## Parse Diagnostics
 

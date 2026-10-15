@@ -1,10 +1,10 @@
 // The declarations of a prelude, and a function that binds a name and calls another one.
 
 #[builtin]
-type Unit
+data Unit
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun println-int(value: Int): Unit

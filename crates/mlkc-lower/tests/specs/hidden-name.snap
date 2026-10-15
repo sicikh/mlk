@@ -2,51 +2,6 @@
 source: crates/mlkc-lower/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Item Tree
-
-```
-MODULE #3 project::data
-
-ITEM TREE
-  type Point  @2.0
-    visibility: public
-  fun hidden  @2.1
-    visibility: private
-    ret: Int -> use Int
-  use Int  prelude
-    path: std::prelude::Int
-    visibility: private
-  use Unit  prelude
-    path: std::prelude::Unit
-    visibility: private
-  use String  prelude
-    path: std::prelude::String
-    visibility: private
-  use Bool  prelude
-    path: std::prelude::Bool
-    visibility: private
-  use print-int  prelude
-    path: std::prelude::print-int
-    visibility: private
-  use print-bool  prelude
-    path: std::prelude::print-bool
-    visibility: private
-```
-
-### Bodies
-
-`fun hidden`
-
-```
-BODY fun hidden in module #3
-
-root expr#0
-exprs
-  expr#0  literal 1
-```
-
 ## `project::main`
 
 ### Item Tree
@@ -56,7 +11,7 @@ MODULE #4 project::main
 
 ITEM TREE
   use Point  @2.0
-    path: project::data::Point
+    path: project::types::Point
     visibility: private
   fun call  @2.1
     visibility: private
@@ -99,7 +54,7 @@ exprs
   expr#0  path path#0
   expr#1  call expr#0 ()
 paths
-  path#0  project::data::hidden -> the project
+  path#0  project::types::hidden -> the project
 ```
 
 `fun make`
@@ -111,7 +66,7 @@ root expr#0
 exprs
   expr#0  path path#0
 paths
-  path#0  project::data::Point -> the project
+  path#0  project::types::Point -> the project
 ```
 
 `fun gone`
@@ -125,4 +80,49 @@ exprs
   expr#1  call expr#0 ()
 paths
   path#0  project::gone::x -> the project
+```
+
+## `project::types`
+
+### Item Tree
+
+```
+MODULE #3 project::types
+
+ITEM TREE
+  data Point  @2.0
+    visibility: public
+  fun hidden  @2.1
+    visibility: private
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun hidden`
+
+```
+BODY fun hidden in module #3
+
+root expr#0
+exprs
+  expr#0  literal 1
 ```

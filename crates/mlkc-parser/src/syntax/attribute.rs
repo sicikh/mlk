@@ -57,7 +57,7 @@ pub(crate) fn parse_visibility(p: &mut MlkParser) {
 // test mlk a_declaration_may_carry_several_attributes
 // #[builtin]
 // #[extern]
-// type Int
+// data Int
 pub(crate) fn parse_attribute_list(p: &mut MlkParser) -> CompletedMarker {
     let m = p.start();
 

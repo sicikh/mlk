@@ -3,7 +3,7 @@
 MLK is a small statically typed language in the ML language family.
 Its compiler is named as `mlkc` and is under active development.
 
-The goal is to create a language with ergonomic typeclasses and higher-kinded types,
+The goal is to create a language with ergonomic type classes and higher-kinded types,
 possibly with effects, and a _blazingly fast™_ compiler with great support for incremental compilation and IDE features.
 
 Much of the work was inspired by Alexey _matklad_ Kladov's posts

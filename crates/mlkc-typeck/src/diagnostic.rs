@@ -222,7 +222,7 @@ impl TypeError {
             } => "the type of this result is not written".to_owned(),
             Self::NotAType { .. } => "a type belongs here".to_owned(),
             Self::NotAValue { .. } => "a value belongs here".to_owned(),
-            Self::TypeArguments { .. } => "a class takes no arguments".to_owned(),
+            Self::TypeArguments { .. } => "a adt takes no arguments".to_owned(),
             Self::NestedName { .. } => "the language has no members yet".to_owned(),
             Self::NotCallable { found } => format!("`{found}` is not a function"),
             Self::ArgumentCount { expected, found } => {

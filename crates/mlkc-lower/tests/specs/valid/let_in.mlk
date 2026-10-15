@@ -1,7 +1,7 @@
 // Bindings: nested, ignored, and bound to the result of a call.
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun f(value: Int): Int

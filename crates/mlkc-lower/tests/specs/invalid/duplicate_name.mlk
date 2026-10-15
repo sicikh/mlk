@@ -2,7 +2,7 @@
 // the second is what the lowering reports. A name declared in another namespace is not a
 // duplicate of it, which is what `valid/namespaces.mlk` shows.
 
-type Int
+data Int
 
 fun size(value: Int): Int =
     value
@@ -10,6 +10,6 @@ fun size(value: Int): Int =
 fun size(value: Int): Int =
     value
 
-type Point
+data Point
 
-type Point
+data Point

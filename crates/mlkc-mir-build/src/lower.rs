@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use mlkc_diagnostics::ice;
 use mlkc_hir_def::{
-    BinaryOp, Body, BodyEntityLoc, BodyLoc, BodySourceMap, ClassLoc, EntityLoc, Expr, ExprId,
+    AdtLoc, BinaryOp, Body, BodyEntityLoc, BodyLoc, BodySourceMap, EntityLoc, Expr, ExprId,
     ItemLocLike, ItemTree, LambdaParam, Literal, LocalDefId, ModuleId, Name, Namespace, Pat, PatId,
     PathAnchor, PathData, Resolution, UnaryOp, Walk,
 };
@@ -212,7 +212,7 @@ struct Lowerer<'a, 'g> {
     source_map: &'a BodySourceMap,
     /// The types the check recorded.
     checked: &'a CheckedBody,
-    /// What the check read: the projects, the closure, the surfaces, and the classes of the
+    /// What the check read: the projects, the closure, the surfaces, and the data types of the
     /// language.
     deps: &'a CheckDeps,
     /// What the resolution of the module left: what each import resolved to.
@@ -726,7 +726,7 @@ impl Lowerer<'_, '_> {
                         .entity_of(self.module, self.resolution, path, Namespace::Value);
 
                 match entity {
-                    // A function, a constant, or a class written where a value belongs: the
+                    // A function, a constant, or a data type written where a value belongs: the
                     // check rejects a name that denotes no value, and the language has no value
                     // of an entity yet.
                     Some(entity) => {
@@ -852,8 +852,8 @@ impl Lowerer<'_, '_> {
     fn binary_prim(&mut self, op: BinaryOp, lhs: &Ty, rhs: &Ty) -> PrimOp {
         let int = self.deps.builtins().int().clone();
         let boolean = self.deps.builtins().boolean().clone();
-        let ints = is_class(lhs, &int) && is_class(rhs, &int);
-        let booleans = is_class(lhs, &boolean) && is_class(rhs, &boolean);
+        let ints = is_adt(lhs, &int) && is_adt(rhs, &int);
+        let booleans = is_adt(lhs, &boolean) && is_adt(rhs, &boolean);
 
         match op {
             BinaryOp::Add if ints => PrimOp::IntAdd,
@@ -890,7 +890,7 @@ impl Lowerer<'_, '_> {
                 let ty = self.checked.expr_type(operand).cloned();
 
                 match ty {
-                    Some(ty) if is_class(&ty, self.deps.builtins().int()) => {
+                    Some(ty) if is_adt(&ty, self.deps.builtins().int()) => {
                         Rvalue::Prim {
                             op: PrimOp::IntNeg,
                             args: vec![Operand::Local(value)],
@@ -960,9 +960,9 @@ impl Lowerer<'_, '_> {
     }
 }
 
-/// Whether a type is a class that takes no arguments, and that class.
-fn is_class(ty: &Ty, class: &EntityLoc<ClassLoc>) -> bool {
-    matches!(ty, Ty::Class { class: found, args } if args.is_empty() && found == class)
+/// Whether a type is a data type that takes no arguments, and that data type.
+fn is_adt(ty: &Ty, adt: &EntityLoc<AdtLoc>) -> bool {
+    matches!(ty, Ty::Adt { adt: found, args } if args.is_empty() && found == adt)
 }
 
 #[cfg(test)]
@@ -971,7 +971,7 @@ mod tests {
 
     use mlkc_diagnostics::Ice;
     use mlkc_hir_def::{
-        BodyEntityLoc, ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name,
+        AdtLoc, BodyEntityLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name,
         Prelude, ProjectGraph, Resolution,
     };
     use mlkc_hir_ty::{Builtins, CheckDeps};
@@ -986,8 +986,8 @@ mod tests {
     use super::{Bodies, Callee, FunctionLoc, LiftedId, MirBody, Rvalue, StmtKind, lower_body};
     use crate::construct_ssa;
 
-    /// The classes of the language, as a module of a test declares them.
-    const CLASSES: &str = "#[builtin]\ntype Int\n\n#[builtin]\ntype Unit\n\n#[builtin]\ntype String\n\n#[builtin]\ntype Bool\n";
+    /// The data types of the language, as a module of a test declares them.
+    const BUILTINS: &str = "#[builtin]\ndata Int\n\n#[builtin]\ndata Unit\n\n#[builtin]\ndata String\n\n#[builtin]\ndata Bool\n";
 
     /// A module of a test: its surface, its bodies, and what the check and the lowering read.
     struct Fixture {
@@ -1007,10 +1007,10 @@ mod tests {
 
         let tree = lowered.item_tree;
         let builtins = Builtins::new(
-            class(&tree, "Int"),
-            class(&tree, "Unit"),
-            class(&tree, "String"),
-            class(&tree, "Bool"),
+            adt(&tree, "Int"),
+            adt(&tree, "Unit"),
+            adt(&tree, "String"),
+            adt(&tree, "Bool"),
         );
         let resolution = Resolution::new(Arc::new(ModuleScope::default()), BTreeMap::new());
         let graph = Arc::new(ProjectGraph::default());
@@ -1037,16 +1037,16 @@ mod tests {
         }
     }
 
-    /// The class of a module under a name.
-    fn class(tree: &ItemTree, name: &str) -> EntityLoc<ClassLoc> {
+    /// The data type of a module under a name.
+    fn adt(tree: &ItemTree, name: &str) -> EntityLoc<AdtLoc> {
         let (item, _) = tree
             .entities()
             .find(|(item, _)| item.name() == Some(&Name::new(name)))
-            .expect("the class to be declared");
+            .expect("the data type to be declared");
 
         EntityLoc {
             module: tree.module(),
-            item: ClassLoc::try_from(item).expect("a class"),
+            item: AdtLoc::try_from(item).expect("a data type"),
         }
     }
 
@@ -1081,7 +1081,7 @@ mod tests {
     #[test]
     fn a_lambda_lifts_its_code_and_captures_what_it_reads() {
         let source = format!(
-            "{CLASSES}fun main(): Int = \
+            "{BUILTINS}fun main(): Int = \
              let base = 40 in \
              let add = fn(x: Int) -> x + base in \
              add(2)\n"
@@ -1161,7 +1161,7 @@ mod tests {
     #[test]
     fn a_nested_lambda_is_a_function_of_the_body_that_wrote_it() {
         let source = format!(
-            "{CLASSES}fun main(): Int = \
+            "{BUILTINS}fun main(): Int = \
              let base = 40 in \
              let add = fn(x: Int) -> fn(y: Int) -> x + y + base in \
              add(1)(1)\n"
@@ -1215,7 +1215,7 @@ mod tests {
     #[test]
     fn an_if_may_be_written_in_a_condition() {
         let source = format!(
-            "{CLASSES}fun pick(a: Bool, b: Bool, c: Bool): Int = \
+            "{BUILTINS}fun pick(a: Bool, b: Bool, c: Bool): Int = \
              if (if a then b else c) then 1 else 2\n"
         );
         let (mir, ssa) = lower(&source);
@@ -1239,7 +1239,7 @@ mod tests {
 
     #[test]
     fn an_if_without_an_else_selects_the_unit_it_is() {
-        let source = format!("{CLASSES}fun log(flag: Bool): Unit = if flag then log(flag)\n");
+        let source = format!("{BUILTINS}fun log(flag: Bool): Unit = if flag then log(flag)\n");
         let (mir, ssa) = lower(&source);
 
         assert_eq!(mir.root().validate_cfg(), Ok(()));
@@ -1261,7 +1261,7 @@ mod tests {
 
     #[test]
     fn an_if_branches_and_writes_its_slot() {
-        let source = format!("{CLASSES}fun pick(flag: Bool): Int = if flag then 1 else 2\n");
+        let source = format!("{BUILTINS}fun pick(flag: Bool): Int = if flag then 1 else 2\n");
         let (mir, ssa) = lower(&source);
 
         assert_eq!(mir.root().validate_cfg(), Ok(()));
@@ -1286,7 +1286,7 @@ mod tests {
     #[test]
     fn an_elif_chain_is_a_chain_of_branches_that_meet_at_one_block() {
         let source = format!(
-            "{CLASSES}fun pick(low: Bool, high: Bool): Int = \
+            "{BUILTINS}fun pick(low: Bool, high: Bool): Int = \
              if low then 1 elif high then 2 else 3\n"
         );
         let (mir, ssa) = lower(&source);
@@ -1310,7 +1310,7 @@ mod tests {
 
     #[test]
     fn an_if_may_be_read_where_a_value_belongs() {
-        let source = format!("{CLASSES}fun pick(flag: Bool): Int = (if flag then 1 else 2) + 3\n");
+        let source = format!("{BUILTINS}fun pick(flag: Bool): Int = (if flag then 1 else 2) + 3\n");
         let (mir, ssa) = lower(&source);
 
         assert_eq!(mir.root().validate_cfg(), Ok(()));
@@ -1332,7 +1332,7 @@ mod tests {
     #[test]
     fn an_if_may_be_written_inside_an_arm() {
         let source = format!(
-            "{CLASSES}fun pick(flag: Bool): Int =\n    if flag then\n        let x = 1 in\n        x\n    else\n        if flag then 2 else 3\n"
+            "{BUILTINS}fun pick(flag: Bool): Int =\n    if flag then\n        let x = 1 in\n        x\n    else\n        if flag then 2 else 3\n"
         );
         let (mir, ssa) = lower(&source);
 
@@ -1349,7 +1349,7 @@ mod tests {
 
     #[test]
     fn a_truth_value_lowers_into_a_constant() {
-        let source = format!("{CLASSES}fun both(): Bool = true && false\n");
+        let source = format!("{BUILTINS}fun both(): Bool = true && false\n");
         let (mir, ssa) = lower(&source);
 
         // A truth value is a word like any other: it lowers into the constant it is, and the
@@ -1369,7 +1369,7 @@ mod tests {
 
     #[test]
     fn a_body_of_one_expression_lowers_into_slots() {
-        let source = format!("{CLASSES}fun double(value: Int): Int = value + value\n");
+        let source = format!("{BUILTINS}fun double(value: Int): Int = value + value\n");
         let (mir, ssa) = lower(&source);
 
         assert_eq!(mir.root().validate_cfg(), Ok(()));
@@ -1387,7 +1387,7 @@ mod tests {
 
     #[test]
     fn a_let_binds_a_slot_for_the_scope_of_its_body() {
-        let source = format!("{CLASSES}fun identity(value: Int): Int = let x = value in x\n");
+        let source = format!("{BUILTINS}fun identity(value: Int): Int = let x = value in x\n");
         let (mir, _) = lower(&source);
 
         assert_eq!(
@@ -1399,7 +1399,7 @@ mod tests {
     #[test]
     fn a_function_declared_inside_a_body_is_a_body_of_its_own() {
         let source = format!(
-            "{CLASSES}fun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
+            "{BUILTINS}fun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
              double(value)\n"
         );
         let (mir, ssa) = lower(&source);
@@ -1455,7 +1455,7 @@ mod tests {
     #[test]
     fn a_function_declared_inside_a_body_may_call_itself() {
         let source = format!(
-            "{CLASSES}fun main(value: Int): Int = local fun down(x: Int): Int = \
+            "{BUILTINS}fun main(value: Int): Int = local fun down(x: Int): Int = \
              if x == 0 then 0 else down(x - 1) in down(value)\n"
         );
         let (mir, ssa) = lower(&source);
@@ -1493,7 +1493,7 @@ mod tests {
     #[test]
     fn a_lambda_written_in_a_function_declared_inside_a_body_is_a_body_of_the_owner() {
         let source = format!(
-            "{CLASSES}fun main(): Int = local fun apply(): Int = (fn(x: Int) -> x)(1) in apply()\n"
+            "{BUILTINS}fun main(): Int = local fun apply(): Int = (fn(x: Int) -> x)(1) in apply()\n"
         );
         let (mir, ssa) = lower(&source);
 
@@ -1512,7 +1512,7 @@ mod tests {
 
     #[test]
     fn a_body_the_check_rejected_is_a_bug_and_not_a_diagnostic() {
-        let source = format!("{CLASSES}fun big(): Int = 1099511627776\n");
+        let source = format!("{BUILTINS}fun big(): Int = 1099511627776\n");
         let fixture = fixture(&source);
         let (owner, body) = fixture.bodies.first().expect("a body of the fixture");
         let (checked, diagnostics) = check_body(

@@ -54,12 +54,12 @@
 //! it are checked: every top-level declaration writes its types for now ([ADR-0017]), so a
 //! check never needs what another check found, and a body edit cannot change what the module
 //! shows. A check of one body is a slot of its own --- the body is the unit --- and it reads the
-//! surface of the module, the surfaces of the modules its paths reach, and the classes of the
+//! surface of the module, the surfaces of the modules its paths reach, and the data types of the
 //! language, and nothing of another body's check.
 //!
-//! The classes of the language --- `Int`, `Unit`, `String`, `Bool` --- are the ones the standard
-//! library declares with `#[builtin]`: the driver reads them off `std::core` and hands them to
-//! the check, and a driver whose host recorded no library checks no types.
+//! The data types of the language --- `Int`, `Unit`, `String`, `Bool` --- are the ones the
+//! standard library declares with `#[builtin]`: the driver reads them off `std::core` and hands
+//! them to the check, and a driver whose host recorded no library checks no types.
 //!
 //! The diagnostics of a check are rendered here as well, the way the resolution's are: a check
 //! reports places in the HIR --- an expression, a pattern, a type a declaration writes --- and

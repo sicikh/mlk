@@ -97,7 +97,7 @@ ModuleItemList = ModuleItem*
 
 ModuleItem =
     FunDecl
-    | TypeDecl
+    | AdtDecl
     | UseDecl
     | BogusDecl
 
@@ -114,10 +114,10 @@ Attribute =
     name: Name
     ']'
 
-TypeDecl =
+AdtDecl =
     attributes: AttributeList
     visibility: 'pub'?
-    'type'
+    'data'
     name: Name
 
 FunDecl =

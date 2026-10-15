@@ -1,7 +1,7 @@
 //! A type, resolved, and the values a check leaves behind.
 //!
 //! The HIR holds a type as it is written: a [`TypeRef`] is a path, an `_`, or a mistake
-//! ([ADR-0010]). This crate holds a type as it *means*: a class named by its
+//! ([ADR-0010]). This crate holds a type as it *means*: a data type named by its
 //! [`EntityLoc`](mlkc_hir_def::EntityLoc), a function, or a parameter of an entity.
 //! Nothing here is an inference variable, a substitution, or a level: those belong to the
 //! checker that produces a [`Ty`], and none of them is storable ([ADR-0017]).
@@ -13,7 +13,7 @@
 //! # What a check reads and leaves behind
 //!
 //! - [`CheckDeps`] --- what a check reads of the rest of the project: the projects, the closure
-//!   the walk gathered, the surfaces the check reads, and the classes of the language;
+//!   the walk gathered, the surfaces the check reads, and the data types of the language;
 //! - [`Ty`] --- one type, a value of its own a driver can retain, compare, and serialize;
 //! - [`ModuleTypes`] --- the types of a module's entities, resolved from the signatures the
 //!   module writes, which is what its readers and its own bodies read;
@@ -22,7 +22,7 @@
 //! # Modules
 //!
 //! - [`ty`] --- a type, and how it reads.
-//! - [`builtins`] --- the classes the language itself declares.
+//! - [`builtins`] --- the data types the language itself declares.
 //! - [`module_types`] --- the type surface of a module.
 //! - [`checked`] --- the types of one checked body.
 //! - [`deps`] --- what a check reads of the rest of the project.

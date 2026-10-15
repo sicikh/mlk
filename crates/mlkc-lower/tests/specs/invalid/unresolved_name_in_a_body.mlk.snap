@@ -11,10 +11,10 @@ expression: snapshot
 // name where it is written. A name a type of the body is rooted at is read the same way.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Point
+data Point
 
 #[extern]
 fun declared(value: Point): Point
@@ -31,20 +31,20 @@ fun main(): Point =
 MODULE #0 project::unresolved_name_in_a_body
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type Point  @2.1
+  data Point  @2.1
     attributes: #[builtin]
     visibility: private
   fun declared  @2.2
     attributes: #[extern]
     visibility: private
-    param: Point -> type Point
-    ret: Point -> type Point
+    param: Point -> data Point
+    ret: Point -> data Point
   fun main  @2.3
     visibility: private
-    ret: Point -> type Point
+    ret: Point -> data Point
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -90,7 +90,7 @@ pats
 paths
   path#0  declared -> fun declared
   path#1  bound -> binding pat#0
-  path#2  declared[Point -> type Point] -> fun declared
+  path#2  declared[Point -> data Point] -> fun declared
   path#3  declared[Missing -> unresolved] -> fun declared
 ```
 

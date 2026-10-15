@@ -30,9 +30,9 @@ fun main(): Unit =
 /// The same module with the `in` of the `let` missing.
 const BROKEN: &str = "fun main(): Unit =\n    let x = 1\n";
 
-/// A module of a project: it shows a class, and has a body no other module reads.
-const DATA: &str = "\
-pub type Point
+/// A module of a project: it shows a data type, and has a body no other module reads.
+const TYPES: &str = "\
+pub data Point
 
 pub fun origin(): Point = origin()
 
@@ -40,8 +40,8 @@ fun helper() = 1
 ";
 
 /// The same module with the body of the private function edited.
-const DATA_EDITED: &str = "\
-pub type Point
+const TYPES_EDITED: &str = "\
+pub data Point
 
 pub fun origin(): Point = origin()
 
@@ -49,17 +49,17 @@ fun helper() = 2
 ";
 
 /// The same module with another name shown.
-const DATA_EXTENDED: &str = "\
-pub type Point
+const TYPES_EXTENDED: &str = "\
+pub data Point
 
-pub type Extra
+pub data Extra
 
 pub fun origin(): Point = origin()
 ";
 
-/// A module of the same project that reads what `DATA` shows.
+/// A module of the same project that reads what `TYPES` shows.
 const READER: &str = "\
-use project::data::Point
+use project::types::Point
 
 fun get(): Point = get()
 ";
@@ -147,7 +147,7 @@ fn file(driver: &Driver, place: &str) -> FileId {
 ///
 /// The names of the language are names the library declares ([ADR-0011]): a module of the
 /// fixture writes `Int` because the prelude of the project, the prelude of the language,
-/// reaches the name through the re-export the library writes. A check reads the classes of
+/// reaches the name through the re-export the library writes. A check reads the data types of
 /// the language from the library, so the fixture is the one of tests that check types.
 ///
 /// [ADR-0011]: ../../docs/adr/0011-module-prelude.md
@@ -187,16 +187,16 @@ fn body_of(driver: &mut Driver, file: FileId, name: &str) -> BodyEntityLoc {
         )
 }
 
-/// A driver that holds a project of two modules: the one of `data`, and the one that reads
+/// A driver that holds a project of two modules: the one of `types`, and the one that reads
 /// it. Both stand at the root of the file system, which is what names them.
-fn reader_and_data(data: &str, reader: &str) -> (Driver, FileId, FileId) {
-    let fixture = format!("//- /data.mlk\n{data}\n//- /main.mlk\n{reader}");
+fn types_and_reader(types: &str, reader: &str) -> (Driver, FileId, FileId) {
+    let fixture = format!("//- /types.mlk\n{types}\n//- /main.mlk\n{reader}");
     let driver = project_of(&fixture);
 
-    let data = file(&driver, "data.mlk");
+    let types = file(&driver, "types.mlk");
     let main = file(&driver, "main.mlk");
 
-    (driver, main, data)
+    (driver, main, types)
 }
 
 /// The module of the standard library the driver holds, by the name the library gives it.
@@ -830,7 +830,7 @@ fn the_prelude_of_the_language_names_what_the_library_exports() {
 
 #[test]
 fn a_name_of_another_module_resolves_in_the_middle_of_a_project() {
-    let (mut driver, main, data) = reader_and_data(DATA, READER);
+    let (mut driver, main, types) = types_and_reader(TYPES, READER);
 
     let resolution = driver
         .resolution(ModuleId(main))
@@ -849,19 +849,19 @@ fn a_name_of_another_module_resolves_in_the_middle_of_a_project() {
         .expect("`Point` to be a name of the reader");
     let (entity, _) = point.ty.clone().expect("`Point` to be a type");
 
-    assert_eq!(entity.module, ModuleId(data));
+    assert_eq!(entity.module, ModuleId(types));
 }
 
 #[test]
 fn a_body_edit_leaves_the_interface_of_a_module_where_it_was() {
-    let (mut driver, _, data) = reader_and_data(DATA, READER);
+    let (mut driver, _, types) = types_and_reader(TYPES, READER);
 
-    let module = ModuleId(data);
+    let module = ModuleId(types);
     let before = driver
         .interface(module)
         .expect("the module to have an interface");
 
-    driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+    driver.set_file_text(path("types.mlk"), Some(TYPES_EDITED.to_owned()));
     let after = driver
         .interface(module)
         .expect("the module to have an interface");
@@ -876,19 +876,19 @@ fn a_body_edit_leaves_the_interface_of_a_module_where_it_was() {
 
 #[test]
 fn a_body_edit_of_a_module_leaves_the_modules_that_read_it_where_they_were() {
-    let (mut driver, main, _) = reader_and_data(DATA, READER);
+    let (mut driver, main, _) = types_and_reader(TYPES, READER);
 
     let before = driver
         .resolution(ModuleId(main))
         .expect("the module to resolve");
 
-    driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+    driver.set_file_text(path("types.mlk"), Some(TYPES_EDITED.to_owned()));
 
     let after = driver
         .resolution(ModuleId(main))
         .expect("the module to resolve");
 
-    // The interface of `data` is the value the driver holds, so the walk of `main` reaches
+    // The interface of `types` is the value the driver holds, so the walk of `main` reaches
     // it again: what `main` resolved to is what it had, and nothing of it was paid for.
     assert!(
         Arc::ptr_eq(&before, &after),
@@ -949,15 +949,15 @@ fn ticking_clock() -> f64 {
 
 #[test]
 fn an_edit_of_a_body_reads_the_surface_of_its_module_again_and_keeps_it() {
-    let (mut driver, _, data) = reader_and_data(DATA, READER);
-    let module = ModuleId(data);
+    let (mut driver, _, types) = types_and_reader(TYPES, READER);
+    let module = ModuleId(types);
 
     let _ = driver
         .interface(module)
         .expect("the module to have an interface");
     let _ = driver.take_stats();
 
-    driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
+    driver.set_file_text(path("types.mlk"), Some(TYPES_EDITED.to_owned()));
     let _ = driver
         .interface(module)
         .expect("the module to have an interface");
@@ -966,8 +966,8 @@ fn an_edit_of_a_body_reads_the_surface_of_its_module_again_and_keeps_it() {
     // The text changed, so what is derived from it is read again --- and the surface of the
     // module came out of it unchanged, which is what the counters call a keep. The parse is a
     // value of the file and the interface one of the module, which is what the units say.
-    assert_eq!(counters(&taken, Pass::Parse, &Unit::File(data)).stales, 1);
-    assert_eq!(counters(&taken, Pass::Lower, &Unit::File(data)).stales, 1);
+    assert_eq!(counters(&taken, Pass::Parse, &Unit::File(types)).stales, 1);
+    assert_eq!(counters(&taken, Pass::Lower, &Unit::File(types)).stales, 1);
     assert_eq!(
         counters(&taken, Pass::Interface, &Unit::Module(module)).stales,
         1
@@ -980,18 +980,18 @@ fn an_edit_of_a_body_reads_the_surface_of_its_module_again_and_keeps_it() {
 
 #[test]
 fn an_edit_of_a_body_costs_its_module_and_nothing_of_its_readers() {
-    let fixture = format!("//- /data.mlk\n{DATA}\n//- /main.mlk\n{READER}");
+    let fixture = format!("//- /types.mlk\n{TYPES}\n//- /main.mlk\n{READER}");
     let mut driver = std_project_of(&fixture);
-    let data = file(&driver, "data.mlk");
+    let types = file(&driver, "types.mlk");
     let main = file(&driver, "main.mlk");
 
     // Both modules are read once, so what the edit costs is what follows.
-    let _ = driver.diagnostics(data).expect("the diagnostics of data");
+    let _ = driver.diagnostics(types).expect("the diagnostics of types");
     let _ = driver.diagnostics(main).expect("the diagnostics of main");
     let _ = driver.take_stats();
 
-    driver.set_file_text(path("data.mlk"), Some(DATA_EDITED.to_owned()));
-    let _ = driver.diagnostics(data).expect("the diagnostics of data");
+    driver.set_file_text(path("types.mlk"), Some(TYPES_EDITED.to_owned()));
+    let _ = driver.diagnostics(types).expect("the diagnostics of types");
     let taken = driver.take_stats();
 
     // A body edited is a check read again: the checks of the module's bodies are stale reads
@@ -1003,8 +1003,8 @@ fn an_edit_of_a_body_costs_its_module_and_nothing_of_its_readers() {
     assert!(taken.total(Pass::Check).kept >= 1);
     assert_eq!(taken.total(Pass::Signatures).kept, 1);
 
-    // The module that reads `data` is read again with nothing to do: what it reads --- the
-    // interface of `data` --- is the value the driver kept, so every pass is a hit. The hits
+    // The module that reads `types` is read again with nothing to do: what it reads --- the
+    // interface of `types` --- is the value the driver kept, so every pass is a hit. The hits
     // of the library are the many of them, since every one of its parses is handed over again.
     let _ = driver.diagnostics(main).expect("the diagnostics of main");
     let taken = driver.take_stats();
@@ -1023,11 +1023,11 @@ fn an_edit_of_a_body_costs_its_module_and_nothing_of_its_readers() {
 
 #[test]
 fn a_change_of_a_project_drops_what_was_read_under_it() {
-    let fixture = format!("//- /data.mlk\n{DATA}\n//- /main.mlk\n{READER}");
+    let fixture = format!("//- /types.mlk\n{TYPES}\n//- /main.mlk\n{READER}");
     let mut driver = project_of(&fixture);
-    let data = ModuleId(file(&driver, "data.mlk"));
+    let types = ModuleId(file(&driver, "types.mlk"));
 
-    let _ = driver.resolution(data).expect("the module to resolve");
+    let _ = driver.resolution(types).expect("the module to resolve");
     let _ = driver.take_stats();
 
     // The project gains the library, which is what its modules are read under: what was read
@@ -1047,11 +1047,11 @@ fn a_change_of_a_project_drops_what_was_read_under_it() {
 
     // What went is named by the unit it belonged to, and a body goes by its own name.
     assert_eq!(
-        counters(&taken, Pass::Lower, &Unit::File(data.0)).dropped,
+        counters(&taken, Pass::Lower, &Unit::File(types.0)).dropped,
         1
     );
     assert_eq!(
-        counters(&taken, Pass::Resolution, &Unit::Module(data)).dropped,
+        counters(&taken, Pass::Resolution, &Unit::Module(types)).dropped,
         1
     );
     assert!(counters(&taken, Pass::ModuleIndex, &Unit::Project(project())).dropped >= 1);
@@ -1059,11 +1059,11 @@ fn a_change_of_a_project_drops_what_was_read_under_it() {
 
 #[test]
 fn the_counters_name_the_unit_a_pass_was_asked_for() {
-    let fixture = format!("//- /data.mlk\n{DATA}\n//- /main.mlk\n{READER}");
+    let fixture = format!("//- /types.mlk\n{TYPES}\n//- /main.mlk\n{READER}");
     let mut driver = std_project_of(&fixture);
-    let data = file(&driver, "data.mlk");
+    let types = file(&driver, "types.mlk");
 
-    let _ = driver.diagnostics(data).expect("the diagnostics of data");
+    let _ = driver.diagnostics(types).expect("the diagnostics of types");
     let taken = driver.take_stats();
 
     // A check is a value of a body: what was read is counted for the body it was read for, and
@@ -1079,7 +1079,7 @@ fn the_counters_name_the_unit_a_pass_was_asked_for() {
             panic!("a check to be a value of a body, not of {unit:?}");
         };
 
-        assert_eq!(owner.module(), ModuleId(data), "a check of another module");
+        assert_eq!(owner.module(), ModuleId(types), "a check of another module");
 
         checked.push(driver.unit_name(unit));
     }
@@ -1119,9 +1119,9 @@ fn a_pass_that_runs_is_measured_by_the_clock_of_the_host() {
 
 #[test]
 fn a_name_added_to_a_module_does_not_move_what_its_readers_resolved_to() {
-    let (mut driver, main, data) = reader_and_data(DATA, READER);
+    let (mut driver, main, types) = types_and_reader(TYPES, READER);
 
-    let module = ModuleId(data);
+    let module = ModuleId(types);
     let before = driver
         .resolution(ModuleId(main))
         .expect("the module to resolve");
@@ -1129,7 +1129,7 @@ fn a_name_added_to_a_module_does_not_move_what_its_readers_resolved_to() {
         .interface(module)
         .expect("the module to have an interface");
 
-    driver.set_file_text(path("data.mlk"), Some(DATA_EXTENDED.to_owned()));
+    driver.set_file_text(path("types.mlk"), Some(TYPES_EXTENDED.to_owned()));
 
     let after = driver
         .resolution(ModuleId(main))
@@ -1138,7 +1138,7 @@ fn a_name_added_to_a_module_does_not_move_what_its_readers_resolved_to() {
         .interface(module)
         .expect("the module to have an interface");
 
-    // A name added is a different interface, so the readers of `data` walk again --- and
+    // A name added is a different interface, so the readers of `types` walk again --- and
     // the walk ends at the same entity, so the resolution it came to is the one it had.
     assert!(
         !Arc::ptr_eq(&interface, &current),
@@ -1152,20 +1152,20 @@ fn a_name_added_to_a_module_does_not_move_what_its_readers_resolved_to() {
 
 #[test]
 fn the_index_of_a_project_holds_the_modules_its_files_are() {
-    let (mut driver, main, data) = reader_and_data(DATA, READER);
+    let (mut driver, main, types) = types_and_reader(TYPES, READER);
 
     let index = driver
         .module_index(&project())
         .expect("the project to have an index");
 
-    assert_eq!(index.get(&[Name::new("data")]), Some(ModuleId(data)));
+    assert_eq!(index.get(&[Name::new("types")]), Some(ModuleId(types)));
     assert_eq!(index.get(&[Name::new("main")]), Some(ModuleId(main)));
     assert_eq!(index.len(), 2);
 }
 
 #[test]
 fn the_def_map_of_a_project_holds_the_scopes_of_its_modules() {
-    let (mut driver, main, _) = reader_and_data(DATA, READER);
+    let (mut driver, main, _) = types_and_reader(TYPES, READER);
 
     let map = driver
         .def_map(&project())
@@ -1189,11 +1189,11 @@ fn the_def_map_of_a_project_holds_the_scopes_of_its_modules() {
 fn a_name_a_module_keeps_to_itself_is_told_about_as_kept() {
     let mut driver = project_of(
         "\
-//- /data.mlk
-type Hidden
+//- /types.mlk
+data Hidden
 
 //- /main.mlk
-use project::data::Hidden
+use project::types::Hidden
 
 fun get() = 1
 ",
@@ -1212,15 +1212,15 @@ fun get() = 1
     assert_eq!(diagnostic.code, "08");
     assert_eq!(
         diagnostic.message,
-        "the module `project::data` holds the name `Hidden` and does not show it",
+        "the module `project::types` holds the name `Hidden` and does not show it",
     );
 }
 
 #[test]
 fn what_a_resolution_found_travels_with_the_diagnostics_of_the_file() {
-    const SOURCE: &str = "use project::data::Nope\n\nfun get() = 1\n";
+    const SOURCE: &str = "use project::types::Nope\n\nfun get() = 1\n";
 
-    let (mut driver, main, _) = reader_and_data(DATA, SOURCE);
+    let (mut driver, main, _) = types_and_reader(TYPES, SOURCE);
 
     let diagnostics = driver.diagnostics(main).expect("the file to be diagnosed");
 
@@ -1235,11 +1235,11 @@ fn what_a_resolution_found_travels_with_the_diagnostics_of_the_file() {
     assert_eq!(diagnostic.code, "04");
     assert_eq!(
         diagnostic.message,
-        "the module `project::data` exports no name `Nope`"
+        "the module `project::types` exports no name `Nope`"
     );
     assert_eq!(
         covered(SOURCE, Some(label.span.range)),
-        Some("use project::data::Nope")
+        Some("use project::types::Nope")
     );
 }
 
@@ -1248,9 +1248,9 @@ fn a_module_added_under_a_prefix_makes_the_module_that_named_it_resolve_again() 
     let mut driver = project_of(
         "\
 //- /main.mlk
-use project::data
+use project::types
 
-use project::data::utils::Point
+use project::types::utils::Point
 
 fun get(): Point = get()
 ",
@@ -1261,7 +1261,7 @@ fun get(): Point = get()
         .resolution(ModuleId(main))
         .expect("the module to resolve");
 
-    // No module of `data` is there yet, so the paths that read it name nothing.
+    // No module of `types` is there yet, so the paths that read it name nothing.
     assert!(!before.diagnostics().is_empty());
     assert!(
         before
@@ -1271,8 +1271,8 @@ fun get(): Point = get()
             .is_none()
     );
 
-    let path = path("data/utils.mlk");
-    driver.set_file_text(path.clone(), Some("pub type Point\n".to_owned()));
+    let path = path("types/utils.mlk");
+    driver.set_file_text(path.clone(), Some("pub data Point\n".to_owned()));
 
     let utils = driver.file_id(&path).expect("the file to have an id");
     driver.set_module_project(ModuleId(utils), project());
@@ -1353,7 +1353,7 @@ fn the_types_of_a_module_are_resolved_from_the_signatures_it_writes() {
         .map(|(item, _)| EntityLoc { module, item })
         .expect("the module to declare `double`");
 
-    // The signature is a value: `Int` is the class the library declares, and the type of the
+    // The signature is a value: `Int` is the data type the library declares, and the type of the
     // function reads as the types it writes ([ADR-0017]).
     //
     // [ADR-0017]: ../../docs/adr/0017-resolved-types.md
@@ -1442,11 +1442,11 @@ fn a_signature_that_is_not_written_is_reported_at_its_declaration() {
 #[test]
 fn a_name_a_module_keeps_to_itself_is_told_about_as_kept_from_a_body() {
     const MAIN: &str = "\
-//- /data.mlk
+//- /types.mlk
 fun hidden(): Int = 1
 
 //- /main.mlk
-fun get(): Int = project::data::hidden()
+fun get(): Int = project::types::hidden()
 ";
 
     let mut driver = std_project_of(MAIN);
@@ -1467,7 +1467,7 @@ fun get(): Int = project::data::hidden()
     assert_eq!(diagnostic.code, "11");
     assert_eq!(
         diagnostic.message,
-        "the module `project::data` holds the name `hidden` and does not show it",
+        "the module `project::types` holds the name `hidden` and does not show it",
     );
 }
 
@@ -1756,7 +1756,7 @@ fun second(): Int = 2
 
 #[test]
 fn a_driver_without_the_library_checks_no_types() {
-    // The classes of the language are the library's declaration, and a driver whose host
+    // The data types of the language are the library's declaration, and a driver whose host
     // recorded no library has none: what a literal is is nothing the checker can say.
     let (mut driver, file) = driver_with("main.mlk", "fun main(): Int = 1\n");
 

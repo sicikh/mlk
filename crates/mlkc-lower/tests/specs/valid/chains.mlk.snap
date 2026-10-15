@@ -9,22 +9,22 @@ expression: snapshot
 // a path. What a chain is a chain of is known from the text alone.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Config
+data Config
 
 #[builtin]
-type Persons
+data Persons
 
 #[builtin]
-type Name
+data Name
 
 #[builtin]
-type Data
+data Data
 
 #[builtin]
-type Map
+data Map
 
 fun load(config: Config): Config =
     config
@@ -38,13 +38,13 @@ fun start(config: Config): Int =
 fun chained(config: Config): Int =
     config.load().validate().start()
 
-fun insert(persons: Persons, name: Name, data: Data): Persons =
+fun insert(persons: Persons, name: Name, value: Data): Persons =
     persons
 
 // The callee of a step may be a path: the path says which `insert` the step means, and the
 // receiver is passed as the first argument.
-fun add(persons: Persons, name: Name, data: Data): Persons =
-    persons.Map::insert(name, data)
+fun add(persons: Persons, name: Name, value: Data): Persons =
+    persons.Map::insert(name, value)
 
 // A field read: the name is what the type of the value is read for, and the value may be the
 // result of a call.
@@ -62,60 +62,60 @@ fun loaded_port(config: Config): Int =
 MODULE #0 project::chains
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type Config  @2.1
+  data Config  @2.1
     attributes: #[builtin]
     visibility: private
-  type Persons  @2.2
+  data Persons  @2.2
     attributes: #[builtin]
     visibility: private
-  type Name  @2.3
+  data Name  @2.3
     attributes: #[builtin]
     visibility: private
-  type Data  @2.4
+  data Data  @2.4
     attributes: #[builtin]
     visibility: private
-  type Map  @2.5
+  data Map  @2.5
     attributes: #[builtin]
     visibility: private
   fun load  @2.6
     visibility: private
-    param: Config -> type Config
-    ret: Config -> type Config
+    param: Config -> data Config
+    ret: Config -> data Config
   fun validate  @2.7
     visibility: private
-    param: Config -> type Config
-    ret: Config -> type Config
+    param: Config -> data Config
+    ret: Config -> data Config
   fun start  @2.8
     visibility: private
-    param: Config -> type Config
-    ret: Int -> type Int
+    param: Config -> data Config
+    ret: Int -> data Int
   fun chained  @2.9
     visibility: private
-    param: Config -> type Config
-    ret: Int -> type Int
+    param: Config -> data Config
+    ret: Int -> data Int
   fun insert  @2.10
     visibility: private
-    param: Persons -> type Persons
-    param: Name -> type Name
-    param: Data -> type Data
-    ret: Persons -> type Persons
+    param: Persons -> data Persons
+    param: Name -> data Name
+    param: Data -> data Data
+    ret: Persons -> data Persons
   fun add  @2.11
     visibility: private
-    param: Persons -> type Persons
-    param: Name -> type Name
-    param: Data -> type Data
-    ret: Persons -> type Persons
+    param: Persons -> data Persons
+    param: Name -> data Name
+    param: Data -> data Data
+    ret: Persons -> data Persons
   fun port  @2.12
     visibility: private
-    param: Config -> type Config
-    ret: Int -> type Int
+    param: Config -> data Config
+    ret: Int -> data Int
   fun loaded_port  @2.13
     visibility: private
-    param: Config -> type Config
-    ret: Int -> type Int
+    param: Config -> data Config
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -216,7 +216,7 @@ exprs
 pats
   pat#0  bind persons
   pat#1  bind name
-  pat#2  bind data
+  pat#2  bind value
 paths
   path#0  persons -> binding pat#0
 ```
@@ -238,12 +238,12 @@ exprs
 pats
   pat#0  bind persons
   pat#1  bind name
-  pat#2  bind data
+  pat#2  bind value
 paths
   path#0  persons -> binding pat#0
   path#1  Map::insert -> unresolved
   path#2  name -> binding pat#1
-  path#3  data -> binding pat#2
+  path#3  value -> binding pat#2
 ```
 
 ```

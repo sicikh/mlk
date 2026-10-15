@@ -2,46 +2,6 @@
 source: crates/mlkc-lir-wasm/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-`fun origin`
-
-origin:
-```
-lir (entry b0) ret eqref
-  locals: 
-  b0:
-    v0 = call $0()
-    return v0
-```
-
-Structure:
-
-```
-  leaf b0
-  return v0
-```
-
-## `project::data::utils`
-
-`fun make`
-
-make:
-```
-lir (entry b0) ret eqref
-  locals: 
-  b0:
-    v0 = call $0()
-    return v0
-```
-
-Structure:
-
-```
-  leaf b0
-  return v0
-```
-
 ## `project::main`
 
 `fun handle`
@@ -82,4 +42,44 @@ Structure:
 ```
   leaf b0
   return v2
+```
+
+## `project::types`
+
+`fun origin`
+
+origin:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
+```
+
+## `project::types::utils`
+
+`fun make`
+
+make:
+```
+lir (entry b0) ret eqref
+  locals: 
+  b0:
+    v0 = call $0()
+    return v0
+```
+
+Structure:
+
+```
+  leaf b0
+  return v0
 ```

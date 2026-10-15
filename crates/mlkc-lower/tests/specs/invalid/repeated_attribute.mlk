@@ -3,7 +3,7 @@
 
 #[builtin]
 #[builtin]
-type Int
+data Int
 
 #[extern]
 #[extern]

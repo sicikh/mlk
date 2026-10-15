@@ -2,15 +2,15 @@
 // a module that is not there, a name the module itself knows nothing about, and a name of the
 // module written where a type belongs.
 
-//- /data.mlk
-// The module `project::data`: it keeps the name `Hidden` to itself.
+//- /types.mlk
+// The module `project::types`: it keeps the name `Hidden` to itself.
 
-type Hidden
+data Hidden
 
-pub type Point
+pub data Point
 
 //- /main.mlk
-use project::data::Hidden
+use project::types::Hidden
 
 use project::missing::X
 

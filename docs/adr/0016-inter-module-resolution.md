@@ -180,7 +180,7 @@ pub struct Interface {
 /// What one exported name denotes inside the module that exports it.
 pub struct Export {
     /// The entity the module declares under this name:
-    /// a type class is in the type namespace, a function, a value, and a constant in the value one.
+    /// a data type is in the type namespace, a function and a constant in the value one.
     pub ty: Option<EntityLoc>,
     pub value: Option<EntityLoc>,
     /// What an import of the name brings in: the path, as the module wrote it, unresolved.

@@ -2,7 +2,21 @@
 source: crates/mlkc-lir-wasm/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
+## `project::main`
+
+`fun call`
+
+Not lowered: the module of the body is not whole.
+
+`fun make`
+
+Not lowered: the module of the body is not whole.
+
+`fun gone`
+
+Not lowered: the module of the body is not whole.
+
+## `project::types`
 
 `fun hidden`
 
@@ -22,17 +36,3 @@ Structure:
   leaf b0
   return v1
 ```
-
-## `project::main`
-
-`fun call`
-
-Not lowered: the module of the body is not whole.
-
-`fun make`
-
-Not lowered: the module of the body is not whole.
-
-`fun gone`
-
-Not lowered: the module of the body is not whole.

@@ -3,10 +3,10 @@
 // name are declared here.
 
 #[builtin]
-type Map
+data Map
 
 #[builtin]
-type String
+data String
 
 fun qualified(value: std::core::Int): Unit =
     value

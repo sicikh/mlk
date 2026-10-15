@@ -1,7 +1,7 @@
 //! A reading of the values of this crate, for a person and for a diff.
 //!
 //! The dump of a value is a text a snapshot test compares ([ADR-0006]). It is a function of the
-//! value alone: no store, no item tree, no file. A class reads as the name it was declared
+//! value alone: no store, no item tree, no file. A data type reads as the name it was declared
 //! under, and a reader that needs to know which module it came from reads the ids, not the text.
 //!
 //! [ADR-0006]: ../../docs/adr/0006-snapshot-testing.md

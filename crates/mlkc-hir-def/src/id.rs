@@ -81,7 +81,7 @@ pub struct WrongKind {
 
 impl fmt::Display for WrongKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "expected a {}, found a {}", self.expected, self.found)
+        write!(f, "expected `{}`, found `{}`", self.expected, self.found)
     }
 }
 
@@ -372,7 +372,7 @@ impl From<LocalConstId> for LocalDefId {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{BodyLoc, ClassLoc, ConstLoc, FunctionLoc, ItemKind, ItemLoc, ItemLocData, Name};
+    use super::{AdtLoc, BodyLoc, ConstLoc, FunctionLoc, ItemKind, ItemLoc, ItemLocData, Name};
 
     fn function(name: &str, disambiguator: u32) -> FunctionLoc {
         FunctionLoc(ItemLocData {
@@ -388,8 +388,8 @@ mod tests {
         })
     }
 
-    fn class(name: &str) -> ClassLoc {
-        ClassLoc(ItemLocData {
+    fn adt(name: &str) -> AdtLoc {
+        AdtLoc(ItemLocData {
             name: Some(Name::new(name)),
             disambiguator: 0,
         })
@@ -404,11 +404,11 @@ mod tests {
 
     #[test]
     fn narrowing_a_name_of_another_kind_fails_loudly() {
-        let error = FunctionLoc::try_from(ItemLoc::from(class("foo"))).unwrap_err();
+        let error = FunctionLoc::try_from(ItemLoc::from(adt("foo"))).unwrap_err();
 
         assert_eq!(error.expected, ItemKind::Function);
-        assert_eq!(error.found, ItemKind::Class);
-        assert_eq!(error.to_string(), "expected a Function, found a Class");
+        assert_eq!(error.found, ItemKind::Adt);
+        assert_eq!(error.to_string(), "expected `Function`, found `Adt`");
     }
 
     #[test]

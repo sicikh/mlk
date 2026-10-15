@@ -2,7 +2,7 @@
 // it binds is not part of it, and reading one is a mistake.
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun consume(left: Int, right: Int): Int

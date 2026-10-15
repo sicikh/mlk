@@ -8,10 +8,10 @@ expression: snapshot
 // --- stdlib.mlk
 
 #[builtin]
-type Unit
+data Unit
 
 #[builtin]
-type Int
+data Int
 
 // --- main.mlk ---
 
@@ -31,7 +31,7 @@ ModuleRoot {
     bom_token: missing (optional),
     preamble: missing (optional),
     items: ModuleItemList [
-        TypeDecl {
+        AdtDecl {
             attributes: AttributeList [
                 Attribute {
                     hash_token: HASH@0..20 "#" [Comments("// --- stdlib.mlk"), Newline("\n"), Newline("\n")] [],
@@ -43,12 +43,12 @@ ModuleRoot {
                 },
             ],
             visibility_token: missing (optional),
-            type_token: TYPE_KW@29..35 "type" [Newline("\n")] [Whitespace(" ")],
+            data_token: DATA_KW@29..35 "data" [Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@35..39 "Unit" [] [],
             },
         },
-        TypeDecl {
+        AdtDecl {
             attributes: AttributeList [
                 Attribute {
                     hash_token: HASH@39..42 "#" [Newline("\n"), Newline("\n")] [],
@@ -60,7 +60,7 @@ ModuleRoot {
                 },
             ],
             visibility_token: missing (optional),
-            type_token: TYPE_KW@51..57 "type" [Newline("\n")] [Whitespace(" ")],
+            data_token: DATA_KW@51..57 "data" [Newline("\n")] [Whitespace(" ")],
             name: Name {
                 value_token: IDENT@57..60 "Int" [] [],
             },
@@ -225,7 +225,7 @@ ModuleRoot {
   0: (empty)
   1: (empty)
   2: MODULE_ITEM_LIST@0..198
-    0: TYPE_DECL@0..39
+    0: ADT_DECL@0..39
       0: ATTRIBUTE_LIST@0..29
         0: ATTRIBUTE@0..29
           0: HASH@0..20 "#" [Comments("// --- stdlib.mlk"), Newline("\n"), Newline("\n")] []
@@ -234,10 +234,10 @@ ModuleRoot {
             0: IDENT@21..28 "builtin" [] []
           3: R_BRACK@28..29 "]" [] []
       1: (empty)
-      2: TYPE_KW@29..35 "type" [Newline("\n")] [Whitespace(" ")]
+      2: DATA_KW@29..35 "data" [Newline("\n")] [Whitespace(" ")]
       3: NAME@35..39
         0: IDENT@35..39 "Unit" [] []
-    1: TYPE_DECL@39..60
+    1: ADT_DECL@39..60
       0: ATTRIBUTE_LIST@39..51
         0: ATTRIBUTE@39..51
           0: HASH@39..42 "#" [Newline("\n"), Newline("\n")] []
@@ -246,7 +246,7 @@ ModuleRoot {
             0: IDENT@43..50 "builtin" [] []
           3: R_BRACK@50..51 "]" [] []
       1: (empty)
-      2: TYPE_KW@51..57 "type" [Newline("\n")] [Whitespace(" ")]
+      2: DATA_KW@51..57 "data" [Newline("\n")] [Whitespace(" ")]
       3: NAME@57..60
         0: IDENT@57..60 "Int" [] []
     2: FUN_DECL@60..127

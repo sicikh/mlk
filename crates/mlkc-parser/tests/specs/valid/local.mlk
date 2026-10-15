@@ -19,7 +19,7 @@ fun stepped(value: Int): Int =
 // where a function is, each by the rule that reads one in a module.
 fun declared(value: Int): Int =
     local
-        type Unit
+        data Unit
         use std::core::Int as Integer
         fun double(x: Int): Int = x * 2
     in

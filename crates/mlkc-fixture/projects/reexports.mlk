@@ -9,7 +9,7 @@ pub use project::b::Point
 //- /b.mlk
 // The module `project::b`: where the name the chain ends at is declared.
 
-pub type Point
+pub data Point
 
 //- /main.mlk
 use project::a::Point

@@ -1,13 +1,12 @@
 //! The surface of one module: the items it declares, and the bodies they own.
 
 use mlkc_hir_def::{
-    Attributes, BodyEntityLoc, ClassData, ClassLoc, EntityData, EntityLoc, FunctionData,
-    FunctionLoc, ItemLoc, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, LocalTarget, ModuleAttributes,
-    ModuleId, Name, PathRoot, PlainPath, PlainPathId, Prelude, ProjectId, UseData, UseLoc,
-    Visibility,
+    AdtData, AdtLoc, Attributes, BodyEntityLoc, EntityData, EntityLoc, FunctionData, FunctionLoc,
+    ItemLoc, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, LocalTarget, ModuleAttributes, ModuleId,
+    Name, PathRoot, PlainPath, PlainPathId, Prelude, ProjectId, UseData, UseLoc, Visibility,
 };
 use mlkc_rowan::AstNode;
-use mlkc_syntax::{AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, TypeDecl, UseDecl};
+use mlkc_syntax::{AdtDecl, AttributeList, FunDecl, ModuleItem, ModuleRoot, SyntaxNode, UseDecl};
 use mlkc_vfs::{FileId, RelPath};
 
 use crate::{
@@ -295,7 +294,7 @@ impl ItemLowering<'_> {
             // what the module does say: a broken item says nothing.
             match ModuleItem::cast(node) {
                 Some(ModuleItem::FunDecl(decl)) => self.function(&decl, position),
-                Some(ModuleItem::TypeDecl(decl)) => self.class(&decl, position),
+                Some(ModuleItem::AdtDecl(decl)) => self.adt(&decl, position),
                 Some(ModuleItem::UseDecl(decl)) => self.import(&decl, position),
                 Some(ModuleItem::BogusDecl(_)) | None => {},
             }
@@ -508,12 +507,12 @@ impl ItemLowering<'_> {
         }
     }
 
-    /// Declares one class.
-    fn class(&mut self, decl: &TypeDecl, position: ItemSyntaxLoc) {
+    /// Declares one data type.
+    fn adt(&mut self, decl: &AdtDecl, position: ItemSyntaxLoc) {
         let attributes = self.attributes(&decl.attributes());
         let visibility = decl::visibility(decl.visibility_token());
 
-        let data = EntityData::Class(ClassData {
+        let data = EntityData::Adt(AdtData {
             attributes,
             visibility,
         });
@@ -524,22 +523,20 @@ impl ItemLowering<'_> {
             Some(syntax::name(decl.name())),
             data,
         );
-        let class = ClassLoc::try_from(loc.item).expect("a type is a type");
+        let adt = AdtLoc::try_from(loc.item).expect("a data type is a data type");
 
-        // An entry point is a function, and a type is not where a program begins.
+        // An entry point is a function, and a data type is not where a program begins.
         if attributes.entry {
-            let error = LoweringError::EntryType {
-                class: class.clone(),
-            };
+            let error = LoweringError::EntryAdt { adt: adt.clone() };
             let diagnostic = LoweringDiag::new(error, syntax::span(self.file, decl.syntax()));
 
             self.diagnostics.push(diagnostic);
         }
 
-        // An external type is a type the project does not declare, and the language has not
+        // An external data type is one the project does not declare, and the language has not
         // decided how a module says that yet.
         if attributes.external {
-            let error = LoweringError::ExternType { class };
+            let error = LoweringError::ExternAdt { adt };
             let diagnostic = LoweringDiag::new(error, syntax::span(self.file, decl.syntax()));
 
             self.diagnostics.push(diagnostic);
@@ -652,7 +649,7 @@ impl ItemLowering<'_> {
 mod tests {
     use mlkc_diagnostics::{Category, DiagKind, Level};
     use mlkc_hir_def::{
-        ClassLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, PathAnchor,
+        AdtLoc, FunctionLoc, ItemLoc, ItemLocLike, ItemTree, ModuleId, Namespace, PathAnchor,
         PlainPath, TypeRef,
     };
     use mlkc_vfs::{FileId, RelPathBuf};
@@ -665,7 +662,7 @@ mod tests {
     /// A module that is wrong in the ways the surface of a module can be wrong on its own.
     const SOURCE: &str = "\
 #[extern]
-type Handle
+data Handle
 
 #[extern]
 fun open(handle: Handle): Int =
@@ -683,7 +680,7 @@ fun max(left: Int, right: Int): Int =
 
 #[builtin]
 #[builtin]
-type Point
+data Point
 
 pub fun size(value) =
     value
@@ -764,8 +761,8 @@ fun same(left: Int, left: Int): Int =
             .unwrap_or_else(|| panic!("a second declaration of `{name}`"))
     }
 
-    fn class(tree: &ItemTree, name: &str) -> ClassLoc {
-        ClassLoc::try_from(item(tree, Namespace::Ty, name)).expect("a class")
+    fn adt(tree: &ItemTree, name: &str) -> AdtLoc {
+        AdtLoc::try_from(item(tree, Namespace::Ty, name)).expect("a data type")
     }
 
     fn function(tree: &ItemTree, name: &str) -> FunctionLoc {
@@ -826,8 +823,8 @@ fun same(left: Int, left: Int): Int =
         // checked in: the two that a whole module decides --- an import of a declared name ---
         // are found last and read where they are.
         assert_eq!(errors, [
-            &LoweringError::ExternType {
-                class: class(tree, "Handle"),
+            &LoweringError::ExternAdt {
+                adt: adt(tree, "Handle"),
             },
             &LoweringError::ExternFunctionHasBody {
                 function: function(tree, "open"),
@@ -875,7 +872,7 @@ fun kept(): Unit =
     1
 
 #[entry]
-type NotAFunction
+data NotAFunction
 ",
             Prelude::standard(),
         );
@@ -894,8 +891,8 @@ type NotAFunction
             &LoweringError::EntryFunctionNotPublic {
                 function: function(tree, "kept"),
             },
-            &LoweringError::EntryType {
-                class: class(tree, "NotAFunction"),
+            &LoweringError::EntryAdt {
+                adt: adt(tree, "NotAFunction"),
             },
         ]);
     }
@@ -979,7 +976,7 @@ type NotAFunction
         // A message is a rendering of the error, and the error is not the message: the text
         // of it says what the facts say and nothing of the kind or the code.
         assert!(
-            diagnostic.message.contains("type Handle"),
+            diagnostic.message.contains("data Handle"),
             "{}",
             diagnostic.message,
         );
@@ -1029,12 +1026,12 @@ type NotAFunction
 
     #[test]
     fn a_name_the_module_declares_is_what_it_denotes() {
-        let lowered = lower_with("type Int\n\nfun main(): Int = 1\n", Prelude::standard());
+        let lowered = lower_with("data Int\n\nfun main(): Int = 1\n", Prelude::standard());
         let tree = &lowered.item_tree;
 
         // The module declares `Int` itself, so the prelude's `Int` is not what the name means.
         assert!(lowered.diagnostics.is_empty(), "{:?}", lowered.diagnostics);
-        assert_eq!(class(tree, "Int").name(), Some(&Name::new("Int")));
+        assert_eq!(adt(tree, "Int").name(), Some(&Name::new("Int")));
     }
 
     #[test]

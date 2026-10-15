@@ -2,7 +2,23 @@
 source: crates/mlkc-mir-build/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
+## `project::main`
+
+### MIR
+
+`fun call`
+
+Not lowered: the front end reported a mistake.
+
+`fun make`
+
+Not lowered: the front end reported a mistake.
+
+`fun gone`
+
+Not lowered: the front end reported a mistake.
+
+## `project::types`
 
 ### MIR
 
@@ -25,19 +41,3 @@ fun hidden (entry b0)
     v0 = const 1
     return v0
 ```
-
-## `project::main`
-
-### MIR
-
-`fun call`
-
-Not lowered: the front end reported a mistake.
-
-`fun make`
-
-Not lowered: the front end reported a mistake.
-
-`fun gone`
-
-Not lowered: the front end reported a mistake.

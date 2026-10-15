@@ -39,7 +39,7 @@ pub struct Interface {
 /// What one exported name of a module denotes to the modules that read it.
 ///
 /// The namespaces a name is declared in are the namespaces of the kind of the entity:
-/// a class is a type, and a function, a value, and a constant are values. What an import
+/// a data type is a type, and a function and a constant are values. What an import
 /// brings in is different: which namespace it lands in is what the path it wrote resolves to,
 /// and a module alone cannot say, so the path is held for the modules that read the interface.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -156,7 +156,7 @@ mod tests {
     use super::{EntityData, Interface, ItemLocLike, Name, Visibility};
     use crate::{
         id::{ItemKind, ItemLoc, ModuleId},
-        item_data::{Attributes, ClassData, FunctionData, Signature, UseData},
+        item_data::{AdtData, Attributes, FunctionData, Signature, UseData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
         path::{PathRoot, PlainPath, PlainPathId},
     };
@@ -173,10 +173,10 @@ mod tests {
         ItemTreeBuilder::new(module(), path("main"))
     }
 
-    /// The data of a class, named for the reader: a name lives in the entity's loc, and the
+    /// The data of a data type, named for the reader: a name lives in the entity's loc, and the
     /// builder mints it from what `declare` is given.
-    fn class(_name: &str, visibility: Visibility) -> EntityData {
-        EntityData::Class(ClassData {
+    fn adt(_name: &str, visibility: Visibility) -> EntityData {
+        EntityData::Adt(AdtData {
             attributes: Attributes::default(),
             visibility,
         })
@@ -195,12 +195,12 @@ mod tests {
         let mut builder = builder();
         builder.declare(
             Some(Name::new("Int")),
-            class("Int", Visibility::Public),
+            adt("Int", Visibility::Public),
             ItemSyntaxLoc::root().child(0),
         );
         builder.declare(
             Some(Name::new("helper")),
-            class("helper", Visibility::Private),
+            adt("helper", Visibility::Private),
             ItemSyntaxLoc::root().child(1),
         );
         builder.declare(
@@ -219,7 +219,7 @@ mod tests {
             .expect("`Int` to be exported");
         assert_eq!(
             int.ty.as_ref().map(|loc| loc.item.clone()),
-            Some(ItemLoc::new(ItemKind::Class, Some(Name::new("Int")), 0))
+            Some(ItemLoc::new(ItemKind::Adt, Some(Name::new("Int")), 0))
         );
         assert_eq!(int.reexport, None);
 
@@ -256,7 +256,7 @@ mod tests {
         let mut builder = builder();
         builder.declare(
             Some(Name::new("Box")),
-            class("Box", Visibility::Public),
+            adt("Box", Visibility::Public),
             ItemSyntaxLoc::root().child(0),
         );
         builder.declare(
@@ -271,13 +271,13 @@ mod tests {
 
         let interface = Interface::of(&builder.finish());
 
-        // A class and a function of one name are in different namespaces, and both are shown.
+        // A data type and a function of one name are in different namespaces, and both are shown.
         let export = interface
             .export(&Name::new("Box"))
             .expect("`Box` to be exported");
         assert_eq!(
             export.ty.as_ref().map(|loc| loc.item.kind()),
-            Some(ItemKind::Class)
+            Some(ItemKind::Adt)
         );
         assert_eq!(
             export.value.as_ref().map(|loc| loc.item.kind()),

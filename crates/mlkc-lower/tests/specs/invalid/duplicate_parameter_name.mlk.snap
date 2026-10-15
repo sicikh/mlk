@@ -9,7 +9,7 @@ expression: snapshot
 // its body binds, and a name a body reads is one name, so the two cannot be told apart.
 
 #[builtin]
-type Int
+data Int
 
 fun same(left: Int, left: Int): Int =
     left
@@ -25,19 +25,19 @@ fun different(left: Int, right: Int): Int =
 MODULE #0 project::duplicate_parameter_name
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
   fun same  @2.1
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun different  @2.2
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private

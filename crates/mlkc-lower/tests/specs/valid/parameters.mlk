@@ -4,7 +4,7 @@
 // not public.
 
 #[builtin]
-type Int
+data Int
 
 fun used(value: Int): Int =
     value

@@ -18,7 +18,7 @@
 //! Both take the resolution of the module (what its names denote, and what each of its imports
 //! resolved to) and a [`CheckDeps`](mlkc_hir_ty::CheckDeps): the projects, the closure of the
 //! modules the paths reach,
-//! the type surfaces of the modules the check reads, and the classes of the language. A path
+//! the type surfaces of the modules the check reads, and the data types of the language. A path
 //! that names a module --- a module of the project, a module of another project, or a name a
 //! module re-exports --- is walked over that closure ([ADR-0016]), so a check of a body reads
 //! exactly the values its input function was built from.

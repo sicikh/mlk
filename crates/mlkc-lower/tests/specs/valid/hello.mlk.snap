@@ -8,10 +8,10 @@ expression: snapshot
 // The declarations of a prelude, and a function that binds a name and calls another one.
 
 #[builtin]
-type Unit
+data Unit
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun println-int(value: Int): Unit
@@ -28,20 +28,20 @@ fun main(): Unit =
 MODULE #0 project::hello
 
 ITEM TREE
-  type Unit  @2.0
+  data Unit  @2.0
     attributes: #[builtin]
     visibility: private
-  type Int  @2.1
+  data Int  @2.1
     attributes: #[builtin]
     visibility: private
   fun println-int  @2.2
     attributes: #[extern]
     visibility: private
-    param: Int -> type Int
-    ret: Unit -> type Unit
+    param: Int -> data Int
+    ret: Unit -> data Unit
   fun main  @2.3
     visibility: private
-    ret: Unit -> type Unit
+    ret: Unit -> data Unit
   use Int  prelude
     path: std::prelude::Int
     visibility: private

@@ -190,8 +190,8 @@ fn underscore_is_not_an_identifier() {
 #[test]
 fn keywords() {
     let keywords = [
-        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
-        "project", "pub", "then", "true", "type", "use",
+        "as", "data", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
+        "project", "pub", "then", "true", "use",
     ];
 
     for keyword in keywords {

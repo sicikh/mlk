@@ -9,13 +9,13 @@ use mlkc_rowan::TextRange;
 
 use crate::parser::MlkParser;
 
-/// The parser expected a declaration: `fun`, `type`, an attribute list in front of one of
+/// The parser expected a declaration: `fun`, `data`, an attribute list in front of one of
 /// them, or `pub`.
 pub(crate) fn expected_declaration(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("declaration", range, p)
 }
 
-/// The parser expected a name, which is what `fun`, `type`, an attribute, a field, and a path
+/// The parser expected a name, which is what `fun`, `data`, an attribute, a field, and a path
 /// segment need.
 pub(crate) fn expected_name(p: &MlkParser, range: TextRange) -> ParseDiagnostic {
     ParseDiagnostic::new_single_node("name", range, p)
@@ -23,7 +23,7 @@ pub(crate) fn expected_name(p: &MlkParser, range: TextRange) -> ParseDiagnostic 
 
 /// The parser found the project keyword where a name of a path belongs.
 ///
-/// A path is rooted at the project --- `project::data` --- and the segment it starts at is the
+/// A path is rooted at the project --- `project::core` --- and the segment it starts at is the
 /// only one that is written that way: after a `::`, a name belongs. The keyword is read as the
 /// segment it is written as all the same, so that a path a mistake is written in stays whole.
 pub(crate) fn project_where_a_name_belongs(p: &MlkParser, range: TextRange) -> ParseDiagnostic {

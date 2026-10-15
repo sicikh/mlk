@@ -3,10 +3,10 @@
 // --- what the lambda captures.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Bool
+data Bool
 
 #[extern]
 fun consume(left: Int, right: Int): Int

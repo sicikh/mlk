@@ -183,7 +183,7 @@ not the decisions they record.
 
 ```mlk
 #[builtin]
-type Int
+data Int
 
 #[no-prelude]
 module project::prelude

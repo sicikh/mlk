@@ -8,10 +8,10 @@ use mlkc_parser_core::{
 };
 use mlkc_syntax::{
     SyntaxKind::{
-        self, BOGUS_DECL, BOGUS_PARAMETER, FUN_BODY, FUN_DECL, FUN_KW, FUN_RETURN_TYPE_ANNOTATION,
-        HASH, IDENT, L_BRACK, MODULE_ITEM_LIST, MODULE_KW, MODULE_PREAMBLE, MODULE_ROOT, PARAMETER,
-        PARAMETER_LIST, PARAMETERS, R_BRACK, TYPE_ANNOTATION, TYPE_DECL, TYPE_KW, USE_ALIAS,
-        USE_DECL,
+        self, ADT_DECL, BOGUS_DECL, BOGUS_PARAMETER, DATA_KW, FUN_BODY, FUN_DECL, FUN_KW,
+        FUN_RETURN_TYPE_ANNOTATION, HASH, IDENT, L_BRACK, MODULE_ITEM_LIST, MODULE_KW,
+        MODULE_PREAMBLE, MODULE_ROOT, PARAMETER, PARAMETER_LIST, PARAMETERS, R_BRACK,
+        TYPE_ANNOTATION, USE_ALIAS, USE_DECL,
     },
     T,
 };
@@ -34,7 +34,7 @@ use crate::{
 /// The tokens a broken module item is recovered at: the start of the next declaration or
 /// import, which is `#`, `pub`, or the keyword of one of the items the language has.
 const MODULE_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
-    token_set![T![#], T![pub], T![fun], T![type], T![use]];
+    token_set![T![#], T![pub], T![fun], T![data], T![use]];
 
 /// The tokens a broken parameter is recovered at: the end of the parameter it was written
 /// in, or the end of the list it belongs to.
@@ -83,7 +83,7 @@ pub(crate) fn parse_module_root(p: &mut MlkParser) -> CompletedMarker {
 //
 // test mlk an_attribute_belongs_to_the_declaration_it_stands_in_front_of
 // #[builtin]
-// type Unit
+// data Unit
 fn parse_module_preamble(p: &mut MlkParser) -> ParsedSyntax {
     if !at_module_preamble(p) {
         return ParsedSyntax::Absent;
@@ -151,8 +151,8 @@ pub(crate) fn parse_module_item(p: &mut MlkParser) -> ParsedSyntax {
         parse_use_decl(p)
     } else if is_at_declaration(p, FUN_KW) {
         parse_fun_decl(p)
-    } else if is_at_declaration(p, TYPE_KW) {
-        parse_type_decl(p)
+    } else if is_at_declaration(p, DATA_KW) {
+        parse_adt_decl(p)
     } else {
         ParsedSyntax::Absent
     }
@@ -242,14 +242,14 @@ pub(crate) fn parse_fun_decl(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses a type declaration.
-// test mlk a_type_declaration_names_a_type
+// test mlk an_adt_declaration_names_a_type
 // #[builtin]
-// type Unit
+// data Unit
 //
-// test mlk a_type_declaration_may_be_public
-// pub type Unit
-fn parse_type_decl(p: &mut MlkParser) -> ParsedSyntax {
-    if !is_at_declaration(p, TYPE_KW) {
+// test mlk an_adt_declaration_may_be_public
+// pub data Unit
+fn parse_adt_decl(p: &mut MlkParser) -> ParsedSyntax {
+    if !is_at_declaration(p, DATA_KW) {
         return ParsedSyntax::Absent;
     }
 
@@ -257,10 +257,10 @@ fn parse_type_decl(p: &mut MlkParser) -> ParsedSyntax {
 
     parse_attribute_list(p);
     parse_visibility(p);
-    p.expect(T![type]);
+    p.expect(T![data]);
     parse_name(p).or_add_diagnostic(p, expected_name);
 
-    Present(m.complete(p, TYPE_DECL))
+    Present(m.complete(p, ADT_DECL))
 }
 
 /// Parses the parameters of a function declaration, parentheses included.

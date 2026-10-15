@@ -60,11 +60,11 @@ project_specs! {
     missing_types: "missing-types",
 
     // What a check finds: a value where another one belongs, a callee that is not a function,
-    // a call of the wrong arity, and a class applied to arguments.
+    // a call of the wrong arity, and a data type applied to arguments.
     type_errors: "type-errors",
 
     // The paths of a body, which a resolution never walks: a name a module keeps to itself, a
-    // class written where a value belongs, and a module that is not there.
+    // data type written where a value belongs, and a module that is not there.
     hidden_name: "hidden-name",
 
     // What the construction of MIR reports about a body the checker accepted: an integer

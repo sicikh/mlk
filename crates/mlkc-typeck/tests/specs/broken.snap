@@ -2,18 +2,6 @@
 source: crates/mlkc-typeck/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Type Surface
-
-```
-MODULE TYPES
-```
-
-### Checked Bodies
-
-No bodies.
-
 ## `project::main`
 
 ### Type Surface
@@ -51,3 +39,15 @@ CHECKED BODY
   expr #1: Int
   expr #2: Int
 ```
+
+## `project::types`
+
+### Type Surface
+
+```
+MODULE TYPES
+```
+
+### Checked Bodies
+
+No bodies.

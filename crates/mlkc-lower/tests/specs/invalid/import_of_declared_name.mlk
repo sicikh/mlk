@@ -4,8 +4,8 @@
 
 use std::core::Handle
 
-type Handle
+data Handle
 
-type Point
+data Point
 
 use std::geometry::Point

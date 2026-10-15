@@ -8,7 +8,7 @@ expression: snapshot
 // A module of declarations that declare no body: what they are is their signature.
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun add(left: Int, right: Int): Int
@@ -24,15 +24,15 @@ fun main() =
 MODULE #0 project::no_body
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
   fun add  @2.1
     attributes: #[extern]
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun main  @2.2
     visibility: private
   use Int  prelude

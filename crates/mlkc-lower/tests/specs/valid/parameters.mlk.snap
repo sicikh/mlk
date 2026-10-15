@@ -11,7 +11,7 @@ expression: snapshot
 // not public.
 
 #[builtin]
-type Int
+data Int
 
 fun used(value: Int): Int =
     value
@@ -33,22 +33,22 @@ fun inferred(value, _) =
 MODULE #0 project::parameters
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
   fun used  @2.1
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun ignored  @2.2
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun mixed  @2.3
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun inferred  @2.4
     visibility: private
     param

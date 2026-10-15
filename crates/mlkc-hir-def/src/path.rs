@@ -301,11 +301,11 @@ mod tests {
         }
     }
 
-    /// The name of a class, which is a name of the type namespace.
-    fn class(name: &str) -> EntityLoc {
+    /// The name of a data type, which is a name of the type namespace.
+    fn adt(name: &str) -> EntityLoc {
         EntityLoc {
             module: module(),
-            item: ItemLoc::Class(crate::id::ClassLoc(ItemLocData {
+            item: ItemLoc::Adt(crate::id::AdtLoc(ItemLocData {
                 name: Some(Name::new(name)),
                 disambiguator: 0,
             })),
@@ -314,7 +314,7 @@ mod tests {
 
     fn scope_with(name: &str) -> LocalScope {
         let mut scope = LocalScope::default();
-        scope.declare(Name::new(name), LocalTarget::Item(class(name)));
+        scope.declare(Name::new(name), LocalTarget::Item(adt(name)));
         scope
     }
 
@@ -327,7 +327,7 @@ mod tests {
         let mut path = path_of("foo");
         path.resolve(&scope_with("foo"), Namespace::Ty);
 
-        assert_eq!(path.anchor, PathAnchor::Item(class("foo")));
+        assert_eq!(path.anchor, PathAnchor::Item(adt("foo")));
     }
 
     #[test]
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn a_path_is_resolved_in_the_namespace_it_is_read_in() {
-        // A class is a type, not a value: a path written where a value belongs is not
+        // A data type is a type, not a value: a path written where a value belongs is not
         // answered for by a name of the type namespace.
         let mut path = path_of("foo");
         path.resolve(&scope_with("foo"), Namespace::Value);
@@ -363,7 +363,7 @@ mod tests {
             Name::new("bar"),
             // An argument is a type wherever the path itself is written, so it is read in
             // the type namespace of the module.
-            PathAnchor::Item(class("bar")),
+            PathAnchor::Item(adt("bar")),
         ))],);
     }
 
@@ -417,7 +417,7 @@ mod tests {
         // A name of the module is what it was, and the projects are what is left over.
         let mut known = path_of("foo");
         known.resolve(&scope, Namespace::Ty);
-        assert_eq!(known.anchor, PathAnchor::Item(class("foo")));
+        assert_eq!(known.anchor, PathAnchor::Item(adt("foo")));
     }
 
     #[test]

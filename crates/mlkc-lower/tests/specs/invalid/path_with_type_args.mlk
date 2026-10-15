@@ -6,7 +6,7 @@ module project::main[Int]
 
 use std[Int]::core
 
-use project::data::Map[Int, String]
+use project::types::Map[Int, String]
 
 fun main(): Int =
     1

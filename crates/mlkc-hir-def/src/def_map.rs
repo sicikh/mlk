@@ -34,8 +34,8 @@ impl ItemKind {
     /// The rule is here, next to the namespaces it is about, and a caller that records a
     /// declaration asks it rather than deciding for itself.
     ///
-    /// - a class is in the type namespace, and a function, a value, and a constant are in the
-    ///   value namespace. A class that has a value of its own --- a constructor, or an
+    /// - a data type is in the type namespace, and a function and a constant are in the
+    ///   value namespace. A data type that has a value of its own --- a constructor, or an
     ///   instance of it as a value --- is in both, which is what putting its name in both
     ///   here would say;
     /// - an `impl` has no name of its own, and a `use` is an entry of the import table:
@@ -45,8 +45,8 @@ impl ItemKind {
     /// [ADR-0004]: ../../docs/adr/0004-module-system.md
     pub const fn namespaces(self) -> &'static [Namespace] {
         match self {
-            Self::Class => &[Namespace::Ty],
-            Self::Function | Self::Value | Self::Const => &[Namespace::Value],
+            Self::Adt => &[Namespace::Ty],
+            Self::Function | Self::Const => &[Namespace::Value],
             Self::Impl | Self::Use => &[],
         }
     }
@@ -78,7 +78,7 @@ impl LocalTarget {
 
 /// What one name of a module denotes, in the namespaces of that module.
 ///
-/// A name may denote more than one thing at once: a class and a value may share a name, and a
+/// A name may denote more than one thing at once: a data type and a value may share a name, and a
 /// name an import brings in may be a name an entity of the module has as well. What a name
 /// denotes is therefore read per namespace, and the place a name is written in is what says
 /// which namespace it is read in.
@@ -145,7 +145,7 @@ impl LocalEntry {
 ///
 /// The namespaces of a name are separate ([`Namespace`]), which is what keeps a name of one of
 /// them out of the way of a name of another: a module that is edited to declare a function
-/// named like a class of its own changes what the name means where a value belongs, and leaves
+/// named like a data type of its own changes what the name means where a value belongs, and leaves
 /// what it means where a type belongs alone.
 ///
 /// [ADR-0004]: ../../docs/adr/0004-module-system.md
@@ -306,7 +306,7 @@ fn records_nothing(name: &Name, target: &LocalTarget) -> bool {
 /// the project resolved to rather than with what one module says on its own.
 ///
 /// An empty namespace is `None`; a name may be in more than one at once,
-/// because a class and a value may share a name.
+/// because a data type and a value may share a name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PerNs {
     /// The type namespace.
@@ -431,8 +431,8 @@ mod tests {
         LocalTarget::Item(entity(name, ItemKind::Function))
     }
 
-    fn class(name: &str) -> LocalTarget {
-        LocalTarget::Item(entity(name, ItemKind::Class))
+    fn adt(name: &str) -> LocalTarget {
+        LocalTarget::Item(entity(name, ItemKind::Adt))
     }
 
     fn import(name: &str) -> LocalTarget {
@@ -454,21 +454,21 @@ mod tests {
     }
 
     #[test]
-    fn a_class_and_a_function_may_share_a_name() {
+    fn a_data_type_and_a_function_may_share_a_name() {
         let mut scope = LocalScope::default();
 
-        assert!(scope.declare(Name::new("Box"), class("Box")));
+        assert!(scope.declare(Name::new("Box"), adt("Box")));
         assert!(scope.declare(Name::new("Box"), function("Box")));
         assert_eq!(scope.len(), 1);
 
         // The two are separate, and a name is read in the namespace the place it is written
         // in asks for.
         let entry = scope.get(&Name::new("Box")).expect("the name to be there");
-        assert_eq!(entry.ty, Some(class("Box")));
+        assert_eq!(entry.ty, Some(adt("Box")));
         assert_eq!(entry.value, Some(function("Box")));
         assert_eq!(
             scope.anchor(&Name::new("Box"), Namespace::Ty),
-            class("Box").anchor(),
+            adt("Box").anchor(),
         );
         assert_eq!(
             scope.anchor(&Name::new("Box"), Namespace::Value),
@@ -510,13 +510,13 @@ mod tests {
     fn a_name_the_module_declares_shadows_an_import_of_it() {
         let mut scope = LocalScope::default();
         scope.declare(Name::new("foo"), import("foo"));
-        assert!(scope.declare(Name::new("foo"), class("foo")));
+        assert!(scope.declare(Name::new("foo"), adt("foo")));
 
         // The declaration is what the name denotes where a type belongs, and the import is
         // what it denotes where the module declares nothing.
         assert_eq!(
             scope.anchor(&Name::new("foo"), Namespace::Ty),
-            class("foo").anchor(),
+            adt("foo").anchor(),
         );
         assert_eq!(
             scope.anchor(&Name::new("foo"), Namespace::Value),
@@ -584,16 +584,17 @@ mod tests {
     #[test]
     fn a_name_of_the_module_is_no_answer_in_a_namespace_it_is_not_declared_in() {
         let mut scope = LocalScope::default();
-        scope.declare(Name::new("std"), class("std"));
+        scope.declare(Name::new("std"), adt("std"));
         scope.set_projects(&[ProjectId::new("std")]);
 
-        // A class is a type and not a value: where a value belongs the name is not the class
+        // A data type is a type and not a value: where a value belongs the name is not the data
+        // type
         // but the project of that name, which every namespace answers for ([ADR-0016]).
         //
         // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
         assert_eq!(
             scope.anchor(&Name::new("std"), Namespace::Ty),
-            class("std").anchor(),
+            adt("std").anchor(),
         );
         assert_eq!(
             scope.anchor(&Name::new("std"), Namespace::Value),
@@ -620,7 +621,7 @@ mod tests {
     #[test]
     fn the_entry_of_a_name_reads_in_every_namespace_it_denotes_in() {
         let mut scope = LocalScope::default();
-        scope.declare(Name::new("Box"), class("Box"));
+        scope.declare(Name::new("Box"), adt("Box"));
         scope.declare(Name::new("Box"), function("Box"));
 
         let entry = scope.get(&Name::new("Box")).expect("the name to be there");
@@ -636,7 +637,7 @@ mod tests {
         scope.declare(Name::new("second"), function("second"));
         scope.declare(Name::new("first"), function("first"));
         // A name declared in another namespace is not a second name of the module.
-        scope.declare(Name::new("second"), class("second"));
+        scope.declare(Name::new("second"), adt("second"));
 
         let names: Vec<_> = scope.iter().map(|(name, _)| name.as_str()).collect();
         assert_eq!(names, ["second", "first"]);
@@ -670,9 +671,8 @@ mod tests {
 
     #[test]
     fn the_kinds_of_a_namespace_are_the_ones_the_language_declares() {
-        assert_eq!(ItemKind::Class.namespaces(), [Namespace::Ty]);
+        assert_eq!(ItemKind::Adt.namespaces(), [Namespace::Ty]);
         assert_eq!(ItemKind::Function.namespaces(), [Namespace::Value]);
-        assert_eq!(ItemKind::Value.namespaces(), [Namespace::Value]);
         assert_eq!(ItemKind::Const.namespaces(), [Namespace::Value]);
         assert!(ItemKind::Impl.namespaces().is_empty());
         assert!(ItemKind::Use.namespaces().is_empty());

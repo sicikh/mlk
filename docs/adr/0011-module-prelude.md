@@ -86,7 +86,7 @@ after it has declared the module's own items.
 The order is the whole of the shadowing rule:
 what a module declares or imports first is what its names denote ([ADR-0010][0010-stable-entity-identity.md]),
 so a prelude entry that finds a name already taken is not recorded and nothing is reported.
-A module that declares `type Int` keeps meaning its own `Int`;
+A module that declares `data Int` keeps meaning its own `Int`;
 a module that writes `use std.core.Int` keeps meaning that import;
 and in both cases the prelude's entry is quietly not what the name denotes.
 The prelude entity still exists in the item tree —

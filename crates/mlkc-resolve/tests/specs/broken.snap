@@ -2,30 +2,6 @@
 source: crates/mlkc-resolve/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Resolution
-
-```
-SCOPE
-  Hidden
-    ty: type Hidden in module #3 (private)
-  Point
-    ty: type Point in module #3 (public)
-  Int
-    ty: type Int in module #0 (private)
-  Unit
-    ty: type Unit in module #0 (private)
-  String
-    ty: type String in module #0 (private)
-  Bool
-    ty: type Bool in module #0 (private)
-  print-int
-    value: fun print-int in module #2 (private)
-  print-bool
-    value: fun print-bool in module #2 (private)
-```
-
 ## `project::main`
 
 ### Resolution
@@ -39,13 +15,37 @@ SCOPE
   wrong
     value: fun wrong in module #4 (private)
   Int
-    ty: type Int in module #0 (private)
+    ty: data Int in module #0 (private)
   Unit
-    ty: type Unit in module #0 (private)
+    ty: data Unit in module #0 (private)
   String
-    ty: type String in module #0 (private)
+    ty: data String in module #0 (private)
   Bool
-    ty: type Bool in module #0 (private)
+    ty: data Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
+```
+
+## `project::types`
+
+### Resolution
+
+```
+SCOPE
+  Hidden
+    ty: data Hidden in module #3 (private)
+  Point
+    ty: data Point in module #3 (public)
+  Int
+    ty: data Int in module #0 (private)
+  Unit
+    ty: data Unit in module #0 (private)
+  String
+    ty: data String in module #0 (private)
+  Bool
+    ty: data Bool in module #0 (private)
   print-int
     value: fun print-int in module #2 (private)
   print-bool

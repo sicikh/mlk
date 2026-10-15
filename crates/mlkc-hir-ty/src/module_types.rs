@@ -76,15 +76,15 @@ impl std::fmt::Display for ModuleTypes {
 #[cfg(test)]
 mod tests {
     use mlkc_hir_def::{
-        Attributes, ClassData, ClassLoc, EntityData, EntityLoc, FunctionData, ItemLoc,
-        ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleId, Name, PathRoot, PlainPath, PlainPathId,
-        Signature, Visibility,
+        AdtData, AdtLoc, Attributes, EntityData, EntityLoc, FunctionData, ItemLoc, ItemSyntaxLoc,
+        ItemTree, ItemTreeBuilder, ModuleId, Name, PathRoot, PlainPath, PlainPathId, Signature,
+        Visibility,
     };
     use mlkc_vfs::FileId;
 
     use super::{ModuleTypes, Ty};
 
-    /// A module that declares a class `Int` and a function `double`.
+    /// A module that declares a data type `Int` and a function `double`.
     fn module() -> ItemTree {
         let mut builder = ItemTreeBuilder::new(
             ModuleId(FileId::from_raw(0)),
@@ -92,7 +92,7 @@ mod tests {
         );
         builder.declare(
             Some(Name::new("Int")),
-            EntityData::Class(ClassData {
+            EntityData::Adt(AdtData {
                 attributes: Attributes::default(),
                 visibility: Visibility::Public,
             }),
@@ -111,8 +111,8 @@ mod tests {
         builder.finish()
     }
 
-    /// The class `Int` of the module, and the name of the function `double`.
-    fn entities(tree: &ItemTree) -> (EntityLoc<ClassLoc>, EntityLoc) {
+    /// The data type `Int` of the module, and the name of the function `double`.
+    fn entities(tree: &ItemTree) -> (EntityLoc<AdtLoc>, EntityLoc) {
         let mut int = None;
         let mut double = None;
 
@@ -123,10 +123,10 @@ mod tests {
             };
 
             match item {
-                ItemLoc::Class(_) => {
+                ItemLoc::Adt(_) => {
                     int = Some(EntityLoc {
                         module: tree.module(),
-                        item: ClassLoc::try_from(item).expect("a class"),
+                        item: AdtLoc::try_from(item).expect("a data type"),
                     })
                 },
                 ItemLoc::Function(_) if double.is_none() => double = Some(entity),
@@ -134,7 +134,7 @@ mod tests {
             }
         }
 
-        (int.expect("a class"), double.expect("a function"))
+        (int.expect("a data type"), double.expect("a function"))
     }
 
     #[test]
@@ -148,14 +148,14 @@ mod tests {
 
         types.insert(
             double.clone(),
-            Ty::function(vec![Ty::class(int.clone())], Ty::class(int.clone())),
+            Ty::function(vec![Ty::adt(int.clone())], Ty::adt(int.clone())),
         );
 
         assert_eq!(
             types.get(&double),
             Some(&Ty::function(
-                vec![Ty::class(int.clone())],
-                Ty::class(int.clone())
+                vec![Ty::adt(int.clone())],
+                Ty::adt(int.clone())
             ))
         );
         assert_eq!(types.len(), 1);

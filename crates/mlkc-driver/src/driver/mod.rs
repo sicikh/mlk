@@ -263,7 +263,7 @@ struct CheckInputs {
     closure: Closure,
     /// The type surface of every module the check may read, by module.
     types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
-    /// The classes of the language the check was given.
+    /// The data types of the language the check was given.
     builtins: Builtins,
 }
 
@@ -271,7 +271,7 @@ struct CheckInputs {
 ///
 /// The key of a check is what the check read: the HIR of the module --- the body among it --- the
 /// resolution of the module, the closure of the check, the type surfaces of the modules the
-/// paths reach, and the classes of the language ([ADR-0017]).
+/// paths reach, and the data types of the language ([ADR-0017]).
 ///
 /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 struct CheckSlot {
@@ -283,7 +283,7 @@ struct CheckSlot {
     closure: Closure,
     /// The type surface of every module the check may read, by module.
     types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
-    /// The classes of the language the check was given.
+    /// The data types of the language the check was given.
     builtins: Builtins,
     /// The value, retained so that the driver can hand it out and compare it later.
     checked: Checked,
@@ -308,7 +308,7 @@ impl Checked {
 /// The MIR of one body in the CFG form, and what it was made from ([ADR-0019]).
 ///
 /// The key of the slot is what the lowering read: the HIR of the module --- the body among it ---
-/// the resolution of the module, the closure the walk read, the classes of the language, and the
+/// the resolution of the module, the closure the walk read, the data types of the language, and the
 /// check of the body, whose types pick the operators and the constants. The surfaces the check
 /// read are not read again here: the lowering reads the types of the check's value and no surface
 /// of another module.
@@ -321,7 +321,7 @@ struct MirSlot {
     resolution: Arc<Resolution>,
     /// The modules the walk read, and the entries of the indexes it read.
     closure: Closure,
-    /// The classes of the language the lowering was given.
+    /// The data types of the language the lowering was given.
     builtins: Builtins,
     /// The check the lowering read.
     checked: Checked,
@@ -359,7 +359,7 @@ struct LirSlot {
 /// The module of one module, and what building it read ([ADR-0021]).
 ///
 /// The key of the slot is what the stage read: the HIR the functions and their names are read
-/// from, the types of the module's entities, the classes of the language, the SSA form of every
+/// from, the types of the module's entities, the data types of the language, the SSA form of every
 /// body, and the type surface of every module a callee belongs to --- an import carries the
 /// signature of the function it names ([ADR-0021]).
 ///
@@ -369,7 +369,7 @@ struct ModuleMirSlot {
     lowered: Arc<Lowered>,
     /// The types of the module's entities, which say what each function takes and gives back.
     types: Arc<ModuleTypes>,
-    /// The classes of the language the module was read with.
+    /// The data types of the language the module was read with.
     builtins: Builtins,
     /// The SSA form of every body of the module, in the order the module declares them.
     bodies: Vec<Arc<MirBody>>,

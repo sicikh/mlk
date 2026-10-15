@@ -2,44 +2,6 @@
 source: crates/mlkc-typeck/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Type Surface
-
-```
-MODULE TYPES
-  fun origin: () -> Point
-```
-
-### Checked Bodies
-
-`fun origin`
-
-```
-CHECKED BODY
-  expr #0: () -> Point
-  expr #1: Point
-```
-
-## `project::data::utils`
-
-### Type Surface
-
-```
-MODULE TYPES
-  fun make: () -> Point
-```
-
-### Checked Bodies
-
-`fun make`
-
-```
-CHECKED BODY
-  expr #0: () -> Point
-  expr #1: Point
-```
-
 ## `project::main`
 
 ### Type Surface
@@ -67,4 +29,42 @@ CHECKED BODY
 CHECKED BODY
   expr #0: Int
   pat #0: Point
+```
+
+## `project::types`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun origin: () -> Point
+```
+
+### Checked Bodies
+
+`fun origin`
+
+```
+CHECKED BODY
+  expr #0: () -> Point
+  expr #1: Point
+```
+
+## `project::types::utils`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun make: () -> Point
+```
+
+### Checked Bodies
+
+`fun make`
+
+```
+CHECKED BODY
+  expr #0: () -> Point
+  expr #1: Point
 ```

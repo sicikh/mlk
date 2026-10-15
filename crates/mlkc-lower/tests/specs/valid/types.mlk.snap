@@ -10,10 +10,10 @@ expression: snapshot
 // name are declared here.
 
 #[builtin]
-type Map
+data Map
 
 #[builtin]
-type String
+data String
 
 fun qualified(value: std::core::Int): Unit =
     value
@@ -43,10 +43,10 @@ fun inferred(value: _): _ =
 MODULE #0 project::types
 
 ITEM TREE
-  type Map  @2.0
+  data Map  @2.0
     attributes: #[builtin]
     visibility: private
-  type String  @2.1
+  data String  @2.1
     attributes: #[builtin]
     visibility: private
   fun qualified  @2.2
@@ -55,19 +55,19 @@ ITEM TREE
     ret: Unit -> use Unit
   fun applied  @2.3
     visibility: private
-    param: Map[Int -> use Int, String -> type String] -> type Map
+    param: Map[Int -> use Int, String -> data String] -> data Map
     ret: Unit -> use Unit
   fun applied_and_qualified  @2.4
     visibility: private
-    param: std::Map[Int -> use Int, String -> type String] -> the project std
+    param: std::Map[Int -> use Int, String -> data String] -> the project std
     ret: Unit -> use Unit
   fun applied_to_a_qualified_path  @2.5
     visibility: private
-    param: std::core::Map[Int -> use Int, String -> type String] -> the project std
+    param: std::core::Map[Int -> use Int, String -> data String] -> the project std
     ret: Unit -> use Unit
   fun applied_and_read_inside  @2.6
     visibility: private
-    param: Map[Int -> use Int]::Entry -> type Map
+    param: Map[Int -> use Int]::Entry -> data Map
     ret: Unit -> use Unit
   fun inferred  @2.7
     visibility: private

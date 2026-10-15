@@ -3,7 +3,7 @@
 // not have yet.
 
 #[extern]
-type Handle
+data Handle
 
 #[extern]
 fun open(handle: Handle): Int =

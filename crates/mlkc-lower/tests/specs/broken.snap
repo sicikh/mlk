@@ -2,42 +2,6 @@
 source: crates/mlkc-lower/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Item Tree
-
-```
-MODULE #3 project::data
-
-ITEM TREE
-  type Hidden  @2.0
-    visibility: private
-  type Point  @2.1
-    visibility: public
-  use Int  prelude
-    path: std::prelude::Int
-    visibility: private
-  use Unit  prelude
-    path: std::prelude::Unit
-    visibility: private
-  use String  prelude
-    path: std::prelude::String
-    visibility: private
-  use Bool  prelude
-    path: std::prelude::Bool
-    visibility: private
-  use print-int  prelude
-    path: std::prelude::print-int
-    visibility: private
-  use print-bool  prelude
-    path: std::prelude::print-bool
-    visibility: private
-```
-
-### Bodies
-
-No bodies.
-
 ## `project::main`
 
 ### Item Tree
@@ -47,7 +11,7 @@ MODULE #4 project::main
 
 ITEM TREE
   use Hidden  @2.0
-    path: project::data::Hidden
+    path: project::types::Hidden
     visibility: private
   use X  @2.1
     path: project::missing::X
@@ -126,3 +90,39 @@ exprs
 paths
   path#0  size -> fun size
 ```
+
+## `project::types`
+
+### Item Tree
+
+```
+MODULE #3 project::types
+
+ITEM TREE
+  data Hidden  @2.0
+    visibility: private
+  data Point  @2.1
+    visibility: public
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+No bodies.

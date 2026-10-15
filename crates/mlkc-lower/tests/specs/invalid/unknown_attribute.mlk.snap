@@ -9,7 +9,7 @@ expression: snapshot
 // what to do with, and a name nothing knows is a mistake of the module.
 
 #[biultin]
-type Int
+data Int
 
 fun main(): Int =
     1
@@ -22,11 +22,11 @@ fun main(): Int =
 MODULE #0 project::unknown_attribute
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     visibility: private
   fun main  @2.1
     visibility: private
-    ret: Int -> type Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private

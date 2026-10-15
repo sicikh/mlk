@@ -17,6 +17,10 @@ macro_rules! map_syntax_node {
         match $node {
             node => {
                 match $crate::SyntaxNode::kind(&node) {
+                    $crate::SyntaxKind::ADT_DECL => {
+                        let $pattern = unsafe { $crate::AdtDecl::new_unchecked(node) };
+                        $body
+                    },
                     $crate::SyntaxKind::ATTRIBUTE => {
                         let $pattern = unsafe { $crate::Attribute::new_unchecked(node) };
                         $body
@@ -152,10 +156,6 @@ macro_rules! map_syntax_node {
                     },
                     $crate::SyntaxKind::TYPE_ARGS => {
                         let $pattern = unsafe { $crate::TypeArgs::new_unchecked(node) };
-                        $body
-                    },
-                    $crate::SyntaxKind::TYPE_DECL => {
-                        let $pattern = unsafe { $crate::TypeDecl::new_unchecked(node) };
                         $body
                     },
                     $crate::SyntaxKind::UFCS_CALL => {

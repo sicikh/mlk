@@ -5,13 +5,13 @@
 // that is not there.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Bool
+data Bool
 
 #[builtin]
-type Unit
+data Unit
 
 fun pick(flag: Bool): Int =
     if flag then 1 else 2

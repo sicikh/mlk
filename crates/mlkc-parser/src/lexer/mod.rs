@@ -28,12 +28,12 @@ use mlkc_parser_core::{
 use mlkc_rowan::SyntaxKind as SyntaxKindTrait;
 use mlkc_syntax::{
     SyntaxKind::{
-        self, AND2, ARROW, AS_KW, AT, BANG_EQ, COLON, COLON_COLON, COMMA, COMMENT, DOT, ELIF_KW,
-        ELSE_KW, EOF, EQ, EQ2, ERROR_TOKEN, FALSE_KW, FN_KW, FUN_KW, GT, GT_EQ, HASH, IDENT, IF_KW,
-        IN_KW, INT_LITERAL, L_BRACK, L_CURLY, L_PAREN, LET_KW, LOCAL_KW, LT, LT_EQ, MINUS,
-        MODULE_KW, MULTILINE_COMMENT, NEWLINE, OR2, PIPE, PLUS, PROJECT_KW, PUB_KW, R_BRACK,
+        self, AND2, ARROW, AS_KW, AT, BANG_EQ, COLON, COLON_COLON, COMMA, COMMENT, DATA_KW, DOT,
+        ELIF_KW, ELSE_KW, EOF, EQ, EQ2, ERROR_TOKEN, FALSE_KW, FN_KW, FUN_KW, GT, GT_EQ, HASH,
+        IDENT, IF_KW, IN_KW, INT_LITERAL, L_BRACK, L_CURLY, L_PAREN, LET_KW, LOCAL_KW, LT, LT_EQ,
+        MINUS, MODULE_KW, MULTILINE_COMMENT, NEWLINE, OR2, PIPE, PLUS, PROJECT_KW, PUB_KW, R_BRACK,
         R_CURLY, R_PAREN, SEMICOLON, SLASH, STAR, STRING_LITERAL, THEN_KW, TOMBSTONE, TRUE_KW,
-        TYPE_KW, UNDERSCORE, UNICODE_BOM, USE_KW, WHITESPACE,
+        UNDERSCORE, UNICODE_BOM, USE_KW, WHITESPACE,
     },
     TextRange, TextSize,
 };
@@ -60,6 +60,8 @@ enum Tok {
 
     #[token("as")]
     AsKw,
+    #[token("data")]
+    DataKw,
     #[token("elif")]
     ElifKw,
     #[token("else")]
@@ -88,8 +90,6 @@ enum Tok {
     ThenKw,
     #[token("true")]
     TrueKw,
-    #[token("type")]
-    TypeKw,
     #[token("use")]
     UseKw,
 
@@ -195,7 +195,7 @@ impl Tok {
             Self::PubKw => PUB_KW,
             Self::ThenKw => THEN_KW,
             Self::TrueKw => TRUE_KW,
-            Self::TypeKw => TYPE_KW,
+            Self::DataKw => DATA_KW,
             Self::UseKw => USE_KW,
             Self::IntLiteral => INT_LITERAL,
             Self::StringLiteral => STRING_LITERAL,

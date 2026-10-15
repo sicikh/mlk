@@ -211,7 +211,7 @@ pub enum Rvalue {
   and the lowering records the call's type from the checker as it does for any call.
 - **`ty` is the checker's type, and not the generalized one.**
   `Body::ty` is `CheckedBody`'s type of the lambda expression,
-  so an unconstrained parameter is `Ty::Error` and a constrained one is its class;
+  so an unconstrained parameter is `Ty::Error` and a constrained one is its data type;
   what the checker generalized at the `let` is the type of a _use_, not of this code
   (see "The key is the ABI shape").
 - **The verifier and the dump.** `Capture` is valid only in a lifted lambda body,
@@ -334,7 +334,7 @@ two closures of one signature must still be one WASM type.
 
 They are, because the key of a closure type is the **shape** of the checked type:
 whether a parameter or result is an immediate is what the ABI cares about,
-and every other type — a class, a `Param`, an `Error` — is one word.
+and every other type — a data type, a `Param`, an `Error` — is one word.
 `Ty::Param` and `Ty::Error` are words,
 so both spellings of `id` meet in one `$fn`, one `$closure`,
 and one `$env` per capture shape,
@@ -346,7 +346,7 @@ it is the closure type itself.
 This is where the uniform word earns its keep:
 the lifted code of a generalized lambda is monomorphic over words,
 and each instantiation of the `let` only chooses the values that flow through it.
-An operation inside the lambda that needs a class (`+` on an `Int`) has that class in the
+An operation inside the lambda that needs a data type (`+` on an `Int`) has that data type in the
 checker's recorded type, so it is no longer a `Param`;
 an operation that is only passing a value around needs nothing but a word.
 The backend refines and casts at the uses, as it does everywhere else

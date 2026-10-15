@@ -14,4 +14,4 @@ fun a_value_may_be_named_by_a_path(): Int =
     std::core::size(1)
 
 fun a_value_may_be_named_by_a_project_path(): Int =
-    data::main-module::start-app(1)
+    types::main-module::start-app(1)

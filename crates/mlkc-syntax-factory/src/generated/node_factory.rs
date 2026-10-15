@@ -10,6 +10,39 @@ use mlkc_rowan::AstNode;
     )
 )]
 use mlkc_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, *};
+pub(crate) fn adt_decl(
+    attributes: AttributeList,
+    data_token: SyntaxToken,
+    name: Name,
+) -> AdtDeclBuilder {
+    AdtDeclBuilder {
+        attributes,
+        data_token,
+        name,
+        visibility_token: None,
+    }
+}
+pub(crate) struct AdtDeclBuilder {
+    attributes: AttributeList,
+    data_token: SyntaxToken,
+    name: Name,
+    visibility_token: Option<SyntaxToken>,
+}
+impl AdtDeclBuilder {
+    pub(crate) fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
+        self.visibility_token = Some(visibility_token);
+        self
+    }
+    pub(crate) fn build(self) -> AdtDecl {
+        AdtDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::ADT_DECL, [
+            Some(SyntaxElement::Node(self.attributes.into_syntax())),
+            self.visibility_token
+                .map(|token| SyntaxElement::Token(token)),
+            Some(SyntaxElement::Token(self.data_token)),
+            Some(SyntaxElement::Node(self.name.into_syntax())),
+        ]))
+    }
+}
 pub(crate) fn attribute(
     hash_token: SyntaxToken,
     l_brack_token: SyntaxToken,
@@ -445,39 +478,6 @@ pub(crate) fn type_args(
         Some(SyntaxElement::Node(type_arg_list.into_syntax())),
         Some(SyntaxElement::Token(r_brack_token)),
     ]))
-}
-pub(crate) fn type_decl(
-    attributes: AttributeList,
-    type_token: SyntaxToken,
-    name: Name,
-) -> TypeDeclBuilder {
-    TypeDeclBuilder {
-        attributes,
-        type_token,
-        name,
-        visibility_token: None,
-    }
-}
-pub(crate) struct TypeDeclBuilder {
-    attributes: AttributeList,
-    type_token: SyntaxToken,
-    name: Name,
-    visibility_token: Option<SyntaxToken>,
-}
-impl TypeDeclBuilder {
-    pub(crate) fn with_visibility_token(mut self, visibility_token: SyntaxToken) -> Self {
-        self.visibility_token = Some(visibility_token);
-        self
-    }
-    pub(crate) fn build(self) -> TypeDecl {
-        TypeDecl::unwrap_cast(SyntaxNode::new_detached(SyntaxKind::TYPE_DECL, [
-            Some(SyntaxElement::Node(self.attributes.into_syntax())),
-            self.visibility_token
-                .map(|token| SyntaxElement::Token(token)),
-            Some(SyntaxElement::Token(self.type_token)),
-            Some(SyntaxElement::Node(self.name.into_syntax())),
-        ]))
-    }
 }
 pub(crate) fn ufcs_call(
     receiver: Expr,

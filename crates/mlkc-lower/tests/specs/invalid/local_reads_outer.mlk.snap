@@ -9,7 +9,7 @@ expression: snapshot
 // it binds is not part of it, and reading one is a mistake.
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun consume(left: Int, right: Int): Int
@@ -44,31 +44,31 @@ fun piped(value: Int): Int =
 MODULE #0 project::local_reads_outer
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
   fun consume  @2.1
     attributes: #[extern]
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun parameter  @2.2
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun bound  @2.3
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun through_lambda  @2.4
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun piped  @2.5
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -115,8 +115,8 @@ paths
 functions
   fun#0  add  root expr#2
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -149,8 +149,8 @@ paths
 functions
   fun#0  add  root expr#5
     params pat#2
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -178,7 +178,7 @@ paths
   path#2  applied -> local fun#0
 functions
   fun#0  applied  root expr#5
-    ret: Int -> type Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -207,7 +207,7 @@ paths
   path#3  passed -> local fun#0
 functions
   fun#0  passed  root expr#3
-    ret: Int -> type Int
+    ret: Int -> data Int
 ```
 
 ## Lowering Diagnostics

@@ -47,9 +47,9 @@ fun Box(): Int = 1
 fun use_box(): Int = Box
 ";
 
-/// The same module with a class declared under the name the function has.
+/// The same module with a data type declared under the name the function has.
 const CALLED_AND_NAMED_ELSEWHERE: &str = "\
-type Box
+data Box
 
 fun Box(): Int = 1
 
@@ -173,9 +173,9 @@ fn an_entity_added_in_another_namespace_leaves_a_body_alone() {
     let before = lower(CALLED);
     let after = lower(CALLED_AND_NAMED_ELSEWHERE);
 
-    // A class named like a function is not what a call of the function is anchored to, however
+    // A data type named like a function is not what a call of the function is anchored to, however
     // the module is ordered: what the name denotes where a value belongs did not change, so the
     // body that wrote it is the body the driver already holds. With one scope for all names it
-    // would have been the class, and every call of the function would have been re-lowered.
+    // would have been the data type, and every call of the function would have been re-lowered.
     assert_eq!(body_of(&before, "use_box"), body_of(&after, "use_box"));
 }

@@ -2,13 +2,13 @@
 module project::core
 
 #[builtin]
-pub type Int
+pub data Int
 
 #[builtin]
-pub type Unit
+pub data Unit
 
 #[builtin]
-pub type String
+pub data String
 
 #[builtin]
-pub type Bool
+pub data Bool

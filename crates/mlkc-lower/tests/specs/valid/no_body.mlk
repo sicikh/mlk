@@ -1,7 +1,7 @@
 // A module of declarations that declare no body: what they are is their signature.
 
 #[builtin]
-type Int
+data Int
 
 #[extern]
 fun add(left: Int, right: Int): Int

@@ -7,10 +7,10 @@
 // it binds is not part of it, and what it reads of the module it reaches without an environment.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Bool
+data Bool
 
 #[extern]
 fun consume(left: Int, right: Int): Int

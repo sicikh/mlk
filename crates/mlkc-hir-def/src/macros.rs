@@ -17,8 +17,7 @@ macro_rules! for_each_item_kind {
     ($mac:ident) => {
         $mac! {
             Function(FunctionData, FunctionLoc, ModuleFunctionId, "fun"),
-            Class(ClassData, ClassLoc, ModuleClassId, "type"),
-            Value(ValueData, ValueLoc, ModuleValueId, "val"),
+            Adt(AdtData, AdtLoc, ModuleAdtId, "data"),
             Const(ConstData, ConstLoc, ModuleConstId, "const"),
             Impl(ImplData, ImplLoc, ModuleImplId, "impl"),
             Use(UseData, UseLoc, ModuleUseId, "use"),

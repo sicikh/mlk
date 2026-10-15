@@ -2,7 +2,7 @@
 // what to do with, and a name nothing knows is a mistake of the module.
 
 #[biultin]
-type Int
+data Int
 
 fun main(): Int =
     1

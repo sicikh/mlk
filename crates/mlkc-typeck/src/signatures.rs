@@ -33,7 +33,7 @@ use crate::{
 /// reports is what the first check requires of every declaration.
 ///
 /// The deps carry the projects and the closure the paths of the surface walk; the type surfaces
-/// of other modules are not read here, since a written type names a class and never a resolved
+/// of other modules are not read here, since a written type names a data type and never a resolved
 /// type of another module.
 ///
 /// [ADR-0004]: ../../docs/adr/0004-module-system.md
@@ -156,7 +156,8 @@ pub fn resolve_module_types(
                     ty,
                 );
             },
-            // A class has no type of a value, and an import stands for the entity it names.
+            // A data type writes no type of its own yet, and an import stands for the entity
+            // its path names.
             _ => {},
         }
     }
@@ -182,7 +183,7 @@ mod tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     use mlkc_hir_def::{
-        ClassLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name, Prelude,
+        AdtLoc, EntityLoc, ItemLocLike, ItemTree, ModuleId, ModuleScope, Name, Prelude,
         ProjectGraph, ProjectId, Resolution,
     };
     use mlkc_hir_ty::{Builtins, CheckDeps, Ty};
@@ -194,11 +195,11 @@ mod tests {
 
     use super::{TypeError, resolve_module_types};
 
-    /// The classes of the language, as a module of a test declares them.
-    const CLASSES: &str = "#[builtin]\ntype Int\n\n#[builtin]\ntype Unit\n\n#[builtin]\ntype String\n\n#[builtin]\ntype Bool\n";
+    /// The data types of the language, as a module of a test declares them.
+    const BUILTINS: &str = "#[builtin]\ndata Int\n\n#[builtin]\ndata Unit\n\n#[builtin]\ndata String\n\n#[builtin]\ndata Bool\n";
 
     fn module(source: &str) -> ItemTree {
-        let source = format!("{CLASSES}\n{source}");
+        let source = format!("{BUILTINS}\n{source}");
         let parsed = parse(&source);
         let root = parsed.tree::<ModuleRoot>();
         let relative = RelPathBuf::try_from("main.mlk").expect("a relative path");
@@ -225,12 +226,12 @@ mod tests {
             .expect("the entity to be declared")
     }
 
-    fn class(tree: &ItemTree, name: &str) -> EntityLoc<ClassLoc> {
+    fn adt(tree: &ItemTree, name: &str) -> EntityLoc<AdtLoc> {
         let entity = entity(tree, name);
 
         EntityLoc {
             module: entity.module,
-            item: ClassLoc::try_from(entity.item).expect("a class"),
+            item: AdtLoc::try_from(entity.item).expect("a data type"),
         }
     }
 
@@ -241,10 +242,10 @@ mod tests {
         let closure = closure::of(tree.module(), tree, &graph, &BTreeMap::new(), &mut |_| None);
         let resolution = Resolution::new(Arc::new(ModuleScope::default()), BTreeMap::new());
         let builtins = Builtins::new(
-            class(tree, "Int"),
-            class(tree, "Unit"),
-            class(tree, "String"),
-            class(tree, "Bool"),
+            adt(tree, "Int"),
+            adt(tree, "Unit"),
+            adt(tree, "String"),
+            adt(tree, "Bool"),
         );
         let deps = CheckDeps::new(builtins)
             .with_graph(graph)
@@ -260,8 +261,8 @@ mod tests {
         let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let int = Ty::class(class(&tree, "Int"));
-        let boolean = Ty::class(class(&tree, "Bool"));
+        let int = Ty::adt(adt(&tree, "Int"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
 
         assert_eq!(
             types.get(&entity(&tree, "id")),
@@ -284,17 +285,11 @@ mod tests {
         // The types are still there, with the error type where nothing was written.
         assert_eq!(
             types.get(&entity(&tree, "f")),
-            Some(&Ty::function(
-                vec![Ty::Error],
-                Ty::class(class(&tree, "Int"))
-            )),
+            Some(&Ty::function(vec![Ty::Error], Ty::adt(adt(&tree, "Int")))),
         );
         assert_eq!(
             types.get(&entity(&tree, "g")),
-            Some(&Ty::function(
-                vec![Ty::class(class(&tree, "Int"))],
-                Ty::Error
-            )),
+            Some(&Ty::function(vec![Ty::adt(adt(&tree, "Int"))], Ty::Error)),
         );
 
         assert!(matches!(diagnostics[0].error(), TypeError::MissingType {
@@ -319,10 +314,7 @@ mod tests {
         }));
         assert_eq!(
             types.get(&entity(&tree, "f")),
-            Some(&Ty::function(
-                vec![Ty::Error],
-                Ty::class(class(&tree, "Int"))
-            )),
+            Some(&Ty::function(vec![Ty::Error], Ty::adt(adt(&tree, "Int")))),
         );
     }
 
@@ -337,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn a_class_applied_to_arguments_is_reported() {
+    fn a_data_type_applied_to_arguments_is_reported() {
         let tree = module("fun f(x: Int[Bool]): Int = x\n");
         let (resolution, deps) = world(&tree);
         let (types, diagnostics) = resolve_module_types(&tree, &resolution, &deps);
@@ -347,15 +339,15 @@ mod tests {
             TypeError::TypeArguments { .. }
         ));
 
-        let int = class(&tree, "Int");
+        let int = adt(&tree, "Int");
         assert_eq!(
             types.get(&entity(&tree, "f")),
             Some(&Ty::function(
-                vec![Ty::Class {
-                    class: int.clone(),
-                    args: vec![Ty::class(class(&tree, "Bool"))],
+                vec![Ty::Adt {
+                    adt: int.clone(),
+                    args: vec![Ty::adt(adt(&tree, "Bool"))],
                 }],
-                Ty::class(int),
+                Ty::adt(int),
             )),
         );
     }

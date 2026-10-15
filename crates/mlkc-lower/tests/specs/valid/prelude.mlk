@@ -1,7 +1,7 @@
 // What a module is given without writing it: the names of the prelude, which a module uses as
 // it uses an import of them, and a name the module declares itself, which is what it denotes.
 
-type Unit
+data Unit
 
 fun size(value: Int): Int =
     value

@@ -11,14 +11,14 @@ expression: snapshot
 
 module project::app
 
-use project::data
+use project::types
 
 use project::core::Int
 
 fun start(): Int =
-    project::data::start-app(1)
+    project::types::start-app(1)
 
-fun handle(value: project::data::Handle): Int =
+fun handle(value: project::types::Handle): Int =
     value
 
 ```
@@ -29,8 +29,8 @@ fun handle(value: project::data::Handle): Int =
 MODULE #0 project::app
 
 ITEM TREE
-  use data  @2.0
-    path: project::data
+  use types  @2.0
+    path: project::types
     visibility: private
   use Int  @2.1
     path: project::core::Int
@@ -40,7 +40,7 @@ ITEM TREE
     ret: Int -> use Int
   fun handle  @2.3
     visibility: private
-    param: project::data::Handle -> the project
+    param: project::types::Handle -> the project
     ret: Int -> use Int
   use Int#1  prelude
     path: std::prelude::Int
@@ -73,7 +73,7 @@ exprs
   expr#1  literal 1
   expr#2  call expr#0 (expr#1)
 paths
-  path#0  project::data::start-app -> the project
+  path#0  project::types::start-app -> the project
 ```
 
 ```

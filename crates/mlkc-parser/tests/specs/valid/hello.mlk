@@ -1,10 +1,10 @@
 // --- stdlib.mlk
 
 #[builtin]
-type Unit
+data Unit
 
 #[builtin]
-type Int
+data Int
 
 // --- main.mlk ---
 

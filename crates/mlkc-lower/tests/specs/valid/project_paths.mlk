@@ -4,12 +4,12 @@
 
 module project::app
 
-use project::data
+use project::types
 
 use project::core::Int
 
 fun start(): Int =
-    project::data::start-app(1)
+    project::types::start-app(1)
 
-fun handle(value: project::data::Handle): Int =
+fun handle(value: project::types::Handle): Int =
     value

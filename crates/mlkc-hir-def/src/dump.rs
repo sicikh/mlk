@@ -46,7 +46,7 @@ const MISSING: &str = "<missing>";
 /// is about nothing, and a host marks nothing for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
-    /// An entity of the module: a function, a class, an import.
+    /// An entity of the module: a function, a data type, an import.
     Item(ItemLoc),
     /// A type a declaration writes: the type of a parameter, or the type of a result.
     ///
@@ -710,8 +710,7 @@ fn entity_data_lines(data: &EntityData, module: ModuleId, item: &ItemLoc) -> Vec
             lines.push(visibility_line(data.visibility));
             lines.extend(signature_lines(&data.signature, module, Some(item)));
         },
-        EntityData::Class(data) => lines.push(visibility_line(data.visibility)),
-        EntityData::Value(data) => lines.push(visibility_line(data.visibility)),
+        EntityData::Adt(data) => lines.push(visibility_line(data.visibility)),
         EntityData::Const(data) => {
             lines.push(visibility_line(data.visibility));
             if let Some(ty) = &data.ty {
@@ -719,8 +718,8 @@ fn entity_data_lines(data: &EntityData, module: ModuleId, item: &ItemLoc) -> Vec
             }
         },
         EntityData::Impl(data) => {
-            if let Some(class) = &data.class {
-                lines.push(type_line("class", Some(class), None, module));
+            if let Some(ty_class) = &data.ty_class {
+                lines.push(type_line("ty_class", Some(ty_class), None, module));
             }
             if let Some(ty) = &data.ty {
                 lines.push(type_line("ty", Some(ty), None, module));
@@ -1177,7 +1176,7 @@ mod tests {
         body::{BinaryOp, BodyBuilder, LocalConstData, LocalFunctionData, Pat},
         def_map::LocalScope,
         id::{BodyLoc, FunctionLoc, ItemKind, ItemLoc, UseLoc},
-        item_data::{Attributes, ClassData, FunctionData, ImplData, ParamData},
+        item_data::{AdtData, Attributes, FunctionData, ImplData, ParamData},
         item_tree::{ItemSyntaxLoc, ItemTreeBuilder},
         path::{PathRoot, PlainPath, PlainPathId},
         project_graph::ProjectId,
@@ -1225,7 +1224,7 @@ mod tests {
 
         builder.declare(
             Some(Name::new("Int")),
-            EntityData::Class(ClassData {
+            EntityData::Adt(AdtData {
                 attributes: Attributes::default(),
                 visibility: Visibility::Public,
             }),
@@ -1256,11 +1255,11 @@ mod tests {
 MODULE #0 project::main
 
 ITEM TREE
-  type Int  @0
+  data Int  @0
     visibility: public
   fun main  @1
     visibility: private
-    param: Int -> type Int
+    param: Int -> data Int
     ret: Unit -> unresolved
 "
         );
@@ -1275,7 +1274,7 @@ ITEM TREE
 
         builder.declare(
             Some(Name::new("Unit")),
-            EntityData::Class(ClassData {
+            EntityData::Adt(AdtData {
                 attributes: Attributes {
                     builtin: true,
                     external: false,
@@ -1312,14 +1311,14 @@ ITEM TREE
 MODULE #0 project::main-module
 
 ITEM TREE
-  type Unit  @0
+  data Unit  @0
     attributes: #[builtin]
     visibility: public
   fun println-int  @1
     attributes: #[extern]
     visibility: private
     param: Int -> unresolved
-    ret: Unit -> type Unit
+    ret: Unit -> data Unit
 "
         );
     }
@@ -1333,7 +1332,7 @@ ITEM TREE
         builder.declare(
             None,
             EntityData::Impl(ImplData {
-                class: None,
+                ty_class: None,
                 ty: None,
             }),
             ItemSyntaxLoc::root().child(0),
@@ -1407,7 +1406,7 @@ ITEM TREE
                 params: vec![ParamData {
                     ty: Some(type_path(
                         "Int",
-                        PathAnchor::Item(entity("Int", ItemKind::Class)),
+                        PathAnchor::Item(entity("Int", ItemKind::Adt)),
                     )),
                 }],
                 ret: Some(TypeRef::Infer),
@@ -1444,7 +1443,7 @@ paths
 functions
   fun#0  helper  root expr#5
     params pat#2
-    param: Int -> type Int
+    param: Int -> data Int
     ret: _
 "
         );
@@ -1521,7 +1520,7 @@ consts
         ])));
         builder.declare(
             Some(Name::new("Unit")),
-            EntityData::Class(ClassData {
+            EntityData::Adt(AdtData {
                 attributes: Attributes::default(),
                 visibility: Visibility::Public,
             }),
@@ -1542,12 +1541,12 @@ consts
 
         let unit = &items.children[0];
 
-        assert_eq!(unit.text(), "type Unit  @0");
+        assert_eq!(unit.text(), "data Unit  @0");
         assert_eq!(unit.kind, NodeKind::Item);
         assert_eq!(
             unit.target,
             Some(Target::Item(ItemLoc::new(
-                ItemKind::Class,
+                ItemKind::Adt,
                 Some(Name::new("Unit")),
                 0,
             ))),
@@ -1732,7 +1731,7 @@ BODY fun f in module #0
         let mut scope = ModuleScope::default();
 
         scope.insert(Name::new("Point"), PerNs {
-            ty: Some((entity("Point", ItemKind::Class), Visibility::Public)),
+            ty: Some((entity("Point", ItemKind::Adt), Visibility::Public)),
             value: Some((entity("Point", ItemKind::Function), Visibility::Private)),
             module: None,
         });
@@ -1754,7 +1753,7 @@ BODY fun f in module #0
             "\
 SCOPE
   Point
-    ty: type Point in module #0 (public)
+    ty: data Point in module #0 (public)
     value: fun Point in module #0 (private)
   data
     module: prefix project::data (private)

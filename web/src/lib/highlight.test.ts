@@ -66,7 +66,7 @@ describe("the colours of the language", () => {
     });
 
     it("paints use and as, for an import renamed where it is written", () => {
-        const source = `use project::data::core as data\n\npub fun main() : Unit =\n    data.start()\n`;
+        const source = `use project::types::core as types\n\npub fun main() : Unit =\n    types.start()\n`;
 
         expect(tagsAt(source, source.indexOf("use"))).toContain(tags.keyword);
         expect(tagsAt(source, source.indexOf("as"))).toContain(tags.keyword);

@@ -2,7 +2,7 @@
 //!
 //! One MLK module becomes one WASM module ([ADR-0020][adr-0020], [ADR-0021][adr-0021]).
 //! [`ModuleMir`] is what `assemble_module` reads: the checked bodies and their MIR, the
-//! signatures their owners have, the functions they call and do not declare, and the classes of
+//! signatures their owners have, the functions they call and do not declare, and the data types of
 //! the language.
 //!
 //! A function the module does not declare is an import: a function of another module, or one
@@ -212,13 +212,13 @@ pub struct ModuleFunction {
     pub body: Arc<MirBody>,
 }
 
-/// One module: the functions it imports, the ones it declares, and the classes of the language.
+/// One module: the functions it imports, the ones it declares, and the data types of the language.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleMir {
     /// The canonical path of the module, which names it in the `name` section, in an import of
     /// another module, and in a stack trace.
     pub name: String,
-    /// The classes of the language, which say what a type refines to.
+    /// The data types of the language, which say what a type refines to.
     pub builtins: Builtins,
     /// The functions the module imports, in the order their indices are assigned.
     pub imports: Vec<ModuleImport>,
@@ -263,7 +263,7 @@ pub struct ModuleLayout {
 }
 
 impl ModuleLayout {
-    /// The classes of the language.
+    /// The data types of the language.
     pub fn builtins(&self) -> &Builtins {
         &self.builtins
     }

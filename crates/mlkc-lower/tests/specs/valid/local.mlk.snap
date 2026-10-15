@@ -14,10 +14,10 @@ expression: snapshot
 // it binds is not part of it, and what it reads of the module it reaches without an environment.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Bool
+data Bool
 
 #[extern]
 fun consume(left: Int, right: Int): Int
@@ -85,50 +85,50 @@ fun piped(value: Int): Int =
 MODULE #0 project::local
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type Bool  @2.1
+  data Bool  @2.1
     attributes: #[builtin]
     visibility: private
   fun consume  @2.2
     attributes: #[extern]
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun direct  @2.3
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun mutual  @2.4
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun bound  @2.5
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun renamed  @2.6
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun shadowed  @2.7
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun ignored  @2.8
     visibility: private
-    param: Bool -> type Bool
-    ret: Int -> type Int
+    param: Bool -> data Bool
+    ret: Int -> data Int
   fun nested  @2.9
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun piped  @2.10
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -175,8 +175,8 @@ paths
 functions
   fun#0  double  root expr#2
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -220,12 +220,12 @@ paths
 functions
   fun#0  step  root expr#9
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun#1  twice  root expr#16
     params pat#2
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -258,8 +258,8 @@ paths
 functions
   fun#0  add  root expr#6
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -281,7 +281,7 @@ paths
   path#0  value -> local fun#0
 functions
   fun#0  value  root expr#0
-    ret: Int -> type Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -311,8 +311,8 @@ paths
 functions
   fun#0  double  root expr#2
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -336,8 +336,8 @@ paths
 functions
   fun#0  nothing  root expr#0
     params pat#1
-    param: Bool -> type Bool
-    ret: Int -> type Int
+    param: Bool -> data Bool
+    ret: Int -> data Int
 ```
 
 ```
@@ -371,12 +371,12 @@ paths
 functions
   fun#0  outer  root expr#6
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun#1  inner  root expr#2
     params pat#2
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -414,8 +414,8 @@ paths
 functions
   fun#0  pass  root expr#5
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ## Lowering Diagnostics

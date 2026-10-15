@@ -40,8 +40,8 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         ("|>", "PIPE"),
     ],
     keywords: &[
-        "as", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
-        "project", "pub", "then", "true", "type", "use",
+        "as", "data", "elif", "else", "false", "fn", "fun", "if", "in", "let", "local", "module",
+        "project", "pub", "then", "true", "use",
     ],
     literals: &["INT_LITERAL", "STRING_LITERAL"],
     tokens: &[
@@ -67,7 +67,7 @@ pub const MLK_KINDS_SRC: KindsSrc = KindsSrc {
         "MODULE_ITEM",
         "ATTRIBUTE_LIST",
         "ATTRIBUTE",
-        "TYPE_DECL",
+        "ADT_DECL",
         "FUN_DECL",
         "USE_DECL",
         "USE_ALIAS",

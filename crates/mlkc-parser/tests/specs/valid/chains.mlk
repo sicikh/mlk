@@ -11,10 +11,10 @@ fun chained(): Int =
     value.load().validate()
 
 fun a_step_may_be_named_by_a_path(): Int =
-    value.data::Map::insert(1)
+    value.input::Map::insert(1)
 
 fun fields(): Int =
-    data@server@port
+    input@server@port
 
 fun a_field_of_a_call(): Int =
     f(1)@field

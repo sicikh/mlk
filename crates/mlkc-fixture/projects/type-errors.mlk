@@ -1,5 +1,5 @@
 // What the checker reports about a body and about a written type: a value where another one
-// belongs, a callee that is not a function, a call of the wrong arity, a class applied to
+// belongs, a callee that is not a function, a call of the wrong arity, a data type applied to
 // arguments, equality over a type that has none, and a choice whose condition or branch is
 // not a value the choice can take --- a choice without an `else` included, which selects a
 // `Unit`.

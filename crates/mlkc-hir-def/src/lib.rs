@@ -12,7 +12,7 @@
 //! An **index** is a proof that a node exists, and the proof holds only inside the value
 //! that owns the arena: `Idx<Expr>` of [`ExprId`] is meaningful inside the one
 //! [`Body`] it was allocated in, and nowhere else.
-//! A **name** is a value that denotes an entity of a module: [`FunctionLoc`], [`ClassLoc`],
+//! A **name** is a value that denotes an entity of a module: [`FunctionLoc`], [`AdtLoc`],
 //! and their erased sum [`ItemLoc`], all project-wide in [`EntityLoc`].
 //! A name may denote nothing, so every use of one is a lookup that may fail.
 //!
@@ -113,14 +113,14 @@ pub use crate::{
     closure::{Closure, Read},
     def_map::{LocalEntry, LocalScope, LocalTarget, ModuleScope, Namespace, PerNs, ProjectDefMap},
     id::{
-        BodyEntityLoc, BodyLoc, ClassLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind,
+        AdtLoc, BodyEntityLoc, BodyLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind,
         ItemLoc, ItemLocData, ItemLocLike, LocalConstId, LocalDefId, LocalFunctionId, ModuleDefId,
-        ModuleDefWithBodyId, ModuleId, UseLoc, ValueLoc, WrongKind,
+        ModuleDefWithBodyId, ModuleId, UseLoc, WrongKind,
     },
     interface::{Export, Interface},
     item_data::{
-        Attributes, ClassData, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes,
-        ParamData, Signature, UseData, ValueData, Visibility,
+        AdtData, Attributes, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes,
+        ParamData, Signature, UseData, Visibility,
     },
     item_tree::{Declared, Entity, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity},
     module_index::ModuleIndex,

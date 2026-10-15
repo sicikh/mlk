@@ -645,8 +645,8 @@ impl BodyLowering<'_> {
             // what a reader is told about.
             let decl = match item {
                 ModuleItem::FunDecl(decl) => decl,
-                ModuleItem::TypeDecl(decl) => {
-                    self.report_unread_local_item(ItemKind::Class, decl.syntax());
+                ModuleItem::AdtDecl(decl) => {
+                    self.report_unread_local_item(ItemKind::Adt, decl.syntax());
                     continue;
                 },
                 ModuleItem::UseDecl(decl) => {
@@ -1074,7 +1074,7 @@ fun main(): Int =
     fn a_name_the_body_knows_is_not_a_name_nothing_denotes() {
         let source = "\
 #[builtin]
-type Point
+data Point
 
 fun declared(value: Int): Int =
     value
@@ -1106,7 +1106,7 @@ fun main(): Int =
     fn a_type_a_body_writes_is_anchored_and_a_name_it_cannot_name_is_reported() {
         let source = "\
 #[builtin]
-type Point
+data Point
 
 #[extern]
 fun declared(value: Point): Point
@@ -1132,7 +1132,7 @@ fun main(): Point =
         // written, as the name of an expression is.
         let dumped = mlkc_hir_def::dump::body(&lowered.bodies[0].owner, &body.body);
 
-        assert!(dumped.contains("declared[Point -> type Point]"), "{dumped}");
+        assert!(dumped.contains("declared[Point -> data Point]"), "{dumped}");
         assert!(
             dumped.contains("declared[Missing -> unresolved]"),
             "{dumped}"

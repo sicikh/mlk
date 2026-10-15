@@ -10,7 +10,7 @@ use std::fmt;
 
 use mlkc_diagnostics::{Category, DiagKind, Diagnostic, Level};
 use mlkc_hir_def::{
-    ClassLoc, EntityLoc, FunctionLoc, ItemKind, ItemLoc, ItemLocLike, Name, PlainPath,
+    AdtLoc, EntityLoc, FunctionLoc, ItemKind, ItemLoc, ItemLocLike, Name, PlainPath,
 };
 use mlkc_span::Span;
 
@@ -96,15 +96,15 @@ pub enum LoweringError {
         /// The function.
         function: FunctionLoc,
     },
-    /// `#[extern]` is on a type, and the language has no external types yet.
-    ExternType {
-        /// The type.
-        class: ClassLoc,
+    /// `#[extern]` is on a data type, and the language has no external data types yet.
+    ExternAdt {
+        /// The data type.
+        adt: AdtLoc,
     },
-    /// `#[entry]` is on a type, and an entry point is a function.
-    EntryType {
-        /// The type.
-        class: ClassLoc,
+    /// `#[entry]` is on a data type, and an entry point is a function.
+    EntryAdt {
+        /// The data type.
+        adt: AdtLoc,
     },
     /// `#[entry]` is on a function that is not public.
     ///
@@ -285,15 +285,16 @@ impl LoweringError {
                  compiler's: it has no body here",
                 )
             },
-            Self::ExternType { class } => {
+            Self::ExternAdt { adt } => {
                 format!(
-                    "`{class:?}` is declared `#[extern]`, and the language has no external types yet",
+                    "`{adt:?}` is declared `#[extern]`, and the language has no external data \
+                     types yet",
                 )
             },
-            Self::EntryType { class } => {
+            Self::EntryAdt { adt } => {
                 format!(
-                    "`{class:?}` is declared `#[entry]`, and an entry point is a function: \
-                     a program does not begin in a type",
+                    "`{adt:?}` is declared `#[entry]`, and an entry point is a function: \
+                     a program does not begin in a data type",
                 )
             },
             Self::EntryFunctionNotPublic { function } => {
@@ -405,7 +406,7 @@ impl DiagKind for LoweringError {
             Self::IntegerLiteralTooLarge { .. } => "03",
             Self::PathIsNotPlain { .. } => "04",
             Self::ExternFunctionHasBody { .. } => "05",
-            Self::ExternType { .. } => "06",
+            Self::ExternAdt { .. } => "06",
             Self::PublicFunctionWithoutResult { .. } => "07",
             Self::PublicParameterWithoutType { .. } => "08",
             Self::BuiltinFunctionHasBody { .. } => "09",
@@ -415,7 +416,7 @@ impl DiagKind for LoweringError {
             Self::UnknownEscape { .. } => "13",
             Self::ProjectWithTypeArguments { .. } => "14",
             Self::UnresolvedName { .. } => "15",
-            Self::EntryType { .. } => "16",
+            Self::EntryAdt { .. } => "16",
             Self::EntryFunctionNotPublic { .. } => "17",
             Self::EntryFunctionNotWritten { .. } => "18",
             Self::LocalFunctionWithoutBody { .. } => "19",

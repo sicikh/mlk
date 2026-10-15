@@ -10,7 +10,7 @@
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
 //! [okmij]: https://okmij.org/ftp/ML/generalization.html
 
-use mlkc_hir_def::{ClassLoc, EntityLoc, TypeVarId};
+use mlkc_hir_def::{AdtLoc, EntityLoc, TypeVarId};
 use mlkc_hir_ty::Ty;
 
 /// The id of an inference variable.
@@ -22,10 +22,10 @@ pub(crate) struct VarId(u32);
 pub(crate) enum InferTy {
     /// The type of a mistake, which absorbs what it meets.
     Error,
-    /// A class, applied to its arguments.
-    Class {
-        /// The class.
-        class: EntityLoc<ClassLoc>,
+    /// A data type, applied to its arguments.
+    Adt {
+        /// The data type.
+        adt: EntityLoc<AdtLoc>,
         /// The arguments.
         args: Vec<InferTy>,
     },
@@ -48,9 +48,9 @@ impl InferTy {
     pub(crate) fn of(ty: &Ty) -> Self {
         match ty {
             Ty::Error => Self::Error,
-            Ty::Class { class, args } => {
-                Self::Class {
-                    class: class.clone(),
+            Ty::Adt { adt, args } => {
+                Self::Adt {
+                    adt: adt.clone(),
                     args: args.iter().map(Self::of).collect(),
                 }
             },
@@ -160,12 +160,12 @@ impl Engine {
             (ty, InferTy::Var(var)) => self.bind(var, &ty),
             (InferTy::Param(left), InferTy::Param(right)) if left == right => Ok(()),
             (
-                InferTy::Class {
-                    class: left,
+                InferTy::Adt {
+                    adt: left,
                     args: left_args,
                 },
-                InferTy::Class {
-                    class: right,
+                InferTy::Adt {
+                    adt: right,
                     args: right_args,
                 },
             ) if left == right && left_args.len() == right_args.len() => {
@@ -243,7 +243,7 @@ impl Engine {
 
                 Ok(())
             },
-            InferTy::Class { args, .. } => {
+            InferTy::Adt { args, .. } => {
                 for arg in args {
                     self.occurs(var, arg, level)?;
                 }
@@ -294,9 +294,9 @@ impl Engine {
                     InferTy::Var(var)
                 }
             },
-            InferTy::Class { class, args } => {
-                InferTy::Class {
-                    class,
+            InferTy::Adt { adt, args } => {
+                InferTy::Adt {
+                    adt,
                     args: args.iter().map(|arg| self.quantify(arg, params)).collect(),
                 }
             },
@@ -331,9 +331,9 @@ impl Engine {
                     None => InferTy::Param(var),
                 }
             },
-            InferTy::Class { class, args } => {
-                InferTy::Class {
-                    class,
+            InferTy::Adt { adt, args } => {
+                InferTy::Adt {
+                    adt,
                     args: args
                         .iter()
                         .map(|arg| self.substitute(arg, params, fresh))
@@ -369,7 +369,7 @@ impl Engine {
                     params.push(var);
                 }
             },
-            InferTy::Class { args, .. } => {
+            InferTy::Adt { args, .. } => {
                 for arg in &args {
                     self.params_of(arg, owner, params);
                 }
@@ -389,9 +389,9 @@ impl Engine {
     pub(crate) fn zonk(&self, ty: &InferTy) -> Ty {
         match self.repr(ty) {
             InferTy::Error | InferTy::Var(_) => Ty::Error,
-            InferTy::Class { class, args } => {
-                Ty::Class {
-                    class,
+            InferTy::Adt { adt, args } => {
+                Ty::Adt {
+                    adt,
                     args: args.iter().map(|arg| self.zonk(arg)).collect(),
                 }
             },
@@ -423,17 +423,16 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use mlkc_hir_def::{
-        Attributes, ClassData, ClassLoc, EntityData, EntityLoc, FunctionData, ItemLoc,
-        ItemSyntaxLoc, ItemTreeBuilder, ModuleId, Name, PathRoot, PlainPath, PlainPathId,
-        Signature, Visibility,
+        AdtData, AdtLoc, Attributes, EntityData, EntityLoc, FunctionData, ItemLoc, ItemSyntaxLoc,
+        ItemTreeBuilder, ModuleId, Name, PathRoot, PlainPath, PlainPathId, Signature, Visibility,
     };
     use mlkc_hir_ty::Ty;
     use mlkc_vfs::FileId;
 
     use super::{Engine, InferTy, UnifyError};
 
-    /// A module with a function `f`, which a check generalizes over, and a class `Int`.
-    fn entities() -> (EntityLoc, EntityLoc<ClassLoc>) {
+    /// A module with a function `f`, which a check generalizes over, and a data type `Int`.
+    fn entities() -> (EntityLoc, EntityLoc<AdtLoc>) {
         let mut builder = ItemTreeBuilder::new(
             ModuleId(FileId::from_raw(0)),
             PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new("main")])),
@@ -449,7 +448,7 @@ mod tests {
         );
         builder.declare(
             Some(Name::new("Int")),
-            EntityData::Class(ClassData {
+            EntityData::Adt(AdtData {
                 attributes: Attributes::default(),
                 visibility: Visibility::Public,
             }),
@@ -468,17 +467,17 @@ mod tests {
                         item: item.clone(),
                     });
                 },
-                ItemLoc::Class(_) => {
+                ItemLoc::Adt(_) => {
                     int = Some(EntityLoc {
                         module: tree.module(),
-                        item: ClassLoc::try_from(item.clone()).expect("a class"),
+                        item: AdtLoc::try_from(item.clone()).expect("a data type"),
                     });
                 },
                 _ => {},
             }
         }
 
-        (owner.expect("a function"), int.expect("a class"))
+        (owner.expect("a function"), int.expect("a data type"))
     }
 
     fn function(params: Vec<InferTy>) -> InferTy {
@@ -493,15 +492,15 @@ mod tests {
         let (owner, int) = entities();
         let mut engine = Engine::new(owner);
         let var = engine.fresh_var();
-        let int_ty = InferTy::Class {
-            class: int.clone(),
+        let int_ty = InferTy::Adt {
+            adt: int.clone(),
             args: Vec::new(),
         };
 
         assert_eq!(engine.unify(&var, &int_ty), Ok(()));
         // Both directions find what the variable stands for.
         assert_eq!(engine.unify(&int_ty, &var), Ok(()));
-        assert_eq!(engine.zonk(&var), Ty::class(int));
+        assert_eq!(engine.zonk(&var), Ty::adt(int));
     }
 
     #[test]

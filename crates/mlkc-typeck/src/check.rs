@@ -7,11 +7,11 @@
 //!
 //! A body reads the surface of its own module --- its own signature, and the signatures of the
 //! functions it calls --- and the surfaces of the modules its paths name, which the driver
-//! assembles into a [`CheckDeps`] together with the closure of the check and the classes of the
+//! assembles into a [`CheckDeps`] together with the closure of the check and the data types of the
 //! language. A path that names a module, a module of a project above all, is walked over that
-//! closure ([ADR-0016]); the classes of the language are handed in as
+//! closure ([ADR-0016]); the data types of the language are handed in as
 //! [`Builtins`](mlkc_hir_ty::Builtins), and the check knows no primitive:
-//! `Int` and `String` are classes like any other.
+//! `Int` and `String` are data types like any other.
 //!
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 //! [ADR-0017]: ../../docs/adr/0017-resolved-types.md
@@ -360,7 +360,7 @@ impl Checker<'_> {
                 });
                 InferTy::Error
             },
-            // A name the lowering could not resolve: a class of the module written where a
+            // A name the lowering could not resolve: a data type of the module written where a
             // value belongs, or a name that is not there at all, which the lowering reported.
             PathAnchor::Unresolved => {
                 if let Some(name) = path.root.name()
@@ -546,7 +546,7 @@ impl Checker<'_> {
 
     /// Reports equality over a type the language has no equality for yet.
     ///
-    /// Equality is over `Int` and `Bool` for now, and becomes a class of its own when the
+    /// Equality is over `Int` and `Bool` for now, and becomes a method of a type class when the
     /// language has `impl`s ([ADR-0019]). A mistake absorbs the report: the mistake was reported
     /// where it was made, and one expression is one mistake.
     ///
@@ -562,10 +562,9 @@ impl Checker<'_> {
 
         let supported = match &represented {
             InferTy::Error | InferTy::Var(_) => return,
-            InferTy::Class { class, args } => {
+            InferTy::Adt { adt, args } => {
                 args.is_empty()
-                    && (class == self.deps.builtins().int()
-                        || class == self.deps.builtins().boolean())
+                    && (adt == self.deps.builtins().int() || adt == self.deps.builtins().boolean())
             },
             InferTy::Fn { .. } | InferTy::Param(_) => false,
         };
@@ -838,17 +837,17 @@ impl Checker<'_> {
         }
     }
 
-    /// The type of a class the language declares.
+    /// The type of a data type the language declares.
     fn builtin(&self, which: Builtin) -> InferTy {
-        let class = match which {
+        let adt = match which {
             Builtin::Int => self.deps.builtins().int(),
             Builtin::String => self.deps.builtins().string(),
             Builtin::Boolean => self.deps.builtins().boolean(),
             Builtin::Unit => self.deps.builtins().unit(),
         };
 
-        InferTy::Class {
-            class: class.clone(),
+        InferTy::Adt {
+            adt: adt.clone(),
             args: Vec::new(),
         }
     }
@@ -923,7 +922,7 @@ mod tests {
     use std::{collections::BTreeMap, sync::Arc};
 
     use mlkc_hir_def::{
-        Body, BodyEntityLoc, ClassLoc, EntityLoc, ItemKind, ItemLoc, ItemLocLike, ItemTree,
+        AdtLoc, Body, BodyEntityLoc, EntityLoc, ItemKind, ItemLoc, ItemLocLike, ItemTree,
         LocalDefId, ModuleId, ModuleScope, Name, Prelude, ProjectGraph, ProjectId, Resolution,
         Target, TypeVarId, UseLoc,
     };
@@ -937,8 +936,8 @@ mod tests {
     use super::{Expr, TypeError, check_body};
     use crate::signatures::resolve_module_types;
 
-    /// The classes of the language, as a module of a test declares them.
-    const CLASSES: &str = "#[builtin]\ntype Int\n\n#[builtin]\ntype Unit\n\n#[builtin]\ntype String\n\n#[builtin]\ntype Bool\n";
+    /// The data types of the language, as a module of a test declares them.
+    const BUILTINS: &str = "#[builtin]\ndata Int\n\n#[builtin]\ndata Unit\n\n#[builtin]\ndata String\n\n#[builtin]\ndata Bool\n";
 
     fn module(id: ModuleId, source: &str) -> (ItemTree, Vec<(BodyEntityLoc, Body)>) {
         let parsed = parse(source);
@@ -975,22 +974,22 @@ mod tests {
             .expect("the entity to be declared")
     }
 
-    fn class(tree: &ItemTree, name: &str) -> EntityLoc<ClassLoc> {
+    fn adt(tree: &ItemTree, name: &str) -> EntityLoc<AdtLoc> {
         let entity = entity(tree, name);
 
         EntityLoc {
             module: entity.module,
-            item: ClassLoc::try_from(entity.item).expect("a class"),
+            item: AdtLoc::try_from(entity.item).expect("a data type"),
         }
     }
 
-    /// The classes of the language, read off a module that declares all four.
+    /// The data types of the language, read off a module that declares all four.
     fn builtins(tree: &ItemTree) -> Builtins {
         Builtins::new(
-            class(tree, "Int"),
-            class(tree, "Unit"),
-            class(tree, "String"),
-            class(tree, "Bool"),
+            adt(tree, "Int"),
+            adt(tree, "Unit"),
+            adt(tree, "String"),
+            adt(tree, "Bool"),
         )
     }
 
@@ -1021,7 +1020,7 @@ mod tests {
 
         for (name, entity) in imports {
             let target = match entity.item.kind() {
-                ItemKind::Class => Target::entity(Some(entity.clone()), None),
+                ItemKind::Adt => Target::entity(Some(entity.clone()), None),
                 _ => Target::entity(None, Some(entity.clone())),
             };
 
@@ -1046,8 +1045,8 @@ mod tests {
     fn a_body_reads_the_surface_of_its_own_module_and_of_the_modules_it_names() {
         let (std, a, b) = ids();
 
-        // The library: the classes of the language, and nothing else.
-        let (std_tree, _) = module(std, CLASSES);
+        // The library: the data types of the language, and nothing else.
+        let (std_tree, _) = module(std, BUILTINS);
         let std_builtins = builtins(&std_tree);
         let std_resolution = resolution(&std_tree, &[]);
         let std_deps = deps(std, &std_tree, std_builtins.clone());
@@ -1055,7 +1054,7 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         let std_types = Arc::new(std_types);
 
-        let int = class(&std_tree, "Int");
+        let int = adt(&std_tree, "Int");
 
         // Module `a`: a function whose written signature names the `Int` of the library.
         let (a_tree, a_bodies) = module(
@@ -1073,13 +1072,10 @@ mod tests {
         let (checked, diagnostics) =
             check_body(owner.clone(), &a_tree, body, &a_resolution, &a_deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        assert_eq!(
-            checked.expr_type(body.root()),
-            Some(&Ty::class(int.clone()))
-        );
+        assert_eq!(checked.expr_type(body.root()), Some(&Ty::adt(int.clone())));
         assert_eq!(
             checked.pat_type(body.params()[0]),
-            Some(&Ty::class(int.clone())),
+            Some(&Ty::adt(int.clone())),
         );
 
         // Module `b`: a body that calls the function of `a`, whose type it reads from `a`'s
@@ -1103,14 +1099,14 @@ mod tests {
         let (checked, diagnostics) =
             check_body(owner.clone(), &b_tree, body, &b_resolution, &b_deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        assert_eq!(checked.expr_type(body.root()), Some(&Ty::class(int)));
+        assert_eq!(checked.expr_type(body.root()), Some(&Ty::adt(int)));
     }
 
     #[test]
     fn an_if_is_a_value_of_the_type_its_branches_agree_on() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun pick(low: Bool, high: Bool): Int = \
+            "{BUILTINS}\nfun pick(low: Bool, high: Bool): Int = \
              if low then 1 elif high then 2 else 3\n"
         );
         let (tree, bodies) = module(id, &source);
@@ -1120,8 +1116,8 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         let deps = deps.with_types(id, Arc::new(types));
 
-        let int = Ty::class(class(&tree, "Int"));
-        let boolean = Ty::class(class(&tree, "Bool"));
+        let int = Ty::adt(adt(&tree, "Int"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
 
         let (owner, body) = &bodies[0];
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
@@ -1156,7 +1152,7 @@ mod tests {
     #[test]
     fn a_condition_that_is_not_a_bool_is_reported() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun wrong(): Int = if 1 then 2 else 3\n");
+        let source = format!("{BUILTINS}\nfun wrong(): Int = if 1 then 2 else 3\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1172,8 +1168,8 @@ mod tests {
             matches!(
                 diagnostics[0].error(),
                 TypeError::TypeMismatch { expected, found }
-                    if *expected == Ty::class(class(&tree, "Bool"))
-                        && *found == Ty::class(class(&tree, "Int"))
+                    if *expected == Ty::adt(adt(&tree, "Bool"))
+                        && *found == Ty::adt(adt(&tree, "Int"))
             ),
             "{diagnostics:?}",
         );
@@ -1182,7 +1178,7 @@ mod tests {
         // value of the expression away: what the `if` is is still known.
         assert_eq!(
             checked.expr_type(body.root()),
-            Some(&Ty::class(class(&tree, "Int"))),
+            Some(&Ty::adt(adt(&tree, "Int"))),
         );
     }
 
@@ -1190,7 +1186,7 @@ mod tests {
     fn an_if_without_an_else_selects_the_unit_its_arms_are() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun log(flag: Bool): Unit =\n    if flag then\n        log(flag)\n"
+            "{BUILTINS}\nfun log(flag: Bool): Unit =\n    if flag then\n        log(flag)\n"
         );
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
@@ -1199,8 +1195,8 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         let deps = deps.with_types(id, Arc::new(types));
 
-        let boolean = Ty::class(class(&tree, "Bool"));
-        let unit = Ty::class(class(&tree, "Unit"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
+        let unit = Ty::adt(adt(&tree, "Unit"));
 
         let (owner, body) = &bodies[0];
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
@@ -1227,7 +1223,7 @@ mod tests {
     #[test]
     fn an_arm_that_is_not_a_unit_is_reported_when_there_is_no_else() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun wrong(flag: Bool): Unit = if flag then 1\n");
+        let source = format!("{BUILTINS}\nfun wrong(flag: Bool): Unit = if flag then 1\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1245,14 +1241,14 @@ mod tests {
             matches!(
                 diagnostics[0].error(),
                 TypeError::TypeMismatch { expected, found }
-                    if *expected == Ty::class(class(&tree, "Unit"))
-                        && *found == Ty::class(class(&tree, "Int"))
+                    if *expected == Ty::adt(adt(&tree, "Unit"))
+                        && *found == Ty::adt(adt(&tree, "Int"))
             ),
             "{diagnostics:?}",
         );
         assert_eq!(
             checked.expr_type(body.root()),
-            Some(&Ty::class(class(&tree, "Unit"))),
+            Some(&Ty::adt(adt(&tree, "Unit"))),
         );
     }
 
@@ -1260,7 +1256,7 @@ mod tests {
     fn branches_of_different_types_are_reported() {
         let (id, ..) = ids();
         let source =
-            format!("{CLASSES}\nfun wrong(flag: Bool): Int = if flag then 1 else \"text\"\n");
+            format!("{BUILTINS}\nfun wrong(flag: Bool): Int = if flag then 1 else \"text\"\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1278,8 +1274,8 @@ mod tests {
             matches!(
                 diagnostics[0].error(),
                 TypeError::TypeMismatch { expected, found }
-                    if *expected == Ty::class(class(&tree, "Int"))
-                        && *found == Ty::class(class(&tree, "String"))
+                    if *expected == Ty::adt(adt(&tree, "Int"))
+                        && *found == Ty::adt(adt(&tree, "String"))
             ),
             "{diagnostics:?}",
         );
@@ -1288,7 +1284,7 @@ mod tests {
     #[test]
     fn a_lambda_is_a_function_of_its_parameters() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(value: Int): Int = (fn(x) -> x + value)(1)\n");
+        let source = format!("{BUILTINS}\nfun main(value: Int): Int = (fn(x) -> x + value)(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1300,7 +1296,7 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let int = Ty::class(class(&tree, "Int"));
+        let int = Ty::adt(adt(&tree, "Int"));
         assert_eq!(checked.expr_type(body.root()), Some(&int));
 
         let Expr::Call { callee, args } = &body[body.root()] else {
@@ -1327,7 +1323,7 @@ mod tests {
     fn a_function_declared_inside_a_body_is_checked_and_called() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
+            "{BUILTINS}\nfun main(value: Int): Int = local fun double(x: Int): Int = x * 2 in \
              double(value)\n"
         );
         let (tree, bodies) = module(id, &source);
@@ -1341,7 +1337,7 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let int = Ty::class(class(&tree, "Int"));
+        let int = Ty::adt(adt(&tree, "Int"));
         assert_eq!(checked.expr_type(body.root()), Some(&int));
 
         // The type of the function the `local` declares is recorded with the body, and it is
@@ -1364,7 +1360,7 @@ mod tests {
     fn a_function_declared_inside_a_body_may_call_itself_and_the_ones_written_after_it() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun main(value: Int): Bool = local\n    fun even(x: Int): Bool = if x == 0 \
+            "{BUILTINS}\nfun main(value: Int): Bool = local\n    fun even(x: Int): Bool = if x == 0 \
              then true else odd(x - 1)\n    fun odd(x: Int): Bool = if x == 0 then false \
              else even(x - 1)\nin even(value)\n"
         );
@@ -1379,7 +1375,7 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let boolean = Ty::class(class(&tree, "Bool"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
         assert_eq!(checked.expr_type(body.root()), Some(&boolean));
 
         // Both names are functions of the body, and each of them is checked against its own
@@ -1388,7 +1384,7 @@ mod tests {
             assert_eq!(
                 checked.local_type(LocalDefId::Function(local)),
                 Some(&Ty::function(
-                    vec![Ty::class(class(&tree, "Int"))],
+                    vec![Ty::adt(adt(&tree, "Int"))],
                     boolean.clone()
                 )),
             );
@@ -1399,7 +1395,7 @@ mod tests {
     fn a_call_of_a_function_declared_inside_a_body_checks_its_arguments() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun main(): Int = local fun double(x: Int): Int = x * 2 in double(true)\n"
+            "{BUILTINS}\nfun main(): Int = local fun double(x: Int): Int = x * 2 in double(true)\n"
         );
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
@@ -1418,8 +1414,8 @@ mod tests {
             matches!(
                 diagnostics[0].error(),
                 TypeError::TypeMismatch { expected, found }
-                    if *expected == Ty::class(class(&tree, "Int"))
-                        && *found == Ty::class(class(&tree, "Bool"))
+                    if *expected == Ty::adt(adt(&tree, "Int"))
+                        && *found == Ty::adt(adt(&tree, "Bool"))
             ),
             "{diagnostics:?}",
         );
@@ -1428,7 +1424,7 @@ mod tests {
     #[test]
     fn the_result_of_a_function_declared_inside_a_body_is_its_signature() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = local fun wrong(): Int = true in 0\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = local fun wrong(): Int = true in 0\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1446,8 +1442,8 @@ mod tests {
             matches!(
                 diagnostics[0].error(),
                 TypeError::TypeMismatch { expected, found }
-                    if *expected == Ty::class(class(&tree, "Int"))
-                        && *found == Ty::class(class(&tree, "Bool"))
+                    if *expected == Ty::adt(adt(&tree, "Int"))
+                        && *found == Ty::adt(adt(&tree, "Bool"))
             ),
             "{diagnostics:?}",
         );
@@ -1456,7 +1452,7 @@ mod tests {
     #[test]
     fn a_function_declared_inside_a_body_is_not_a_value() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = local fun one(): Int = 1 in one\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = local fun one(): Int = 1 in one\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1481,7 +1477,7 @@ mod tests {
     #[test]
     fn a_function_declared_inside_a_body_writes_its_types() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = local fun id(x) = x in id(1)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = local fun id(x) = x in id(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1520,7 +1516,7 @@ mod tests {
     #[test]
     fn a_lambda_parameter_takes_the_type_it_writes() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = (fn(x: Int) -> x)(1)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: Int) -> x)(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1532,7 +1528,7 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let int = Ty::class(class(&tree, "Int"));
+        let int = Ty::adt(adt(&tree, "Int"));
         let Expr::Call { callee, .. } = &body[body.root()] else {
             panic!("the root to be a call");
         };
@@ -1551,7 +1547,7 @@ mod tests {
     #[test]
     fn a_lambda_parameter_left_to_infer_is_inferred_from_the_body() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = (fn(x: _) -> x + 1)(2)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: _) -> x + 1)(2)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1563,7 +1559,7 @@ mod tests {
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-        let int = Ty::class(class(&tree, "Int"));
+        let int = Ty::adt(adt(&tree, "Int"));
         let Expr::Call { callee, .. } = &body[body.root()] else {
             panic!("the root to be a call");
         };
@@ -1578,7 +1574,7 @@ mod tests {
     fn a_lambda_bound_by_a_let_is_used_at_two_types() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun main(): Int =\n    let id = fn(x) -> x in\n    let _ = id(true) in\n    id(1)\n"
+            "{BUILTINS}\nfun main(): Int =\n    let id = fn(x) -> x in\n    let _ = id(true) in\n    id(1)\n"
         );
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
@@ -1595,14 +1591,14 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(
             checked.expr_type(body.root()),
-            Some(&Ty::class(class(&tree, "Int"))),
+            Some(&Ty::adt(adt(&tree, "Int"))),
         );
     }
 
     #[test]
     fn a_lambda_bound_by_a_let_reads_as_the_parameter_it_was_generalized_over() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = let id = fn(x) -> x in id(1)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = let id = fn(x) -> x in id(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1643,7 +1639,7 @@ mod tests {
     #[test]
     fn a_lambda_parameter_that_is_not_its_argument_is_reported() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun main(): Int = (fn(x: Int) -> x)(true)\n");
+        let source = format!("{BUILTINS}\nfun main(): Int = (fn(x: Int) -> x)(true)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1659,8 +1655,8 @@ mod tests {
             matches!(
                 diagnostics[0].error(),
                 TypeError::TypeMismatch { expected, found }
-                    if *expected == Ty::class(class(&tree, "Int"))
-                        && *found == Ty::class(class(&tree, "Bool"))
+                    if *expected == Ty::adt(adt(&tree, "Int"))
+                        && *found == Ty::adt(adt(&tree, "Bool"))
             ),
             "{diagnostics:?}",
         );
@@ -1670,7 +1666,7 @@ mod tests {
     fn a_lambda_parameter_type_that_names_a_value_is_reported() {
         let (id, ..) = ids();
         let source =
-            format!("{CLASSES}\nfun value(): Int = 1\nfun main(): Int = (fn(x: value) -> x)(1)\n");
+            format!("{BUILTINS}\nfun value(): Int = 1\nfun main(): Int = (fn(x: value) -> x)(1)\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1698,7 +1694,7 @@ mod tests {
     fn arithmetic_comparisons_and_lets_are_typed_by_the_rules_of_the_check() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\nfun main(): Int = let x = 1 in x + 2\nfun compare(): Bool = 1 == 2 && 3 < 4\n"
+            "{BUILTINS}\nfun main(): Int = let x = 1 in x + 2\nfun compare(): Bool = 1 == 2 && 3 < 4\n"
         );
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
@@ -1707,8 +1703,8 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         let deps = deps.with_types(id, Arc::new(types));
 
-        let int = Ty::class(class(&tree, "Int"));
-        let boolean = Ty::class(class(&tree, "Bool"));
+        let int = Ty::adt(adt(&tree, "Int"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
 
         let (owner, body) = &bodies[0];
         let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
@@ -1730,7 +1726,7 @@ mod tests {
     #[test]
     fn a_truth_value_is_a_bool() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun truth(): Bool = true\nfun untruth(): Bool = false\n");
+        let source = format!("{BUILTINS}\nfun truth(): Bool = true\nfun untruth(): Bool = false\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1738,7 +1734,7 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         let deps = deps.with_types(id, Arc::new(types));
 
-        let boolean = Ty::class(class(&tree, "Bool"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
 
         for (owner, body) in &bodies {
             let (checked, diagnostics) = check_body(owner.clone(), &tree, body, &resolution, &deps);
@@ -1751,7 +1747,7 @@ mod tests {
     #[test]
     fn a_literal_out_of_the_range_of_int_is_reported() {
         let (id, ..) = ids();
-        let source = format!("{CLASSES}\nfun big(): Int = 1099511627776\n");
+        let source = format!("{BUILTINS}\nfun big(): Int = 1099511627776\n");
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
         let deps = deps(id, &tree, builtins(&tree));
@@ -1773,7 +1769,7 @@ mod tests {
         ));
 
         // The literal is still an `Int`: what is wrong is the value, and not the type.
-        let int = Ty::class(class(&tree, "Int"));
+        let int = Ty::adt(adt(&tree, "Int"));
         assert_eq!(checked.expr_type(body.root()), Some(&int));
     }
 
@@ -1781,7 +1777,7 @@ mod tests {
     fn equality_is_over_int_and_bool_for_now() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\n\
+            "{BUILTINS}\n\
              fun ints(left: Int, right: Int): Bool = left != right\n\
              fun booleans(left: Bool, right: Bool): Bool = left == right\n\
              fun strings(left: String, right: String): Bool = left == right\n\
@@ -1808,7 +1804,7 @@ mod tests {
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(matches!(
             diagnostics[0].error(),
-            TypeError::NoEquality { ty } if *ty == Ty::class(class(&tree, "String"))
+            TypeError::NoEquality { ty } if *ty == Ty::adt(adt(&tree, "String"))
         ));
 
         // Two operands that do not check against each other are one mismatch, and not a mismatch
@@ -1825,7 +1821,7 @@ mod tests {
     fn a_function_is_not_a_value() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\n\
+            "{BUILTINS}\n\
              fun id(x: Int): Int = x\n\
              fun bound(): Int = let f = id in f(1)\n\
              fun called(): Int = id(1)\n"
@@ -1859,12 +1855,12 @@ mod tests {
     fn a_mistake_is_reported_once_and_absorbs_what_it_meets() {
         let (id, ..) = ids();
         let source = format!(
-            "{CLASSES}\n\
+            "{BUILTINS}\n\
              fun wrong(): Bool = 1\n\
              fun arity(): Int = one(1, 2)\n\
              fun one(x: Int): Int = x\n\
              fun text(): String = \"s\"\n\
-             fun class_as_value(): Int = Int\n"
+             fun adt_as_value(): Int = Int\n"
         );
         let (tree, bodies) = module(id, &source);
         let resolution = resolution(&tree, &[]);
@@ -1873,9 +1869,9 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         let deps = deps.with_types(id, Arc::new(types));
 
-        let int = Ty::class(class(&tree, "Int"));
-        let boolean = Ty::class(class(&tree, "Bool"));
-        let string = Ty::class(class(&tree, "String"));
+        let int = Ty::adt(adt(&tree, "Int"));
+        let boolean = Ty::adt(adt(&tree, "Bool"));
+        let string = Ty::adt(adt(&tree, "String"));
 
         let check = |index: usize| {
             let (owner, body) = &bodies[index];
@@ -1906,7 +1902,7 @@ mod tests {
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(checked.expr_type(bodies[3].1.root()), Some(&string));
 
-        // A class written where a value belongs.
+        // A data type written where a value belongs.
         let (_, diagnostics) = check(4);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(

@@ -10,13 +10,13 @@ expression: snapshot
 // to.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type String
+data String
 
 #[builtin]
-type Bool
+data Bool
 
 fun positive(): Int =
     42
@@ -44,33 +44,33 @@ fun subtracted(): Int =
 MODULE #0 project::literals
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type String  @2.1
+  data String  @2.1
     attributes: #[builtin]
     visibility: private
-  type Bool  @2.2
+  data Bool  @2.2
     attributes: #[builtin]
     visibility: private
   fun positive  @2.3
     visibility: private
-    ret: Int -> type Int
+    ret: Int -> data Int
   fun text  @2.4
     visibility: private
-    ret: String -> type String
+    ret: String -> data String
   fun escaped  @2.5
     visibility: private
-    ret: String -> type String
+    ret: String -> data String
   fun truth  @2.6
     visibility: private
-    ret: Bool -> type Bool
+    ret: Bool -> data Bool
   fun untruth  @2.7
     visibility: private
-    ret: Bool -> type Bool
+    ret: Bool -> data Bool
   fun subtracted  @2.8
     visibility: private
-    ret: Int -> type Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private

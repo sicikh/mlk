@@ -2,10 +2,6 @@
 source: crates/mlkc-lir-wasm/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-No bodies.
-
 ## `project::main`
 
 `fun get`
@@ -63,3 +59,7 @@ Structure:
   leaf b0
   return v2
 ```
+
+## `project::types`
+
+No bodies.

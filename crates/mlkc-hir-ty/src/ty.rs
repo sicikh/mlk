@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use mlkc_hir_def::{ClassLoc, EntityLoc, ItemLocLike, TypeVarId};
+use mlkc_hir_def::{AdtLoc, EntityLoc, ItemLocLike, TypeVarId};
 
 /// The smallest `Int`: the payload of `i31ref` is 31 bits ([ADR-0018][adr-0018]).
 ///
@@ -30,10 +30,10 @@ pub enum Ty {
     /// It absorbs what it meets, so one mistake is one report.
     Error,
 
-    /// A class, applied to its arguments: `Int`, `Map[Int, Str]`.
-    Class {
-        /// The class, named the way the project names it.
-        class: EntityLoc<ClassLoc>,
+    /// A data type, applied to its arguments: `Int`, `Map[Int, Str]`.
+    Adt {
+        /// The data type, named the way the project names it.
+        adt: EntityLoc<AdtLoc>,
         /// The arguments, in the order they are applied.
         args: Vec<Ty>,
     },
@@ -56,10 +56,10 @@ pub enum Ty {
 }
 
 impl Ty {
-    /// The type of a class that takes no arguments.
-    pub fn class(class: EntityLoc<ClassLoc>) -> Self {
-        Self::Class {
-            class,
+    /// The type of a data type that takes no arguments.
+    pub fn adt(adt: EntityLoc<AdtLoc>) -> Self {
+        Self::Adt {
+            adt,
             args: Vec::new(),
         }
     }
@@ -90,17 +90,17 @@ impl fmt::Display for Ty {
     /// The type as a reader of a message reads it: `Int`, `(Int, Bool) -> Int`,
     /// `{error}` for a mistake.
     ///
-    /// A class reads as its name. The name is the one it was declared under, and not where it
+    /// A data type reads as its name. The name is the one it was declared under, and not where it
     /// was declared: a message says the type, and a reader who wants to know which module it
     /// came from asks for the [`EntityLoc`].
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Error => f.write_str("{error}"),
-            Self::Class { class, args } => {
-                let name = class
+            Self::Adt { adt, args } => {
+                let name = adt
                     .item
                     .name()
-                    .map_or_else(|| format!("{:?}", class.item), ToString::to_string);
+                    .map_or_else(|| format!("{:?}", adt.item), ToString::to_string);
                 f.write_str(&name)?;
 
                 if !args.is_empty() {
@@ -141,21 +141,21 @@ impl fmt::Display for Ty {
 #[cfg(test)]
 mod tests {
     use mlkc_hir_def::{
-        Attributes, ClassData, ClassLoc, EntityData, EntityLoc, ItemSyntaxLoc, ItemTreeBuilder,
+        AdtData, AdtLoc, Attributes, EntityData, EntityLoc, ItemSyntaxLoc, ItemTreeBuilder,
         ModuleId, Name, PathRoot, PlainPath, PlainPathId, TypeVarId, Visibility,
     };
     use mlkc_vfs::FileId;
 
     use super::Ty;
 
-    fn class(name: &str) -> EntityLoc<ClassLoc> {
+    fn adt(name: &str) -> EntityLoc<AdtLoc> {
         let mut builder = ItemTreeBuilder::new(
             ModuleId(FileId::from_raw(0)),
             PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new("main")])),
         );
         builder.declare(
             Some(Name::new(name)),
-            EntityData::Class(ClassData {
+            EntityData::Adt(AdtData {
                 attributes: Attributes::default(),
                 visibility: Visibility::Public,
             }),
@@ -163,18 +163,21 @@ mod tests {
         );
 
         let tree = builder.finish();
-        let (item, _) = tree.entities().next().expect("the class to be declared");
+        let (item, _) = tree
+            .entities()
+            .next()
+            .expect("the data type to be declared");
 
         EntityLoc {
             module: tree.module(),
-            item: ClassLoc::try_from(item).expect("a class"),
+            item: AdtLoc::try_from(item).expect("a data type"),
         }
     }
 
     #[test]
     fn a_type_reads_as_the_names_it_is_made_of() {
-        let int = Ty::class(class("Int"));
-        let bool_ = Ty::class(class("Bool"));
+        let int = Ty::adt(adt("Int"));
+        let bool_ = Ty::adt(adt("Bool"));
 
         assert_eq!(int.to_string(), "Int");
         assert_eq!(Ty::Error.to_string(), "{error}");
@@ -187,8 +190,8 @@ mod tests {
             "() -> ((Int) -> Bool)",
         );
         assert_eq!(
-            Ty::Class {
-                class: class("Map"),
+            Ty::Adt {
+                adt: adt("Map"),
                 args: vec![int.clone(), bool_.clone()],
             }
             .to_string(),
@@ -201,7 +204,7 @@ mod tests {
         let var = TypeVarId {
             owner: EntityLoc {
                 module: ModuleId(FileId::from_raw(0)),
-                item: mlkc_hir_def::ItemLoc::Class(class("Int").item),
+                item: mlkc_hir_def::ItemLoc::Adt(adt("Int").item),
             },
             index: 0,
         };
@@ -211,11 +214,11 @@ mod tests {
 
     #[test]
     fn a_function_reads_its_parts_back() {
-        let ty = Ty::function(vec![Ty::class(class("Int"))], Ty::class(class("Bool")));
+        let ty = Ty::function(vec![Ty::adt(adt("Int"))], Ty::adt(adt("Bool")));
         let (params, ret) = ty.as_function().expect("a function");
 
-        assert_eq!(params, [Ty::class(class("Int"))]);
-        assert_eq!(ret, &Ty::class(class("Bool")));
+        assert_eq!(params, [Ty::adt(adt("Int"))]);
+        assert_eq!(ret, &Ty::adt(adt("Bool")));
         assert!(Ty::Error.as_function().is_none());
     }
 }

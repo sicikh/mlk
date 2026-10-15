@@ -2,7 +2,7 @@
 // its body binds, and a name a body reads is one name, so the two cannot be told apart.
 
 #[builtin]
-type Int
+data Int
 
 fun same(left: Int, left: Int): Int =
     left

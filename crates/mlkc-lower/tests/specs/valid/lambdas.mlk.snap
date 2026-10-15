@@ -10,10 +10,10 @@ expression: snapshot
 // --- what the lambda captures.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Bool
+data Bool
 
 #[extern]
 fun consume(left: Int, right: Int): Int
@@ -67,48 +67,48 @@ fun piped(value: Int): Int =
 MODULE #0 project::lambdas
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type Bool  @2.1
+  data Bool  @2.1
     attributes: #[builtin]
     visibility: private
   fun consume  @2.2
     attributes: #[extern]
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun captured  @2.3
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun annotated  @2.4
     visibility: private
-    ret: Int -> type Int
+    ret: Int -> data Int
   fun called  @2.5
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun shadowed  @2.6
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun nested  @2.7
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun free  @2.8
     visibility: private
-    ret: Int -> type Int
+    ret: Int -> data Int
   fun let_bound  @2.9
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun piped  @2.10
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -159,7 +159,7 @@ exprs
   expr#1  path path#1
   expr#2  literal 0
   expr#3  if expr#0 then expr#1 else expr#2
-  expr#4  lambda (pat#0: Int -> type Int, pat#1: Bool -> type Bool) -> expr#3 captures ()
+  expr#4  lambda (pat#0: Int -> data Int, pat#1: Bool -> data Bool) -> expr#3 captures ()
 pats
   pat#0  bind x
   pat#1  bind y

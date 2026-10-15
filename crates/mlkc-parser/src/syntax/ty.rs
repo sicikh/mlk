@@ -62,7 +62,7 @@ fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
 /// therefore closes the path parsed so far into a qualifier, and starts a path around it.
 ///
 /// The first segment of a path is its root, and it is the only one that may be written as the
-/// project the module is in: `project::data` is a path of the name `data` inside this project,
+/// project the module is in: `project::types` is a path of the name `types` inside this project,
 /// and a keyword after a `::` is not a root.
 //
 // A path is what a type is written as and what an expression names a value by, so the rule
@@ -73,7 +73,7 @@ fn parse_infer_type(p: &mut MlkParser) -> ParsedSyntax {
 //
 // test mlk a_path_may_be_rooted_at_the_project
 // fun rooted(): Int =
-//     project::data::start-app(1)
+//     project::types::start-app(1)
 pub(crate) fn parse_path(p: &mut MlkParser) -> ParsedSyntax {
     let segment = parse_path_segment(p, true);
 

@@ -2,54 +2,6 @@
 source: crates/mlkc-mir-build/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### MIR
-
-`fun origin`
-
-CFG form:
-
-```
-fun origin (entry b0)
-  b0:
-    l0 = call fun origin()
-    return l0
-```
-
-SSA form:
-
-```
-fun origin (entry b0)
-  b0:
-    v0 = call fun origin()
-    return v0
-```
-
-## `project::data::utils`
-
-### MIR
-
-`fun make`
-
-CFG form:
-
-```
-fun make (entry b0)
-  b0:
-    l0 = call fun make()
-    return l0
-```
-
-SSA form:
-
-```
-fun make (entry b0)
-  b0:
-    v0 = call fun make()
-    return v0
-```
-
 ## `project::main`
 
 ### MIR
@@ -99,4 +51,52 @@ fun read (entry b0)
   b0:
     v1 = const 1
     return v1
+```
+
+## `project::types`
+
+### MIR
+
+`fun origin`
+
+CFG form:
+
+```
+fun origin (entry b0)
+  b0:
+    l0 = call fun origin()
+    return l0
+```
+
+SSA form:
+
+```
+fun origin (entry b0)
+  b0:
+    v0 = call fun origin()
+    return v0
+```
+
+## `project::types::utils`
+
+### MIR
+
+`fun make`
+
+CFG form:
+
+```
+fun make (entry b0)
+  b0:
+    l0 = call fun make()
+    return l0
+```
+
+SSA form:
+
+```
+fun make (entry b0)
+  b0:
+    v0 = call fun make()
+    return v0
 ```

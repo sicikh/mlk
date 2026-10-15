@@ -10,14 +10,14 @@ expression: snapshot
 
 module project::app
 
-use project::data
+use project::types
 
 use project::core::Int
 
 fun start(): Int =
-    project::data::start-app(1)
+    project::types::start-app(1)
 
-fun handle(value: project::data::Handle): Unit =
+fun handle(value: project::types::Handle): Unit =
     value
 
 ```
@@ -70,7 +70,7 @@ ModuleRoot {
                 },
                 segment: PathSegment {
                     root: Name {
-                        value_token: IDENT@179..183 "data" [] [],
+                        value_token: IDENT@179..184 "types" [] [],
                     },
                     type_args: missing (optional),
                 },
@@ -79,7 +79,7 @@ ModuleRoot {
         },
         UseDecl {
             visibility_token: missing (optional),
-            use_token: USE_KW@183..189 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            use_token: USE_KW@184..190 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
             path: Path {
                 qualifier: PathQualifier {
                     path: Path {
@@ -88,25 +88,25 @@ ModuleRoot {
                                 qualifier: missing (optional),
                                 segment: PathSegment {
                                     root: Project {
-                                        project_token: PROJECT_KW@189..196 "project" [] [],
+                                        project_token: PROJECT_KW@190..197 "project" [] [],
                                     },
                                     type_args: missing (optional),
                                 },
                             },
-                            double_colon_token: COLON_COLON@196..198 "::" [] [],
+                            double_colon_token: COLON_COLON@197..199 "::" [] [],
                         },
                         segment: PathSegment {
                             root: Name {
-                                value_token: IDENT@198..202 "core" [] [],
+                                value_token: IDENT@199..203 "core" [] [],
                             },
                             type_args: missing (optional),
                         },
                     },
-                    double_colon_token: COLON_COLON@202..204 "::" [] [],
+                    double_colon_token: COLON_COLON@203..205 "::" [] [],
                 },
                 segment: PathSegment {
                     root: Name {
-                        value_token: IDENT@204..207 "Int" [] [],
+                        value_token: IDENT@205..208 "Int" [] [],
                     },
                     type_args: missing (optional),
                 },
@@ -116,23 +116,23 @@ ModuleRoot {
         FunDecl {
             attributes: AttributeList [],
             visibility_token: missing (optional),
-            fun_token: FUN_KW@207..213 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            fun_token: FUN_KW@208..214 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
             name: Name {
-                value_token: IDENT@213..218 "start" [] [],
+                value_token: IDENT@214..219 "start" [] [],
             },
             parameters: Parameters {
-                l_paren_token: L_PAREN@218..219 "(" [] [],
+                l_paren_token: L_PAREN@219..220 "(" [] [],
                 items: ParameterList [],
-                r_paren_token: R_PAREN@219..220 ")" [] [],
+                r_paren_token: R_PAREN@220..221 ")" [] [],
             },
             return_type_annotation: FunReturnTypeAnnotation {
-                colon_token: COLON@220..222 ":" [] [Whitespace(" ")],
+                colon_token: COLON@221..223 ":" [] [Whitespace(" ")],
                 return_type: PathType {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
                             root: Name {
-                                value_token: IDENT@222..226 "Int" [] [Whitespace(" ")],
+                                value_token: IDENT@223..227 "Int" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
                         },
@@ -140,7 +140,7 @@ ModuleRoot {
                 },
             },
             body: FunBody {
-                eq_token: EQ@226..227 "=" [] [],
+                eq_token: EQ@227..228 "=" [] [],
                 expr: CallExpr {
                     function: PathExpr {
                         path: Path {
@@ -151,58 +151,58 @@ ModuleRoot {
                                             qualifier: missing (optional),
                                             segment: PathSegment {
                                                 root: Project {
-                                                    project_token: PROJECT_KW@227..239 "project" [Newline("\n"), Whitespace("    ")] [],
+                                                    project_token: PROJECT_KW@228..240 "project" [Newline("\n"), Whitespace("    ")] [],
                                                 },
                                                 type_args: missing (optional),
                                             },
                                         },
-                                        double_colon_token: COLON_COLON@239..241 "::" [] [],
+                                        double_colon_token: COLON_COLON@240..242 "::" [] [],
                                     },
                                     segment: PathSegment {
                                         root: Name {
-                                            value_token: IDENT@241..245 "data" [] [],
+                                            value_token: IDENT@242..247 "types" [] [],
                                         },
                                         type_args: missing (optional),
                                     },
                                 },
-                                double_colon_token: COLON_COLON@245..247 "::" [] [],
+                                double_colon_token: COLON_COLON@247..249 "::" [] [],
                             },
                             segment: PathSegment {
                                 root: Name {
-                                    value_token: IDENT@247..256 "start-app" [] [],
+                                    value_token: IDENT@249..258 "start-app" [] [],
                                 },
                                 type_args: missing (optional),
                             },
                         },
                     },
-                    l_paren_token: L_PAREN@256..257 "(" [] [],
+                    l_paren_token: L_PAREN@258..259 "(" [] [],
                     arguments: ArgumentList [
                         IntLiteral {
-                            value_token: INT_LITERAL@257..258 "1" [] [],
+                            value_token: INT_LITERAL@259..260 "1" [] [],
                         },
                     ],
-                    r_paren_token: R_PAREN@258..259 ")" [] [],
+                    r_paren_token: R_PAREN@260..261 ")" [] [],
                 },
             },
         },
         FunDecl {
             attributes: AttributeList [],
             visibility_token: missing (optional),
-            fun_token: FUN_KW@259..265 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
+            fun_token: FUN_KW@261..267 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")],
             name: Name {
-                value_token: IDENT@265..271 "handle" [] [],
+                value_token: IDENT@267..273 "handle" [] [],
             },
             parameters: Parameters {
-                l_paren_token: L_PAREN@271..272 "(" [] [],
+                l_paren_token: L_PAREN@273..274 "(" [] [],
                 items: ParameterList [
                     Parameter {
                         pat: IdentPat {
                             name: Name {
-                                value_token: IDENT@272..277 "value" [] [],
+                                value_token: IDENT@274..279 "value" [] [],
                             },
                         },
                         type_annotation: TypeAnnotation {
-                            colon_token: COLON@277..279 ":" [] [Whitespace(" ")],
+                            colon_token: COLON@279..281 ":" [] [Whitespace(" ")],
                             ty: PathType {
                                 path: Path {
                                     qualifier: PathQualifier {
@@ -212,25 +212,25 @@ ModuleRoot {
                                                     qualifier: missing (optional),
                                                     segment: PathSegment {
                                                         root: Project {
-                                                            project_token: PROJECT_KW@279..286 "project" [] [],
+                                                            project_token: PROJECT_KW@281..288 "project" [] [],
                                                         },
                                                         type_args: missing (optional),
                                                     },
                                                 },
-                                                double_colon_token: COLON_COLON@286..288 "::" [] [],
+                                                double_colon_token: COLON_COLON@288..290 "::" [] [],
                                             },
                                             segment: PathSegment {
                                                 root: Name {
-                                                    value_token: IDENT@288..292 "data" [] [],
+                                                    value_token: IDENT@290..295 "types" [] [],
                                                 },
                                                 type_args: missing (optional),
                                             },
                                         },
-                                        double_colon_token: COLON_COLON@292..294 "::" [] [],
+                                        double_colon_token: COLON_COLON@295..297 "::" [] [],
                                     },
                                     segment: PathSegment {
                                         root: Name {
-                                            value_token: IDENT@294..300 "Handle" [] [],
+                                            value_token: IDENT@297..303 "Handle" [] [],
                                         },
                                         type_args: missing (optional),
                                     },
@@ -239,16 +239,16 @@ ModuleRoot {
                         },
                     },
                 ],
-                r_paren_token: R_PAREN@300..301 ")" [] [],
+                r_paren_token: R_PAREN@303..304 ")" [] [],
             },
             return_type_annotation: FunReturnTypeAnnotation {
-                colon_token: COLON@301..303 ":" [] [Whitespace(" ")],
+                colon_token: COLON@304..306 ":" [] [Whitespace(" ")],
                 return_type: PathType {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
                             root: Name {
-                                value_token: IDENT@303..308 "Unit" [] [Whitespace(" ")],
+                                value_token: IDENT@306..311 "Unit" [] [Whitespace(" ")],
                             },
                             type_args: missing (optional),
                         },
@@ -256,13 +256,13 @@ ModuleRoot {
                 },
             },
             body: FunBody {
-                eq_token: EQ@308..309 "=" [] [],
+                eq_token: EQ@311..312 "=" [] [],
                 expr: PathExpr {
                     path: Path {
                         qualifier: missing (optional),
                         segment: PathSegment {
                             root: Name {
-                                value_token: IDENT@309..319 "value" [Newline("\n"), Whitespace("    ")] [],
+                                value_token: IDENT@312..322 "value" [Newline("\n"), Whitespace("    ")] [],
                             },
                             type_args: missing (optional),
                         },
@@ -271,14 +271,14 @@ ModuleRoot {
             },
         },
     ],
-    eof_token: EOF@319..320 "" [Newline("\n")] [],
+    eof_token: EOF@322..323 "" [Newline("\n")] [],
 }
 ```
 
 ## CST
 
 ```
-0: MODULE_ROOT@0..320
+0: MODULE_ROOT@0..323
   0: (empty)
   1: MODULE_PREAMBLE@0..164
     0: ATTRIBUTE_LIST@0..0
@@ -296,11 +296,11 @@ ModuleRoot {
         0: NAME@161..164
           0: IDENT@161..164 "app" [] []
         1: (empty)
-  2: MODULE_ITEM_LIST@164..319
-    0: USE_DECL@164..183
+  2: MODULE_ITEM_LIST@164..322
+    0: USE_DECL@164..184
       0: (empty)
       1: USE_KW@164..170 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: PATH@170..183
+      2: PATH@170..184
         0: PATH_QUALIFIER@170..179
           0: PATH@170..177
             0: (empty)
@@ -309,139 +309,139 @@ ModuleRoot {
                 0: PROJECT_KW@170..177 "project" [] []
               1: (empty)
           1: COLON_COLON@177..179 "::" [] []
-        1: PATH_SEGMENT@179..183
-          0: NAME@179..183
-            0: IDENT@179..183 "data" [] []
+        1: PATH_SEGMENT@179..184
+          0: NAME@179..184
+            0: IDENT@179..184 "types" [] []
           1: (empty)
       3: (empty)
-    1: USE_DECL@183..207
+    1: USE_DECL@184..208
       0: (empty)
-      1: USE_KW@183..189 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      2: PATH@189..207
-        0: PATH_QUALIFIER@189..204
-          0: PATH@189..202
-            0: PATH_QUALIFIER@189..198
-              0: PATH@189..196
+      1: USE_KW@184..190 "use" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      2: PATH@190..208
+        0: PATH_QUALIFIER@190..205
+          0: PATH@190..203
+            0: PATH_QUALIFIER@190..199
+              0: PATH@190..197
                 0: (empty)
-                1: PATH_SEGMENT@189..196
-                  0: PROJECT@189..196
-                    0: PROJECT_KW@189..196 "project" [] []
+                1: PATH_SEGMENT@190..197
+                  0: PROJECT@190..197
+                    0: PROJECT_KW@190..197 "project" [] []
                   1: (empty)
-              1: COLON_COLON@196..198 "::" [] []
-            1: PATH_SEGMENT@198..202
-              0: NAME@198..202
-                0: IDENT@198..202 "core" [] []
+              1: COLON_COLON@197..199 "::" [] []
+            1: PATH_SEGMENT@199..203
+              0: NAME@199..203
+                0: IDENT@199..203 "core" [] []
               1: (empty)
-          1: COLON_COLON@202..204 "::" [] []
-        1: PATH_SEGMENT@204..207
-          0: NAME@204..207
-            0: IDENT@204..207 "Int" [] []
+          1: COLON_COLON@203..205 "::" [] []
+        1: PATH_SEGMENT@205..208
+          0: NAME@205..208
+            0: IDENT@205..208 "Int" [] []
           1: (empty)
       3: (empty)
-    2: FUN_DECL@207..259
-      0: ATTRIBUTE_LIST@207..207
+    2: FUN_DECL@208..261
+      0: ATTRIBUTE_LIST@208..208
       1: (empty)
-      2: FUN_KW@207..213 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      3: NAME@213..218
-        0: IDENT@213..218 "start" [] []
-      4: PARAMETERS@218..220
-        0: L_PAREN@218..219 "(" [] []
-        1: PARAMETER_LIST@219..219
-        2: R_PAREN@219..220 ")" [] []
-      5: FUN_RETURN_TYPE_ANNOTATION@220..226
-        0: COLON@220..222 ":" [] [Whitespace(" ")]
-        1: PATH_TYPE@222..226
-          0: PATH@222..226
+      2: FUN_KW@208..214 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@214..219
+        0: IDENT@214..219 "start" [] []
+      4: PARAMETERS@219..221
+        0: L_PAREN@219..220 "(" [] []
+        1: PARAMETER_LIST@220..220
+        2: R_PAREN@220..221 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@221..227
+        0: COLON@221..223 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@223..227
+          0: PATH@223..227
             0: (empty)
-            1: PATH_SEGMENT@222..226
-              0: NAME@222..226
-                0: IDENT@222..226 "Int" [] [Whitespace(" ")]
+            1: PATH_SEGMENT@223..227
+              0: NAME@223..227
+                0: IDENT@223..227 "Int" [] [Whitespace(" ")]
               1: (empty)
-      6: FUN_BODY@226..259
-        0: EQ@226..227 "=" [] []
-        1: CALL_EXPR@227..259
-          0: PATH_EXPR@227..256
-            0: PATH@227..256
-              0: PATH_QUALIFIER@227..247
-                0: PATH@227..245
-                  0: PATH_QUALIFIER@227..241
-                    0: PATH@227..239
+      6: FUN_BODY@227..261
+        0: EQ@227..228 "=" [] []
+        1: CALL_EXPR@228..261
+          0: PATH_EXPR@228..258
+            0: PATH@228..258
+              0: PATH_QUALIFIER@228..249
+                0: PATH@228..247
+                  0: PATH_QUALIFIER@228..242
+                    0: PATH@228..240
                       0: (empty)
-                      1: PATH_SEGMENT@227..239
-                        0: PROJECT@227..239
-                          0: PROJECT_KW@227..239 "project" [Newline("\n"), Whitespace("    ")] []
+                      1: PATH_SEGMENT@228..240
+                        0: PROJECT@228..240
+                          0: PROJECT_KW@228..240 "project" [Newline("\n"), Whitespace("    ")] []
                         1: (empty)
-                    1: COLON_COLON@239..241 "::" [] []
-                  1: PATH_SEGMENT@241..245
-                    0: NAME@241..245
-                      0: IDENT@241..245 "data" [] []
+                    1: COLON_COLON@240..242 "::" [] []
+                  1: PATH_SEGMENT@242..247
+                    0: NAME@242..247
+                      0: IDENT@242..247 "types" [] []
                     1: (empty)
-                1: COLON_COLON@245..247 "::" [] []
-              1: PATH_SEGMENT@247..256
-                0: NAME@247..256
-                  0: IDENT@247..256 "start-app" [] []
+                1: COLON_COLON@247..249 "::" [] []
+              1: PATH_SEGMENT@249..258
+                0: NAME@249..258
+                  0: IDENT@249..258 "start-app" [] []
                 1: (empty)
-          1: L_PAREN@256..257 "(" [] []
-          2: ARGUMENT_LIST@257..258
-            0: INT_LITERAL@257..258
-              0: INT_LITERAL@257..258 "1" [] []
-          3: R_PAREN@258..259 ")" [] []
-    3: FUN_DECL@259..319
-      0: ATTRIBUTE_LIST@259..259
+          1: L_PAREN@258..259 "(" [] []
+          2: ARGUMENT_LIST@259..260
+            0: INT_LITERAL@259..260
+              0: INT_LITERAL@259..260 "1" [] []
+          3: R_PAREN@260..261 ")" [] []
+    3: FUN_DECL@261..322
+      0: ATTRIBUTE_LIST@261..261
       1: (empty)
-      2: FUN_KW@259..265 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
-      3: NAME@265..271
-        0: IDENT@265..271 "handle" [] []
-      4: PARAMETERS@271..301
-        0: L_PAREN@271..272 "(" [] []
-        1: PARAMETER_LIST@272..300
-          0: PARAMETER@272..300
-            0: IDENT_PAT@272..277
-              0: NAME@272..277
-                0: IDENT@272..277 "value" [] []
-            1: TYPE_ANNOTATION@277..300
-              0: COLON@277..279 ":" [] [Whitespace(" ")]
-              1: PATH_TYPE@279..300
-                0: PATH@279..300
-                  0: PATH_QUALIFIER@279..294
-                    0: PATH@279..292
-                      0: PATH_QUALIFIER@279..288
-                        0: PATH@279..286
+      2: FUN_KW@261..267 "fun" [Newline("\n"), Newline("\n")] [Whitespace(" ")]
+      3: NAME@267..273
+        0: IDENT@267..273 "handle" [] []
+      4: PARAMETERS@273..304
+        0: L_PAREN@273..274 "(" [] []
+        1: PARAMETER_LIST@274..303
+          0: PARAMETER@274..303
+            0: IDENT_PAT@274..279
+              0: NAME@274..279
+                0: IDENT@274..279 "value" [] []
+            1: TYPE_ANNOTATION@279..303
+              0: COLON@279..281 ":" [] [Whitespace(" ")]
+              1: PATH_TYPE@281..303
+                0: PATH@281..303
+                  0: PATH_QUALIFIER@281..297
+                    0: PATH@281..295
+                      0: PATH_QUALIFIER@281..290
+                        0: PATH@281..288
                           0: (empty)
-                          1: PATH_SEGMENT@279..286
-                            0: PROJECT@279..286
-                              0: PROJECT_KW@279..286 "project" [] []
+                          1: PATH_SEGMENT@281..288
+                            0: PROJECT@281..288
+                              0: PROJECT_KW@281..288 "project" [] []
                             1: (empty)
-                        1: COLON_COLON@286..288 "::" [] []
-                      1: PATH_SEGMENT@288..292
-                        0: NAME@288..292
-                          0: IDENT@288..292 "data" [] []
+                        1: COLON_COLON@288..290 "::" [] []
+                      1: PATH_SEGMENT@290..295
+                        0: NAME@290..295
+                          0: IDENT@290..295 "types" [] []
                         1: (empty)
-                    1: COLON_COLON@292..294 "::" [] []
-                  1: PATH_SEGMENT@294..300
-                    0: NAME@294..300
-                      0: IDENT@294..300 "Handle" [] []
+                    1: COLON_COLON@295..297 "::" [] []
+                  1: PATH_SEGMENT@297..303
+                    0: NAME@297..303
+                      0: IDENT@297..303 "Handle" [] []
                     1: (empty)
-        2: R_PAREN@300..301 ")" [] []
-      5: FUN_RETURN_TYPE_ANNOTATION@301..308
-        0: COLON@301..303 ":" [] [Whitespace(" ")]
-        1: PATH_TYPE@303..308
-          0: PATH@303..308
+        2: R_PAREN@303..304 ")" [] []
+      5: FUN_RETURN_TYPE_ANNOTATION@304..311
+        0: COLON@304..306 ":" [] [Whitespace(" ")]
+        1: PATH_TYPE@306..311
+          0: PATH@306..311
             0: (empty)
-            1: PATH_SEGMENT@303..308
-              0: NAME@303..308
-                0: IDENT@303..308 "Unit" [] [Whitespace(" ")]
+            1: PATH_SEGMENT@306..311
+              0: NAME@306..311
+                0: IDENT@306..311 "Unit" [] [Whitespace(" ")]
               1: (empty)
-      6: FUN_BODY@308..319
-        0: EQ@308..309 "=" [] []
-        1: PATH_EXPR@309..319
-          0: PATH@309..319
+      6: FUN_BODY@311..322
+        0: EQ@311..312 "=" [] []
+        1: PATH_EXPR@312..322
+          0: PATH@312..322
             0: (empty)
-            1: PATH_SEGMENT@309..319
-              0: NAME@309..319
-                0: IDENT@309..319 "value" [Newline("\n"), Whitespace("    ")] []
+            1: PATH_SEGMENT@312..322
+              0: NAME@312..322
+                0: IDENT@312..322 "value" [Newline("\n"), Whitespace("    ")] []
               1: (empty)
-  3: EOF@319..320 "" [Newline("\n")] []
+  3: EOF@322..323 "" [Newline("\n")] []
 
 ```
 

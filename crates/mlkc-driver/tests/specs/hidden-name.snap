@@ -2,16 +2,16 @@
 source: crates/mlkc-driver/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Diagnostics
-
-No diagnostics.
-
 ## `project::main`
 
 ### Diagnostics
 
-typechecker[11]: the module `project::data` holds the name `hidden` and does not show it  @48..69
-typechecker[03]: the name `Point` does not denote a value, and a value belongs here  @97..117 (a value belongs here)
-typechecker[11]: the project `app` holds no module `gone`  @141..157
+typechecker[11]: the module `project::types` holds the name `hidden` and does not show it  @49..71
+typechecker[03]: the name `Point` does not denote a value, and a value belongs here  @99..120 (a value belongs here)
+typechecker[11]: the project `app` holds no module `gone`  @144..160
+
+## `project::types`
+
+### Diagnostics
+
+No diagnostics.

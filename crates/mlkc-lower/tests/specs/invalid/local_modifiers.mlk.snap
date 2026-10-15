@@ -9,7 +9,7 @@ expression: snapshot
 // function declared inside a body carries neither.
 
 #[builtin]
-type Int
+data Int
 
 fun published(value: Int): Int =
     local pub fun double(x: Int): Int = x * 2 in
@@ -32,21 +32,21 @@ fun unknown(value: Int): Int =
 MODULE #0 project::local_modifiers
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
   fun published  @2.1
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun attributed  @2.2
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun unknown  @2.3
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -93,8 +93,8 @@ paths
 functions
   fun#0  double  root expr#2
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -121,8 +121,8 @@ paths
 functions
   fun#0  double  root expr#2
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ```
@@ -149,8 +149,8 @@ paths
 functions
   fun#0  double  root expr#2
     params pat#1
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
 ```
 
 ## Lowering Diagnostics

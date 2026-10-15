@@ -113,7 +113,7 @@ const STEP_RECOVERY_SET: TokenSet<SyntaxKind> = token_set![
     T![#],
     T![pub],
     T![fun],
-    T![type],
+    T![data],
     T![use]
 ];
 
@@ -238,7 +238,7 @@ fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
 }
 
 /// Parses an expression that may be applied to arguments and to the operators of a chain:
-/// `f(a, b)(c)`, `value.function(a)`, `data@field`.
+/// `f(a, b)(c)`, `value.function(a)`, `input@field`.
 // test mlk calls_take_arguments_and_are_applied_to_the_result
 // fun calls(): Int =
 //     f(g(1), h(2, 3))(4)
@@ -253,7 +253,7 @@ fn parse_unary_expr(p: &mut MlkParser) -> ParsedSyntax {
 //
 // test mlk a_field_is_read_with_an_at_sign
 // fun field(): Int =
-//     data@field
+//     input@field
 fn parse_postfix_expr(p: &mut MlkParser) -> ParsedSyntax {
     let expr = parse_primary_expr(p);
 
@@ -324,7 +324,7 @@ fn parse_postfixes(p: &mut MlkParser, expr: ParsedSyntax) -> ParsedSyntax {
 ///
 /// A step is a call: a callee, and an argument list with a `_` among its arguments. The callee
 /// is a name the module holds, a path, or --- a call written with the dot --- the callee of a
-/// call whose receiver is a name or a path as well: `data |> map.insert("k", _)` is a step of
+/// call whose receiver is a name or a path as well: `input |> map.insert("k", _)` is a step of
 /// `insert`, with `map` and `"k"` before the value. The receiver is passed first, as the
 /// receiver of any call written with the dot is.
 ///
@@ -333,11 +333,11 @@ fn parse_postfixes(p: &mut MlkParser, expr: ParsedSyntax) -> ParsedSyntax {
 /// a call on the result of another call goes inside the arguments instead.
 // test mlk a_pipeline_passes_its_value_to_a_call
 // fun passed(): Int =
-//     data |> f(1, _)
+//     input |> f(1, _)
 //
 // test mlk a_step_may_be_written_with_the_dot
 // fun inserted(): Int =
-//     data |> map.insert("k", _)
+//     input |> map.insert("k", _)
 fn parse_step(p: &mut MlkParser) -> ParsedSyntax {
     // What the step calls, or the receiver of the call it is written with.
     let receiver = parse_path_expr(p);
@@ -505,7 +505,7 @@ fn parse_bool_literal(p: &mut MlkParser) -> ParsedSyntax {
 /// what stands where one belongs is read as an expression that is not there.
 // test mlk a_place_is_written_among_the_arguments_of_a_step
 // fun passed(): Int =
-//     data |> f(_, 1)
+//     input |> f(_, 1)
 fn parse_placeholder_expr(p: &mut MlkParser) -> ParsedSyntax {
     if !p.at(UNDERSCORE) {
         return ParsedSyntax::Absent;
@@ -534,7 +534,7 @@ fn parse_placeholder_expr(p: &mut MlkParser) -> ParsedSyntax {
 /// first one denotes, which is what the stage that holds the scopes of the project reads.
 // test mlk a_value_may_be_named_by_a_qualified_path
 // fun main(): Int =
-//     data::main-module::start-app(1)
+//     input::main-module::start-app(1)
 fn parse_path_expr(p: &mut MlkParser) -> ParsedSyntax {
     parse_path(p).map(|path| path.precede(p).complete(p, PATH_EXPR))
 }
@@ -768,7 +768,7 @@ fn parse_lambda_parameter(p: &mut MlkParser) -> ParsedSyntax {
 /// The tokens a broken item of a `local` is recovered at: what follows an item, which is the
 /// `in` that ends the list, and what starts the next declaration of a module.
 const LOCAL_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
-    token_set![T![in], T![#], T![pub], T![fun], T![type], T![use]];
+    token_set![T![in], T![#], T![pub], T![fun], T![data], T![use]];
 
 /// Parses a `local`: the items it declares, and the expression they are visible in,
 /// `local fun f(x) = body in expr`.
@@ -793,7 +793,7 @@ const LOCAL_ITEM_RECOVERY_SET: TokenSet<SyntaxKind> =
 // test mlk the_items_of_a_local_are_the_items_of_a_module
 // fun applied(value: Int): Int =
 //     local
-//         type Unit
+//         data Unit
 //         use std::core::Int as Integer
 //         fun double(x: Int): Int = x * 2
 //     in

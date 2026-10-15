@@ -10,7 +10,7 @@ expression: snapshot
 // the path is what a reader is told about; a type and a body are told about what they wrote.
 
 fun handle(value: project[Int]::Handle): project[String]::Handle =
-    project[Bool]::data::start-app(value)
+    project[Bool]::types::start-app(value)
 
 ```
 
@@ -59,7 +59,7 @@ exprs
 pats
   pat#0  bind value
 paths
-  path#0  project[Bool -> use Bool]::data::start-app -> the project
+  path#0  project[Bool -> use Bool]::types::start-app -> the project
   path#1  value -> binding pat#0
 ```
 
@@ -67,7 +67,7 @@ paths
 
 313..318: `project::Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
 336..344: `project::Handle` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
-366..372: `project::data::start-app` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
+366..372: `project::types::start-app` is rooted at the project, which is not a type: the type arguments written at it are applied to nothing
 
 ## Parse Diagnostics
 

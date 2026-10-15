@@ -2,22 +2,22 @@
 // a path. What a chain is a chain of is known from the text alone.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Config
+data Config
 
 #[builtin]
-type Persons
+data Persons
 
 #[builtin]
-type Name
+data Name
 
 #[builtin]
-type Data
+data Data
 
 #[builtin]
-type Map
+data Map
 
 fun load(config: Config): Config =
     config
@@ -31,13 +31,13 @@ fun start(config: Config): Int =
 fun chained(config: Config): Int =
     config.load().validate().start()
 
-fun insert(persons: Persons, name: Name, data: Data): Persons =
+fun insert(persons: Persons, name: Name, value: Data): Persons =
     persons
 
 // The callee of a step may be a path: the path says which `insert` the step means, and the
 // receiver is passed as the first argument.
-fun add(persons: Persons, name: Name, data: Data): Persons =
-    persons.Map::insert(name, data)
+fun add(persons: Persons, name: Name, value: Data): Persons =
+    persons.Map::insert(name, value)
 
 // A field read: the name is what the type of the value is read for, and the value may be the
 // result of a call.

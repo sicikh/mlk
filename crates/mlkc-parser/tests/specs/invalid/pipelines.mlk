@@ -5,13 +5,13 @@
 // whole: what a mistake costs is the step.
 
 fun no_place(): Int =
-    data |> f(1)
+    input |> f(1)
 
 fun not_a_call(): Int =
-    data |> 1
+    input |> 1
 
 fun no_arguments(): Int =
-    data |> f
+    input |> f
 
 fun a_place_outside_a_step(): Int =
     f(_)
@@ -20,4 +20,4 @@ fun a_place_outside_a_step(): Int =
 // the place belongs to the step, and this `_` is written in the call of a value that is not
 // one.
 fun a_place_after_the_step(): Int =
-    data |> f(_).g(_)
+    input |> f(_).g(_)

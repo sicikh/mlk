@@ -202,21 +202,12 @@ pub struct FunctionData {
     pub signature: Signature,
 }
 
-/// What a class is to everything that is not its body.
+/// What a data type is to everything that is not its declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClassData {
+pub struct AdtData {
     /// What the declaration says about itself.
     pub attributes: Attributes,
-    /// How far the class is visible.
-    pub visibility: Visibility,
-}
-
-/// What a module-level value is.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ValueData {
-    /// What the declaration says about itself.
-    pub attributes: Attributes,
-    /// How far the value is visible.
+    /// How far the data type is visible.
     pub visibility: Visibility,
 }
 
@@ -231,11 +222,11 @@ pub struct ConstData {
     pub ty: Option<TypeRef>,
 }
 
-/// What an `impl` is: the class it implements and the type it implements it for.
+/// What an `impl` is: the type class it implements and the type it implements it for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplData {
-    /// The class, as written.
-    pub class: Option<TypeRef>,
+    /// The type class, as written.
+    pub ty_class: Option<TypeRef>,
     /// The type, as written.
     pub ty: Option<TypeRef>,
 }
@@ -258,8 +249,7 @@ impl EntityData {
     pub fn visibility(&self) -> Option<Visibility> {
         match self {
             Self::Function(data) => Some(data.visibility),
-            Self::Class(data) => Some(data.visibility),
-            Self::Value(data) => Some(data.visibility),
+            Self::Adt(data) => Some(data.visibility),
             Self::Const(data) => Some(data.visibility),
             Self::Use(data) => Some(data.visibility),
             Self::Impl(_) => None,
@@ -270,8 +260,7 @@ impl EntityData {
     pub fn attributes(&self) -> Option<&Attributes> {
         match self {
             Self::Function(data) => Some(&data.attributes),
-            Self::Class(data) => Some(&data.attributes),
-            Self::Value(data) => Some(&data.attributes),
+            Self::Adt(data) => Some(&data.attributes),
             Self::Const(data) => Some(&data.attributes),
             // An `impl` carries no attributes: the language writes them in front of a
             // declaration, and an `impl` has no declaration of its own yet.
@@ -283,9 +272,9 @@ impl EntityData {
 
     /// Resolves the anchors the paths of this data left unresolved.
     ///
-    /// The paths a kind of entity holds are read where the language writes them: a class, a
-    /// constant, and an `impl` name types, and a `use` names an import, which is a path of the
-    /// import table rather than a path in a namespace of the module.
+    /// The paths a kind of entity holds are read where the language writes them: a constant
+    /// and an `impl` name types, and a `use` names an import, which is a path of the import
+    /// table rather than a path in a namespace of the module.
     pub(crate) fn resolve(&mut self, scope: &LocalScope) {
         match self {
             Self::Function(data) => data.signature.resolve(scope),
@@ -295,16 +284,16 @@ impl EntityData {
                 }
             },
             Self::Impl(data) => {
-                if let Some(class) = &mut data.class {
-                    class.resolve(scope);
+                if let Some(ty_class) = &mut data.ty_class {
+                    ty_class.resolve(scope);
                 }
                 if let Some(ty) = &mut data.ty {
                     ty.resolve(scope);
                 }
             },
-            // A class and a value have no types of their own yet,
-            // and an import names its target by a path, not by the HIR's own resolution.
-            Self::Class(_) | Self::Value(_) | Self::Use(_) => {},
+            // A data type writes no type of its own yet, and an import names its target by a
+            // path, not by the HIR's own resolution.
+            Self::Adt(_) | Self::Use(_) => {},
         }
     }
 }
@@ -318,7 +307,7 @@ mod tests {
         ParamData, Signature, Visibility,
     };
     use crate::{
-        id::{ClassLoc, EntityLoc, ItemLoc, ItemLocData, ModuleId},
+        id::{AdtLoc, EntityLoc, ItemLoc, ItemLocData, ModuleId},
         path::{PathAnchor, PathData},
         type_ref::TypeRef,
     };
@@ -327,10 +316,10 @@ mod tests {
         ModuleId(FileId::from_raw(0))
     }
 
-    fn class(name: &str) -> EntityLoc {
+    fn adt(name: &str) -> EntityLoc {
         EntityLoc {
             module: module(),
-            item: ItemLoc::Class(ClassLoc(ItemLocData {
+            item: ItemLoc::Adt(AdtLoc(ItemLocData {
                 name: Some(Name::new(name)),
                 disambiguator: 0,
             })),
@@ -340,10 +329,7 @@ mod tests {
     #[test]
     fn a_signature_resolves_its_anchors() {
         let mut scope = LocalScope::default();
-        scope.declare(
-            Name::new("T"),
-            crate::def_map::LocalTarget::Item(class("T")),
-        );
+        scope.declare(Name::new("T"), crate::def_map::LocalTarget::Item(adt("T")));
 
         let mut data = FunctionData {
             attributes: Attributes::default(),
@@ -364,7 +350,7 @@ mod tests {
             data.signature.params[0].ty,
             Some(TypeRef::Path(PathData::ident(
                 Name::new("T"),
-                PathAnchor::Item(class("T")),
+                PathAnchor::Item(adt("T")),
             ))),
         );
     }
@@ -372,7 +358,7 @@ mod tests {
     #[test]
     fn the_visibility_of_an_impl_is_not_a_thing() {
         let data = EntityData::Impl(ImplData {
-            class: None,
+            ty_class: None,
             ty: None,
         });
 

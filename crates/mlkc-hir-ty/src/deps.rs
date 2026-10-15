@@ -26,7 +26,7 @@ pub struct CheckDeps {
     closure: Closure,
     /// The type surface of the module the body belongs to, and of the ones it names.
     types: BTreeMap<ModuleId, Arc<ModuleTypes>>,
-    /// The classes of the language.
+    /// The data types of the language.
     builtins: Builtins,
 }
 
@@ -74,7 +74,7 @@ impl CheckDeps {
         self.types.get(&module)
     }
 
-    /// The classes of the language.
+    /// The data types of the language.
     pub fn builtins(&self) -> &Builtins {
         &self.builtins
     }

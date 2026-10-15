@@ -10,13 +10,13 @@ expression: snapshot
 // module can write.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Config
+data Config
 
 #[builtin]
-type String
+data String
 
 // The functions the steps of the pipelines call: a step is a call as any other one, and the
 // text says which function it is a call of.
@@ -35,21 +35,21 @@ fun write(config: Config, path: String): Config
 fun consume(left: Int, right: Int): Int =
     left
 
-fun passed(data: Int): Int =
-    data |> consume(_, 1)
+fun passed(value: Int): Int =
+    value |> consume(_, 1)
 
-fun twice(data: Int): Int =
-    data |> consume(_, _)
+fun twice(value: Int): Int =
+    value |> consume(_, _)
 
 // A step written with the dot passes its receiver first, as any call written with the dot
 // does.
-fun inserted(data: Int): Int =
-    data |> data.consume(1, _)
+fun inserted(value: Int): Int =
+    value |> value.consume(1, _)
 
 // Two pipelines of a body are two bindings, and a step inside the arguments of another one
 // binds its own value: the place of the outer step is the outer value.
-fun chained(data: Int, other: Int): Int =
-    data |> consume(other |> consume(_, 1), _) |> consume(_, 2)
+fun chained(value: Int, other: Int): Int =
+    value |> consume(other |> consume(_, 1), _) |> consume(_, 2)
 
 // The chain the record is written about: the dot where it can write the step, and the pipe
 // where the value is not the first argument of the call.
@@ -72,69 +72,69 @@ fun summed(left: Int, right: Int): Int =
 MODULE #0 project::pipelines
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type Config  @2.1
+  data Config  @2.1
     attributes: #[builtin]
     visibility: private
-  type String  @2.2
+  data String  @2.2
     attributes: #[builtin]
     visibility: private
   fun load  @2.3
     attributes: #[extern]
     visibility: private
-    param: Config -> type Config
-    ret: Config -> type Config
+    param: Config -> data Config
+    ret: Config -> data Config
   fun merge  @2.4
     attributes: #[extern]
     visibility: private
-    param: Config -> type Config
-    param: Config -> type Config
-    ret: Config -> type Config
+    param: Config -> data Config
+    param: Config -> data Config
+    ret: Config -> data Config
   fun validate  @2.5
     attributes: #[extern]
     visibility: private
-    param: Config -> type Config
-    ret: Config -> type Config
+    param: Config -> data Config
+    ret: Config -> data Config
   fun write  @2.6
     attributes: #[extern]
     visibility: private
-    param: Config -> type Config
-    param: String -> type String
-    ret: Config -> type Config
+    param: Config -> data Config
+    param: String -> data String
+    ret: Config -> data Config
   fun consume  @2.7
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun passed  @2.8
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun twice  @2.9
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun inserted  @2.10
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun chained  @2.11
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun configured  @2.12
     visibility: private
-    param: Config -> type Config
-    param: Config -> type Config
-    ret: Config -> type Config
+    param: Config -> data Config
+    param: Config -> data Config
+    ret: Config -> data Config
   fun summed  @2.13
     visibility: private
-    param: Int -> type Int
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    param: Int -> data Int
+    ret: Int -> data Int
   use Int  prelude
     path: std::prelude::Int
     visibility: private
@@ -187,10 +187,10 @@ exprs
   expr#4  call expr#1 (expr#2, expr#3)
   expr#5  let pat#1 = expr#0 in expr#4
 pats
-  pat#0  bind data
+  pat#0  bind value
   pat#1  bind <mlkc@pipeline-0>
 paths
-  path#0  data -> binding pat#0
+  path#0  value -> binding pat#0
   path#1  consume -> fun consume
   path#2  <mlkc@pipeline-0> -> binding pat#1
 ```
@@ -209,10 +209,10 @@ exprs
   expr#4  call expr#1 (expr#2, expr#3)
   expr#5  let pat#1 = expr#0 in expr#4
 pats
-  pat#0  bind data
+  pat#0  bind value
   pat#1  bind <mlkc@pipeline-0>
 paths
-  path#0  data -> binding pat#0
+  path#0  value -> binding pat#0
   path#1  consume -> fun consume
   path#2  <mlkc@pipeline-0> -> binding pat#1
 ```
@@ -232,10 +232,10 @@ exprs
   expr#5  call expr#2 (expr#1, expr#3, expr#4)
   expr#6  let pat#1 = expr#0 in expr#5
 pats
-  pat#0  bind data
+  pat#0  bind value
   pat#1  bind <mlkc@pipeline-0>
 paths
-  path#0  data -> binding pat#0
+  path#0  value -> binding pat#0
   path#1  consume -> fun consume
   path#2  <mlkc@pipeline-0> -> binding pat#1
 ```
@@ -265,13 +265,13 @@ exprs
   expr#14  call expr#11 (expr#12, expr#13)
   expr#15  let pat#4 = expr#10 in expr#14
 pats
-  pat#0  bind data
+  pat#0  bind value
   pat#1  bind other
   pat#2  bind <mlkc@pipeline-0>
   pat#3  bind <mlkc@pipeline-1>
   pat#4  bind <mlkc@pipeline-2>
 paths
-  path#0  data -> binding pat#0
+  path#0  value -> binding pat#0
   path#1  consume -> fun consume
   path#2  other -> binding pat#1
   path#3  <mlkc@pipeline-1> -> binding pat#3

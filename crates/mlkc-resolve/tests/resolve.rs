@@ -41,7 +41,7 @@ struct World {
 }
 
 impl World {
-    /// The module a path names in a project: `world.module("app", "data::utils")`.
+    /// The module a path names in a project: `world.module("app", "types::utils")`.
     fn module(&self, project: &str, path: &str) -> ModuleId {
         let project = ProjectId::new(project);
         let segments = segments(path);
@@ -125,8 +125,8 @@ impl WorldBuilder {
         self
     }
 
-    /// Lowers a module of `project`, standing at the place `at` in it: a file at `data/utils.mlk`
-    /// is the module `data::utils`, unless its preamble declares another path.
+    /// Lowers a module of `project`, standing at the place `at` in it: a file at `types/utils.mlk`
+    /// is the module `types::utils`, unless its preamble declares another path.
     fn module(self, project: &str, at: &str, source: &str) -> Self {
         let project = ProjectId::new(project);
 
@@ -293,8 +293,8 @@ fn name(text: &str) -> Name {
     Name::new(text)
 }
 
-/// The path a test writes, rooted at the keyword `project`: `["data", "Point"]` is
-/// `project::data::Point`.
+/// The path a test writes, rooted at the keyword `project`: `["types", "Point"]` is
+/// `project::types::Point`.
 fn path(segments: &[&str]) -> PlainPathId {
     PlainPathId::new(PlainPath::from_root(
         PathRoot::Project,
@@ -302,7 +302,7 @@ fn path(segments: &[&str]) -> PlainPathId {
     ))
 }
 
-/// The segments of a path a test writes: `data::utils` is two names.
+/// The segments of a path a test writes: `types::utils` is two names.
 fn segments(path: &str) -> Vec<Name> {
     path.split("::").map(Name::new).collect()
 }
@@ -355,12 +355,12 @@ fn read_prefix(project: ProjectId, segments: &[&str], found: bool) -> Read {
     }
 }
 
-/// The module `data`: it declares a class named `Point`.
-const DATA: &str = "pub type Point\n";
+/// The module `types`: it declares a data type named `Point`.
+const DATA: &str = "pub data Point\n";
 
-/// The module `data`: it declares a class and a function of one name.
+/// The module `types`: it declares a data type and a function of one name.
 const DATA_BOTH_NAMESPACES: &str = "\
-pub type Point
+pub data Point
 
 pub fun Point(): Point = Point
 ";
@@ -368,12 +368,12 @@ pub fun Point(): Point = Point
 #[test]
 fn an_import_of_a_name_of_another_module_resolves_to_the_entity_it_denotes() {
     let world = app()
-        .module("app", "data.mlk", DATA)
+        .module("app", "types.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::Point
+use project::types::Point
 
 fun get(): Point = get()
 ",
@@ -381,7 +381,7 @@ fun get(): Point = get()
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (scope, diagnostics) = world.resolve(main);
 
@@ -392,7 +392,7 @@ fun get(): Point = get()
     assert_eq!(
         ty_of(&scope, "Point"),
         Some((
-            declared(&world, data, "Point", Namespace::Ty),
+            declared(&world, types, "Point", Namespace::Ty),
             Visibility::Private,
         )),
     );
@@ -402,12 +402,12 @@ fun get(): Point = get()
 #[test]
 fn a_name_of_another_module_denotes_what_the_module_shows_in_every_namespace() {
     let world = app()
-        .module("app", "data.mlk", DATA_BOTH_NAMESPACES)
+        .module("app", "types.mlk", DATA_BOTH_NAMESPACES)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::Point
+use project::types::Point
 
 fun make(): Point = Point()
 ",
@@ -415,25 +415,25 @@ fun make(): Point = Point()
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (scope, diagnostics) = world.resolve(main);
 
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
-    // A class and a function of one name are two names, and the import of `Point` brings in
+    // A data type and a function of one name are two names, and the import of `Point` brings in
     // both: what it lands in is not the module alone to say.
     assert_eq!(
         ty_of(&scope, "Point"),
         Some((
-            declared(&world, data, "Point", Namespace::Ty),
+            declared(&world, types, "Point", Namespace::Ty),
             Visibility::Private,
         )),
     );
     assert_eq!(
         value_of(&scope, "Point"),
         Some((
-            declared(&world, data, "Point", Namespace::Value),
+            declared(&world, types, "Point", Namespace::Value),
             Visibility::Private,
         )),
     );
@@ -446,7 +446,7 @@ fn a_name_a_module_declares_denotes_what_it_wrote() {
             "app",
             "main.mlk",
             "\
-pub type Int
+pub data Int
 
 fun helper(): Int = helper()
 ",
@@ -478,12 +478,12 @@ fun helper(): Int = helper()
 #[test]
 fn a_module_names_its_own_project_by_the_keyword() {
     let world = app()
-        .module("app", "data.mlk", DATA)
+        .module("app", "types.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::Point
+use project::types::Point
 
 fun get(): Point = get()
 ",
@@ -491,7 +491,7 @@ fun get(): Point = get()
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (scope, diagnostics) = world.resolve(main);
 
@@ -502,7 +502,7 @@ fun get(): Point = get()
     assert_eq!(
         ty_of(&scope, "Point"),
         Some((
-            declared(&world, data, "Point", Namespace::Ty),
+            declared(&world, types, "Point", Namespace::Ty),
             Visibility::Private,
         )),
     );
@@ -511,12 +511,12 @@ fun get(): Point = get()
 #[test]
 fn a_module_does_not_name_its_own_project_by_its_name() {
     let world = app()
-        .module("app", "data.mlk", DATA)
+        .module("app", "types.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use app::data::Point
+use app::types::Point
 
 fun get() = 1
 ",
@@ -538,12 +538,12 @@ fun get() = 1
 #[test]
 fn a_name_a_module_keeps_to_itself_is_not_a_name_another_module_reads() {
     let world = app()
-        .module("app", "data.mlk", "type Hidden\n")
+        .module("app", "types.mlk", "data Hidden\n")
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::Hidden
+use project::types::Hidden
 
 fun get() = 1
 ",
@@ -551,7 +551,7 @@ fun get() = 1
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (scope, diagnostics) = world.resolve(main);
 
@@ -560,8 +560,8 @@ fun get() = 1
     let diagnostic = only(&diagnostics);
 
     assert_eq!(diagnostic.error(), &ResolveError::UnknownName {
-        path: path(&["data"]),
-        module: data,
+        path: path(&["types"]),
+        module: types,
         name: name("Hidden"),
     },);
     assert_eq!(diagnostic.place().item().kind(), ItemKind::Use);
@@ -597,12 +597,12 @@ fun get() = 1
 #[test]
 fn a_name_a_module_does_not_hold_is_reported() {
     let world = app()
-        .module("app", "data.mlk", DATA)
+        .module("app", "types.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::Other
+use project::types::Other
 
 fun get() = 1
 ",
@@ -610,13 +610,13 @@ fun get() = 1
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (_, diagnostics) = world.resolve(main);
 
     assert_eq!(only(&diagnostics).error(), &ResolveError::UnknownName {
-        path: path(&["data"]),
-        module: data,
+        path: path(&["types"]),
+        module: types,
         name: name("Other"),
     },);
 }
@@ -626,7 +626,7 @@ fn a_module_names_a_project_it_depends_on() {
     let world = WorldBuilder::new()
         .project("app", depends_on(&["other"]))
         .project("other", bare_project())
-        .module("other", "thing.mlk", "pub type X\n")
+        .module("other", "thing.mlk", "pub data X\n")
         .module(
             "app",
             "main.mlk",
@@ -658,7 +658,7 @@ fun get(): other::thing::X = get()
 fn a_module_names_the_projects_it_depends_on_and_no_other() {
     let world = app()
         .project("other", bare_project())
-        .module("other", "thing.mlk", "pub type X\n")
+        .module("other", "thing.mlk", "pub data X\n")
         .module(
             "app",
             "main.mlk",
@@ -685,42 +685,42 @@ fun get() = 1
 #[test]
 fn a_use_of_a_module_binds_the_module() {
     let world = app()
-        .module("app", "data.mlk", DATA)
+        .module("app", "types.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data
+use project::types
 
-fun handle(value: data::Point) = 1
+fun handle(value: types::Point) = 1
 ",
         )
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (scope, diagnostics) = world.resolve(main);
 
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
     assert_eq!(
-        module_of(&scope, "data"),
-        Some((ModuleLocator::Module(data), Visibility::Private)),
+        module_of(&scope, "types"),
+        Some((ModuleLocator::Module(types), Visibility::Private)),
     );
 }
 
 #[test]
 fn a_use_of_a_prefix_binds_the_modules_that_stand_under_it() {
     let world = app()
-        .module("app", "data/utils.mlk", DATA)
+        .module("app", "types/utils.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data
+use project::types
 
-fun handle(value: data::utils::Point) = 1
+fun handle(value: types::utils::Point) = 1
 ",
         )
         .build();
@@ -734,11 +734,11 @@ fun handle(value: data::utils::Point) = 1
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
     assert_eq!(
-        module_of(&scope, "data"),
+        module_of(&scope, "types"),
         Some((
             ModuleLocator::Prefix {
                 project: ProjectId::new("app"),
-                path: path(&["data"]),
+                path: path(&["types"]),
             },
             Visibility::Private,
         )),
@@ -748,14 +748,14 @@ fun handle(value: data::utils::Point) = 1
 #[test]
 fn a_name_under_a_prefix_that_is_not_there_is_reported() {
     let world = app()
-        .module("app", "data/utils.mlk", DATA)
+        .module("app", "types/utils.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data
+use project::types
 
-fun handle(value: data::nope::Point) = 1
+fun handle(value: types::nope::Point) = 1
 ",
         )
         .build();
@@ -779,12 +779,12 @@ fun handle(value: data::nope::Point) = 1
 #[test]
 fn a_path_rooted_at_the_project_is_read_among_the_modules_of_the_project() {
     let world = app()
-        .module("app", "data.mlk", DATA)
+        .module("app", "types.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-fun read(value: project::data::Point) = 1
+fun read(value: project::types::Point) = 1
 ",
         )
         .build();
@@ -797,14 +797,14 @@ fun read(value: project::data::Point) = 1
 }
 
 #[test]
-fn a_segment_after_a_class_is_left_to_the_naming_a_type_decides() {
+fn a_segment_after_a_data_type_is_left_to_the_naming_a_type_decides() {
     let world = app()
-        .module("app", "data.mlk", "pub type Map\n")
+        .module("app", "types.mlk", "pub data Map\n")
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::Map
+use project::types::Map
 
 fun entry(value: Map::Entry): Map = value
 ",
@@ -812,17 +812,18 @@ fun entry(value: Map::Entry): Map = value
         .build();
 
     let main = world.module("app", "main");
-    let data = world.module("app", "data");
+    let types = world.module("app", "types");
 
     let (scope, diagnostics) = world.resolve(main);
 
-    // What a name after a class is is what a type decides, and the naming of type classes is a
-    // record of its own: the path is left unresolved, and it is not reported as an unknown name.
+    // What a name after a data type is is what a type decides, and the naming of type classes
+    // is a record of its own: the path is left unresolved, and it is not reported as an unknown
+    // name.
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     assert_eq!(
         ty_of(&scope, "Map"),
         Some((
-            declared(&world, data, "Map", Namespace::Ty),
+            declared(&world, types, "Map", Namespace::Ty),
             Visibility::Private,
         )),
     );
@@ -967,12 +968,12 @@ fun size(value: Int): Int = value
 #[test]
 fn a_closure_holds_what_the_walk_of_a_module_reaches_and_reads() {
     let world = app()
-        .module("app", "data/utils.mlk", DATA)
+        .module("app", "types/utils.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data::utils::Point
+use project::types::utils::Point
 
 fun handle(value: Point) = 1
 ",
@@ -980,7 +981,7 @@ fun handle(value: Point) = 1
         .build();
 
     let main = world.module("app", "main");
-    let utils = world.module("app", "data::utils");
+    let utils = world.module("app", "types::utils");
     let project = ProjectId::new("app");
 
     let closure = world.closure(main);
@@ -992,9 +993,9 @@ fun handle(value: Point) = 1
     // The names of a path are read as a module path, the longest first, and the entry of every
     // prefix is what the key of the resolution holds.
     assert_eq!(closure.reads(), [
-        read_module(project.clone(), &["data"], None),
-        read_module(project.clone(), &["data", "utils"], Some(utils)),
-        read_module(project, &["data", "utils", "Point"], None),
+        read_module(project.clone(), &["types"], None),
+        read_module(project.clone(), &["types", "utils"], Some(utils)),
+        read_module(project, &["types", "utils", "Point"], None),
     ],);
 
     // A module gathered twice reads the same values, and a value that is the same is what lets a
@@ -1005,14 +1006,14 @@ fun handle(value: Point) = 1
 #[test]
 fn a_walk_reads_the_prefix_a_name_stands_on_when_no_module_is_named() {
     let world = app()
-        .module("app", "data/utils.mlk", DATA)
+        .module("app", "types/utils.mlk", DATA)
         .module(
             "app",
             "main.mlk",
             "\
-use project::data
+use project::types
 
-fun handle(value: data::utils::Point) = 1
+fun handle(value: types::utils::Point) = 1
 ",
         )
         .build();
@@ -1024,14 +1025,14 @@ fun handle(value: data::utils::Point) = 1
     let reads = closure.reads();
 
     assert!(
-        reads.contains(&read_prefix(project.clone(), &["data"], true)),
+        reads.contains(&read_prefix(project.clone(), &["types"], true)),
         "{reads:?}",
     );
 
     // The entry the index answered about the names under the prefix is what a resolution of a
-    // prefix is keyed by: a module added under `data` changes it.
+    // prefix is keyed by: a module added under `types` changes it.
     assert!(
-        reads.contains(&read_module(project, &["data"], None)),
+        reads.contains(&read_module(project, &["types"], None)),
         "{reads:?}",
     );
 }

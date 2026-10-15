@@ -12,7 +12,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    Body, BodyEntityLoc, ClassLoc, Closure, EntityLoc, Interface, ItemLocLike, ItemTree, ModuleId,
+    AdtLoc, Body, BodyEntityLoc, Closure, EntityLoc, Interface, ItemLocLike, ItemTree, ModuleId,
     ModuleIndex, Name, ProjectData, ProjectGraph, ProjectId, Resolution,
 };
 use mlkc_hir_ty::{Builtins, CheckDeps, ModuleTypes, Ty};
@@ -104,15 +104,15 @@ impl World {
         Arc::clone(resolved.resolution())
     }
 
-    /// The classes of the language, read off `std::core`.
+    /// The data types of the language, read off `std::core`.
     fn builtins(&self) -> Builtins {
         let core = self.tree(self.module(mlkc_stdlib::PROJECT, mlkc_stdlib::CORE));
 
         Builtins::new(
-            class_of(core, "Int"),
-            class_of(core, "Unit"),
-            class_of(core, "String"),
-            class_of(core, "Bool"),
+            adt_of(core, "Int"),
+            adt_of(core, "Unit"),
+            adt_of(core, "String"),
+            adt_of(core, "Bool"),
         )
     }
 
@@ -267,32 +267,32 @@ fn world() -> World {
         .project("app", app)
         .module(
             "app",
-            "data.mlk",
-            "module project::data\n\npub fun double(value: Int): Int = value\n",
+            "types.mlk",
+            "module project::types\n\npub fun double(value: Int): Int = value\n",
         )
         .module(
             "app",
             "main.mlk",
             "module project::main\n\n\
-             fun call(): Int = project::data::double(1)\n\n\
+             fun call(): Int = project::types::double(1)\n\n\
              fun text(): String = \"hello\"\n\n\
-             fun qualified(): std::core::Int = project::data::double(2)\n",
+             fun qualified(): std::core::Int = project::types::double(2)\n",
         )
         .module(
             "app",
             "broken.mlk",
-            "module project::broken\n\nfun call(): Int = project::data::missing(1)\n",
+            "module project::broken\n\nfun call(): Int = project::types::missing(1)\n",
         )
         .build()
 }
 
-/// The class an item tree declares under a name.
-fn class_of(tree: &ItemTree, name: &str) -> EntityLoc<ClassLoc> {
+/// The data type an item tree declares under a name.
+fn adt_of(tree: &ItemTree, name: &str) -> EntityLoc<AdtLoc> {
     let entity = entity_of(tree, name);
 
     EntityLoc {
         module: tree.module(),
-        item: ClassLoc::try_from(entity.item).expect("a class"),
+        item: AdtLoc::try_from(entity.item).expect("a data type"),
     }
 }
 
@@ -315,38 +315,38 @@ fn entity_of(tree: &ItemTree, name: &str) -> EntityLoc {
 fn a_signature_that_names_a_module_of_another_project_is_walked() {
     let world = world();
     let core = world.module(mlkc_stdlib::PROJECT, mlkc_stdlib::CORE);
-    let int = class_of(world.tree(core), "Int");
-    let data = world.module("app", "data");
+    let int = adt_of(world.tree(core), "Int");
+    let types = world.module("app", "types");
 
-    let types = world.types(data);
-    let double = entity_of(world.tree(data), "double");
+    let module_types = world.types(types);
+    let double = entity_of(world.tree(types), "double");
 
     assert_eq!(
-        types.get(&double),
+        module_types.get(&double),
         Some(&Ty::function(
-            vec![Ty::class(int.clone())],
-            Ty::class(int.clone())
+            vec![Ty::adt(int.clone())],
+            Ty::adt(int.clone())
         )),
     );
 }
 
 #[test]
-fn a_reexport_chain_and_a_qualified_path_resolve_to_one_class() {
+fn a_reexport_chain_and_a_qualified_path_resolve_to_one_data_type() {
     let world = world();
     let core = world.module(mlkc_stdlib::PROJECT, mlkc_stdlib::CORE);
-    let int = class_of(world.tree(core), "Int");
-    let string = class_of(world.tree(core), "String");
+    let int = adt_of(world.tree(core), "Int");
+    let string = adt_of(world.tree(core), "String");
     let main = world.module("app", "main");
 
     let types = world.types(main);
 
     // `call` writes `Int`, a name the prelude re-exports from `std::core`; `qualified` writes
-    // the path of that class itself. Both resolve to the one class of the library.
+    // the path of that data type itself. Both resolve to the one data type of the library.
     for name in ["call", "qualified"] {
         let function = entity_of(world.tree(main), name);
         assert_eq!(
             types.get(&function),
-            Some(&Ty::function(vec![], Ty::class(int.clone()))),
+            Some(&Ty::function(vec![], Ty::adt(int.clone()))),
             "{name}",
         );
     }
@@ -354,7 +354,7 @@ fn a_reexport_chain_and_a_qualified_path_resolve_to_one_class() {
     let text = entity_of(world.tree(main), "text");
     assert_eq!(
         types.get(&text),
-        Some(&Ty::function(vec![], Ty::class(string))),
+        Some(&Ty::function(vec![], Ty::adt(string))),
     );
 }
 
@@ -362,14 +362,14 @@ fn a_reexport_chain_and_a_qualified_path_resolve_to_one_class() {
 fn a_body_calls_a_module_that_its_surface_does_not_name() {
     let world = world();
     let core = world.module(mlkc_stdlib::PROJECT, mlkc_stdlib::CORE);
-    let int = class_of(world.tree(core), "Int");
-    let data = world.module("app", "data");
+    let int = adt_of(world.tree(core), "Int");
+    let types = world.module("app", "types");
     let main = world.module("app", "main");
 
-    // The surface of `main` names `std` and never `data`: only the closure of the check holds
+    // The surface of `main` names `std` and never `types`: only the closure of the check holds
     // the interface of the module the body calls.
-    assert!(!world.closure(main).interfaces().contains_key(&data));
-    assert!(world.check_closure(main).interfaces().contains_key(&data));
+    assert!(!world.closure(main).interfaces().contains_key(&types));
+    assert!(world.check_closure(main).interfaces().contains_key(&types));
 
     let resolution = world.resolution(main);
     let deps = world.deps(main);
@@ -378,7 +378,7 @@ fn a_body_calls_a_module_that_its_surface_does_not_name() {
         check_body(owner.clone(), world.tree(main), body, &resolution, &deps);
 
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
-    assert_eq!(checked.expr_type(body.root()), Some(&Ty::class(int)));
+    assert_eq!(checked.expr_type(body.root()), Some(&Ty::adt(int)));
 }
 
 #[test]

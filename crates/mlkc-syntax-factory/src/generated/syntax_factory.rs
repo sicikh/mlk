@@ -26,6 +26,43 @@ impl SyntaxFactoryTrait for SyntaxFactory {
             BOGUS | BOGUS_DECL | BOGUS_EXPR | BOGUS_PARAMETER | BOGUS_PAT | BOGUS_TYPE => {
                 RawSyntaxNode::new(kind, children.into_iter().map(Some))
             },
+            ADT_DECL => {
+                let mut elements = (&children).into_iter();
+                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
+                let mut current_element = elements.next();
+                if let Some(element) = &current_element
+                    && AttributeList::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![pub]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && element.kind() == T![data]
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if let Some(element) = &current_element
+                    && Name::can_cast(element.kind())
+                {
+                    slots.mark_present();
+                    current_element = elements.next();
+                }
+                slots.next_slot();
+                if current_element.is_some() {
+                    return RawSyntaxNode::new(ADT_DECL.to_bogus(), children.into_iter().map(Some));
+                }
+                slots.into_node(ADT_DECL, children)
+            },
             ATTRIBUTE => {
                 let mut elements = (&children).into_iter();
                 let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
@@ -1064,46 +1101,6 @@ impl SyntaxFactoryTrait for SyntaxFactory {
                     );
                 }
                 slots.into_node(TYPE_ARGS, children)
-            },
-            TYPE_DECL => {
-                let mut elements = (&children).into_iter();
-                let mut slots: RawNodeSlots<4usize> = RawNodeSlots::default();
-                let mut current_element = elements.next();
-                if let Some(element) = &current_element
-                    && AttributeList::can_cast(element.kind())
-                {
-                    slots.mark_present();
-                    current_element = elements.next();
-                }
-                slots.next_slot();
-                if let Some(element) = &current_element
-                    && element.kind() == T![pub]
-                {
-                    slots.mark_present();
-                    current_element = elements.next();
-                }
-                slots.next_slot();
-                if let Some(element) = &current_element
-                    && element.kind() == T![type]
-                {
-                    slots.mark_present();
-                    current_element = elements.next();
-                }
-                slots.next_slot();
-                if let Some(element) = &current_element
-                    && Name::can_cast(element.kind())
-                {
-                    slots.mark_present();
-                    current_element = elements.next();
-                }
-                slots.next_slot();
-                if current_element.is_some() {
-                    return RawSyntaxNode::new(
-                        TYPE_DECL.to_bogus(),
-                        children.into_iter().map(Some),
-                    );
-                }
-                slots.into_node(TYPE_DECL, children)
             },
             UFCS_CALL => {
                 let mut elements = (&children).into_iter();

@@ -26,7 +26,7 @@ fun stepped(value: Int): Int =
 // where a function is, each by the rule that reads one in a module.
 fun declared(value: Int): Int =
     local
-        type Unit
+        data Unit
         use std::core::Int as Integer
         fun double(x: Int): Int = x * 2
     in
@@ -525,10 +525,10 @@ ModuleRoot {
                 expr: LocalExpr {
                     local_token: LOCAL_KW@912..922 "local" [Newline("\n"), Whitespace("    ")] [],
                     items: ModuleItemList [
-                        TypeDecl {
+                        AdtDecl {
                             attributes: AttributeList [],
                             visibility_token: missing (optional),
-                            type_token: TYPE_KW@922..936 "type" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")],
+                            data_token: DATA_KW@922..936 "data" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")],
                             name: Name {
                                 value_token: IDENT@936..940 "Unit" [] [],
                             },
@@ -2126,10 +2126,10 @@ ModuleRoot {
         1: LOCAL_EXPR@912..1047
           0: LOCAL_KW@912..922 "local" [Newline("\n"), Whitespace("    ")] []
           1: MODULE_ITEM_LIST@922..1018
-            0: TYPE_DECL@922..940
+            0: ADT_DECL@922..940
               0: ATTRIBUTE_LIST@922..922
               1: (empty)
-              2: TYPE_KW@922..936 "type" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")]
+              2: DATA_KW@922..936 "data" [Newline("\n"), Whitespace("        ")] [Whitespace(" ")]
               3: NAME@936..940
                 0: IDENT@936..940 "Unit" [] []
             1: USE_DECL@940..978

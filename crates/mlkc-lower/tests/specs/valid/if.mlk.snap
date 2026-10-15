@@ -12,13 +12,13 @@ expression: snapshot
 // that is not there.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Bool
+data Bool
 
 #[builtin]
-type Unit
+data Unit
 
 fun pick(flag: Bool): Int =
     if flag then 1 else 2
@@ -57,41 +57,41 @@ fun log_ordered(low: Bool, high: Bool): Unit =
 MODULE #0 project::if
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     attributes: #[builtin]
     visibility: private
-  type Bool  @2.1
+  data Bool  @2.1
     attributes: #[builtin]
     visibility: private
-  type Unit  @2.2
+  data Unit  @2.2
     attributes: #[builtin]
     visibility: private
   fun pick  @2.3
     visibility: private
-    param: Bool -> type Bool
-    ret: Int -> type Int
+    param: Bool -> data Bool
+    ret: Int -> data Int
   fun ordered  @2.4
     visibility: private
-    param: Bool -> type Bool
-    param: Bool -> type Bool
-    ret: Int -> type Int
+    param: Bool -> data Bool
+    param: Bool -> data Bool
+    ret: Int -> data Int
   fun branch_with_a_let  @2.5
     visibility: private
-    param: Bool -> type Bool
-    ret: Int -> type Int
+    param: Bool -> data Bool
+    ret: Int -> data Int
   fun nested  @2.6
     visibility: private
-    param: Bool -> type Bool
-    ret: Int -> type Int
+    param: Bool -> data Bool
+    ret: Int -> data Int
   fun log  @2.7
     visibility: private
-    param: Bool -> type Bool
-    ret: Unit -> type Unit
+    param: Bool -> data Bool
+    ret: Unit -> data Unit
   fun log_ordered  @2.8
     visibility: private
-    param: Bool -> type Bool
-    param: Bool -> type Bool
-    ret: Unit -> type Unit
+    param: Bool -> data Bool
+    param: Bool -> data Bool
+    ret: Unit -> data Unit
   use Int  prelude
     path: std::prelude::Int
     visibility: private

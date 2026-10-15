@@ -2,12 +2,6 @@
 source: crates/mlkc-mir-build/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### MIR
-
-No bodies.
-
 ## `project::main`
 
 ### MIR
@@ -75,3 +69,9 @@ fun wrong (entry b0)
     v1 = call fun size(v0)
     return v1
 ```
+
+## `project::types`
+
+### MIR
+
+No bodies.

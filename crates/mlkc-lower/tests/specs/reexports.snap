@@ -45,7 +45,7 @@ No bodies.
 MODULE #4 project::b
 
 ITEM TREE
-  type Point  @2.0
+  data Point  @2.0
     visibility: public
   use Int  prelude
     path: std::prelude::Int

@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_diagnostics::Diagnostic;
 use mlkc_hir_def::{
-    Body, BodyEntityLoc, ClassLoc, EntityData, EntityLoc, ItemLoc, ModuleId, Name, PathAnchor,
+    AdtLoc, Body, BodyEntityLoc, EntityData, EntityLoc, ItemLoc, ModuleId, Name, PathAnchor,
     ProjectId,
 };
 use mlkc_hir_ty::{Builtins, CheckDeps, CheckedBody, ModuleTypes};
@@ -54,11 +54,11 @@ fn type_place_range(
 }
 
 impl Driver {
-    /// The classes of the language, as the standard library declares them.
+    /// The data types of the language, as the standard library declares them.
     ///
-    /// `Int`, `Unit`, `String`, and `Bool` are ordinary classes ([ADR-0017]): the library
+    /// `Int`, `Unit`, `String`, and `Bool` are ordinary data types ([ADR-0017]): the library
     /// declares them with `#[builtin]`, and the check reads them by name rather than looking a
-    /// primitive type up. A driver whose host recorded no library holds no classes to give, and
+    /// primitive type up. A driver whose host recorded no library holds no data types to give, and
     /// checks no types: there is nothing for a literal or an operator to be.
     ///
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
@@ -71,32 +71,32 @@ impl Driver {
         let lowered = self.lower(core.0)?;
         let tree = lowered.item_tree();
 
-        let class = |name: &str| -> Option<EntityLoc<ClassLoc>> {
+        let adt = |name: &str| -> Option<EntityLoc<AdtLoc>> {
             let target = tree.scope().get(&Name::new(name))?.ty.as_ref()?;
             let PathAnchor::Item(entity) = target.anchor() else {
                 return None;
             };
-            let EntityData::Class(data) = tree.entity_data(entity.item.clone())? else {
+            let EntityData::Adt(data) = tree.entity_data(entity.item.clone())? else {
                 return None;
             };
 
-            // The language's class is the one the library declares as a builtin; a class that
-            // happens to carry the name of one is a class like any other.
+            // The language's data type is the one the library declares as a builtin; a data
+            // type that happens to carry the name of one is a data type like any other.
             if !data.attributes.builtin {
                 return None;
             }
 
             Some(EntityLoc {
                 module: entity.module,
-                item: ClassLoc::try_from(entity.item).ok()?,
+                item: AdtLoc::try_from(entity.item).ok()?,
             })
         };
 
         Some(Builtins::new(
-            class("Int")?,
-            class("Unit")?,
-            class("String")?,
-            class("Bool")?,
+            adt("Int")?,
+            adt("Unit")?,
+            adt("String")?,
+            adt("Bool")?,
         ))
     }
 
@@ -107,7 +107,7 @@ impl Driver {
     /// read again.
     ///
     /// `None` when there is nothing to resolve the types against: the module has no HIR, or the
-    /// driver holds no standard library, whose `#[builtin]` classes the check is given
+    /// driver holds no standard library, whose `#[builtin]` data types the check is given
     /// ([`Driver::use_std`]).
     ///
     /// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
@@ -209,7 +209,7 @@ impl Driver {
     ///
     /// The key of the slot is what the check read: the HIR of the module --- the body among it
     /// --- the resolution, the wider closure of the check (the paths of every body, not only of
-    /// the surface), the type surfaces of the modules the paths reach, and the classes of the
+    /// the surface), the type surfaces of the modules the paths reach, and the data types of the
     /// language. A body edit changes the HIR, and the recomputation of a body that did not change
     /// ends up equal to what the driver holds, so the value a reader sees stays where it was.
     ///
@@ -223,7 +223,7 @@ impl Driver {
     /// What the check of a body reads of the units around it ([`CheckInputs`]).
     ///
     /// `None` when there is nothing to check against: the module has no HIR, it has no resolution,
-    /// or the driver holds no standard library, whose `#[builtin]` classes the check is given
+    /// or the driver holds no standard library, whose `#[builtin]` data types the check is given
     /// ([`Driver::use_std`]).
     pub(super) fn check_inputs(&mut self, module: ModuleId) -> Option<CheckInputs> {
         let lowered = self.lower(module.0)?;

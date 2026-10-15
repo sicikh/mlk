@@ -8,18 +8,18 @@ use std::core::Int
 
 pub use std::core::io as IO
 
-use project::data
+use project::types
 
-use project::data::start-app
+use project::types::start-app
 
 fun main(): IO =
     start-app(1)
 
-fun handle(value: data::Handle): Int =
+fun handle(value: types::Handle): Int =
     value
 
 // A path that starts at a name of the module: what follows the first name is read inside
 // what it denotes, and the module of the import is what the names after it are resolved
 // against.
 fun start(): Int =
-    data::main-module::start-app()
+    types::main-module::start-app()

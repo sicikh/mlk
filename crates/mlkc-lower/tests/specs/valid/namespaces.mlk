@@ -1,7 +1,7 @@
-// A class and a function that share a name: the namespaces of a module are separate, and a
+// A data type and a function that share a name: the namespaces of a module are separate, and a
 // name is read in the namespace the place it is written in asks for.
 
-type Box
+data Box
 
 fun Box(): Box =
     Box

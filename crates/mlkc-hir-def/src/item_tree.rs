@@ -8,13 +8,13 @@ use rustc_hash::FxHashMap;
 use crate::{
     def_map::{LocalScope, LocalTarget},
     id::{
-        BodyLoc, ClassLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind, ItemLoc,
-        ItemLocLike, ModuleClassId, ModuleConstId, ModuleDefId, ModuleDefWithBodyId,
-        ModuleFunctionId, ModuleId, ModuleImplId, ModuleUseId, ModuleValueId, UseLoc, ValueLoc,
+        AdtLoc, BodyLoc, ConstLoc, EntityLoc, FunctionLoc, ImplLoc, ItemKind, ItemLoc, ItemLocLike,
+        ModuleAdtId, ModuleConstId, ModuleDefId, ModuleDefWithBodyId, ModuleFunctionId, ModuleId,
+        ModuleImplId, ModuleUseId, UseLoc,
     },
     item_data::{
-        ClassData, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes, UseData,
-        ValueData, Visibility,
+        AdtData, ConstData, EntityData, FunctionData, ImplData, ModuleAttributes, UseData,
+        Visibility,
     },
     macros::{define_entity_accessors, for_each_item_kind},
     name::Name,
@@ -478,7 +478,7 @@ mod tests {
     use mlkc_vfs::FileId;
 
     use super::{
-        BodyLoc, ClassData, EntityData, EntityLoc, FunctionData, ImplData, ItemKind, ItemLoc,
+        AdtData, BodyLoc, EntityData, EntityLoc, FunctionData, ImplData, ItemKind, ItemLoc,
         ItemLocLike, ItemSyntaxLoc, ItemTree, ItemTreeBuilder, ModuleEntity, ModuleFunctionId,
         ModuleId, Name, PreludeImport, UseData,
     };
@@ -524,9 +524,9 @@ mod tests {
         })
     }
 
-    /// The data of a class, named for the reader as [`function`] is.
-    fn class(_name: &str) -> EntityData {
-        EntityData::Class(ClassData {
+    /// The data of a data type, named for the reader as [`function`] is.
+    fn adt(_name: &str) -> EntityData {
+        EntityData::Adt(AdtData {
             attributes: Attributes::default(),
             visibility: Visibility::Private,
         })
@@ -542,7 +542,7 @@ mod tests {
 
     fn anonymous_impl() -> EntityData {
         EntityData::Impl(ImplData {
-            class: None,
+            ty_class: None,
             ty: None,
         })
     }
@@ -578,11 +578,7 @@ mod tests {
 
     #[test]
     fn a_tree_of_one_module_is_equal_to_itself() {
-        let items = [
-            ("f", function("f")),
-            ("T", class("T")),
-            ("g", function("g")),
-        ];
+        let items = [("f", function("f")), ("T", adt("T")), ("g", function("g"))];
 
         // Two revisions that declare the same things have equal trees:
         // this is what lets the driver keep the value it already has.
@@ -591,11 +587,7 @@ mod tests {
 
     #[test]
     fn the_names_and_the_ids_are_a_bijection() {
-        let tree = tree(&[
-            ("f", function("f")),
-            ("T", class("T")),
-            ("g", function("g")),
-        ]);
+        let tree = tree(&[("f", function("f")), ("T", adt("T")), ("g", function("g"))]);
 
         for (loc, id) in tree.entities() {
             assert_eq!(tree.id_of(loc.clone()), Some(id));
@@ -608,8 +600,8 @@ mod tests {
         let tree = tree(&[("f", function("f"))]);
 
         assert_eq!(tree.id_of(item("g", ItemKind::Function)), None);
-        // The kind is part of the name: a class named `f` is a different entity.
-        assert_eq!(tree.id_of(item("f", ItemKind::Class)), None);
+        // The kind is part of the name: a data type named `f` is a different entity.
+        assert_eq!(tree.id_of(item("f", ItemKind::Adt)), None);
     }
 
     #[test]
@@ -669,15 +661,15 @@ mod tests {
     }
 
     #[test]
-    fn a_class_and_a_function_may_share_a_name() {
+    fn a_data_type_and_a_function_may_share_a_name() {
         let mut builder = builder();
-        let class = builder.declare(Some(Name::new("Box")), class("Box"), syntax(0));
+        let adt = builder.declare(Some(Name::new("Box")), adt("Box"), syntax(0));
         let function = builder.declare(Some(Name::new("Box")), function("Box"), syntax(1));
         let tree = builder.finish();
 
         // The two are names of the module in different namespaces, and neither is in the
         // way of the other.
-        assert!(!class.duplicate);
+        assert!(!adt.duplicate);
         assert!(!function.duplicate);
         assert_eq!(
             tree.scope().get(&Name::new("Box")).map(LocalEntry::is_none),
@@ -685,7 +677,7 @@ mod tests {
         );
         assert_eq!(
             tree.scope().anchor(&Name::new("Box"), Namespace::Ty),
-            PathAnchor::Item(class.loc),
+            PathAnchor::Item(adt.loc),
         );
         assert_eq!(
             tree.scope().anchor(&Name::new("Box"), Namespace::Value),
@@ -757,7 +749,7 @@ mod tests {
     #[test]
     fn a_name_the_module_declares_is_what_it_denotes() {
         let mut builder = builder();
-        let declaration = builder.declare(Some(Name::new("Int")), class("Int"), syntax(0));
+        let declaration = builder.declare(Some(Name::new("Int")), adt("Int"), syntax(0));
         builder.declare_prelude(&prelude_import(&["std", "prelude", "Int"]));
         let tree = builder.finish();
 
@@ -812,7 +804,7 @@ mod tests {
     #[test]
     fn a_signature_resolves_a_local_anchor() {
         let mut builder = builder();
-        builder.declare(Some(Name::new("T")), class("T"), syntax(0));
+        builder.declare(Some(Name::new("T")), adt("T"), syntax(0));
         builder.declare(
             Some(Name::new("f")),
             EntityData::Function(FunctionData {
@@ -842,7 +834,7 @@ mod tests {
                 Name::new("T"),
                 PathAnchor::Item(EntityLoc {
                     module: module(),
-                    item: item("T", ItemKind::Class),
+                    item: item("T", ItemKind::Adt),
                 }),
             ))),
         );
@@ -893,17 +885,17 @@ mod tests {
 
     #[test]
     fn a_body_has_a_name_only_if_its_kind_owns_one() {
-        let tree = tree(&[("f", function("f")), ("T", class("T"))]);
+        let tree = tree(&[("f", function("f")), ("T", adt("T"))]);
         let body =
             BodyLoc::try_from(item("f", ItemKind::Function)).expect("a function owns a body");
 
         let id = tree.body_id(body.clone()).expect("f to be there");
         assert_eq!(tree.body_loc(id), body);
 
-        let error = BodyLoc::try_from(item("T", ItemKind::Class)).unwrap_err();
+        let error = BodyLoc::try_from(item("T", ItemKind::Adt)).unwrap_err();
         assert_eq!(error, WrongKind {
             expected: ItemKind::Function,
-            found: ItemKind::Class,
+            found: ItemKind::Adt,
         },);
     }
 

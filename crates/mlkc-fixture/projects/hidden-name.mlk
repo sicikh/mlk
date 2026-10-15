@@ -1,23 +1,24 @@
 // The paths a body writes, and what walking them finds: a name another module keeps to itself,
-// a class written where a value belongs, and a module that is not there. The paths of a body are
-// walked by the check and never by the resolution, so what they find is the check's to report.
+// a data type written where a value belongs, and a module that is not there. The paths of a body
+// are walked by the check and never by the resolution, so what they find is the check's to
+// report.
 
-//- /data.mlk
-// The module `project::data`: it keeps the function `hidden` to itself, and shows a class.
+//- /types.mlk
+// The module `project::types`: it keeps the function `hidden` to itself, and shows a data type.
 
-pub type Point
+pub data Point
 
 fun hidden(): Int =
     1
 
 //- /main.mlk
-use project::data::Point
+use project::types::Point
 
 fun call(): Int =
-    project::data::hidden()
+    project::types::hidden()
 
 fun make(): Point =
-    project::data::Point
+    project::types::Point
 
 fun gone(): Int =
     project::gone::x()

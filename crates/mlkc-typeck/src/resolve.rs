@@ -16,7 +16,7 @@
 //! [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 
 use mlkc_hir_def::{
-    ClassLoc, EntityLoc, ModuleId, Namespace, PathAnchor, PathData, Resolution, ResolveError,
+    AdtLoc, EntityLoc, ModuleId, Namespace, PathAnchor, PathData, Resolution, ResolveError,
     TypeRef, Walk,
 };
 use mlkc_hir_ty::{CheckDeps, Ty};
@@ -122,14 +122,14 @@ impl<'a> PathResolver<'a> {
             return (Ty::Error, errors);
         };
 
-        match ClassLoc::try_from(entity.item.clone()) {
-            Ok(class) => {
-                let class = EntityLoc {
+        match AdtLoc::try_from(entity.item.clone()) {
+            Ok(adt) => {
+                let adt = EntityLoc {
                     module: entity.module,
-                    item: class,
+                    item: adt,
                 };
 
-                (Ty::Class { class, args }, errors)
+                (Ty::Adt { adt, args }, errors)
             },
             Err(_) => {
                 errors.push(TypeError::NotAType { name: path.name() });

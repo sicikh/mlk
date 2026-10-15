@@ -6,7 +6,7 @@
 ## Context and Problem Statement
 
 [ADR-0017][0017-resolved-types.md] fixes what a type _is_ at the source level:
-a type class, a function, or a parameter,
+a data type, a function, or a parameter,
 resolved to names and nothing else.
 It says nothing about what a value _is_ in a machine.
 

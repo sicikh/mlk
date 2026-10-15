@@ -331,13 +331,13 @@ impl<'w, 'a> Resolver<'w, 'a> {
                 },
                 EntityData::Const(data) => data.ty.iter().map(|ty| (None, ty)).collect(),
                 EntityData::Impl(data) => {
-                    data.class
+                    data.ty_class
                         .iter()
                         .chain(data.ty.iter())
                         .map(|ty| (None, ty))
                         .collect()
                 },
-                EntityData::Class(_) | EntityData::Value(_) | EntityData::Use(_) => Vec::new(),
+                EntityData::Adt(_) | EntityData::Use(_) => Vec::new(),
             };
 
             for (place, ty) in types {
@@ -370,7 +370,7 @@ impl<'w, 'a> Resolver<'w, 'a> {
         match &path.anchor {
             // A name of the module, a binding of a body, or a type variable: the path denotes
             // something the module itself resolved. What follows it is a member of what it
-            // denotes, and the language has no members yet: what a name after a class is is
+            // denotes, and the language has no members yet: what a name after a data type is is
             // what a type decides, and that naming is a record of its own.
             PathAnchor::Item(_)
             | PathAnchor::Local(_)

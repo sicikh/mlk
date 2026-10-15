@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use mlkc_hir_def::{
-    Attributes, ClassData, ClassLoc, Closure, EntityData, EntityLoc, ItemLoc, ItemLocLike,
+    AdtData, AdtLoc, Attributes, Closure, EntityData, EntityLoc, ItemLoc, ItemLocLike,
     ItemSyntaxLoc, ItemTreeBuilder, ModuleId, ModuleScope, Name, Namespace, Pat, PathAnchor,
     PathData, PathRoot, PlainPath, PlainPathId, Prelude, ProjectGraph, Resolution, ResolveError,
     Target, UseLoc, Visibility, Walk, path::PathSegmentData,
@@ -20,7 +20,7 @@ use mlkc_vfs::{FileId, RelPathBuf};
 /// The module the tests of the walk are written in.
 const MAIN: ModuleId = ModuleId(FileId::from_raw(0));
 
-/// A module of another project, where the classes of the tests are declared.
+/// A module of another project, where the data types of the tests are declared.
 const STD: ModuleId = ModuleId(FileId::from_raw(1));
 
 /// The surface of the module of the tests: one import, and a body that binds a name.
@@ -35,15 +35,15 @@ fn lowered() -> mlkc_lower::LoweredModule {
     lower_module(MAIN, &root, &Prelude::none(), &[], relative.as_path())
 }
 
-/// The class `Int` of the standard library of the tests.
-fn class() -> EntityLoc<ClassLoc> {
+/// The data type `Int` of the standard library of the tests.
+fn adt() -> EntityLoc<AdtLoc> {
     let mut builder = ItemTreeBuilder::new(
         STD,
         PlainPathId::new(PlainPath::from_root(PathRoot::Project, [Name::new("std")])),
     );
     builder.declare(
         Some(Name::new("Int")),
-        EntityData::Class(ClassData {
+        EntityData::Adt(AdtData {
             attributes: Attributes::default(),
             visibility: Visibility::Public,
         }),
@@ -51,11 +51,14 @@ fn class() -> EntityLoc<ClassLoc> {
     );
 
     let tree = builder.finish();
-    let (item, _) = tree.entities().next().expect("the class to be declared");
+    let (item, _) = tree
+        .entities()
+        .next()
+        .expect("the data type to be declared");
 
     EntityLoc {
         module: tree.module(),
-        item: ClassLoc::try_from(item).expect("a class"),
+        item: AdtLoc::try_from(item).expect("a data type"),
     }
 }
 
@@ -88,8 +91,8 @@ fn path(name: &str, anchor: PathAnchor) -> PathData {
 
 #[test]
 fn a_name_the_lowering_anchored_is_answered_as_it_is() {
-    let class = class();
-    let path = path("Int", PathAnchor::Item(EntityLoc::from(class.clone())));
+    let adt = adt();
+    let path = path("Int", PathAnchor::Item(EntityLoc::from(adt.clone())));
     let graph = ProjectGraph::default();
     let closure = Closure::default();
     let mut walk = Walk::of(&graph, &closure);
@@ -97,13 +100,13 @@ fn a_name_the_lowering_anchored_is_answered_as_it_is() {
     let (entity, errors) = walk.entity_of(MAIN, &resolution(&[]), &path, Namespace::Ty);
 
     assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(entity, Some(EntityLoc::from(class)));
+    assert_eq!(entity, Some(EntityLoc::from(adt)));
 }
 
 #[test]
 fn a_name_written_after_an_entity_is_not_a_member_yet() {
-    let class = class();
-    let mut path = path("Int", PathAnchor::Item(EntityLoc::from(class)));
+    let adt = adt();
+    let mut path = path("Int", PathAnchor::Item(EntityLoc::from(adt)));
     path.segments.push(PathSegmentData {
         name: Name::new("field"),
         args: Vec::new(),
@@ -122,11 +125,11 @@ fn a_name_written_after_an_entity_is_not_a_member_yet() {
 
 #[test]
 fn an_import_is_read_as_what_the_resolution_resolved() {
-    let class = class();
+    let adt = adt();
     let import = import();
     let imports = [(
         import.clone(),
-        Target::entity(Some(EntityLoc::from(class.clone())), None),
+        Target::entity(Some(EntityLoc::from(adt.clone())), None),
     )];
     let path = path("Int", PathAnchor::Use(import));
     let graph = ProjectGraph::default();
@@ -136,9 +139,9 @@ fn an_import_is_read_as_what_the_resolution_resolved() {
     let (entity, errors) = walk.entity_of(MAIN, &resolution(&imports), &path, Namespace::Ty);
 
     assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(entity, Some(EntityLoc::from(class)));
+    assert_eq!(entity, Some(EntityLoc::from(adt)));
 
-    // The same path read where a value belongs: a class is not a value.
+    // The same path read where a value belongs: a data type is not a value.
     let (entity, errors) = walk.entity_of(MAIN, &resolution(&imports), &path, Namespace::Value);
 
     assert_eq!(entity, None);

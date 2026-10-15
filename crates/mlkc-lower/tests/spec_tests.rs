@@ -49,7 +49,7 @@ spec_tests! {
     // A parameter is a pattern: a name the body binds, and a wildcard it ignores.
     parameters: "valid/parameters.mlk",
 
-    // A class and a function that share a name: the two are names of different namespaces, and
+    // A data type and a function that share a name: the two are names of different namespaces, and
     // a name is read in the one the place it is written in asks for.
     namespaces: "valid/namespaces.mlk",
 

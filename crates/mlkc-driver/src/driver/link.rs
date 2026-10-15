@@ -132,7 +132,7 @@ impl DiagKind for LinkError {
 }
 
 /// What the link stage reads: the module of every module of the program, the entries of the
-/// project a host asked to link, and the classes of the language.
+/// project a host asked to link, and the data types of the language.
 struct LinkInputs {
     /// The module of every module of the program, by module.
     modules: BTreeMap<ModuleId, Arc<ModuleMir>>,
@@ -143,7 +143,7 @@ struct LinkInputs {
     lirs: BTreeMap<ModuleId, Vec<Arc<LoweredFunction>>>,
     /// The functions of the root project declared `#[entry]`, in the order of their modules.
     entries: Vec<EntryCandidate>,
-    /// The classes of the language, which say what the unit is.
+    /// The data types of the language, which say what the unit is.
     builtins: Builtins,
     /// What debug information the assembled modules carry ([ADR-0025][adr-0025]).
     ///
@@ -527,7 +527,7 @@ fn entry_of(inputs: &LinkInputs, diagnostics: &mut Vec<Diagnostic>) -> Option<(M
         return None;
     }
 
-    let unit = Ty::class(inputs.builtins.unit().clone());
+    let unit = Ty::adt(inputs.builtins.unit().clone());
 
     if !entry.signature.params.is_empty() || entry.signature.ret != unit {
         let ty = Ty::function(entry.signature.params.clone(), entry.signature.ret.clone());

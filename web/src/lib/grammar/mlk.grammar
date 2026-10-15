@@ -40,7 +40,7 @@
 
 @skip { space | Comment }
 
-item { Attribute* (ModulePreamble | FunDecl | TypeDecl | UseDecl) }
+item { Attribute* (ModulePreamble | FunDecl | AdtDecl | UseDecl) }
 
 // The keywords are not tokens of their own.
 //
@@ -74,7 +74,7 @@ ReturnType { ":" Type }
 
 FunBody { "=" Expr }
 
-TypeDecl { Visibility? kw<"type"> Name }
+AdtDecl { Visibility? kw<"data"> Name }
 
 // An import: a path of the project, under the name it is brought in as, which is the last
 // segment of the path or what it is renamed to.
@@ -140,7 +140,7 @@ LocalExpr { kw<"local"> ModuleItem* kw<"in"> Expr }
 
 // An item of a module, as a `local` writes one: a declaration, with the attributes it carries in
 // front of it.
-ModuleItem { Attribute* (FunDecl | TypeDecl | UseDecl) }
+ModuleItem { Attribute* (FunDecl | AdtDecl | UseDecl) }
 
 PrimaryExpr { IfExpr | LetExpr | LambdaExpr | LocalExpr | Placeholder | Literal | PathExpr | ParenExpr }
 

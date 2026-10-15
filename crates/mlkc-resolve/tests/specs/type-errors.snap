@@ -31,13 +31,13 @@ SCOPE
   arm-of-another-type
     value: fun arm-of-another-type in module #3 (private)
   Int
-    ty: type Int in module #0 (private)
+    ty: data Int in module #0 (private)
   Unit
-    ty: type Unit in module #0 (private)
+    ty: data Unit in module #0 (private)
   String
-    ty: type String in module #0 (private)
+    ty: data String in module #0 (private)
   Bool
-    ty: type Bool in module #0 (private)
+    ty: data Bool in module #0 (private)
   print-int
     value: fun print-int in module #2 (private)
   print-bool

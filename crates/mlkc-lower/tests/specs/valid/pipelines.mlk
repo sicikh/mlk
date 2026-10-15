@@ -3,13 +3,13 @@
 // module can write.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Config
+data Config
 
 #[builtin]
-type String
+data String
 
 // The functions the steps of the pipelines call: a step is a call as any other one, and the
 // text says which function it is a call of.
@@ -28,21 +28,21 @@ fun write(config: Config, path: String): Config
 fun consume(left: Int, right: Int): Int =
     left
 
-fun passed(data: Int): Int =
-    data |> consume(_, 1)
+fun passed(value: Int): Int =
+    value |> consume(_, 1)
 
-fun twice(data: Int): Int =
-    data |> consume(_, _)
+fun twice(value: Int): Int =
+    value |> consume(_, _)
 
 // A step written with the dot passes its receiver first, as any call written with the dot
 // does.
-fun inserted(data: Int): Int =
-    data |> data.consume(1, _)
+fun inserted(value: Int): Int =
+    value |> value.consume(1, _)
 
 // Two pipelines of a body are two bindings, and a step inside the arguments of another one
 // binds its own value: the place of the outer step is the outer value.
-fun chained(data: Int, other: Int): Int =
-    data |> consume(other |> consume(_, 1), _) |> consume(_, 2)
+fun chained(value: Int, other: Int): Int =
+    value |> consume(other |> consume(_, 1), _) |> consume(_, 2)
 
 // The chain the record is written about: the dot where it can write the step, and the pipe
 // where the value is not the first argument of the call.

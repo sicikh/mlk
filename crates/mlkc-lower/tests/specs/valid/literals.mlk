@@ -3,13 +3,13 @@
 // to.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type String
+data String
 
 #[builtin]
-type Bool
+data Bool
 
 fun positive(): Int =
     42

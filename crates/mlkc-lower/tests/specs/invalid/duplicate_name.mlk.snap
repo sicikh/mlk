@@ -9,7 +9,7 @@ expression: snapshot
 // the second is what the lowering reports. A name declared in another namespace is not a
 // duplicate of it, which is what `valid/namespaces.mlk` shows.
 
-type Int
+data Int
 
 fun size(value: Int): Int =
     value
@@ -17,9 +17,9 @@ fun size(value: Int): Int =
 fun size(value: Int): Int =
     value
 
-type Point
+data Point
 
-type Point
+data Point
 
 ```
 
@@ -29,19 +29,19 @@ type Point
 MODULE #0 project::duplicate_name
 
 ITEM TREE
-  type Int  @2.0
+  data Int  @2.0
     visibility: private
   fun size  @2.1
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
+    param: Int -> data Int
+    ret: Int -> data Int
   fun size#1  @2.2
     visibility: private
-    param: Int -> type Int
-    ret: Int -> type Int
-  type Point  @2.3
+    param: Int -> data Int
+    ret: Int -> data Int
+  data Point  @2.3
     visibility: private
-  type Point#1  @2.4
+  data Point#1  @2.4
     visibility: private
   use Int  prelude
     path: std::prelude::Int
@@ -96,7 +96,7 @@ paths
 ## Lowering Diagnostics
 
 296..333: `fun size` is declared more than once in this module
-347..357: `type Point` is declared more than once in this module
+347..357: `data Point` is declared more than once in this module
 
 ## Parse Diagnostics
 

@@ -114,12 +114,12 @@ impl AbiType {
 
 /// The refinement of a type the checker resolved.
 ///
-/// A class that is one of the classes of the language ([`Builtins`]) refines to its
+/// A data type that is one of the builtin data types ([`Builtins`]) refines to its
 /// representation; every other type is a word until the constructs that give it a shape are
 /// lowered. A function type is a word too: a closure is a reference, and what signature its
 /// code has is the refinement of the expression that made it ([`closure_shape_of_ty`]).
 pub(crate) fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
-    let Ty::Class { class, args } = ty else {
+    let Ty::Adt { adt, args } = ty else {
         return Refinement::Word;
     };
 
@@ -127,11 +127,11 @@ pub(crate) fn of_ty(ty: &Ty, builtins: &Builtins) -> Refinement {
         return Refinement::Word;
     }
 
-    if class == builtins.int() {
+    if adt == builtins.int() {
         Refinement::Int
-    } else if class == builtins.boolean() {
+    } else if adt == builtins.boolean() {
         Refinement::Bool
-    } else if class == builtins.unit() {
+    } else if adt == builtins.unit() {
         Refinement::Unit
     } else {
         Refinement::Word
@@ -284,7 +284,7 @@ fn rvalue_refinement(
                         .signature_of(function)
                         .map_or(Refinement::Word, |sig| {
                             // A call gives back the shape the signature declares; what it refines
-                            // to is the type of the result, which only the shape of a class can
+                            // to is the type of the result, which only the shape of a data type can
                             // make narrower than a word.
                             of_ty(&sig.ret, layout.builtins())
                         })

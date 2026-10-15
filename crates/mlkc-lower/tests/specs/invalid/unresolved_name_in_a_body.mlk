@@ -4,10 +4,10 @@
 // name where it is written. A name a type of the body is rooted at is read the same way.
 
 #[builtin]
-type Int
+data Int
 
 #[builtin]
-type Point
+data Point
 
 #[extern]
 fun declared(value: Point): Point

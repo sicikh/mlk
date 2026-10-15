@@ -153,7 +153,7 @@ fn a_call_written_with_a_dot_may_be_named_by_a_path() {
 
 #[test]
 fn a_field_read_is_where_the_field_is_written() {
-    let source = "fun main(): Int =\n    data@field\n";
+    let source = "fun main(): Int =\n    input@field\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 
@@ -164,14 +164,17 @@ fn a_field_read_is_where_the_field_is_written() {
     assert_eq!(field.as_str(), "field");
     assert_eq!(
         lowered.source_map.expr(body.root()),
-        Some(at(source, "data@field")),
+        Some(at(source, "input@field")),
     );
-    assert_eq!(lowered.source_map.expr(*receiver), Some(at(source, "data")));
+    assert_eq!(
+        lowered.source_map.expr(*receiver),
+        Some(at(source, "input"))
+    );
 }
 
 #[test]
 fn a_pipeline_is_the_value_it_binds_and_the_call_it_is() {
-    let source = "fun main(): Int =\n    data |> consume(1, _)\n";
+    let source = "fun main(): Int =\n    input |> consume(1, _)\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 
@@ -188,9 +191,9 @@ fn a_pipeline_is_the_value_it_binds_and_the_call_it_is() {
     // and the step is the call written on the right.
     assert_eq!(
         lowered.source_map.expr(body.root()),
-        Some(at(source, "data |> consume(1, _)")),
+        Some(at(source, "input |> consume(1, _)")),
     );
-    assert_eq!(lowered.source_map.expr(*expr), Some(at(source, "data")));
+    assert_eq!(lowered.source_map.expr(*expr), Some(at(source, "input")));
     assert_eq!(
         lowered.source_map.expr(*step),
         Some(at(source, "consume(1, _)")),
@@ -198,7 +201,7 @@ fn a_pipeline_is_the_value_it_binds_and_the_call_it_is() {
 
     // The binding is a node the lowering made up, and what it binds is the value: what
     // stands on the left is the piece of the text it reads as.
-    assert_eq!(lowered.source_map.pat(*pat), Some(at(source, "data")));
+    assert_eq!(lowered.source_map.pat(*pat), Some(at(source, "input")));
 
     let Expr::Call { callee, args } = &body[*step] else {
         panic!("a step is a call");
@@ -221,7 +224,7 @@ fn a_pipeline_is_the_value_it_binds_and_the_call_it_is() {
 
 #[test]
 fn a_step_written_with_the_dot_passes_its_receiver_first() {
-    let source = "fun main(): Int =\n    data |> map.insert(\"k\", _)\n";
+    let source = "fun main(): Int =\n    input |> map.insert(\"k\", _)\n";
     let lowered = body_of(source);
     let body = &lowered.body;
 

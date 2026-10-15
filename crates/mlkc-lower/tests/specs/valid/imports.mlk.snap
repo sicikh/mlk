@@ -15,21 +15,21 @@ use std::core::Int
 
 pub use std::core::io as IO
 
-use project::data
+use project::types
 
-use project::data::start-app
+use project::types::start-app
 
 fun main(): IO =
     start-app(1)
 
-fun handle(value: data::Handle): Int =
+fun handle(value: types::Handle): Int =
     value
 
 // A path that starts at a name of the module: what follows the first name is read inside
 // what it denotes, and the module of the import is what the names after it are resolved
 // against.
 fun start(): Int =
-    data::main-module::start-app()
+    types::main-module::start-app()
 
 ```
 
@@ -46,18 +46,18 @@ ITEM TREE
     path: std::core::io
     alias: IO
     visibility: public
-  use data  @2.2
-    path: project::data
+  use types  @2.2
+    path: project::types
     visibility: private
   use start-app  @2.3
-    path: project::data::start-app
+    path: project::types::start-app
     visibility: private
   fun main  @2.4
     visibility: private
     ret: IO -> use IO
   fun handle  @2.5
     visibility: private
-    param: data::Handle -> use data
+    param: types::Handle -> use types
     ret: Int -> use Int
   fun start  @2.6
     visibility: private
@@ -118,7 +118,7 @@ exprs
   expr#0  path path#0
   expr#1  call expr#0 ()
 paths
-  path#0  data::main-module::start-app -> use data
+  path#0  types::main-module::start-app -> use types
 ```
 
 ## Lowering Diagnostics

@@ -8,7 +8,7 @@
 //! use project::data::Point
 //!
 //! //- /data.mlk
-//! pub type Point
+//! pub data Point
 //! ```
 //!
 //! The mark is the one the tests of rust-analyzer are written with --- `//-` and the path of
@@ -227,7 +227,7 @@ mod tests {
 use project::data::Point
 
 //- /data/utils.mlk
-pub type Point
+pub data Point
 ",
         );
 
@@ -238,7 +238,7 @@ pub type Point
             },
             Module {
                 place: "/data/utils.mlk".to_owned(),
-                source: "pub type Point\n".to_owned(),
+                source: "pub data Point\n".to_owned(),
             },
         ],);
     }

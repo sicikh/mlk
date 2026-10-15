@@ -5,11 +5,11 @@
 // very often the next declaration, and a reader who wrote `value.` is told about the dot
 // rather than about the `fun` that happens to follow it.
 //
-// The last function is what the paths of an older spelling read as: `data.main-module` is
+// The last function is what the paths of an older spelling read as: `input.main-module` is
 // a step of `data`, because a path is written with `::`.
 
 fun missing_a_call(): Int =
     value.
 
 fun an_old_path(): Int =
-    data.main-module.start-app(1)
+    input.main-module.start-app(1)

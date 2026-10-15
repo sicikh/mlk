@@ -6,9 +6,9 @@ expression: snapshot
 
 ### Diagnostics
 
-typechecker[04]: the name `Int` is applied to type arguments  @274..283 (a class takes no arguments)
+typechecker[04]: the name `Int` is applied to type arguments  @274..283 (a adt takes no arguments)
   note: the language has no generics yet
-typechecker[04]: the name `Int` is applied to type arguments  @286..295 (a class takes no arguments)
+typechecker[04]: the name `Int` is applied to type arguments  @286..295 (a adt takes no arguments)
   note: the language has no generics yet
 typechecker[09]: a value of type `Int` is where a value of type `Unit` belongs  @22..23 (expected `Unit`, found `Int`)
 typechecker[09]: a value of type `String` is where a value of type `Int` belongs  @103..109 (expected `Int`, found `String`)

@@ -2,19 +2,19 @@
 source: crates/mlkc-driver/tests/project_spec.rs
 expression: snapshot
 ---
-## `project::data`
-
-### Diagnostics
-
-No diagnostics.
-
-## `project::data::utils`
-
-### Diagnostics
-
-No diagnostics.
-
 ## `project::main`
+
+### Diagnostics
+
+No diagnostics.
+
+## `project::types`
+
+### Diagnostics
+
+No diagnostics.
+
+## `project::types::utils`
 
 ### Diagnostics
 

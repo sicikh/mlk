@@ -5,10 +5,10 @@ expression: snapshot
 ## Input
 
 ```mlk
-// A class and a function that share a name: the namespaces of a module are separate, and a
+// A data type and a function that share a name: the namespaces of a module are separate, and a
 // name is read in the namespace the place it is written in asks for.
 
-type Box
+data Box
 
 fun Box(): Box =
     Box
@@ -31,11 +31,11 @@ fun misused(): helper =
 MODULE #0 project::namespaces
 
 ITEM TREE
-  type Box  @2.0
+  data Box  @2.0
     visibility: private
   fun Box  @2.1
     visibility: private
-    ret: Box -> type Box
+    ret: Box -> data Box
   fun helper  @2.2
     visibility: private
     ret: Int -> use Int

@@ -81,6 +81,10 @@ project_specs! {
     // What a function declared in a `local` lowers to: the signature the check gave it, the
     // direct call of it, and the function of the module its code is lifted into.
     locals: "locals",
+
+    // A module and a function named with the letters of another alphabet, which a path of the
+    // project reaches.
+    names: "names",
 }
 
 /// A project of the corpus without a test is a snapshot nobody looks at.

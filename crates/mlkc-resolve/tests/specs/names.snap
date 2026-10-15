@@ -1,0 +1,57 @@
+---
+source: crates/mlkc-resolve/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Resolution
+
+```
+SCOPE
+  μ
+    value: fun μ in module #3 (private)
+  f
+    value: fun f in module #4 (private)
+  f'
+    value: fun f' in module #4 (private)
+  café
+    value: fun café in module #4 (private)
+  गिनती
+    value: fun गिनती in module #4 (private)
+  각-글
+    value: fun 각-글 in module #4 (private)
+  Int
+    ty: data Int in module #0 (private)
+  Unit
+    ty: data Unit in module #0 (private)
+  String
+    ty: data String in module #0 (private)
+  Bool
+    ty: data Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
+```
+
+## `project::греческий`
+
+### Resolution
+
+```
+SCOPE
+  μ
+    value: fun μ in module #3 (public)
+  Int
+    ty: data Int in module #0 (private)
+  Unit
+    ty: data Unit in module #0 (private)
+  String
+    ty: data String in module #0 (private)
+  Bool
+    ty: data Bool in module #0 (private)
+  print-int
+    value: fun print-int in module #2 (private)
+  print-bool
+    value: fun print-bool in module #2 (private)
+```

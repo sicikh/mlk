@@ -81,6 +81,10 @@ project_specs! {
     // What a function declared in a `local` lowers to: the signature the check gave it, the
     // direct call of it, and the function of the module its code is lifted into.
     locals: "locals",
+
+    // The types of a program whose names hold a prime and the letters of another alphabet: a
+    // name is a string to the checker, and the functions take and give `Int`.
+    names: "names",
 }
 
 /// A project of the corpus without a test is a snapshot nobody looks at.

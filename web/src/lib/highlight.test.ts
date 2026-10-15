@@ -151,6 +151,17 @@ describe("the colours of the language", () => {
         expect(unexpectedNodes(source)).toEqual([]);
     });
 
+    it("parses a name with a prime and a name of another alphabet", () => {
+        const source = `fun café(x: Int) : Int =
+    let α' = x + 1 in
+    α'
+
+fun кафе-бар(x: Int) : Int = x
+`;
+
+        expect(unexpectedNodes(source)).toEqual([]);
+    });
+
     it("says which tokens a comment of the language is written with", () => {
         const state = EditorState.create({
             doc: "",

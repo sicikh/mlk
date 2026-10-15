@@ -1,0 +1,205 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Item Tree
+
+```
+MODULE #4 project::main
+
+ITEM TREE
+  use μ  @2.0
+    path: project::греческий::μ
+    visibility: private
+  fun f  @2.1
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun f'  @2.2
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun café  @2.3
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun गिनती  @2.4
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  fun 각-글  @2.5
+    visibility: private
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun f`
+
+```
+BODY fun f in module #4
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind x
+paths
+  path#0  μ -> use μ
+  path#1  x -> binding pat#0
+```
+
+`fun f'`
+
+```
+BODY fun f' in module #4
+
+root expr#4
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+  expr#3  literal 1
+  expr#4  binary expr#2 + expr#3
+pats
+  pat#0  bind x
+paths
+  path#0  f -> fun f
+  path#1  x -> binding pat#0
+```
+
+`fun café`
+
+```
+BODY fun café in module #4
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind x
+paths
+  path#0  f' -> fun f'
+  path#1  x -> binding pat#0
+```
+
+`fun गिनती`
+
+```
+BODY fun गिनती in module #4
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind x
+paths
+  path#0  café -> fun café
+  path#1  x -> binding pat#0
+```
+
+`fun 각-글`
+
+```
+BODY fun 각-글 in module #4
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind x
+paths
+  path#0  गिनती -> fun गिनती
+  path#1  x -> binding pat#0
+```
+
+## `project::греческий`
+
+### Item Tree
+
+```
+MODULE #3 project::греческий
+
+ITEM TREE
+  fun μ  @2.0
+    visibility: public
+    param: Int -> use Int
+    ret: Int -> use Int
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun μ`
+
+```
+BODY fun μ in module #3
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  literal 1
+  expr#2  binary expr#0 + expr#1
+pats
+  pat#0  bind x
+paths
+  path#0  x -> binding pat#0
+```

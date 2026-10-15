@@ -53,6 +53,10 @@ wasm_specs! {
     // What a lambda compiles to: the recursion groups of its shape, the environment type of what
     // it captured, the closure one `struct.new` builds, and the `call_ref` it is called through.
     lambdas: "lambdas",
+
+    // What the names of the language compile to: a name with a prime and a name of another
+    // alphabet, written into the name section and printed back by the printer of the format.
+    names: "names",
 }
 
 /// Runs the fixture `fixture`, and checks it against its snapshot.

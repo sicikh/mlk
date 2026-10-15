@@ -221,10 +221,15 @@ PathExpr { Path }
 
 	Comment { "//" ![\n\r]* | "/*" (![*] | "*" ![/])* "*/" }
 
-	// A name may hold `-` between its parts, so `println-int` is one name while
-	// `x - 1` is a subtraction. The narrowest way to write this down is what makes
-	// `x-1` a name as well, and that is what the lexer of the compiler does.
-	identifier { $[a-zA-Z_] $[a-zA-Z0-9_]* ("-" $[a-zA-Z0-9_]+)* }
+	// A name holds the characters the compiler's lexer reads: it begins with a letter or `_`,
+	// and holds letters, digits, `_`, and a prime `'`, with a `-` between them — the dash rule
+	// of `docs/adr/0029-dash-in-names.md`, the prime of `0030-primes-in-names.md`.
+	//
+	// The letters of every alphabet — `XID_Start` and `XID_Continue` of
+	// `docs/adr/0031-unicode-names.md` — cannot be listed here as exactly as the compiler
+	// lists them, so this grammar holds a superset: any non-ASCII character is a character
+	// of a name. The grammar paints and never judges, which is what the superset costs.
+	identifier { $[a-zA-Z_\u0080-\u{10FFFF}] $[a-zA-Z0-9_'\u0080-\u{10FFFF}]* ("-" $[a-zA-Z0-9_'\u0080-\u{10FFFF}]+)* }
 
 	int_literal { $[0-9]+ }
 

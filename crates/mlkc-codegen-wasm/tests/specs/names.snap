@@ -1,0 +1,36 @@
+---
+source: crates/mlkc-codegen-wasm/tests/wasm_specs.rs
+expression: snapshot
+---
+```wat
+(module $app::main
+  (type (;0;) (func (param (ref i31)) (result (ref i31))))
+  (export "f" (func $f))
+  (export "f'" (func $f'))
+  (export "caf\u{e9}" (func $"caf\u{e9}"))
+  (export "\u{917}\u{93f}\u{928}\u{924}\u{940}" (func $"\u{917}\u{93f}\u{928}\u{924}\u{940}"))
+  (func $f (;0;) (type 0) (param $x (ref i31)) (result (ref i31))
+    local.get $x
+    return
+  )
+  (func $f' (;1;) (type 0) (param $x (ref i31)) (result (ref i31))
+    local.get $x
+    call $f
+    i31.get_s
+    i32.const 1
+    i32.add
+    ref.i31
+    return
+  )
+  (func $"caf\u{e9}" (;2;) (type 0) (param $x (ref i31)) (result (ref i31))
+    local.get $x
+    call $f'
+    return
+  )
+  (func $"\u{917}\u{93f}\u{928}\u{924}\u{940}" (;3;) (type 0) (param $x (ref i31)) (result (ref i31))
+    local.get $x
+    call $"caf\u{e9}"
+    return
+  )
+)
+```

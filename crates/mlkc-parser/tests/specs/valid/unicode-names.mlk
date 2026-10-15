@@ -1,0 +1,25 @@
+// A name holds the letters of any alphabet: `XID_Start` followed by `XID_Continue`, so a name
+// in Greek, Cyrillic, or Devanagari is a name like any other. What is not a letter — an arrow,
+// an em dash, the typographic prime — is not a character of a name, and the dash rule reads
+// the same alphabet.
+
+fun café(x: Int): Int =
+    x + 1
+
+fun αβ(x: Int): Int =
+    café(x)
+
+fun кафе(x: Int): Int =
+    αβ(x)
+
+fun गिनती(x: Int): Int =
+    кафе(x)
+
+// A dash between the letters of another alphabet joins the name.
+fun 각-글(x: Int): Int =
+    गिनती(x)
+
+data Δ
+
+fun измерение(x: Δ): Δ =
+    x

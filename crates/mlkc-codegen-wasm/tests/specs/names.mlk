@@ -1,0 +1,16 @@
+// What the names of the language compile to: a name with a prime and a name of another alphabet
+// are names of the module like any other, and the name section is where a reader of the binary
+// finds them --- as the text they are written with, not as a mangled approximation of it.
+
+//- /main.mlk
+pub fun f(x: Int): Int =
+    x
+
+pub fun f'(x: Int): Int =
+    f(x) + 1
+
+pub fun café(x: Int): Int =
+    f'(x)
+
+pub fun गिनती(x: Int): Int =
+    café(x)

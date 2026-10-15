@@ -38,6 +38,9 @@ The editor has its own grammar for highlighting.
   (`docs/adr/0012-split-the-dot-operator.md`).
 - A lambda writes its arrow `=>`; a name never swallows the `-` of the step's `->`
   (`docs/adr/0029-dash-in-names.md`).
+- A name holds the letters of any alphabet, digits, `_`, a prime after its first character,
+  and `-` between those characters
+  (`docs/adr/0029-dash-in-names.md`, `0030-primes-in-names.md`, `0031-unicode-names.md`).
 - `x |> f(a, _)` is sugar for `let v = x in f(a, v)`
   (`docs/adr/0013-pipeline-operator.md`).
 - The HIR gains no spelling variants: sugar stops at lowering

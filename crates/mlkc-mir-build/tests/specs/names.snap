@@ -1,0 +1,161 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### MIR
+
+`fun f`
+
+CFG form:
+
+```
+fun f (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l1 = call fun μ(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun f (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun μ(v0)
+    return v1
+```
+
+`fun f'`
+
+CFG form:
+
+```
+fun f' (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l3 = use l0
+    l2 = call fun f(l3)
+    l4 = const 1
+    l1 = prim int-add(l2, l4)
+    return l1
+```
+
+SSA form:
+
+```
+fun f' (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun f(v0)
+    v2 = const 1
+    v3 = prim int-add(v1, v2)
+    return v3
+```
+
+`fun café`
+
+CFG form:
+
+```
+fun café (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l1 = call fun f'(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun café (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun f'(v0)
+    return v1
+```
+
+`fun गिनती`
+
+CFG form:
+
+```
+fun गिनती (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l1 = call fun café(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun गिनती (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun café(v0)
+    return v1
+```
+
+`fun 각-글`
+
+CFG form:
+
+```
+fun 각-글 (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l1 = call fun गिनती(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun 각-글 (entry b0)
+  params: v0: Int
+  b0:
+    v1 = call fun गिनती(v0)
+    return v1
+```
+
+## `project::греческий`
+
+### MIR
+
+`fun μ`
+
+CFG form:
+
+```
+fun μ (entry b0)
+  params: v0: Int
+  b0:
+    l0(x) = use v0
+    l2 = use l0
+    l3 = const 1
+    l1 = prim int-add(l2, l3)
+    return l1
+```
+
+SSA form:
+
+```
+fun μ (entry b0)
+  params: v0: Int
+  b0:
+    v1 = const 1
+    v2 = prim int-add(v0, v1)
+    return v2
+```

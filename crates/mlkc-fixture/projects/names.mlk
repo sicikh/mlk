@@ -1,0 +1,26 @@
+// The names the language reads: a prime marks the next version of a name, and a letter is a
+// letter of any alphabet. A name is a string to every stage after the lexer, and this project
+// carries the names through all of them: a declaration, a parameter, a reference, a function,
+// and a module a path reaches.
+
+//- /греческий.mlk
+pub fun μ(x: Int): Int =
+    x + 1
+
+//- /main.mlk
+use project::греческий::μ
+
+fun f(x: Int): Int =
+    μ(x)
+
+fun f'(x: Int): Int =
+    f(x) + 1
+
+fun café(x: Int): Int =
+    f'(x)
+
+fun गिनती(x: Int): Int =
+    café(x)
+
+fun 각-글(x: Int): Int =
+    गिनती(x)

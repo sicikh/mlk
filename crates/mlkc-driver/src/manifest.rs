@@ -162,10 +162,13 @@ impl Manifest {
 
     /// The file a module of `name` is written as: `app::main` is `app/main.wasm`.
     ///
-    /// A canonical name is the project and the path of the module inside it, and a file a host
-    /// writes is a path under a directory. Anything a path may not hold becomes a dash, and so
-    /// does a part of dots only, which would name the directory itself or the one above it:
-    /// what a name names is a file of the build, and nothing else.
+    /// A canonical name is the project and the path of a module inside it, and a file a host
+    /// writes is a path under a directory. The letters are kept as they are written, whatever
+    /// alphabet they come from ([ADR-0031]), and anything a path may not hold becomes a dash,
+    /// and so does a part of dots only, which would name the directory itself or the one
+    /// above it: what a name names is a file of the build, and nothing else.
+    ///
+    /// [ADR-0031]: ../../docs/adr/0031-unicode-names.md
     pub fn file_of(name: &str) -> String {
         let mut file = String::with_capacity(name.len() + 5);
 
@@ -181,7 +184,7 @@ impl Manifest {
 
             for it in part.chars() {
                 file.push(
-                    if it.is_ascii_alphanumeric() || matches!(it, '.' | '_' | '-') {
+                    if it.is_alphanumeric() || matches!(it, '.' | '_' | '-' | '\'') {
                         it
                     } else {
                         '-'
@@ -206,6 +209,12 @@ mod tests {
         assert_eq!(Manifest::file_of("std::core"), "std/core.wasm");
         assert_eq!(Manifest::file_of("main"), "main.wasm");
         assert_eq!(Manifest::file_of("app::lib::a.b"), "app/lib/a.b.wasm");
+
+        // The letters of a name are the letters of its alphabet, and a prime is a character
+        // of a name: what a path holds is what is written.
+        assert_eq!(Manifest::file_of("app::кафе"), "app/кафе.wasm");
+        assert_eq!(Manifest::file_of("app::café"), "app/café.wasm");
+        assert_eq!(Manifest::file_of("app::f'"), "app/f'.wasm");
     }
 
     #[test]

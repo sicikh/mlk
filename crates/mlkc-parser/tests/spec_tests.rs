@@ -41,6 +41,14 @@ spec_tests! {
     // Bindings: nested, ignored, and bound to the result of a call.
     let_in: "valid/let_in.mlk",
 
+    // Names: a prime after the first character is a character of a name, wherever a digit
+    // may stand, and a name does not begin with one.
+    primed_names: "valid/primed-names.mlk",
+
+    // Names: the letters of any alphabet are characters of a name, and the dash rule reads
+    // the same alphabet.
+    unicode_names: "valid/unicode-names.mlk",
+
     // Paths of types, qualified and applied to type arguments, and paths of values, which
     // are written the same way.
     paths: "valid/paths.mlk",

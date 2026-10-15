@@ -1,0 +1,15 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Diagnostics
+
+No diagnostics.
+
+## `project::греческий`
+
+### Diagnostics
+
+No diagnostics.

@@ -1,0 +1,22 @@
+// A name may hold a prime after its first character: `f'` is the second `f`, and `f''` the
+// third. The prime is a character of the name wherever a digit is one, so it never opens a
+// name of its own, and it stands wherever the dash rule looks for a name character.
+
+fun f(x: Int): Int =
+    x
+
+fun f'(x: Int): Int =
+    f(x) + 1
+
+fun f''(x: Int): Int =
+    f'(x) + 1
+
+fun applied(x: Int): Int =
+    f''(x) + f'(f(x))
+
+fun derived(x: Int): Int =
+    let derived-name = f(x) in
+    derived-name'
+
+#[extern]
+fun print-int'(value: Int): Unit

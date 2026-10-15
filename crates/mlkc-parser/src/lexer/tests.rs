@@ -212,6 +212,98 @@ fn a_dash_is_an_operator_outside_a_name() {
 }
 
 #[test]
+fn a_prime_is_a_character_of_a_name() {
+    // The prime is a character of a name wherever a digit is one: `f'` is the second `f`,
+    // and a name may hold as many of them as it writes.
+    assert_lex! {
+        "f'",
+        IDENT:2
+    }
+
+    assert_lex! {
+        "f''",
+        IDENT:3
+    }
+
+    assert_lex! {
+        "f'g",
+        IDENT:3
+    }
+
+    // A name does not begin with a prime: what stands where a token starts is not a name.
+    assert_lex! {
+        "'f",
+        ERROR_TOKEN:1,
+        IDENT:1
+    }
+
+    // The prime is a name character where the dash rule looks for one, so it stands next to
+    // a kebab name as well.
+    assert_lex! {
+        "derived-name'",
+        IDENT:13
+    }
+
+    // A space keeps the dash outside the name, and the prime outside it too.
+    assert_lex! {
+        "x' - y'",
+        IDENT:2,
+        WHITESPACE:1,
+        MINUS:1,
+        WHITESPACE:1,
+        IDENT:2
+    }
+}
+
+#[test]
+fn a_name_holds_the_letters_of_any_alphabet() {
+    // A name is `XID_Start` followed by `XID_Continue`: the letters, digits, and marks of
+    // every script are name characters.
+    assert_lex! {
+        "αβ",
+        IDENT:4
+    }
+
+    assert_lex! {
+        "café",
+        IDENT:5
+    }
+
+    assert_lex! {
+        "функция",
+        IDENT:14
+    }
+
+    // A mark is a character of a name, so a name is one whatever way its vowels or its
+    // accents are written: `ि` continues `क`, and a combining accent continues `e`.
+    assert_lex! {
+        "कि",
+        IDENT:6
+    }
+
+    assert_lex! {
+        "e\u{301}",
+        IDENT:3
+    }
+
+    // The dash rule reads the same alphabet: a dash between the letters of any script joins
+    // the name.
+    assert_lex! {
+        "각-글",
+        IDENT:7
+    }
+
+    // What the alphabet does not hold is not a name character: an arrow stops the name
+    // before it, and is a broken token of its own.
+    assert_lex! {
+        "x→y",
+        IDENT:1,
+        ERROR_TOKEN:3,
+        IDENT:1
+    }
+}
+
+#[test]
 fn underscore_is_not_an_identifier() {
     assert_lex! {
         "_",
@@ -621,11 +713,12 @@ fn errors() {
         ERROR_TOKEN:1
     }
 
-    // Identifiers are ASCII for now: a letter of another alphabet is not a name.
+    // What is not a character of a name is not one, whatever alphabet it comes from: the
+    // typographic prime is not the prime of the language, and an arrow is not a letter.
     assert_lex! {
-        "αβ",
-        ERROR_TOKEN:2,
-        ERROR_TOKEN:2
+        "f′",
+        IDENT:1,
+        ERROR_TOKEN:3
     }
 }
 

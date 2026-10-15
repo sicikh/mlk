@@ -20,7 +20,15 @@
 //! the name, the arrow, and a call. That is what lets a host read a step while it is typed:
 //! the text of `x-` never becomes a name no module wrote.
 //!
+//! A name begins with a letter or `_`, and holds letters, digits, `_`, and a prime `'`
+//! after it ([ADR-0030]): `f'` is a second `f`, and it is a character of the name wherever
+//! a digit is one. The letters are the letters of any alphabet ([ADR-0031]): a name is
+//! `XID_Start` followed by `XID_Continue`, so `café` and `α` are names while an arrow or an
+//! em dash is not.
+//!
 //! [ADR-0029]: ../../docs/adr/0029-dash-in-names.md
+//! [ADR-0030]: ../../docs/adr/0030-primes-in-names.md
+//! [ADR-0031]: ../../docs/adr/0031-unicode-names.md
 //!
 //! # Checkpoints
 //!
@@ -53,9 +61,14 @@ use mlkc_syntax::{
 /// over an identifier of the same length because a literal token has a higher
 /// priority than a regular expression.
 ///
-/// Identifiers may contain `-` only between identifier characters, so `println-int`
-/// is a single name while `x - 1` is a subtraction, `x-` is a name and the operator,
-/// and `x->` is a name and the arrow.
+/// Identifiers hold `-` only between identifier characters, so `println-int`
+/// is a single name while `x - 1` is a subtraction and `x-` is a name and the operator;
+/// a prime is a character of a name after its first one, so `f'` is a name too ([ADR-0030]);
+/// and the characters are the ones `XID_Start` and `XID_Continue` name, so `café` and `α`
+/// are names as well ([ADR-0031]).
+///
+/// [ADR-0030]: ../../docs/adr/0030-primes-in-names.md
+/// [ADR-0031]: ../../docs/adr/0031-unicode-names.md
 #[derive(Logos, Debug, Clone, Copy, PartialEq, Eq)]
 enum Tok {
     #[regex(r"[ \t]+")]
@@ -115,7 +128,7 @@ enum Tok {
     #[regex(r#""(\\.|[^"\\\n\r])*\\?"#)]
     UnterminatedString,
 
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*")]
+    #[regex(r"[\p{XID_Start}_][\p{XID_Continue}']*(-[\p{XID_Continue}']+)*")]
     Ident,
 
     #[token(".")]

@@ -1,0 +1,91 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::main`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun f: (Int) -> Int
+  fun f': (Int) -> Int
+  fun café: (Int) -> Int
+  fun गिनती: (Int) -> Int
+  fun 각-글: (Int) -> Int
+```
+
+### Checked Bodies
+
+`fun f`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  pat #0: Int
+```
+
+`fun f'`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  expr #3: Int
+  expr #4: Int
+  pat #0: Int
+```
+
+`fun café`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  pat #0: Int
+```
+
+`fun गिनती`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  pat #0: Int
+```
+
+`fun 각-글`
+
+```
+CHECKED BODY
+  expr #0: (Int) -> Int
+  expr #1: Int
+  expr #2: Int
+  pat #0: Int
+```
+
+## `project::греческий`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun μ: (Int) -> Int
+```
+
+### Checked Bodies
+
+`fun μ`
+
+```
+CHECKED BODY
+  expr #0: Int
+  expr #1: Int
+  expr #2: Int
+  pat #0: Int
+```

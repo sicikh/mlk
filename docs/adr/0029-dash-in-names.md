@@ -65,11 +65,15 @@ Chosen option: "A `-` is a name character only between two name characters".
 ### The rule
 
 A name begins with a letter or `_`,
-and its characters are letters, digits, and `_`.
+and its characters are letters, digits, `_`, and --- since the records beside this one ---
+a prime wherever a name character may stand ([ADR-0030][0030-primes-in-names.md]).
+The letters are the letters of any alphabet ([ADR-0031][0031-unicode-names.md]),
+not the letters of ASCII:
+the classes of a name are `XID_Start` and `XID_Continue`.
 A `-` is one of its characters only when it stands directly between two of them:
 
 ```
-name := (letter | '_') (letter | digit | '_')* ('-' (letter | digit | '_')+)*
+name := (letter | '_') (letter | digit | '_' | '\'')* ('-' (letter | digit | '_' | '\'')+)*
 ```
 
 A name therefore never begins and never ends with a `-`.
@@ -81,10 +85,13 @@ A run that begins with a digit is a number, not a name,
 so a `-` after a number is always the operator:
 `1-2` is a subtraction, whatever the same characters would mean after a letter.
 
-The rule is what the lexer of the compiler reads today ([mlkc-parser]);
+The rule is what the lexer of the compiler reads ([mlkc-parser]);
 this record makes it a decision,
 because the step of a chain ([ADR-0012][0012-split-the-dot-operator.md]) depends on it
 and because it is the kind of rule that is relaxed by accident.
+The alphabet of a name and the prime it may hold are decisions of their own
+([ADR-0030][0030-primes-in-names.md], [ADR-0031][0031-unicode-names.md]);
+what this record decides is the `-`.
 
 ### What the rule reads
 
@@ -202,6 +209,8 @@ Chosen. Described above.
 ## Links
 
 - The arrow a step is written with, and the typing it has to survive: [0012-split-the-dot-operator.md]
+- The prime a name may hold: [0030-primes-in-names.md]
+- The alphabet of a name: [0031-unicode-names.md]
 - Lexing as a stage of the pipeline: [0005-compiler-pipeline.md]
 - The names a host completes: [0011-module-prelude.md]
 - Implementation: the lexer of [mlkc-parser], and the editor's [grammar]
@@ -209,5 +218,7 @@ Chosen. Described above.
 [0005-compiler-pipeline.md]: 0005-compiler-pipeline.md
 [0011-module-prelude.md]: 0011-module-prelude.md
 [0012-split-the-dot-operator.md]: 0012-split-the-dot-operator.md
+[0030-primes-in-names.md]: 0030-primes-in-names.md
+[0031-unicode-names.md]: 0031-unicode-names.md
 [mlkc-parser]: ../../crates/mlkc-parser
 [grammar]: ../../web/src/lib/grammar/mlk.grammar

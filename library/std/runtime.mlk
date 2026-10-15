@@ -6,9 +6,7 @@ module project::runtime
 // process, a browser, a test --- says what it does. The name a host implements is the one the
 // linker uses: `std::runtime::print-int` is `print-int` of this module.
 
-use project::core::Bool
-use project::core::Int
-use project::core::Unit
+use project::core::{Int, Unit, Bool}
 
 #[extern]
 pub fun print-int(value: Int): Unit

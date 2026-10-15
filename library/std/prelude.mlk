@@ -1,9 +1,5 @@
 #[no-prelude]
 module project::prelude
 
-pub use project::core::Int
-pub use project::core::Unit
-pub use project::core::String
-pub use project::core::Bool
-pub use project::runtime::print-int
-pub use project::runtime::print-bool
+pub use project::core::{Int, Unit, String, Bool}
+pub use project::runtime::{print-int, print-bool}

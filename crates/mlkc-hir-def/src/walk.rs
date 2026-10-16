@@ -170,6 +170,17 @@ pub enum ResolveError {
         /// The name the chain returns to.
         name: Name,
     },
+    /// Two modules name each other, round by round.
+    ///
+    /// A module is read after the modules it names, and a cycle of names has no such order:
+    /// what a name at the end of a cycle reaches is nothing, and the modules of a program form
+    /// no cycle ([ADR-0016]).
+    ///
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    ImportCycle {
+        /// The module the name at this place reaches, which is in the cycle with this module.
+        module: PlainPathId,
+    },
     /// A name of the module resolves to nothing.
     ///
     /// The name is a name of the module --- an import brought it in, or the module declared
@@ -227,6 +238,12 @@ impl ResolveError {
             },
             Self::CyclicImport { name } => {
                 format!("the name `{name}` is re-exported through a chain that returns to itself")
+            },
+            Self::ImportCycle { module } => {
+                format!(
+                    "the module `{module}` is in a cycle of names with this module: the imports \
+                     of a program form no cycle"
+                )
             },
             Self::UnresolvedName { name } => {
                 format!("the name `{name}` resolves to nothing and is not a name of this module")

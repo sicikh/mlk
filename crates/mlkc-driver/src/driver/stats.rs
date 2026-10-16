@@ -72,6 +72,10 @@ pub enum Pass {
     ModuleIndex,
     /// What the names of a module denote.
     Resolution,
+    /// What the names of a module reach, and where each of them is named.
+    NamedModules,
+    /// The cycles of the names of the modules of a project.
+    ImportCycles,
     /// The diagnostics of the resolution of a module, rendered.
     ResolutionDiagnostics,
     /// The scopes of the modules of a project.
@@ -102,13 +106,15 @@ pub enum Pass {
 
 impl Pass {
     /// Every pass, in the order a module is read in.
-    pub const ALL: [Pass; 17] = [
+    pub const ALL: [Pass; 19] = [
         Pass::Parse,
         Pass::Lower,
         Pass::LineIndex,
         Pass::Interface,
         Pass::ModuleIndex,
         Pass::Resolution,
+        Pass::NamedModules,
+        Pass::ImportCycles,
         Pass::ResolutionDiagnostics,
         Pass::DefMap,
         Pass::Signatures,
@@ -131,6 +137,8 @@ impl Pass {
             Pass::Interface => "interface",
             Pass::ModuleIndex => "module_index",
             Pass::Resolution => "resolution",
+            Pass::NamedModules => "named_modules",
+            Pass::ImportCycles => "import_cycles",
             Pass::ResolutionDiagnostics => "resolution_diagnostics",
             Pass::DefMap => "def_map",
             Pass::Signatures => "signatures",
@@ -357,6 +365,8 @@ mod tests {
                 | Pass::Interface
                 | Pass::ModuleIndex
                 | Pass::Resolution
+                | Pass::NamedModules
+                | Pass::ImportCycles
                 | Pass::ResolutionDiagnostics
                 | Pass::DefMap
                 | Pass::Signatures
@@ -371,7 +381,7 @@ mod tests {
             }
         }
 
-        assert_eq!(Pass::ALL.len(), 17);
+        assert_eq!(Pass::ALL.len(), 19);
     }
 
     /// A name is what a table and a log read a pass by, and two passes share none.

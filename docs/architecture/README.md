@@ -56,6 +56,8 @@ so they are also the names to look for when something is slow.
 | `interface`              | `Interface`: what a module shows to the modules that import it    | [`mlkc-hir-def`](../../crates/mlkc-hir-def), built by the driver                         |
 | `module_index`           | `ModuleIndex`: which path of a project names which module         | [`mlkc-hir-def`](../../crates/mlkc-hir-def), built by the driver                         |
 | `resolution`             | `Resolution`: what the names of a module denote                   | [`mlkc-resolve`](../../crates/mlkc-resolve)                                              |
+| `named_modules`          | the modules a module's names reach, and where each is named       | [`mlkc-resolve`](../../crates/mlkc-resolve)                                              |
+| `import_cycles`          | the cycles of the names of the modules of a project               | [`mlkc-resolve`](../../crates/mlkc-resolve)                                              |
 | `resolution_diagnostics` | resolve diagnostics, rendered for a host                          | [`mlkc-driver`](../../crates/mlkc-driver)                                                |
 | `def_map`                | `ModuleScope` and `ProjectDefMap`                                 | [`mlkc-hir-def`](../../crates/mlkc-hir-def), folded by the driver                        |
 | `signatures`             | the declared signatures of a module                               | [`mlkc-typeck`](../../crates/mlkc-typeck), held by the driver                            |

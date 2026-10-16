@@ -1245,6 +1245,164 @@ fn what_a_resolution_found_travels_with_the_diagnostics_of_the_file() {
 }
 
 #[test]
+fn two_modules_that_name_each_other_are_a_cycle_of_names() {
+    const A: &str = "\
+use project::b::{Other, other}
+
+pub data Mine
+
+pub fun mine(value: Other): Mine =
+    mine(value)
+";
+    const B: &str = "\
+use project::a::Mine
+
+pub data Other
+
+pub fun other(value: Mine): Other =
+    other(value)
+";
+
+    let mut driver = std_project_of(&format!("//- /a.mlk\n{A}\n//- /b.mlk\n{B}"));
+    let a = file(&driver, "a.mlk");
+    let b = file(&driver, "b.mlk");
+
+    // A cycle is a value of the whole project, and every module of it is told: what the names
+    // of `a` reach is `b`, and what the names of `b` reach is `a` ([ADR-0016]).
+    //
+    // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    let diagnostics = driver.diagnostics(a).expect("the file to be diagnosed");
+
+    assert_eq!(diagnostics.resolution().len(), 1, "{diagnostics:?}");
+
+    let diagnostic = &diagnostics.resolution()[0];
+    let label = diagnostic.labels.first().expect("a label");
+
+    assert_eq!(diagnostic.category, Category::Resolver);
+    assert_eq!(diagnostic.code, "11");
+    assert_eq!(
+        diagnostic.message,
+        "the module `project::b` is in a cycle of names with this module: the imports of a \
+         program form no cycle",
+    );
+    // An import tree is sugar over the imports it holds, and the name of the leaf is what the
+    // report points at: the name a reader wrote, and not the tree around it ([ADR-0032]).
+    //
+    // [ADR-0032]: ../../docs/adr/0032-import-trees.md
+    assert_eq!(covered(A, Some(label.span.range)), Some("Other"));
+
+    let diagnostics = driver.diagnostics(b).expect("the file to be diagnosed");
+
+    assert_eq!(diagnostics.resolution().len(), 1, "{diagnostics:?}");
+
+    let diagnostic = &diagnostics.resolution()[0];
+    let label = diagnostic.labels.first().expect("a label");
+
+    assert_eq!(diagnostic.code, "11");
+    assert_eq!(
+        diagnostic.message,
+        "the module `project::a` is in a cycle of names with this module: the imports of a \
+         program form no cycle",
+    );
+    assert_eq!(covered(B, Some(label.span.range)), Some("project::a::Mine"));
+
+    // The cycle is a mistake of the source rather than a state of the driver: the plan is never
+    // built for a program whose modules cannot be ordered, and the stages before the link keep
+    // the bug reports for the bugs ([ADR-0008]).
+    //
+    // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+    assert!(driver.link(&project()).is_none());
+    assert!(driver.ice().is_none(), "{:?}", driver.ice());
+
+    // A module that stops naming the other one is a module the cycle is read without: the
+    // project forms no cycle again, and nothing of the cycle is reported any more.
+    driver.set_file_text(
+        path("b.mlk"),
+        Some(
+            "pub data Other\n\npub fun other(value: Other): Other =\n    other(value)\n".to_owned(),
+        ),
+    );
+
+    let diagnostics = driver.diagnostics(a).expect("the file to be diagnosed");
+
+    assert!(diagnostics.resolution().is_empty(), "{diagnostics:?}");
+
+    let diagnostics = driver.diagnostics(b).expect("the file to be diagnosed");
+
+    assert!(diagnostics.resolution().is_empty(), "{diagnostics:?}");
+    assert!(driver.link(&project()).is_some(), "the project to link");
+}
+
+#[test]
+fn a_cycle_a_body_closes_without_an_import_is_a_cycle_too() {
+    const A: &str = "\
+pub fun f(): Unit =
+    project::b::g()
+";
+    const B: &str = "\
+pub fun g(): Unit =
+    project::a::f()
+";
+
+    let mut driver = std_project_of(&format!("//- /a.mlk\n{A}\n//- /b.mlk\n{B}"));
+    let a = file(&driver, "a.mlk");
+    let b = file(&driver, "b.mlk");
+
+    // Neither module imports the other, and the paths of the bodies are the only names that
+    // cross: a name of a body is a name of the graph like any other, and what it reaches is the
+    // module the entity belongs to ([ADR-0016]).
+    //
+    // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    let diagnostics = driver.diagnostics(a).expect("the file to be diagnosed");
+
+    assert_eq!(diagnostics.resolution().len(), 1, "{diagnostics:?}");
+
+    let diagnostic = &diagnostics.resolution()[0];
+    let label = diagnostic.labels.first().expect("a label");
+
+    assert_eq!(diagnostic.code, "11");
+    assert_eq!(covered(A, Some(label.span.range)), Some("project::b::g"));
+
+    let diagnostics = driver.diagnostics(b).expect("the file to be diagnosed");
+
+    assert_eq!(diagnostics.resolution().len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics.resolution()[0].code, "11");
+
+    assert!(driver.link(&project()).is_none());
+    assert!(driver.ice().is_none(), "{:?}", driver.ice());
+}
+
+#[test]
+fn a_chain_of_reexports_that_returns_to_itself_is_one_mistake() {
+    const A: &str = "pub use project::b::X\n";
+    const B: &str = "pub use project::a::X\n";
+
+    let mut driver = project_of(&format!("//- /a.mlk\n{A}\n//- /b.mlk\n{B}"));
+    let a = file(&driver, "a.mlk");
+    let b = file(&driver, "b.mlk");
+
+    // A chain that returns to itself is found by the walk of the module that wrote it, and it
+    // resolves to nothing: the names reach no module of the project, so there is no cycle of
+    // names to report beside it ([ADR-0016]).
+    //
+    // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    for (name, id, source, written) in [("a", a, A, "project::b::X"), ("b", b, B, "project::a::X")]
+    {
+        let diagnostics = driver.diagnostics(id).expect("the file to be diagnosed");
+
+        assert_eq!(diagnostics.resolution().len(), 1, "{name}: {diagnostics:?}");
+
+        let diagnostic = &diagnostics.resolution()[0];
+        let label = diagnostic.labels.first().expect("a label");
+
+        assert_eq!(diagnostic.code, "05", "{name}");
+        assert_eq!(covered(source, Some(label.span.range)), Some(written));
+    }
+
+    assert!(driver.ice().is_none(), "{:?}", driver.ice());
+}
+
+#[test]
 fn a_module_added_under_a_prefix_makes_the_module_that_named_it_resolve_again() {
     let mut driver = project_of(
         "\

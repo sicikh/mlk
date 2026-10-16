@@ -3,6 +3,7 @@
 
 mod check;
 mod diagnostics;
+mod graph;
 mod host;
 mod link;
 mod lir;
@@ -27,13 +28,13 @@ use std::{
 use mlkc_codegen_wasm::{LoweredFunctions, ModuleMir};
 use mlkc_diagnostics::{Diagnostic, Ice};
 use mlkc_hir_def::{
-    BodyEntityLoc, Closure, Interface, ItemLocLike, ModuleId, ModuleIndex, ProjectDefMap,
-    ProjectGraph, ProjectId, Resolution,
+    BodyEntityLoc, Closure, Interface, ItemLocLike, ModuleId, ModuleIndex, PlainPathId,
+    ProjectDefMap, ProjectGraph, ProjectId, Resolution,
 };
 use mlkc_hir_ty::{Builtins, CheckedBody, ModuleTypes};
 use mlkc_line_index::LineIndex;
 use mlkc_mir::{Bodies, Body as MirBody};
-use mlkc_resolve::ResolvedModule;
+use mlkc_resolve::{ImportCycles, NamedModules, ResolvedModule};
 use mlkc_rowan::NodeCache;
 use mlkc_typeck::TypeDiag;
 use mlkc_vfs::{FileId, FileVersion, Vfs};
@@ -77,6 +78,10 @@ pub struct Driver {
     module_indexes: FxHashMap<ProjectId, ModuleIndexSlot>,
     /// The resolution of every module that has been resolved.
     resolutions: FxHashMap<ModuleId, ResolutionSlot>,
+    /// The modules the names of every module that has been asked for them reach.
+    named_modules: FxHashMap<ModuleId, NamedModulesSlot>,
+    /// The cycles of the names of every project that has been asked for them.
+    import_cycles: FxHashMap<ProjectId, ImportCyclesSlot>,
     /// The types of every module whose signatures have been resolved.
     signatures: FxHashMap<ModuleId, SignaturesSlot>,
     /// The check of every body that has been checked.
@@ -181,6 +186,38 @@ struct ResolutionSlot {
     value: Arc<ResolvedModule>,
 }
 
+/// The modules the names of one module reach, and what reading them read ([ADR-0016]).
+///
+/// The names are every path the module writes, so the key of the slot is what a check reads:
+/// the HIR --- the bodies among it --- the resolution, and the wider closure of the check
+/// ([ADR-0017]).
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+/// [ADR-0017]: ../../docs/adr/0017-resolved-types.md
+struct NamedModulesSlot {
+    /// The HIR the names were read from.
+    lowered: Arc<Lowered>,
+    /// What each name of the module denotes, and what each import resolved to.
+    resolution: Arc<Resolution>,
+    /// The modules the names reach, and the entries of the indexes they read.
+    closure: Closure,
+    /// The value, retained so that a recomputation that ends up equal keeps it.
+    value: Arc<NamedModules>,
+}
+
+/// The cycles of the names of one project, and the names they were found in ([ADR-0016]).
+///
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+struct ImportCyclesSlot {
+    /// The named modules of every module of the project, by module, as the cycles were found.
+    named: BTreeMap<ModuleId, Arc<NamedModules>>,
+    /// The path every module of the project is called by, as the cycles were found: a report
+    /// names a module by it, so a module called by another path is a project found again.
+    paths: BTreeMap<ModuleId, PlainPathId>,
+    /// The value, retained so that a recomputation that ends up equal keeps it.
+    value: Arc<ImportCycles>,
+}
+
 /// The def map of one project, and the resolutions it was built from ([ADR-0016]).
 ///
 /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
@@ -196,8 +233,9 @@ struct DefMapSlot {
 ///
 /// A resolution reports places in the HIR, and where a place is written is what the driver
 /// holds, so the rendering is the driver's. It is a value of its own, keyed by the resolution,
-/// by the HIR it was made from, and by the HIR of the modules it looked at --- which is nothing
-/// on the way a resolution usually goes, and a module per name a walk could not find
+/// by the HIR it was made from, the cycles of the names of its project --- a cycle is reported
+/// where a name that is in one is written --- and the HIR of the modules it looked at --- which
+/// is nothing on the way a resolution usually goes, and a module per name a walk could not find
 /// ([`hidden_name`]).
 ///
 /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
@@ -206,6 +244,8 @@ struct ResolutionDiagnosticsSlot {
     resolution: Arc<Resolution>,
     /// The HIR the places of the diagnostics are read in.
     lowered: Arc<Lowered>,
+    /// The cycles of the names of the project the module is in, if it is in one.
+    cycles: Option<Arc<ImportCycles>>,
     /// The HIR of the modules a diagnostic looked at, by module.
     looked: BTreeMap<ModuleId, Arc<Lowered>>,
     /// The value, retained so that the driver can hand it out and compare it later.
@@ -668,6 +708,11 @@ impl Driver {
             self.def_maps.remove(project).is_some() as usize,
         );
         self.stats.dropped(
+            Pass::ImportCycles,
+            &unit,
+            self.import_cycles.remove(project).is_some() as usize,
+        );
+        self.stats.dropped(
             Pass::Link,
             &unit,
             self.links.remove(project).is_some() as usize,
@@ -700,6 +745,11 @@ impl Driver {
             Pass::Resolution,
             &named,
             self.resolutions.remove(&module).is_some() as usize,
+        );
+        self.stats.dropped(
+            Pass::NamedModules,
+            &named,
+            self.named_modules.remove(&module).is_some() as usize,
         );
         self.stats.dropped(
             Pass::ResolutionDiagnostics,

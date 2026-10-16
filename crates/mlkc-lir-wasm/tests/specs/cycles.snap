@@ -1,0 +1,45 @@
+---
+source: crates/mlkc-lir-wasm/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+`fun mine`
+
+mine:
+```
+lir (entry b0) ret eqref
+  params: v0: eqref
+  locals: 
+  b0:
+    v1 = call $0(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```
+
+## `project::b`
+
+`fun other`
+
+other:
+```
+lir (entry b0) ret eqref
+  params: v0: eqref
+  locals: 
+  b0:
+    v1 = call $0(v0)
+    return v1
+```
+
+Structure:
+
+```
+  leaf b0
+  return v1
+```

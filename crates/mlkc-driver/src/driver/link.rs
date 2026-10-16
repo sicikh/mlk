@@ -175,15 +175,33 @@ impl Driver {
     /// and ordered, and the entry point it declares ([ADR-0021]).
     ///
     /// `None` when a module of the program is not one the front end read clean, or when a pass
-    /// bugged: a program that is not whole is not a value a host runs.
+    /// bugged: a program that is not whole is not a value a host runs. A module whose names are
+    /// in a cycle is such a module: the imports of a program form no cycle ([ADR-0016]), the
+    /// resolution reports the cycle where the names are written, and the plan is never built
+    /// for a program whose modules cannot be ordered.
     ///
     /// [adr-0021]: ../../docs/adr/0021-translation-units.md
+    /// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
     pub fn link(&mut self, project: &ProjectId) -> Option<Arc<LinkPlan>> {
         // The program is the project and the projects it depends on: the standard library is
         // compiled like any other project ([ADR-0021]).
         //
         // [ADR-0021]: ../../docs/adr/0021-translation-units.md
         let projects = self.project_closure(project);
+
+        // The order the modules are instantiated in is an order of names, and names that come
+        // back to where they started have no such order. The cycle is found where the names are
+        // resolved, and it is a mistake of the source rather than a state of the driver: what
+        // the stages after the resolution are handed is a program the front end read clean
+        // ([ADR-0008]).
+        //
+        // [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+        for it in &projects {
+            if !self.import_cycles(it)?.cycles().is_empty() {
+                return None;
+            }
+        }
+
         let mut modules: BTreeMap<ModuleId, Arc<ModuleMir>> = BTreeMap::new();
         let mut lirs: BTreeMap<ModuleId, Vec<Arc<LoweredFunction>>> = BTreeMap::new();
 
@@ -435,7 +453,13 @@ fn link_plan(inputs: &LinkInputs) -> LinkPlan {
 /// The order the modules are instantiated in: a provider before the modules that import it.
 ///
 /// An import of an extern is not an edge: a host provides it. Every other import names a module
-/// of the program, and the graph is acyclic by design, so the walk always terminates.
+/// of the program, and the imports of a program form no cycle ([ADR-0016]): a cycle of names is
+/// reported by the resolution, and a program that holds one is not one the link is asked for
+/// ([ADR-0008]). The assertion below therefore holds for every program a host can bring here,
+/// and it is a check of the compiler's own work rather than a case of the input.
+///
+/// [ADR-0008]: ../../docs/adr/0008-compiler-driver.md
+/// [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
 fn module_order(
     modules: &BTreeMap<ModuleId, Arc<ModuleMir>>,
     diagnostics: &mut Vec<Diagnostic>,

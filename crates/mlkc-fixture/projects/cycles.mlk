@@ -1,0 +1,15 @@
+//- /a.mlk
+use project::b::{Other, other}
+
+pub data Mine
+
+pub fun mine(value: Other): Mine =
+    mine(value)
+
+//- /b.mlk
+use project::a::Mine
+
+pub data Other
+
+pub fun other(value: Mine): Other =
+    other(value)

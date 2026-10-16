@@ -1,0 +1,59 @@
+---
+source: crates/mlkc-mir-build/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### MIR
+
+`fun mine`
+
+CFG form:
+
+```
+fun mine (entry b0)
+  params: v0: Other
+  b0:
+    l0(value) = use v0
+    l2 = use l0
+    l1 = call fun mine(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun mine (entry b0)
+  params: v0: Other
+  b0:
+    v1 = call fun mine(v0)
+    return v1
+```
+
+## `project::b`
+
+### MIR
+
+`fun other`
+
+CFG form:
+
+```
+fun other (entry b0)
+  params: v0: Mine
+  b0:
+    l0(value) = use v0
+    l2 = use l0
+    l1 = call fun other(l2)
+    return l1
+```
+
+SSA form:
+
+```
+fun other (entry b0)
+  params: v0: Mine
+  b0:
+    v1 = call fun other(v0)
+    return v1
+```

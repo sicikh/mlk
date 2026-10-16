@@ -571,7 +571,7 @@ fn fill(per_ns: &mut PerNs, target: &Target, visibility: Visibility) {
 }
 
 /// The names of the segments of a path, in the order they are written.
-fn segment_names(segments: &[PathSegmentData]) -> Vec<Name> {
+pub(crate) fn segment_names(segments: &[PathSegmentData]) -> Vec<Name> {
     segments
         .iter()
         .map(|segment| segment.name.clone())

@@ -1,0 +1,15 @@
+---
+source: crates/mlkc-driver/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### Diagnostics
+
+resolver[11]: the module `project::b` is in a cycle of names with this module: the imports of a program form no cycle  @17..22
+
+## `project::b`
+
+### Diagnostics
+
+resolver[11]: the module `project::a` is in a cycle of names with this module: the imports of a program form no cycle  @4..20

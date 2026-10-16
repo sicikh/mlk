@@ -1,0 +1,45 @@
+---
+source: crates/mlkc-typeck/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun mine: (Other) -> Mine
+```
+
+### Checked Bodies
+
+`fun mine`
+
+```
+CHECKED BODY
+  expr #0: (Other) -> Mine
+  expr #1: Other
+  expr #2: Mine
+  pat #0: Other
+```
+
+## `project::b`
+
+### Type Surface
+
+```
+MODULE TYPES
+  fun other: (Mine) -> Other
+```
+
+### Checked Bodies
+
+`fun other`
+
+```
+CHECKED BODY
+  expr #0: (Mine) -> Other
+  expr #1: Mine
+  expr #2: Other
+  pat #0: Mine
+```

@@ -36,6 +36,16 @@
 //! wrote it. A chain that returns to where it started resolves to nothing, and is reported: the
 //! walk is a loop inside one pass, and no fixpoint is needed to follow it.
 //!
+//! # The names a module reaches, and the cycles of them
+//!
+//! A module is read after the modules its names reach, so the names of a program form no cycle:
+//! a cycle has no order to read the modules in, and it is a mistake of the source ([ADR-0016]).
+//! What the names of one module reach --- every path it writes, resolved to the module the name
+//! *belongs to* --- is gathered by [`named_modules`], and the cycles of a project, which are the
+//! modules that reach each other, are found by [`import_cycles`]: a driver reads the second to
+//! tell a reader where the cycle is written, and to refuse a program whose modules cannot be
+//! ordered.
+//!
 //! # A path written in a body
 //!
 //! The paths a [`Resolution`](mlkc_hir_def::Resolution) is about are the paths of the *surface*
@@ -51,10 +61,14 @@
 //! [ADR-0009]: ../../docs/adr/0009-pass-contract.md
 
 pub mod closure;
+mod cycles;
 mod diagnostic;
+mod graph;
 mod resolve;
 
 pub use crate::{
+    cycles::{CycleDiag, ImportCycle, ImportCycles, import_cycles},
     diagnostic::{ResolveDiag, ResolvePlace},
+    graph::{NamedModules, NamedPlace, named_modules},
     resolve::{ResolveDeps, ResolvedModule, hidden_name, resolve_module},
 };

@@ -108,6 +108,7 @@ impl DiagKind for ResolveDiag {
             ResolveError::HiddenName { .. } => "08",
             ResolveError::NotAValue { .. } => "09",
             ResolveError::NestedName { .. } => "10",
+            ResolveError::ImportCycle { .. } => "11",
         }
     }
 }

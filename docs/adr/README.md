@@ -59,6 +59,7 @@ Then read the cluster of the area you are about to touch.
 | [0011](0011-module-prelude.md)          | Module prelude                                    | accepted                                             |
 | [0015](0015-standard-library.md)        | Standard library in-repo, built into the compiler | accepted                                             |
 | [0016](0016-inter-module-resolution.md) | Inter-module resolution against interfaces        | accepted                                             |
+| [0033](0033-import-cycles.md)           | Find a cycle of module names in the resolution    | accepted                                             |
 
 ### Types
 
@@ -98,6 +99,11 @@ The code wins; the notes are here so that a plan is not written against a stale 
   Its `lower_body` signature places `CheckDeps` in `mlkc-typeck`
   and `BodySourceMap` in `mlkc-lower`;
   the two live in `mlkc-hir-ty` and `mlkc-hir-def`.
+- [0008](0008-compiler-driver.md) says there is "no cycle detection" at the driver.
+  There is one pass that finds them now, `import_cycles`, of the names of a project
+  ([0033](0033-import-cycles.md));
+  the sentence was about the driver's own pull graph, which stays stratified,
+  and this record refines it rather than replacing it.
 - [0016](0016-inter-module-resolution.md) describes the per-module resolution as the scope and
   the diagnostics of the walk together.
   The code splits the two: `mlkc_hir_def::Resolution` holds the scope and what the imports

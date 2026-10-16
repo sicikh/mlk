@@ -7,7 +7,7 @@ use mlkc_hir_def::{
     Interface, ModuleId, ModuleIndex, ProjectDefMap, ProjectId, Resolution, ResolveError,
 };
 use mlkc_resolve::{
-    ResolveDeps, ResolveDiag, ResolvedModule, closure, hidden_name, resolve_module,
+    ImportCycles, ResolveDeps, ResolveDiag, ResolvedModule, closure, hidden_name, resolve_module,
 };
 use mlkc_span::Span;
 
@@ -15,6 +15,19 @@ use super::{
     DefMapSlot, Driver, InterfaceSlot, Lowered, ModuleIndexSlot, Pass, ResolutionDiagnosticsSlot,
     ResolutionSlot, Unit, entries_are_the_same,
 };
+
+/// Whether two optional cycle values are the same value: the one the driver held, and the one
+/// it read again.
+///
+/// A cycle value is retained by the pass that found it, so two of them are the same when they
+/// are the same allocation --- and a module that takes part in no cycle has none of them.
+fn the_same_cycles(held: &Option<Arc<ImportCycles>>, current: &Option<Arc<ImportCycles>>) -> bool {
+    match (held, current) {
+        (None, None) => true,
+        (Some(held), Some(current)) => Arc::ptr_eq(held, current),
+        _ => false,
+    }
+}
 
 impl Driver {
     /// The interface of `module`: what it shows to the modules that name it.
@@ -289,12 +302,14 @@ impl Driver {
     pub(super) fn resolution_diagnostics(&mut self, module: ModuleId) -> Option<Arc<[Diagnostic]>> {
         let lowered = self.lower(module.0)?;
         let resolved = self.resolution(module)?;
+        let cycles = self.cycles_of(module);
 
         let held = self.resolution_diagnostics.get(&module);
         let existed = held.is_some();
         let held = held.filter(|slot| {
             Arc::ptr_eq(&slot.resolution, resolved.resolution())
                 && Arc::ptr_eq(&slot.lowered, &lowered)
+                && the_same_cycles(&slot.cycles, &cycles)
         });
         let unit = Unit::Module(module);
 
@@ -330,6 +345,19 @@ impl Driver {
             rendered.push(self.rendered(diagnostic, module, &lowered, &mut looked));
         }
 
+        // What the names of the module reach is read after what its own paths found: a cycle is
+        // about the names of the whole project, and every module of one is told about it, where
+        // the name that is in it is written.
+        if let Some(cycles) = &cycles {
+            for diagnostic in cycles
+                .diagnostics()
+                .iter()
+                .filter(|diagnostic| diagnostic.module() == module)
+            {
+                rendered.push(self.rendered_cycle(diagnostic, module, &lowered));
+            }
+        }
+
         self.stats
             .ran(Pass::ResolutionDiagnostics, &unit, self.clock, started);
 
@@ -339,11 +367,22 @@ impl Driver {
             .insert(module, ResolutionDiagnosticsSlot {
                 resolution: Arc::clone(resolved.resolution()),
                 lowered,
+                cycles,
                 looked,
                 value: value.clone(),
             });
 
         Some(value)
+    }
+
+    /// The cycles of the names of the project `module` is in, if it is in one.
+    ///
+    /// A module of no project names the projects of the graph and no module of its own, so no
+    /// name of it can come back: there is no cycle to look for.
+    fn cycles_of(&mut self, module: ModuleId) -> Option<Arc<ImportCycles>> {
+        let project = self.projects.project_of(module).cloned()?;
+
+        self.import_cycles(&project)
     }
 
     /// The diagnostic a host renders of what a resolution found.

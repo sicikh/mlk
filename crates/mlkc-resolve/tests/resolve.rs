@@ -13,12 +13,16 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use mlkc_hir_def::{
-    Closure, EntityLoc, Interface, ItemKind, ItemLocLike, ItemTree, ModuleId, ModuleIndex,
-    ModuleLocator, ModuleScope, Name, Namespace, PathAnchor, PathRoot, PlainPath, PlainPathId,
-    Prelude, ProjectData, ProjectGraph, ProjectId, Read, ResolveError, Visibility, dump::TypePlace,
+    Body, BodyEntityLoc, Closure, EntityLoc, Interface, ItemKind, ItemLocLike, ItemTree, ModuleId,
+    ModuleIndex, ModuleLocator, ModuleScope, Name, Namespace, PathAnchor, PathRoot, PlainPath,
+    PlainPathId, Prelude, ProjectData, ProjectGraph, ProjectId, Read, ResolveError, Visibility,
+    dump::TypePlace,
 };
 use mlkc_lower::lower_module;
-use mlkc_resolve::{ResolveDeps, ResolveDiag, closure, resolve_module};
+use mlkc_resolve::{
+    ImportCycles, NamedModules, NamedPlace, ResolveDeps, ResolveDiag, closure, import_cycles,
+    named_modules, resolve_module,
+};
 use mlkc_syntax::ModuleRoot;
 use mlkc_vfs::{FileId, RelPathBuf};
 
@@ -96,6 +100,42 @@ impl World {
         (
             ModuleScope::clone(resolved.resolution().scope()),
             resolved.diagnostics().to_vec(),
+        )
+    }
+
+    /// The modules the names of a module reach, read the way a driver reads them.
+    ///
+    /// The names of a world are the ones of the surface --- the imports and the types the
+    /// declarations write --- and a name a body writes reaches a module the same way
+    /// ([`named_modules`]): a driver hands the bodies over, and a test of the graph has none.
+    fn named(&self, module: ModuleId) -> NamedModules {
+        let deps = ResolveDeps {
+            graph: Arc::clone(&self.graph),
+            closure: self.closure(module),
+        };
+        let resolved = resolve_module(module, self.tree(module), &deps);
+
+        named_modules(
+            module,
+            self.tree(module),
+            std::iter::empty::<(BodyEntityLoc, &Body)>(),
+            resolved.resolution(),
+            &deps,
+        )
+    }
+
+    /// The cycles of the names of every module of the world.
+    fn cycles(&self) -> ImportCycles {
+        let named: Vec<(ModuleId, PlainPathId, NamedModules)> = self
+            .trees
+            .keys()
+            .map(|module| (*module, self.tree(*module).path(), self.named(*module)))
+            .collect();
+
+        import_cycles(
+            named
+                .iter()
+                .map(|(module, path, names)| (*module, path.clone(), names)),
         )
     }
 }
@@ -927,6 +967,98 @@ fun get() = 1
     assert_eq!(only(&diagnostics).error(), &ResolveError::CyclicImport {
         name: name("X")
     },);
+}
+
+#[test]
+fn two_modules_that_name_each_other_are_one_cycle() {
+    let world = app()
+        .module(
+            "app",
+            "a.mlk",
+            "\
+use project::b::Other
+
+pub data Mine
+
+pub fun mine(value: Other): Mine =
+    mine(value)
+",
+        )
+        .module(
+            "app",
+            "b.mlk",
+            "\
+use project::a::Mine
+
+pub data Other
+
+pub fun other(value: Mine): Other =
+    other(value)
+",
+        )
+        .build();
+
+    let a = world.module("app", "a");
+    let b = world.module("app", "b");
+    let cycles = world.cycles();
+
+    // A cycle of two modules is one cycle, and neither of them is an order the other can be
+    // read in ([ADR-0016]).
+    //
+    // [ADR-0016]: ../../docs/adr/0016-inter-module-resolution.md
+    assert_eq!(cycles.cycles().len(), 1, "{cycles:?}");
+    assert_eq!(cycles.cycles()[0].modules(), [a, b].as_slice());
+
+    // Every module of the cycle is told about it, at a name that reaches a module of the cycle:
+    // a reader of any of the files is told what is wrong ([ADR-0004]).
+    //
+    // [ADR-0004]: ../../docs/adr/0004-module-system.md
+    let diagnostics = cycles.diagnostics();
+
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].module(), a);
+    assert_eq!(diagnostics[0].error(), &ResolveError::ImportCycle {
+        module: path(&["b"]),
+    },);
+    assert!(matches!(diagnostics[0].place(), NamedPlace::Import(_)));
+    assert_eq!(diagnostics[1].module(), b);
+    assert_eq!(diagnostics[1].error(), &ResolveError::ImportCycle {
+        module: path(&["a"]),
+    },);
+    assert!(matches!(diagnostics[1].place(), NamedPlace::Import(_)));
+}
+
+#[test]
+fn names_that_never_come_back_are_no_cycle() {
+    let world = app()
+        .module(
+            "app",
+            "a.mlk",
+            "\
+use project::b::Other
+
+pub data Mine
+
+pub fun mine(value: Other): Mine =
+    mine(value)
+",
+        )
+        .module("app", "b.mlk", "pub data Other\n")
+        .build();
+
+    let a = world.module("app", "a");
+    let b = world.module("app", "b");
+    let named = world.named(a);
+
+    // The names of `a` reach `b`, and where they reach it is where the import is written: the
+    // graph keeps one place per module, and it is what a cycle report points at.
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert!(named.get(b).is_some());
+
+    let cycles = world.cycles();
+
+    assert!(cycles.cycles().is_empty(), "{cycles:?}");
+    assert!(cycles.diagnostics().is_empty(), "{cycles:?}");
 }
 
 #[test]

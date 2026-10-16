@@ -1,0 +1,122 @@
+---
+source: crates/mlkc-lower/tests/project_spec.rs
+expression: snapshot
+---
+## `project::a`
+
+### Item Tree
+
+```
+MODULE #3 project::a
+
+ITEM TREE
+  use Other  @2.0.2.1.2.0
+    path: project::b::Other
+    visibility: private
+  use other  @2.0.2.1.2.2
+    path: project::b::other
+    visibility: private
+  data Mine  @2.1
+    visibility: public
+  fun mine  @2.2
+    visibility: public
+    param: Other -> use Other
+    ret: Mine -> data Mine
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun mine`
+
+```
+BODY fun mine in module #3
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind value
+paths
+  path#0  mine -> fun mine
+  path#1  value -> binding pat#0
+```
+
+## `project::b`
+
+### Item Tree
+
+```
+MODULE #4 project::b
+
+ITEM TREE
+  use Mine  @2.0.2
+    path: project::a::Mine
+    visibility: private
+  data Other  @2.1
+    visibility: public
+  fun other  @2.2
+    visibility: public
+    param: Mine -> use Mine
+    ret: Other -> data Other
+  use Int  prelude
+    path: std::prelude::Int
+    visibility: private
+  use Unit  prelude
+    path: std::prelude::Unit
+    visibility: private
+  use String  prelude
+    path: std::prelude::String
+    visibility: private
+  use Bool  prelude
+    path: std::prelude::Bool
+    visibility: private
+  use print-int  prelude
+    path: std::prelude::print-int
+    visibility: private
+  use print-bool  prelude
+    path: std::prelude::print-bool
+    visibility: private
+```
+
+### Bodies
+
+`fun other`
+
+```
+BODY fun other in module #4
+
+root expr#2
+params
+  pat#0
+exprs
+  expr#0  path path#0
+  expr#1  path path#1
+  expr#2  call expr#0 (expr#1)
+pats
+  pat#0  bind value
+paths
+  path#0  other -> fun other
+  path#1  value -> binding pat#0
+```

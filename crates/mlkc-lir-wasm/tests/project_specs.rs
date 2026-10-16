@@ -51,6 +51,10 @@ project_specs! {
     // and the names they left unresolved.
     broken: "broken",
 
+    // Two modules that name each other, one through a tree of imports: a cycle of names is
+    // a diagnostic of every module of it, and the pipeline reads the project to the end.
+    cycles: "cycles",
+
     // What the checker makes of every expression of a body: the literals, the operators over
     // `Int` and `Bool`, a call, and a `let`, each of them with the type it was checked to.
     expressions: "expressions",

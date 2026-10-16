@@ -200,7 +200,7 @@ check-generated:
     fi
 
 # Check the tree the way CI does, without a browser; unlike `just ready`, works on a dirty tree
-verify: check-generated lint doc test test-doc test-web check-web
+verify: check-generated lint doc test test-doc test-web check-web deny
 
 # `just verify` plus the editor in a real browser; needs `obscura`, and builds the site
 verify-web: verify check-browser

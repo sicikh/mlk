@@ -37,7 +37,7 @@
       # The `wasm-bindgen` crate and the `wasm-bindgen-cli` that generates the glue for it
       # must be the same version. nixpkgs builds one version of the tool; `Cargo.toml`
       # pins the crate to it, and the two are asserted below to be the same.
-      wasmBindgenVersion = "0.2.127";
+      wasmBindgenVersion = "0.2.129";
 
       # The browser the editor's check drives. nixpkgs has an older release, so the
       # assets are fetched here, pinned by the digests GitHub publishes for the release.

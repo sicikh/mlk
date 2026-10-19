@@ -2,6 +2,6 @@
 # The version the repository builds with, and the one `flake.nix` reads.
 # A bump means regenerating the wasm package and re-running `just verify`;
 # the flake only needs the change here.
-channel = "1.99.0"
+channel = "1.99.1"
 components = ["clippy"]
 targets = ["wasm32-unknown-unknown"]

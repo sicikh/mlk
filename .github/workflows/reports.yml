@@ -41,14 +41,14 @@ jobs:
         timeout-minutes: 120
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
             - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
                   primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
                   restore-prefixes-first-match: nix-${{ runner.os }}-
             - name: the toolchain, for the cache below
               run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
-            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+            - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
               with:
                   shared-key: ci
                   workspaces: |
@@ -73,14 +73,14 @@ jobs:
         timeout-minutes: 120
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
             - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
                   primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
                   restore-prefixes-first-match: nix-${{ runner.os }}-
             - name: the toolchain, for the cache below
               run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
-            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+            - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
               with:
                   shared-key: ci
                   workspaces: |
@@ -110,14 +110,14 @@ jobs:
                 target: [parse, lower]
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
             - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
               with:
                   primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'rust-toolchain.toml', 'Cargo.toml', 'Cargo.lock', 'crates/*/Cargo.toml', 'xtask/*/Cargo.toml') }}
                   restore-prefixes-first-match: nix-${{ runner.os }}-
             - name: the toolchain, for the cache below
               run: nix develop -c sh -c 'command -v cargo' | tail -n 1 | xargs dirname >> "$GITHUB_PATH"
-            - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+            - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
               with:
                   shared-key: ci
                   workspaces: |
